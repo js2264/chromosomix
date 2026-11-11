@@ -16,7 +16,10 @@ import { describe, expect, it } from 'vitest'
 import {
   COOLTOOLS_CLIP_PERCENTILE,
   contactShares,
+  cooltoolsExpected,
   cooltoolsMatrix,
+  cooltoolsPlan,
+  cooltoolsSeparationGroups,
   correlationMatrix,
   observedOverExpected,
   singleGroupPlan,
@@ -24,7 +27,7 @@ import {
   saddle,
   usableBins,
 } from '@/analysis/compartments'
-import { ExpectedAccumulator } from '@/analysis/expected'
+import { ExpectedAccumulator, type ExpectedCurve } from '@/analysis/expected'
 import { fiedlerSplit, leadingEigenpairs } from '@/analysis/linalg'
 
 /** Which compartment a bin belongs to: alternating blocks of five. */
@@ -170,6 +173,111 @@ describe('cooltoolsMatrix', () => {
     for (let i = 0; i < index.length; i++) {
       expect(Math.sign(first[i])).toBe(compartmentOf(index[i]) === 0 ? sign : -sign)
     }
+  })
+})
+
+/**
+ * The expectation cooltools' `eigs_cis` divides by, which is its own and not
+ * `expected_cis`: `observed_over_expected` pools the diagonals past about the
+ * thirty-fifth in groups at most 3% wide. The numbers are cooltools 0.7.1's —
+ * `numutils._logbins_numba(1, n, 1.03)` for the groups, and
+ * `cis_eig(A, n_eigs=3, ignore_diags=2, clip_percentile=99.9)` for the square.
+ */
+describe('cooltools’ own expectation', () => {
+  it('groups the separations where `_logbins_numba` puts its edges', () => {
+    const upTo = (n: number): number[] => Array.from({ length: n + 1 }, (_, k) => k)
+    expect(Array.from(cooltoolsSeparationGroups(2))).toEqual([0, 1, 2])
+    expect(Array.from(cooltoolsSeparationGroups(6))).toEqual(upTo(6))
+    expect(Array.from(cooltoolsSeparationGroups(40))).toEqual([...upTo(35), 37, 38, 39, 40])
+    expect(Array.from(cooltoolsSeparationGroups(80))).toEqual([
+      ...upTo(40), 42, 43, 44, 45, 47, 48, 50, 51, 53, 54, 56, 58, 59, 61, 63, 65, 67, 69, 71, 73, 75,
+      78, 80,
+    ])
+    // A mouse chromosome 1 at 100 kb: 170 groups, the first pair at 36 and 37.
+    const chr1 = cooltoolsSeparationGroups(1955)
+    expect(chr1).toHaveLength(171)
+    expect(Array.from(chr1.subarray(35, 38))).toEqual([35, 36, 38])
+    expect(Array.from(chr1.subarray(-3))).toEqual([1842, 1898, 1955])
+  })
+
+  /** A curve over the 40 separations of a 40-bin square, `cells` at each separation `k`. */
+  function curveOf(cells: (k: number) => number[]): ExpectedCurve {
+    const accumulator = new ExpectedAccumulator(39)
+    for (let k = 0; k < 40; k++) for (const value of cells(k)) accumulator.add(k, value)
+    return accumulator.finish()
+  }
+
+  it('divides a group by its cells’ mean, not by the mean of its separations’ means', () => {
+    // 35 and 36 are one group at 40 bins: one cell of 4 and three of 2.
+    const curve = curveOf((k) => (k === 35 ? [4] : k === 36 ? [2, 2, 2] : [k + 1, k + 1]))
+    const pooled = cooltoolsExpected(curve, 2)
+    expect(pooled.mean[35]).toBe(2.5)
+    expect(pooled.mean[36]).toBe(2.5)
+    // Below the first group of two, every separation is its own — the near
+    // diagonal's ones, which is what cooltools sets it to, and then the curve's.
+    expect([pooled.mean[0], pooled.mean[1]]).toEqual([1, 1])
+    for (let k = 2; k < 35; k++) expect(pooled.mean[k]).toBe(k + 1)
+    // The curve's own sums and counts are left as they were.
+    expect(pooled.count[35]).toBe(1)
+    expect(curve.mean[35]).toBe(4)
+  })
+
+  it('pools the near diagonal as ones, and leaves a group with no contacts undivided', () => {
+    const curve = curveOf((k) => (k === 35 ? [4] : k === 36 ? [2, 2, 2] : k >= 37 ? [0, 0] : [k + 1]))
+    // Thirty-six ignored diagonals reach into the group of 35 and 36.
+    expect(cooltoolsExpected(curve, 36).mean[35]).toBe((1 + 6) / 4)
+    // 37, 38 and 39 are each a group, all zeros: divided by nothing, so by 1.
+    const pooled = cooltoolsExpected(curve, 2)
+    for (const k of [37, 38, 39]) expect(pooled.mean[k]).toBe(1)
+    // …where a separation nothing was read at is no expectation at all.
+    expect(Number.isNaN(cooltoolsExpected(curveOf((k) => (k === 38 ? [] : [1])), 2).mean[38])).toBe(true)
+  })
+
+  /** The two-compartment square, every cell `far` or more bins apart empty. */
+  function emptyCorner(n: number, far: number): Float32Array {
+    const values = blocks(n)
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (Math.abs(r - c) >= far) values[r * n + c] = 0
+    return values
+  }
+
+  /** The chain as the runner takes it under cooltools' method, scaled as cooltools writes it. */
+  function decomposed(values: Float32Array, n: number): { value: number; vector: Float64Array }[] {
+    const accumulator = new ExpectedAccumulator(n - 1)
+    accumulator.addBlock({ nrows: n, ncols: n, values, rowExtent: [0, n], colExtent: [0, n] })
+    const index = usableBins(values, n, 0.1)
+    const plan = { ...singleGroupPlan(n, accumulator.finish()), ignoreDiags: 2 }
+    const own = observedOverExpected(values, n, index, cooltoolsPlan(plan))
+    const prepared = cooltoolsMatrix(own, index.length, COOLTOOLS_CLIP_PERCENTILE, own)
+    return leadingEigenpairs(prepared, index.length, 3).map(({ value, vector }) => ({
+      value,
+      vector: vector.map((x) => x * Math.sqrt(Math.abs(value))),
+    }))
+  }
+
+  it('gives `cis_eig`’s eigenvalues and eigenvectors', () => {
+    for (const [far, values, first] of [
+      [80, [17.760623250388637, -10.961943768342252, -3.468600256749778], [-0.5124443358642781, -0.38573833418160997, -0.3599584977487035, -0.4417233023945974]],
+      // Its far corner empty, the last three groups without a contact.
+      [72, [18.138009101734376, -10.617036575209479, -4.756783500358663], [0.5969826853561353, 0.4809560251208968, 0.47477558844962153, 0.5748726980294896]],
+    ] as const) {
+      const pairs = decomposed(emptyCorner(80, far), 80)
+      for (let k = 0; k < 3; k++) expect(pairs[k].value).toBeCloseTo(values[k], 10)
+      const sign = Math.sign(pairs[0].vector[0]) * Math.sign(first[0])
+      for (let i = 0; i < first.length; i++) expect(sign * pairs[0].vector[i]).toBeCloseTo(first[i], 10)
+    }
+  })
+
+  it('is what the near-diagonal plan is not, past the thirty-fifth diagonal', () => {
+    // Each diagonal over its own mean: the eigenvalue cooltools' does not give.
+    const n = 80
+    const values = emptyCorner(n, 72)
+    const accumulator = new ExpectedAccumulator(n - 1)
+    accumulator.addBlock({ nrows: n, ncols: n, values, rowExtent: [0, n], colExtent: [0, n] })
+    const index = usableBins(values, n, 0.1)
+    const plan = { ...singleGroupPlan(n, accumulator.finish()), ignoreDiags: 2 }
+    const own = observedOverExpected(values, n, index, plan)
+    const [first] = leadingEigenpairs(cooltoolsMatrix(own, index.length), index.length, 1)
+    expect(first.value).not.toBeCloseTo(18.138009101734376, 3)
   })
 })
 

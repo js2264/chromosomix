@@ -128,6 +128,21 @@
   --tabstrip-h: 2.4rem;
 
   /*
+   * How much more of the window a frame gives the picture than a window does.
+   *
+   * Every picture sized against the window's height (the `calc(100vh - …)`
+   * budgets below) counts out the furniture around it: the header, the tab
+   * strip, the breadcrumb row and the status bar. An embed has none of the
+   * four, only its one bar (`.embed-bar`), and the budgets still took all four
+   * out: a map in an 850-pixel frame stopped 120 pixels short of the frame's
+   * foot, over a band of empty page, however much room there was for it to
+   * grow. Nothing in a window; in a frame, the header, the breadcrumb row and
+   * the status bar less the embed's bar, the tab strip being `--tabstrip-h`,
+   * which a frame sets to nothing (`.is-embed`, below).
+   */
+  --embed-room: 0rem;
+
+  /*
    * How much of the window the status bar takes: one line of `--step--1` inside
    * `.app-foot`'s padding and its top border.
    *
@@ -1533,6 +1548,13 @@ p {
   cursor: default;
 }
 
+/* The sequence the text names, above the genes it also begins: what Enter
+   opens, set apart from the list it heads by the list's own hairline. */
+.search-hit.search-hit-typed {
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
 .browser-zoom,
 /* The one part of a map's subtitle that moves, and the browser's own. Tabular
    figures so a digit changing under a drag does not shuffle the rest of the
@@ -1672,6 +1694,19 @@ p {
  * and the About button are the two things an embed shows before it shows
  * anything at all.
  */
+/* The frame's share of the window (`--embed-room` at the top of this sheet):
+   no tab strip, and the header, the breadcrumb row and the status bar —
+   measured as `--tabstrip-h` is, 53, 36 and 34 pixels, 7.65rem — less this bar,
+   given back to the picture. The bar's own height is measured by the app
+   (`--embed-bar-h`, `App.ts`), because it is not one number: one line of 38
+   pixels in a wide frame, two below 72rem, three below 50rem and more on a
+   phone, and a fixed allowance ran the "+" row off the foot of every frame
+   narrower than 72rem. */
+.is-embed {
+  --tabstrip-h: 0rem;
+  --embed-room: calc(7.65rem - var(--embed-bar-h, 2.4rem));
+}
+
 .embed-bar {
   display: flex;
   align-items: center;
@@ -1728,6 +1763,92 @@ p {
   gap: 0.15rem;
   flex: 0 0 auto;
   margin-left: auto;
+}
+
+/*
+ * **A narrower frame gives way in an order, rather than clipping the row's
+ * end** (§21.3). The breadcrumb is one row that scrolls, and the end that
+ * scrolled out of sight was the resolution and the contacts box: at 1,040
+ * pixels the box's example was cut, at 910 — an R Markdown page's width — the
+ * row ended at `con`, and at 720 the two were gone, with nothing saying they
+ * were there to be scrolled to. Frames that narrow are where an embed lives: a
+ * notebook cell, a rendered report, a paper's supplement.
+ *
+ * In the frame the viewport *is* the frame, so these are media queries. First
+ * the two controls that say how the picture is drawn take a line of their own
+ * under the trail, together and with their labels: a zero-height break,
+ * ordered between the trail and them, is what keeps the pair from being
+ * split, as plain wrapping split it — the last item, the box, went first. The
+ * trail then has a line to itself, so the file is named in full where it fits,
+ * and the brand and the three buttons keep to the first line. Then the brand
+ * keeps its mark and lets its name go, which keeps the trail on one line down
+ * to 720 pixels: the mark is still the link out, and About still says whose
+ * viewer this is. Last, in a frame a phone could be, the contacts box is put
+ * away and the resolution kept: of the two it is the one a reader looks at one
+ * figure with, and the total every map is drawn to is a press away, in the
+ * full viewer the mark opens.
+ */
+@media (max-width: 72rem) {
+  .embed-bar {
+    align-items: flex-start;
+  }
+
+  .embed-bar > .embed-brand {
+    margin-top: 0.2rem;
+  }
+
+  .embed-bar .breadcrumb {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    row-gap: 0.15rem;
+  }
+
+  .embed-bar .breadcrumb::before {
+    content: '';
+    order: 1;
+    flex: 0 0 100%;
+    height: 0;
+  }
+
+  .embed-bar .breadcrumb > .crumb-res,
+  .embed-bar .breadcrumb > .crumb-contacts {
+    order: 2;
+  }
+
+  .embed-bar .breadcrumb > .crumb-res,
+  .embed-bar .breadcrumb > .crumb-contacts:first-of-type {
+    margin-left: 0;
+    padding-left: 0.25rem;
+  }
+}
+
+@media (max-width: 50rem) {
+  .embed-brand-name {
+    display: none;
+  }
+}
+
+@media (max-width: 34rem) {
+  .embed-bar .breadcrumb > .crumb-contacts {
+    display: none;
+  }
+
+  /* A file of several resolutions draws a slider and a stop for each, and the
+     row ran past a phone's frame at the fourth stop. The stops are the same
+     choice as the slider, each a button that says its bin size, so the slider
+     goes and the stops wrap: every resolution stays one press away. */
+  .embed-bar .crumb-res {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  .embed-bar .crumb-res > .res-slider {
+    display: none;
+  }
+
+  .embed-bar .res-stops {
+    flex-wrap: wrap;
+  }
 }
 
 /*
@@ -3357,7 +3478,7 @@ p {
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--bg-raised);
-  max-height: calc(100vh - 15rem - var(--tabstrip-h));
+  max-height: calc(100vh - 15rem - var(--tabstrip-h) + var(--embed-room));
   min-height: 22rem;
 }
 
@@ -3663,8 +3784,8 @@ p {
   --map-budget: clamp(
     20rem,
     calc(
-      100vh - 14rem - var(--tabstrip-h) - var(--lane-bottom, 0px) - var(--lane-top, 0px) -
-        var(--deck-edge, 0px)
+      100vh - 14rem - var(--tabstrip-h) + var(--embed-room) - var(--lane-bottom, 0px) -
+        var(--lane-top, 0px) - var(--deck-edge, 0px)
     ),
     60rem
   );
@@ -4373,12 +4494,12 @@ p {
 }
 
 /* The ideogram's gestures are its own — the wheel magnifies, a drag moves or
-   chooses a stretch — and the card under the pointer says them (§5.10). */
+   chooses a stretch — and the card under the pointer says them (§5.11). */
 .view-browser.is-ideogram .browser-hint {
   display: none;
 }
 
-/* The Tracks card carries the ideogram's rows as well as the lanes' (§5.10),
+/* The Tracks card carries the ideogram's rows as well as the lanes' (§5.11),
    each set shown while its picture is drawn — as the Map card's rows for the
    square and the circle are — and the controls about the browser's one axis
    step aside while the ideogram, which has none, is. */
@@ -4552,6 +4673,81 @@ canvas.is-frozen {
 
 .map-card-for.is-every {
   color: var(--warn);
+}
+
+/* The Map card's two tabs (§5.10): the map's own settings, and the triangle
+   below the diagonal read its own way. Words on a rule, the open one in the
+   accent and underlined into it — About's tabs, at the card's size, so which is
+   open is read off the row's shape and weight and not off a colour alone. */
+.map-tabs {
+  display: flex;
+  gap: 0.15rem;
+  margin: -0.1rem 0 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.map-tab {
+  margin-bottom: -1px;
+  padding: 0.25rem 0.5rem 0.3rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: var(--step--1);
+  cursor: pointer;
+}
+
+.map-tab:hover {
+  color: var(--text);
+}
+
+.map-tab.is-on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* The second tab while its reading is on, seen from the first: a dot after the
+   word, so a reader on the map's own tab can tell the lower triangle is not the
+   mirror it would otherwise be. */
+.map-tab.is-set::after {
+  content: '';
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  margin-left: 0.35em;
+  border-radius: 50%;
+  background: var(--accent);
+  vertical-align: 0.15em;
+}
+
+.map-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius);
+}
+
+/* The lower tab's fields, under its switch: the same column as the map's own. */
+.map-lower-fields {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+
+.map-lower-fields > * {
+  min-width: 0;
+}
+
+.map-lower-note {
+  margin: 0;
+  font-size: var(--step--1);
+}
+
+.map-lower .field > .btn-toggle,
+.map-lower .field > .btn-word {
+  justify-self: start;
 }
 
 /* Stacked one per row when the card lives in a sidebar; the panel header keeps
@@ -5059,8 +5255,8 @@ canvas.is-frozen {
 }
 
 /* About: as wide as the wide dialogs, for the licences' three columns, and
-   taller than any, so the build stamp under them is on screen without a
-   scroll on a laptop. Still inside the backdrop's 8vh top margin. */
+   taller than any, so a tab as long as the licences scrolls as little as it
+   can on a laptop. Still inside the backdrop's 8vh top margin. */
 .modal-about {
   width: min(48rem, 100%);
   max-height: 88vh;
@@ -5095,17 +5291,19 @@ canvas.is-frozen {
   padding: 0.85rem 0.9rem 0.95rem;
 }
 
-/* The three that are flush on purpose. Two have a child carrying a border across
+/* The four that are flush on purpose. Three have a child carrying a border across
    the panel's whole width — the palette's search box, the feature card's footer
-   rule — which an inset body would cut short of both edges; they pad their own
-   rows instead (`.palette-body > .input`, `.feature-rows`, `.feature-foot`). The
-   third is the stage (§18.13, §25): a picture at the size of the window beside a
+   rule, About's row of tabs — which an inset body would cut short of both edges;
+   they pad their own rows instead (`.palette-body > .input`, `.feature-rows`,
+   `.feature-foot`, `.about-tabs`, `.about-panels`, `.about-foot`). The
+   fourth is the stage (§18.13, §25): a picture at the size of the window beside a
    column the reader drags the width of, where the divider has to reach both
    edges — and where an inset would be measured into the drag, since the grip
    sizes the column from the modal's own right edge. `.stage-body` carries its
    own inset round the picture. */
 .modal-panel > .palette-body,
 .modal-panel > .feature-body,
+.modal-panel > .about-body,
 .modal-panel > .stage-modal {
   padding: 0;
 }
@@ -5672,27 +5870,85 @@ canvas.is-frozen {
   font-size: var(--step--1);
 }
 
+/* About is three tabs: the row of tabs stays put and only the chosen tab's
+   panel scrolls. The Overview tab carries the build stamp and the version
+   picker in a footer of its own, under the part that scrolls, so the stamp is
+   never scrolled off screen; the Notebooks and Licences tabs have none, being
+   about one thing each. */
 .about-body {
-  overflow: auto;
-  padding: 0.4rem 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .about-body p {
   margin: 0.6rem 0;
 }
 
-/* Whose work this is (`licences.ts`): set off by a rule like the build stamp
-   under it, and a table in three columns — the project, what it does here and
-   its licence — so the eye runs down the licences as one list. The rows are a
-   subgrid, so every column lines up while each row stays a list item. */
-.about-licences {
-  border-top: 1px solid var(--border);
-  margin-top: 0.9rem;
+.about-tabbed {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
-.about-body .about-heading {
-  margin: 0.8rem 0 0.2rem;
+/* The tabs: words on a rule, the chosen one in the accent and underlined into
+   the rule, like the drawer's map tabs (`.analysis-map.is-on`) — which one is
+   current is read off the row's shape and weight, not off a colour alone. */
+.about-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.2rem;
+  padding: 0.35rem 0.9rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.about-tab {
+  margin-bottom: -1px;
+  padding: 0.4rem 0.65rem 0.45rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
   font-size: var(--step--1);
+  cursor: pointer;
+}
+
+.about-tab:hover {
+  color: var(--text);
+}
+
+.about-tab.is-on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.about-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius);
+}
+
+.about-panels {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.3rem 0.9rem 0.6rem;
+}
+
+.about-feet {
+  flex: 0 0 auto;
+}
+
+.about-foot {
+  flex: 0 0 auto;
+  padding: 0 0.9rem 0.85rem;
+}
+
+.about-foot > .about-build:first-child {
+  margin-top: 0;
 }
 
 /* A link in a sentence or a list of names: the prose's own type in the accent,
@@ -5708,6 +5964,10 @@ canvas.is-frozen {
   color: var(--text);
 }
 
+/* Whose work this is (`licences.ts`): a table in three columns — the project,
+   what it does here and its licence — so the eye runs down the licences as one
+   list. The rows are a subgrid, so every column lines up while each row stays
+   a list item. */
 .about-licence-list {
   display: grid;
   grid-template-columns: max-content 1fr max-content;
@@ -5759,6 +6019,60 @@ canvas.is-frozen {
   .about-licence-id::before {
     content: ' · ';
   }
+}
+
+/* The notebooks (§18.10): one block each, its name and address on a line, what
+   it holds chromosomix to, what it found — the line the page wrote, in the
+   text colour since it is what the tab is for — and when and from what it was
+   rendered, quiet, as the build stamp is. */
+.about-notebook-list {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.about-notebook {
+  padding: 0.6rem 0 0.65rem;
+  border-top: 1px solid var(--border);
+}
+
+.about-notebook-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.6rem;
+}
+
+.about-notebook-title {
+  font-weight: 600;
+}
+
+.about-notebook-where {
+  font-family: var(--mono);
+  font-size: var(--step--2);
+  color: var(--text-faint);
+}
+
+.about-body .about-notebook-what {
+  margin: 0.2rem 0 0;
+  font-size: var(--step--1);
+  color: var(--text-dim);
+}
+
+/* What it found: set off by a rule in the accent down its left, the one line
+   of the four a reader came to the tab for. */
+.about-body .about-notebook-found {
+  margin: 0.4rem 0 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--accent);
+  font-size: var(--step--1);
+  color: var(--text);
+}
+
+.about-body .about-notebook-stamp {
+  margin: 0.3rem 0 0;
+  font-size: var(--step--2);
+  color: var(--text-faint);
 }
 
 /* The two buttons of the §12 listing gate, side by side and equally weighted:
@@ -6084,12 +6398,14 @@ canvas.is-frozen {
 
 .cell-tip-pos,
 .cell-tip-distance,
+.cell-tip-reading,
 .cell-tip-count {
   font-family: var(--mono);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
 
+.cell-tip-reading,
 .cell-tip-count {
   color: var(--text);
 }
@@ -6490,6 +6806,89 @@ canvas.is-frozen {
     padding: 0.55rem 0.9rem;
     font-size: var(--step-0);
     box-shadow: var(--shadow-2);
+  }
+}
+
+/* The example sessions (§24.11): the tutorial's counterpart at the other end of
+   the page. Under the store tiles where the column is narrow — the two lines,
+   then the buttons in a row that wraps; in the margin left of the tiles where it
+   is wide, as a column of buttons, so that it stands beside the tiles whose
+   kind of data it opens and the margin holds one offer at the top and one at
+   the bottom. Against the section's bottom rather than a row of the grid, which
+   a remembered store moves down. */
+.picker-store-section {
+  position: relative;
+}
+
+.picker-examples {
+  margin: 1rem 0 0;
+}
+
+.picker-examples-kicker {
+  margin: 0;
+  font-size: var(--step--2);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.picker-examples-prompt {
+  margin: 0.15rem 0 0.5rem;
+  font-size: var(--step--1);
+  color: var(--text-dim);
+}
+
+.picker-examples-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+/* A name, and the `?` at its end. The `?` is the Analysis column's mark
+   (`ui/questionMark.ts`), in the button's own colour so a hover on the button
+   takes it too, and the help cursor over it says that pointing there reads
+   rather than opens. */
+.picker-example {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.picker-example-hint {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  cursor: help;
+}
+
+.picker-example-hint > .icon {
+  display: block;
+}
+
+.picker-example:hover .picker-example-hint {
+  color: inherit;
+}
+
+@container landing (min-width: 86rem) {
+  .picker-examples {
+    position: absolute;
+    bottom: 0;
+    right: calc(100% + 2.5rem);
+    width: 13.5rem;
+    margin: 0;
+  }
+
+  .picker-examples-list {
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+
+  .picker-example {
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    font-size: var(--step-0);
+    text-align: left;
   }
 }
 
@@ -8676,6 +9075,227 @@ body.is-carrying-card * {
   margin: 0 0 0.25rem;
 }
 
+/* Pairs statistics (§3.7): the File card's rows, in its type, with the counts
+   standing under one another; the pair types as one wrapped line of the mono
+   the counts are in, since a row each would be a dozen more rows for a list a
+   reader scans; and the save beside nothing, at the foot, as the File card's
+   own actions are. */
+.pairs-stats-table .v {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The card's three charts (`ui/pairsCharts.ts`) and their own series.
+ *
+ * A side card follows the theme, so these cannot be the analysis figures'
+ * Okabe–Ito, which is pinned light with the figures. Blue, orange and green
+ * from one validated set, each with its own dark step, and the fourth a
+ * neutral ink: four hues cannot all be told apart pairwise under a colour-
+ * vision deficiency, and lines that cross are compared pairwise. The dashes
+ * (`pairsCharts.ts`) carry the four apart without colour at all. `--pairs-other`
+ * is the pair types folded into one segment, a grey a step off the border.
+ */
+.pairs-stats {
+  --pairs-s1: #2a78d6;
+  --pairs-s2: #eb6834;
+  --pairs-s3: #179f70;
+  --pairs-s4: #54565a;
+  --pairs-other: #a6a8ac;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .pairs-stats {
+    --pairs-s1: #3987e5;
+    --pairs-s2: #d95926;
+    --pairs-s3: #199e70;
+    --pairs-s4: #b3b5b9;
+    --pairs-other: #6b6d71;
+  }
+}
+
+:root[data-theme='dark'] .pairs-stats {
+  --pairs-s1: #3987e5;
+  --pairs-s2: #d95926;
+  --pairs-s3: #199e70;
+  --pairs-s4: #b3b5b9;
+  --pairs-other: #6b6d71;
+}
+
+/* A chart is a row of the table that spans both its columns, under the rows
+   it pictures, so the keys either side of it keep one column. */
+.pairs-stats-chart {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0.3rem 0 0.45rem;
+}
+
+.pairs-stats-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.1rem 0.6rem;
+  color: var(--text-dim);
+  margin: 0 0 0.25rem;
+}
+
+.pairs-stats-svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.pairs-stats-label {
+  font-family: var(--sans);
+  font-variant-numeric: tabular-nums;
+  fill: var(--text-dim);
+}
+
+.pairs-stats-grid line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.pairs-stats-grid .pairs-stats-axis {
+  stroke: var(--border-strong);
+}
+
+.pairs-stats-line {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.pairs-stats-rule {
+  stroke: var(--text-faint);
+  stroke-width: 1;
+}
+
+/* The convergence's value is read over the lines, so it is ink with a halo
+   of the card under it. */
+.pairs-stats-meet-label {
+  fill: var(--text);
+  paint-order: stroke;
+  stroke: var(--bg-raised);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.pairs-stats-line.is-s1,
+.pairs-stats-key-line .is-s1 {
+  stroke: var(--pairs-s1);
+}
+
+.pairs-stats-line.is-s2,
+.pairs-stats-key-line .is-s2 {
+  stroke: var(--pairs-s2);
+}
+
+.pairs-stats-line.is-s3,
+.pairs-stats-key-line .is-s3 {
+  stroke: var(--pairs-s3);
+}
+
+.pairs-stats-line.is-s4,
+.pairs-stats-key-line .is-s4 {
+  stroke: var(--pairs-s4);
+}
+
+/* Further between two keys than between a key's line and its name, so each
+   name reads as the line's on its left. */
+.pairs-stats-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.65rem;
+  font-family: var(--mono);
+}
+
+.pairs-stats-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.pairs-stats-key-line {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.pairs-stats-seg.is-s1,
+.pairs-stats-swatch.is-s1 {
+  fill: var(--pairs-s1);
+  background: var(--pairs-s1);
+}
+
+.pairs-stats-seg.is-s2,
+.pairs-stats-swatch.is-s2 {
+  fill: var(--pairs-s2);
+  background: var(--pairs-s2);
+}
+
+.pairs-stats-seg.is-s3,
+.pairs-stats-swatch.is-s3 {
+  fill: var(--pairs-s3);
+  background: var(--pairs-s3);
+}
+
+.pairs-stats-seg.is-other,
+.pairs-stats-swatch.is-other {
+  fill: var(--pairs-other);
+  background: var(--pairs-other);
+}
+
+.pairs-stats-track {
+  fill: var(--bg-muted);
+}
+
+.pairs-stats-fill {
+  fill: var(--accent);
+}
+
+.pairs-stats-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+  font-family: var(--mono);
+  font-size: var(--step--1);
+  color: var(--text-dim);
+  margin: 0.35rem 0 0;
+}
+
+.pairs-stats-type {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.pairs-stats-swatch {
+  flex: 0 0 auto;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 2px;
+  margin-right: 0.25rem;
+}
+
+.pairs-stats > .hint {
+  margin: 0.45rem 0 0;
+}
+
+.pairs-stats-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
+.pairs-stats-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+}
+
 /* The one disclosure left in the app: the error view's "what the file actually
    says", where the JSON under it is evidence a reader opens once. The General
    column's Metadata block used this shape too and is a card now (§26.6), which
@@ -8927,7 +9547,7 @@ body.is-carrying-card * {
   }
 
   .table {
-    max-height: calc(100vh - 12rem - var(--tabstrip-h));
+    max-height: calc(100vh - 12rem - var(--tabstrip-h) + var(--embed-room));
   }
 }
 
@@ -10585,19 +11205,59 @@ body.is-carrying-card * {
    size the panel *measured* (`ui/mapSize.ts`), already clamped to this cell and
    to the height budget, so it is both definite and correct; the floor is what a
    panel that has not measured itself yet draws for one frame, and it is small
-   rather than overflowing. `test/unit/deck-plot-css.test.ts` keeps it a number. */
+   rather than overflowing. `test/unit/deck-plot-css.test.ts` keeps it a number.
+
+   **The window's share has a floor**, the single view's 20rem. Without one a
+   short window — a notebook's 620-pixel frame, a laptop with its tools open —
+   took the lane stacks out of the height and handed the map what was left: a
+   map with three tracks under it in a deck of two drew a 42-pixel thumbnail.
+   The page scrolls instead, as the single view's does; `--map-size` is already
+   clamped to the cell, so the floor never pushes a map out of its column. */
 .deck .heatmap-wrap {
   width: min(
     var(--map-size, 20rem),
-    calc(100vh - 16rem - var(--tabstrip-h) - var(--lane-bottom, 0px) - var(--lane-top, 0px))
+    max(20rem, calc(100vh - 16rem - var(--tabstrip-h) + var(--embed-room) - var(--lane-bottom, 0px) - var(--lane-top, 0px)))
   );
 }
 
+/* **A heading wraps rather than runs into the next cell** (§16.9). Its
+   controls are one group (`panels/deckHead.ts`), and where the name cannot
+   keep its 6rem beside them the group goes to a line of its own under it, at
+   the cell's right, and the name takes the whole first line. Four maps across
+   a column with two side panels open are cells of 154 pixels, and a heading of
+   a grip, a name, a sequence, a star, a chain and a × cannot be less than 196:
+   the name went to its floor — `Y…` — and the controls ran on past the cell's
+   edge, the chain drawn over the next cell's grip and name. The basis is the
+   name's own floor now, and the line the group leaves it is the reason for one:
+   a name the reader can read, which `Y…` was not. */
 .deck-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.1rem 0.25rem;
   min-width: 0;
+}
+
+/* The group, at the end of the line or under the name; and, in a cell too
+   narrow even for the group alone, wrapping within itself to the right rather
+   than out of the cell. */
+.deck-tools {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.2rem;
+  min-width: 0;
+  margin-left: auto;
+}
+
+/* Square, as `.btn-icon` means them to be: `.btn`'s side padding comes later
+   in this sheet and made the star and the chain 36 pixels wide round a
+   13-pixel mark — wide enough, beside a rung picker, to put the chain and the
+   × on a line apart from the star. The window's pill sets its own, after. */
+.deck-tools .btn-icon {
+  padding: 0.3rem 0.35rem;
 }
 
 /* A panel's name, which is an `<input>` that looks like text until it has the
@@ -10605,8 +11265,8 @@ body.is-carrying-card * {
    frame appears on hover so the gesture is discoverable, and only then: a deck
    of five boxed headings reads as a form rather than as five pictures. */
 .deck-name {
-  flex: 1 1 auto;
-  min-width: 2rem;
+  flex: 1 1 6rem;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -10698,6 +11358,10 @@ span.deck-name {
 
 .deck-entry {
   flex: 0 0 auto;
+  /* As wide as the rung it says, as `.deck-seq` is as wide as its sequence:
+     sized to the longest rung in the file, it put a narrow cell's × on a line
+     of its own under the rest of its heading's controls. */
+  field-sizing: content;
   padding: 0.05rem 0.15rem;
   border-color: transparent;
   background: none;
@@ -11287,7 +11951,11 @@ span.deck-name {
 .deck-grid.is-alone > .deck-panel:not(.has-height) > .structure-body > .structure-wrap,
 .deck-grid.is-alone > .deck-panel:not(.has-height) > .tracks-body > .tracks-wrap {
   flex: 0 0 auto;
-  height: clamp(20rem, calc(100vh - 18.5rem - var(--tabstrip-h) - var(--deck-edge, 0px)), 60rem);
+  height: clamp(
+    20rem,
+    calc(100vh - 18.5rem - var(--tabstrip-h) + var(--embed-room) - var(--deck-edge, 0px)),
+    60rem
+  );
 }
 
 /* The bar under the picture that sets that height — a model's and a stack of
@@ -11705,6 +12373,78 @@ span.deck-name {
 .analysis-chip.is-done {
   border-color: var(--ok);
   color: var(--ok);
+}
+
+/* What the task re-implements (`ui/taskReference.ts`): a `?` in a circle at the
+   right of the title's line, after the chip. Green where the validation found
+   it identical or equivalent to its reference, the text's own colour where it
+   is untested. A mark and not a control — no fill, no hover state, the help
+   cursor its only invitation — so a column of twenty rows does not read as
+   twenty more buttons. Lucide's drawn mark, at 16 pixels: a typed `?` in a
+   bordered ring sat where the font's metrics put it, off-centre by a pixel on
+   some rows and not on others. */
+.task-ref {
+  display: inline-flex;
+  flex: 0 0 auto;
+  /* On the title's first line, centred on the chip beside it, as the chip
+     itself is held there (`align-self: start`): centred in the cell instead,
+     it sank to the middle of a title that wraps onto two lines. The chip is
+     about 0.27rem taller. */
+  align-self: start;
+  margin-top: 0.135rem;
+  color: var(--text);
+  cursor: help;
+}
+
+.task-ref > .icon {
+  display: block;
+}
+
+.task-ref.is-validated {
+  color: var(--ok);
+}
+
+/* The same width on a row with no `?`, so that every chip stands in one column
+   rather than the rows without a reference pushing theirs to the edge. */
+.task-ref-blank {
+  flex: 0 0 auto;
+  width: 16px;
+}
+
+/* The tip behind every `?` (`ui/questionMark.ts`) — a task's reference here,
+   an example session's contents on the landing page — hung from the body and
+   placed under the `?` by hand: a column scrolls and clips, and what the `?`
+   sits in is a button a link cannot sit inside. Small and plain, a text and a
+   quieter note under it, since it is a footnote and not a card of its own. */
+.question-tip {
+  position: fixed;
+  z-index: 95;
+  width: max-content;
+  max-width: min(19rem, calc(100vw - 1rem));
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-2);
+  font-size: var(--step--2);
+  line-height: 1.4;
+}
+
+.question-tip > p {
+  margin: 0;
+}
+
+.question-tip > .question-tip-note {
+  margin-top: 0.15rem;
+  color: var(--text-dim);
+}
+
+.question-tip a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }
 
 .analysis-chip.is-failed {
@@ -14517,6 +15257,33 @@ span.deck-name {
 .folders-asked .hint {
   flex: 1 1 20rem;
   margin: 0;
+}
+
+/* The grant this browser still holds for the file a tab is waiting on (§5.6),
+   in place of the red note: the same box, in the accent's wash rather than the
+   danger's, since what it asks for is one click and not a correction — and the
+   button is the page's one primary action until the file is back. A grant
+   that turns out to be spent goes back to the red. */
+.allow-asked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+  max-width: 90ch;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: var(--step--1);
+}
+
+.allow-asked-text {
+  flex: 1 1 24rem;
+  margin: 0;
+}
+
+.allow-asked.is-refused {
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 /* --- the guided tutorial (§30) ------------------------------------------- */

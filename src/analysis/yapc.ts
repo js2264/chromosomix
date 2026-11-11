@@ -337,6 +337,18 @@ function sameValue(a: number, b: number): boolean {
  * the kernel's total, a few times −10⁻¹¹ · `v` in either, and a window of zeros is
  * exactly zero.
  * Any `NaN` in the window makes the output `NaN`, as it does in a dot product.
+ *
+ * **Piece by piece, each position's terms in the order they always were.** A
+ * position's value is one term per piece its window meets, added from the
+ * leftmost piece to the rightmost, and that order is what fixes its last place.
+ * Summed a position at a time, every addition waits on the one before it — a
+ * chain of a hundred dependent float64 adds per base on an ATAC-seq pair, which
+ * was most of the time a genome-wide call took (§18.8). So the loop is turned
+ * inside out: each piece, in order, adds its term to every position whose
+ * window it meets ({@link addTerms}). Each position still receives its terms in
+ * the same order, as the same products of the same differences, so the result
+ * is bit for bit the one a position at a time gives; what changes is that
+ * neighbouring positions no longer wait on one another.
  */
 export function convolveSame(
   runs: Runs,
@@ -350,49 +362,145 @@ export function convolveSame(
    * constant, which is to say flat rather than curved. See {@link ConcaveScan}.
    */
   flat?: Uint8Array,
+  /**
+   * Where given — 1 or 0 at each position — only the positions marked 1 are
+   * computed, and the rest are `NaN`. A replicate's own second derivative is
+   * read only where the pooled one is concave — about half of a genome — so the
+   * rest is never summed.
+   */
+  only?: Uint8Array,
 ): Float64Array {
   const taps = kernel.values.length
-  const values = kernel.values
-  const cumulative = kernel.cumulative
   const centre = convolutionCentre(kernel, length)
   const out = new Float64Array(Math.max(0, to - from))
-  let first = 0
-  for (let i = from; i < to; i++) {
-    const reach = i + centre - (taps - 1)
-    const low = Math.max(0, reach)
-    const high = Math.min(length, i + centre + 1)
-    while (first < runs.length && runs.ends[first] <= low) first++
-    if (
-      flat !== undefined &&
-      reach >= 0 &&
-      i + centre + 1 <= length &&
-      first < runs.length &&
-      runs.starts[first] <= low &&
-      runs.ends[first] >= high
-    ) {
-      flat[i - from] = 1
+  if (only === undefined) addTerms(runs, kernel, centre, from, to, out, from)
+  else {
+    // Stretch by stretch of 1s, the gaps between them `NaN`.
+    let at = 0
+    while (at < out.length) {
+      const k = only.indexOf(1, at)
+      const start = k < 0 || k > out.length ? out.length : k
+      out.fill(Number.NaN, at, start)
+      if (start === out.length) break
+      const stop = only.indexOf(0, start)
+      const end = stop < 0 || stop > out.length ? out.length : stop
+      addTerms(runs, kernel, centre, from + start, from + end, out, from)
+      at = end
     }
-    const anchor = i + centre + 1
-    let total = 0
-    for (let r = first; r < runs.length; r++) {
-      const start = runs.starts[r]
-      if (start >= high) break
-      const value = runs.values[r]
-      if (value !== value) {
-        total = Number.NaN
-        break
-      }
-      const s = start > low ? start : low
-      const end = runs.ends[r]
-      const e = end < high ? end : high
-      // One base is one tap, taken as it is: a difference of running totals is
-      // accurate to their size rather than to the tap's, and a bigWig at base
-      // resolution is mostly pieces one or two bases long.
-      total += e - s === 1 ? value * values[anchor - 1 - s] : value * (cumulative[anchor - s] - cumulative[anchor - e])
+  }
+  if (flat !== undefined) {
+    // A window `[i + centre − (taps − 1), i + centre + 1)` inside one piece
+    // `[S, E)`: the positions from `S − centre + taps − 1` to `E − centre − 1`.
+    for (let r = 0; r < runs.length; r++) {
+      const first = Math.max(from, runs.starts[r] - centre + taps - 1)
+      const last = Math.min(to - 1, runs.ends[r] - centre - 1)
+      if (first <= last) flat.fill(1, first - from, last - from + 1)
     }
-    out[i - from] = total
   }
   return out
+}
+
+/**
+ * Every piece's term, added to each position of `[p, q)` whose window it meets,
+ * into `out` — which holds position `from` at index 0 and starts at zero.
+ *
+ * Position `i` reads the bases `[low, high)` below its **anchor** `a = i +
+ * centre + 1`: `low = max(0, a − taps)` and `high = min(length, a)`. A piece
+ * `[S, E)` meets it where `S < a < E + taps`, over `[max(S, low), min(E, high))`
+ * — and since a piece lies inside the sequence, the clamps at its two ends never
+ * decide that overlap: it starts at `S` while `a ≤ S + taps`, at `a − taps` after,
+ * and ends at `a` while `a < E`, at `E` after. So the anchors a piece reaches
+ * fall in four stretches, each one formula:
+ *
+ * 1. `S < a < E`, `a ≤ S + taps`: the window's right end inside the piece;
+ * 2. `E ≤ a ≤ S + taps`: the whole piece inside the window;
+ * 3. `S + taps < a < E`: the whole window inside the piece;
+ * 4. `a ≥ E`, `a > S + taps`: the window's left end inside the piece.
+ *
+ * The term is the one the overlap `[s, e)` always gave: `v · K[a − 1 − s]` for a
+ * single base, `v · (C[a − s] − C[a − e])` otherwise, with `K` the kernel and `C`
+ * its running total. One base is one tap, taken as it is: a difference of
+ * running totals is accurate to their size rather than to the tap's, and a
+ * bigWig at base resolution is mostly pieces one or two bases long. A single
+ * base is where stretch 1 begins, where stretch 4 ends, and the whole of
+ * stretch 2 for a piece one base long.
+ */
+function addTerms(
+  runs: Runs,
+  kernel: YapcKernel,
+  centre: number,
+  p: number,
+  q: number,
+  out: Float64Array,
+  from: number,
+): void {
+  const taps = kernel.values.length
+  const K = kernel.values
+  const C = kernel.cumulative
+  const starts = runs.starts
+  const ends = runs.ends
+  const level = runs.values
+  // Anchors `[first, last]`, and where anchor `a` is in `out`: `a + shift`.
+  const first = p + centre + 1
+  const last = q + centre
+  const shift = -(centre + 1) - from
+  // The first piece that reaches `first`: `E + taps − 1 ≥ first`.
+  let r = 0
+  let hi = runs.length
+  while (r < hi) {
+    const mid = (r + hi) >>> 1
+    if (ends[mid] > first - taps) hi = mid
+    else r = mid + 1
+  }
+  const C0 = C[0]
+  const sum = C[taps]
+  for (; r < runs.length; r++) {
+    const S = starts[r]
+    if (S + 1 > last) break
+    const E = ends[r]
+    const v = level[r]
+    // 1 · `s = S`, `e = a`.
+    let a0 = S + 1 > first ? S + 1 : first
+    let a1 = E - 1 < S + taps ? E - 1 : S + taps
+    if (a1 > last) a1 = last
+    if (a0 <= a1) {
+      let a = a0
+      if (a === S + 1) {
+        out[shift + a] += v * K[0]
+        a++
+      }
+      for (let o = shift + a, j = a - S, end = shift + a1; o <= end; o++, j++) out[o] += v * (C[j] - C0)
+    }
+    // 2 · `s = S`, `e = E`.
+    a0 = E > first ? E : first
+    a1 = S + taps < last ? S + taps : last
+    if (a0 <= a1) {
+      if (E - S === 1) {
+        for (let o = shift + a0, j = a0 - 1 - S, end = shift + a1; o <= end; o++, j++) out[o] += v * K[j]
+      } else {
+        for (let o = shift + a0, j = a0 - S, k = a0 - E, end = shift + a1; o <= end; o++, j++, k++) {
+          out[o] += v * (C[j] - C[k])
+        }
+      }
+    }
+    // 3 · `s = a − taps`, `e = a`: one term throughout.
+    a0 = S + taps + 1 > first ? S + taps + 1 : first
+    a1 = E - 1 < last ? E - 1 : last
+    if (a0 <= a1) {
+      const term = v * (sum - C0)
+      for (let o = shift + a0, end = shift + a1; o <= end; o++) out[o] += term
+    }
+    // 4 · `s = a − taps`, `e = E`, one base wide at the last anchor.
+    a0 = E > S + taps + 1 ? E : S + taps + 1
+    if (a0 < first) a0 = first
+    const single = E + taps - 1
+    a1 = single < last ? single : last
+    if (a0 <= a1) {
+      const end = shift + (a1 === single ? a1 - 1 : a1)
+      for (let o = shift + a0, k = a0 - E; o <= end; o++, k++) out[o] += v * (sum - C[k])
+      if (a1 === single) out[shift + single] += v * K[taps - 1]
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -418,6 +526,28 @@ export interface ConcaveRegions {
    * {@link ConcaveScan}.
    */
   readonly flat: Uint8Array
+}
+
+/** The most values per track {@link ConcaveScan} keeps room for once a region is closed. */
+const HELD_KEPT = 1 << 16
+
+/**
+ * yapc's test, `d2 < tol`, on the pooled second derivative as its bigWig holds
+ * it — float32 — and so the one place a position is concave or not.
+ */
+export function isConcave(d2: number): boolean {
+  return Math.fround(d2) < CONCAVE_TOLERANCE
+}
+
+/**
+ * 1 at each position {@link isConcave} holds for: the only positions whose
+ * per-track second derivatives {@link ConcaveScan.feed} reads, and so the only
+ * ones `convolveSame` need compute them at (its `only`).
+ */
+export function concaveMask(pooled: Float64Array): Uint8Array {
+  const out = new Uint8Array(pooled.length)
+  for (let k = 0; k < pooled.length; k++) if (isConcave(pooled[k])) out[k] = 1
+  return out
 }
 
 /**
@@ -499,7 +629,7 @@ export class ConcaveScan {
     for (let k = 0; k < pooled.length; k++) {
       const at = from + k
       const d2 = Math.fround(pooled[k])
-      const concave = d2 < CONCAVE_TOLERANCE
+      const concave = isConcave(d2)
       if (at === 0) {
         if (concave) this.begin(0)
       } else if (concave && !this.previous) {
@@ -552,6 +682,10 @@ export class ConcaveScan {
     this.ties = []
     this.heldLength = 0
     this.openFlat = 0
+    // A stretch of flat signal megabases long is one region, and grows these to
+    // fit it — 32 MB a track over a mouse centromere's zeros. Let that go with the
+    // region rather than hold it to the end of the sequence.
+    if (this.held[0].length > HELD_KEPT) this.held = this.held.map(() => new Float64Array(1024))
   }
 
   private hold(tracks: readonly Float64Array[], k: number): void {
@@ -637,6 +771,192 @@ export function strongestRegions(
   const kept = order.slice(0, Math.max(0, Math.min(n, limit)))
   kept.sort(byPosition)
   return Int32Array.from(kept)
+}
+
+/**
+ * {@link strongestRegions}, fed one region at a time, holding only the regions
+ * that can still be among the strongest.
+ *
+ * yapc ranks every candidate of the genome in each track before it cuts to the
+ * strongest `limit`, and this did too, holding every one of them to the end —
+ * 5.6 million on a mouse ATAC-seq pair, most of a gigabyte (§18.8) — for the
+ * hundred thousand it kept. Far fewer decide the cut:
+ *
+ * - each track's `limit` highest scores, its ties at the cut included, are some
+ *   `m ≥ limit` regions ranked `m` or better, so the best rank `B` of the last
+ *   region kept is at most `m`;
+ * - a region outside them ranks `m + 1` or worse in that track, whether ranked
+ *   among every region or among those held, since every region above it is held.
+ *
+ * So a region with a best rank of `B` or better has it in a track whose top it is
+ * in, where its rank among those held is its rank among all, and is worse than
+ * `B` nowhere it ranks lower; and a region whose best rank is worse than `B` is
+ * worse than `B` among those held too. {@link strongestRegions} over the regions
+ * held therefore keeps the same regions, in the same order. A region is let go
+ * when its score in every track is below that track's `limit`-th highest so far,
+ * a threshold that only rises, so nothing let go could have come back.
+ *
+ * **Except past a `NaN` score**, which only a track holding an infinite value can
+ * give: ranked by a comparison that is false both ways, it leaves an order that
+ * depends on every region there is, and no subset reproduces it. The first one
+ * stops the pruning, and {@link finish} says whether anything had been let go
+ * before it ({@link StrongestRegionsHeld.exact}), in which case the caller has to
+ * run again holding everything (`prune: false`).
+ */
+export class StrongestRegions {
+  private size = 0
+  private contigs: string[] = []
+  private starts = new Int32Array(1024)
+  private ends = new Int32Array(1024)
+  private modes = new Int32Array(1024)
+  private flats = new Uint8Array(1024)
+  private scores: Float64Array[]
+  /** Each track's `limit`-th highest score so far; −∞ until there are `limit`. */
+  private readonly floor: Float64Array
+  private seen = 0
+  private dropped = 0
+  private holdAll = false
+  /** Track 0's score of each region let go, where it is positive and not flat. */
+  private below: Float64Array | null
+  private belowSize = 0
+
+  constructor(
+    private readonly tracks: number,
+    private readonly limit: number,
+    options: {
+      /** `false` to hold every region, as {@link strongestRegions} is given them. */
+      prune?: boolean
+      /**
+       * Keep track 0's curvature of each region let go — the one-track figure
+       * draws every candidate, tested or not.
+       */
+      below?: boolean
+    } = {},
+  ) {
+    this.scores = Array.from({ length: tracks }, () => new Float64Array(1024))
+    this.floor = new Float64Array(tracks).fill(Number.NEGATIVE_INFINITY)
+    if (options.prune === false) this.holdAll = true
+    this.below = options.below === true ? new Float64Array(1024) : null
+  }
+
+  /** Region `i` of one sequence's regions. */
+  add(regions: ConcaveRegions, i: number): void {
+    this.seen++
+    let keep = this.holdAll
+    for (let t = 0; t < this.tracks; t++) {
+      const score = regions.scores[t][i]
+      if (score !== score && !this.holdAll) {
+        this.holdAll = true
+        keep = true
+      }
+      if (score >= this.floor[t]) keep = true
+    }
+    if (!keep) {
+      this.drop(regions.scores[0][i], regions.flat[i])
+      return
+    }
+    if (this.size === this.starts.length) this.grow()
+    const at = this.size++
+    this.contigs[at] = regions.contig
+    this.starts[at] = regions.starts[i]
+    this.ends[at] = regions.ends[i]
+    this.modes[at] = regions.modes[i]
+    this.flats[at] = regions.flat[i]
+    for (let t = 0; t < this.tracks; t++) this.scores[t][at] = regions.scores[t][i]
+    if (!this.holdAll && this.size >= 2 * this.tracks * this.limit + 1024) this.prune()
+  }
+
+  /** The regions held, and the strongest `limit` of them in yapc's IDR order. */
+  finish(): StrongestRegionsHeld {
+    if (!this.holdAll) this.prune()
+    const n = this.size
+    const held = {
+      contig: this.contigs.slice(0, n),
+      starts: this.starts.slice(0, n),
+      ends: this.ends.slice(0, n),
+      modes: this.modes.slice(0, n),
+      flat: this.flats.slice(0, n),
+      scores: this.scores.map((column) => column.slice(0, n)),
+    }
+    return {
+      ...held,
+      tested: strongestRegions(held.contig, held.starts, held.ends, held.scores, this.limit),
+      below: this.below === null ? new Float64Array(0) : this.below.slice(0, this.belowSize),
+      exact: !(this.holdAll && this.dropped > 0),
+    }
+  }
+
+  /** Raise each track's threshold to its `limit`-th highest, and let go what is under all of them. */
+  private prune(): void {
+    if (this.seen < this.limit) return
+    const n = this.size
+    for (let t = 0; t < this.tracks; t++) {
+      // Every region at or above the old threshold is held, and the `limit`
+      // highest of all are among them, so the `limit`-th highest held is theirs.
+      const sorted = this.scores[t].slice(0, n).sort()
+      this.floor[t] = sorted[n - this.limit]
+    }
+    let kept = 0
+    for (let i = 0; i < n; i++) {
+      let keep = false
+      for (let t = 0; t < this.tracks; t++) if (this.scores[t][i] >= this.floor[t]) keep = true
+      if (!keep) {
+        this.drop(this.scores[0][i], this.flats[i])
+        continue
+      }
+      if (kept !== i) {
+        this.contigs[kept] = this.contigs[i]
+        this.starts[kept] = this.starts[i]
+        this.ends[kept] = this.ends[i]
+        this.modes[kept] = this.modes[i]
+        this.flats[kept] = this.flats[i]
+        for (let t = 0; t < this.tracks; t++) this.scores[t][kept] = this.scores[t][i]
+      }
+      kept++
+    }
+    this.size = kept
+    this.contigs.length = kept
+  }
+
+  private drop(score: number, flat: number): void {
+    this.dropped++
+    if (this.below === null || !(score > 0) || flat === 1) return
+    if (this.belowSize === this.below.length) {
+      const grown = new Float64Array(this.below.length * 2)
+      grown.set(this.below)
+      this.below = grown
+    }
+    this.below[this.belowSize++] = score
+  }
+
+  private grow(): void {
+    const twice = <T extends Int32Array | Uint8Array | Float64Array>(values: T): T => {
+      const grown = new (values.constructor as new (n: number) => T)(values.length * 2)
+      grown.set(values)
+      return grown
+    }
+    this.starts = twice(this.starts)
+    this.ends = twice(this.ends)
+    this.modes = twice(this.modes)
+    this.flats = twice(this.flats)
+    this.scores = this.scores.map(twice)
+  }
+}
+
+/** What {@link StrongestRegions} held, and what it found among them. */
+export interface StrongestRegionsHeld {
+  readonly contig: string[]
+  readonly starts: Int32Array
+  readonly ends: Int32Array
+  readonly modes: Int32Array
+  readonly flat: Uint8Array
+  readonly scores: Float64Array[]
+  /** {@link strongestRegions} of the regions held: indices into them, in yapc's IDR order. */
+  readonly tested: Int32Array
+  /** Track 0's positive curvature of every non-flat region let go, where asked for. */
+  readonly below: Float64Array
+  /** `false` where a `NaN` score came after a region was let go: run again, holding everything. */
+  readonly exact: boolean
 }
 
 /**

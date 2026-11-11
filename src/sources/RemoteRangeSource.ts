@@ -18,19 +18,31 @@
  *
  * Reads must be synchronous because Emscripten's stream `read` is synchronous,
  * so this only works where synchronous `XMLHttpRequest` is allowed: **inside a
- * worker**. That is where all I/O lives anyway.
+ * worker**. That is where all I/O lives anyway. The command line has no such
+ * request, and hands a synchronous fetch of its own instead
+ * ({@link RemoteRangeOptions.syncFetch}, `cli/syncFetch.ts`).
  */
 
 import type { ByteSource, SourceStats } from '../types'
 import { ViewerError } from '../errors'
-import type { H5FSNode } from '../h5/bootstrap'
 import { getH5 } from '../h5/bootstrap'
+import { mountLazyFile, unmountLazyFile } from '../h5/lazyFile'
 import type { S3Credential } from '../s3/sigv4'
 import { accessHeaders } from './access'
 import { isSignedUrl } from './rewrite'
 
-/** 1 MiB. Large enough that HDF5's metadata walk lands repeatedly in one chunk. */
-const DEFAULT_CHUNK_SIZE = 1 << 20
+/**
+ * 256 KiB: what one scattered read costs.
+ *
+ * Opening a cooler is a walk of HDF5 metadata — a superblock, group and
+ * dataset headers, B-tree nodes, a few hundred bytes each — that lands far
+ * apart in a large file, so each lands in a chunk of its own and the chunk is
+ * almost all of what the walk moves. At 1 MiB the 7.9 GB 4DN map of K562
+ * (4DNFI18UHVRO) read 24 MB in 21 requests before its first picture at MYC; at
+ * 256 KiB it reads 9.7 MB in 25. A stretch read chunk after chunk does not pay
+ * for the smaller chunk: read-ahead counts in bytes ({@link AHEAD_FIRST_BYTES}).
+ */
+const DEFAULT_CHUNK_SIZE = 1 << 18
 
 /** 64 MiB of chunks retained. Well above one MAG's matrix, far below a file. */
 const DEFAULT_CACHE_BYTES = 64 << 20
@@ -43,6 +55,17 @@ const NEAR_BYTES = 4 << 20
 
 /** The most one miss fetches beyond what it needs. */
 const MAX_AHEAD_BYTES = 16 << 20
+
+/**
+ * What the first fetch ahead adds, doubling with each near miss after it.
+ *
+ * In bytes and not in chunks, so a stretch read chunk after chunk ramps up as
+ * it did at 1 MiB chunks — 1, 2, 4 and 8 MiB ahead, then 16 MiB a fetch —
+ * whatever the chunk is.
+ * Counted in chunks, the 256 KiB chunk would have started at a quarter of that
+ * and spent two more round trips on every stretch reaching full speed.
+ */
+const AHEAD_FIRST_BYTES = 1 << 20
 
 /** Recent fetches remembered, so several streams read side by side are each seen. */
 const RECENT_FETCHES = 8
@@ -71,6 +94,12 @@ export interface RemoteRangeOptions {
   /** Injected for tests. Defaults to the global `fetch`. */
   fetchImpl?: typeof fetch
   /**
+   * The synchronous request every chunk is fetched with. A synchronous
+   * `XMLHttpRequest` where there is none given — a browser worker's — and the
+   * command line's own where there is not one of those (`cli/syncFetch.ts`).
+   */
+  syncFetch?: SyncRangeFetch
+  /**
    * The credential to sign every request with, for a private bucket.
    *
    * Omitted for a public object, and that is not merely an optimisation:
@@ -95,6 +124,36 @@ export interface RemoteRangeOptions {
    * held and merged in front of the signature by `sources/access.ts`.
    */
   headers?: Record<string, string>
+}
+
+/** What one synchronous range request answered. */
+export interface SyncRangeAnswer {
+  status: number
+  body: Uint8Array
+  /** The `Content-Range` header, or `null` where the response had none. */
+  contentRange: string | null
+}
+
+/**
+ * A synchronous `GET` of `url` with `headers` — `Range` among them — or a throw
+ * where no response arrived.
+ */
+export type SyncRangeFetch = (url: string, headers: Record<string, string>) => SyncRangeAnswer
+
+/** The browser's synchronous fetch: an `XMLHttpRequest`, legal only inside a worker. */
+function xhrRange(url: string, headers: Record<string, string>): SyncRangeAnswer {
+  const xhr = new XMLHttpRequest()
+  xhr.open('GET', url, false)
+  for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value)
+  // Allowed on a synchronous request only inside a worker; the guard in
+  // mount() is what makes this reachable.
+  xhr.responseType = 'arraybuffer'
+  xhr.send(null)
+  return {
+    status: xhr.status,
+    body: new Uint8Array((xhr.response as ArrayBuffer | null) ?? new ArrayBuffer(0)),
+    contentRange: xhr.getResponseHeader('content-range'),
+  }
 }
 
 export class RemoteRangeSource implements ByteSource {
@@ -123,6 +182,8 @@ export class RemoteRangeSource implements ByteSource {
   private readonly headers: Record<string, string> | undefined
   /** What {@link readExact} fetches through — the probe's own, so a test's stub serves both. */
   private readonly fetchImpl: typeof fetch
+  /** What every chunk is fetched through, or `null` for the worker's own `XMLHttpRequest`. */
+  private readonly syncFetch: SyncRangeFetch | null
 
   private constructor(
     url: string,
@@ -139,6 +200,7 @@ export class RemoteRangeSource implements ByteSource {
     // object throws "Illegal invocation".
     this.fetchImpl =
       options.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init))
+    this.syncFetch = options.syncFetch ?? null
     this.chunkSize = Math.max(1, Math.trunc(options.chunkSize ?? DEFAULT_CHUNK_SIZE))
     this.readAhead = options.readAhead ?? true
     this.onRead = options.onRead
@@ -216,10 +278,8 @@ export class RemoteRangeSource implements ByteSource {
         'bad-uri',
         options.credential === undefined
           ? `${host} answered ${head.status} ${head.statusText} to a HEAD of ${url}; ` +
-            'the viewer needs a publicly readable object, or a bucket entry holding a key ' +
-            'for it (Open a file → Private buckets). A presigned link is read without this ' +
-            'probe and does not reach here, so a URL carrying a signature in its query that ' +
-            'fails has expired rather than been rejected for its method.'
+            'the viewer needs a publicly readable object, or a bucket connected with a key ' +
+            'for it (connect a bucket…, on the landing page or in the Files column).'
           : `${host} answered ${head.status} ${head.statusText} to a signed HEAD of ${url}. ` +
             'The key reached the bucket and was rejected: check that the region on the ' +
             'bucket entry matches the bucket, that the key is allowed `s3:GetObject` on ' +
@@ -272,7 +332,13 @@ export class RemoteRangeSource implements ByteSource {
       )
     }
 
-    const declaredLength = numberHeader(head, 'content-length')
+    // A `HEAD` that states no bytes has stated nothing: jupyter-server-proxy —
+    // the way into a kernel's files behind JupyterHub — answers every `HEAD`
+    // with `Content-Length: 0` whatever the file is, and believing it mounted a
+    // map as a file of no bytes ("not an HDF5 file"). A file that really is
+    // empty is nothing to open either, and the probe below says which.
+    const statedLength = numberHeader(head, 'content-length')
+    const declaredLength = statedLength === 0 ? null : statedLength
     const acceptsRanges = (head?.headers.get('accept-ranges') ?? '').toLowerCase().includes('bytes')
 
     if (acceptsRanges && declaredLength !== null) {
@@ -300,8 +366,20 @@ export class RemoteRangeSource implements ByteSource {
         // viewer reads in slices and where to host the file, twice, an inch
         // apart. What the advice cannot know is which host, which URL and what
         // came back instead of a 206, so that is what stays here.
-        `${host} does not serve HTTP range requests: a “Range: bytes=0-0” request for ` +
-          `${url} returned ${probe.status}, not 206 Partial Content.`,
+        //
+        // An error status is not a host that ignores `Range`: it is the
+        // address's own answer — no file, or not for this page — and the page
+        // heads it as a refusal (`ErrorView`, `REFUSED_GUIDANCE`). It is where
+        // a presigned link arrives once it has expired, since it skips the
+        // `HEAD` above, so a signed address says so.
+        probe.status >= 400
+          ? `${host} answered ${probe.status} ${probe.statusText} to a request for the first ` +
+              `byte of ${url}` +
+              (isSignedUrl(url)
+                ? ': this is a presigned link, and a host refuses one once it has expired.'
+                : '.')
+          : `${host} does not serve HTTP range requests: a “Range: bytes=0-0” request for ` +
+              `${url} returned ${probe.status}, not 206 Partial Content.`,
         { url, host, status: probe.status },
       )
     }
@@ -322,14 +400,13 @@ export class RemoteRangeSource implements ByteSource {
   /**
    * Create the lazy FS node and return its path.
    *
-   * The node carries a `contents` object with a `length` and our own `read`
-   * stream op, mirroring what `FS.createLazyFile` builds; `usedBytes` has to be
-   * a getter over `contents.length` or MEMFS's `getattr` reports a zero-length
-   * file and HDF5 refuses to open it.
+   * A file whose every read is {@link copyInto}, mirroring what
+   * `FS.createLazyFile` builds — in MEMFS in a worker, and beside the real
+   * filesystem under the command line's NODERAWFS (`h5/lazyFile.ts`).
    */
   async mount(): Promise<string> {
     if (this.mountPath !== null) return this.mountPath
-    if (typeof XMLHttpRequest === 'undefined') {
+    if (this.syncFetch === null && typeof XMLHttpRequest === 'undefined') {
       throw new ViewerError(
         'remote-cors',
         'remote files are read with synchronous XMLHttpRequest, which exists only in a ' +
@@ -339,40 +416,9 @@ export class RemoteRangeSource implements ByteSource {
     }
     const h5 = await getH5()
     const leaf = `remote-${Math.abs(hash(this.url)).toString(36)}`
-    const node: H5FSNode = h5.FS.createFile('/', leaf, {}, true, false)
-    const contents = { length: this.size }
-    node.contents = contents
-    Object.defineProperty(node, 'usedBytes', { get: () => contents.length })
-
-    const inherited = node.stream_ops
-    // Copy: MEMFS shares one stream_ops object across every file it created.
-    node.stream_ops = {
-      ...inherited,
-      read: (
-        _stream: unknown,
-        buffer: Uint8Array,
-        offset: number,
-        length: number,
-        position: number,
-      ): number => {
-        if (position >= this.size) return 0
-        const n = Math.min(this.size - position, length)
-        this.copyInto(buffer, offset, position, n)
-        return n
-      },
-      mmap: (
-        _stream: unknown,
-        length: number,
-        position: number,
-      ): { ptr: number; allocated: boolean } => {
-        const ptr = h5.Module._malloc(length)
-        if (ptr === 0) throw new Error('mmap allocation failed')
-        const n = Math.max(0, Math.min(this.size - position, length))
-        if (n > 0) this.copyInto(h5.Module.HEAPU8, ptr, position, n)
-        return { ptr, allocated: true }
-      },
-    }
-    this.mountPath = `/${leaf}`
+    this.mountPath = mountLazyFile(h5, leaf, this.size, (buffer, offset, position, length) =>
+      this.copyInto(buffer, offset, position, length),
+    )
     return this.mountPath
   }
 
@@ -383,13 +429,7 @@ export class RemoteRangeSource implements ByteSource {
     const path = this.mountPath
     this.mountPath = null
     void getH5().then(
-      (h5) => {
-        try {
-          h5.FS.unlink(path)
-        } catch {
-          // Nothing to do: the FS may already be gone with the worker.
-        }
-      },
+      (h5) => unmountLazyFile(h5, path),
       () => undefined,
     )
   }
@@ -431,12 +471,26 @@ export class RemoteRangeSource implements ByteSource {
    * The cache is consulted and never filled: a range whose chunks are all held
    * is copied out of them for nothing, and any other is fetched as asked for
    * and handed over whole. Filling the cache from it would need the chunks
-   * either side, which is the megabyte this exists not to fetch — see
+   * either side, which are the bytes this exists not to fetch — see
    * `ByteSource.readExact`.
    *
    * Through `fetch`, not the synchronous request every other read makes, so the
    * worker is free while it is in flight and a walk can have several at once.
    * The request is otherwise the same one, refused the same ways.
+   *
+   * **And past the browser's HTTP cache (`no-store`), or the several are one.**
+   * Chromium's cache lets one request per URL write its entry at a time; every
+   * other request for that URL, whatever its range, waits for the entry before
+   * it is sent. A walk's reads are all of one URL, so the six a whole-genome
+   * picture had out went to the network one after another. Measured in
+   * Chromium on the 4DN chicken map: requests made a second before they were
+   * sent, never more than one on the wire, and the picture's 432 reads took 60 s.
+   * Past the cache they go out together and it takes 12–14 s; the mouse map, 75 s
+   * then and 17 s now. Nothing is lost by it: these are bytes read once
+   * and kept nowhere, and a second open of the same file in the same browser
+   * re-read all 30 MB of them through the cache as well. A synchronous read
+   * cannot say the same (`XMLHttpRequest` has no cache mode), and needs not: one
+   * worker has one of those out at a time anyway.
    */
   async readExact(position: number, length: number): Promise<Uint8Array> {
     const n = Math.max(0, Math.min(this.size - position, length))
@@ -453,6 +507,7 @@ export class RemoteRangeSource implements ByteSource {
     const response = await doFetch(this.url, {
       method: 'GET',
       headers: { ...this.authorisation(), Range: `bytes=${from}-${to}` },
+      cache: 'no-store',
     })
     this.requests += 1
     this.refuseStatus(response.status, from, to)
@@ -477,7 +532,7 @@ export class RemoteRangeSource implements ByteSource {
    *
    * Contiguous missing chunks are fetched in **one** range request. That
    * coalescing is what keeps a bounded pixel slice inside the §12 budget of
-   * five requests: without it, a 4 MB slice at 1 MiB chunks would be four.
+   * five requests: without it, a 4 MB slice at 256 KiB chunks would be sixteen.
    *
    * Bytes are copied straight out of the response and only *then* offered to
    * the cache. Doing it the other way round — fill the cache, read it back —
@@ -531,8 +586,9 @@ export class RemoteRangeSource implements ByteSource {
    *
    * So a miss that lands within {@link NEAR_BYTES} of one of the last few
    * fetches is taken as that region still being read, and from the third such
-   * miss in a row the fetch runs ahead, doubling each time up to
-   * {@link MAX_AHEAD_BYTES}. The count is kept per region, so a read of the
+   * miss in a row the fetch runs ahead — {@link AHEAD_FIRST_BYTES}, then
+   * doubling each time up to {@link MAX_AHEAD_BYTES}, the same bytes whatever
+   * the chunk. The count is kept per region, so a read of the
    * weights or the index between two pixel chunks does not start the pixels'
    * count again. A miss far from anything recent is a new question — an index,
    * a header, another sequence — and fetches what it asks for and nothing more,
@@ -547,12 +603,11 @@ export class RemoteRangeSource implements ByteSource {
     }
     if (streak < 2) return { ahead: 0, streak }
     const most = Math.max(0, Math.floor(MAX_AHEAD_BYTES / this.chunkSize) - (end - index + 1))
-    return { ahead: Math.min(most, 2 ** (streak - 2)), streak }
+    const first = Math.max(1, Math.floor(AHEAD_FIRST_BYTES / this.chunkSize))
+    return { ahead: Math.min(most, first * 2 ** (streak - 2)), streak }
   }
 
   private fetchRange(from: number, to: number): Uint8Array {
-    const xhr = new XMLHttpRequest()
-    xhr.open('GET', this.url, false)
     // The synchronous signature. Every header here is computed in a straight
     // line by `s3/sigv4.ts` — no promise, no `crypto.subtle` — because there is
     // nowhere in this method to await one: it is called from an Emscripten
@@ -564,18 +619,13 @@ export class RemoteRangeSource implements ByteSource {
     // request against a cached key. The static headers — an API key, a bearer
     // token — go on with it and before it, for the same reason and in the order
     // `sources/access.ts` fixes.
-    for (const [name, value] of Object.entries(this.authorisation())) xhr.setRequestHeader(name, value)
-    xhr.setRequestHeader('Range', `bytes=${from}-${to}`)
-    // Allowed on a synchronous request only inside a worker; the guard in
-    // mount() is what makes this reachable.
-    xhr.responseType = 'arraybuffer'
-    xhr.send(null)
+    const headers = { ...this.authorisation(), Range: `bytes=${from}-${to}` }
+    const answer = (this.syncFetch ?? xhrRange)(this.url, headers)
     this.requests += 1
-    this.refuseStatus(xhr.status, from, to)
-    const body = new Uint8Array((xhr.response as ArrayBuffer | null) ?? new ArrayBuffer(0))
-    this.bytesRead += body.byteLength
+    this.refuseStatus(answer.status, from, to)
+    this.bytesRead += answer.body.byteLength
     this.onRead?.(this.requests, this.bytesRead)
-    return this.windowOf(body, from, to, xhr.getResponseHeader('content-range'))
+    return this.windowOf(answer.body, from, to, answer.contentRange)
   }
 
   /** What authorises a `GET` of this object — a signature, a header bag, both or neither. */

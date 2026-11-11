@@ -311,7 +311,7 @@ export function ideogramBody(thickness: number): number {
  * Trace each chromosome's outline into the current path, and fill and stroke
  * nothing: one closed subpath a run, the shape {@link drawIdeogram} fills its
  * bands inside. What the ideogram view clips a chromosome's own colouring to
- * (§5.10), so a body coloured by a track still pinches at its centromere and
+ * (§5.11), so a body coloured by a track still pinches at its centromere and
  * rounds at its telomeres. Returns how many runs it traced — none where the
  * file has no band on the sequences in view.
  */
@@ -343,7 +343,7 @@ export function traceIdeogramOutline(
  * `body` is how thick the chromosome is drawn: the lane's own rule by default,
  * which keeps room round it for the lane's label, and the frame's whole
  * thickness in the ideogram view, where the frame *is* the chromosome and its
- * width is the reader's to set (§5.10).
+ * width is the reader's to set (§5.11).
  */
 export function drawIdeogram(
   ctx: CanvasRenderingContext2D,

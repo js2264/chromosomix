@@ -46,6 +46,8 @@ import {
   defaultStructureStyle,
   isIntervalSet,
   isStructure,
+  pinAt,
+  pinOf,
   structureStyleOf,
 } from '@/annotations/types'
 
@@ -395,6 +397,19 @@ describe('the structure style', () => {
     expect(structureStyleOf({ axesFrame: [0, 0, 0, 0] }).axesFrame).toEqual([0, 0, 0, 1])
     expect(structureStyleOf({ axesFrame: 'sideways' }).axesFrame).toEqual([0, 0, 0, 1])
     expect(structureStyleOf({ axesFrame: [1, 2, 3] }).axesFrame).toEqual([0, 0, 0, 1])
+  })
+
+  it('keeps the pinned bead by its place, and refuses one that names none (§25.5)', () => {
+    // What a model coloured by distance is coloured from: on the row, so a
+    // saved session comes back coloured from the same place.
+    expect(defaultStructureStyle().pin).toBe('')
+    expect(structureStyleOf({ pin: 'chr14:89599000' }).pin).toBe('chr14:89599000')
+    expect(pinOf('chr14:89599000')).toEqual({ contig: 'chr14', bp: 89599000 })
+    expect(pinAt('chr14', 89598000, 89600000)).toBe('chr14:89599000')
+    for (const bad of ['chr14', 'chr14:', ':12', 'chr14:1e6', 'chr 14:1', 7]) {
+      expect(structureStyleOf({ pin: bad }).pin).toBe('')
+    }
+    expect(pinOf('')).toBeNull()
   })
 
   it('is present on a fresh structure row and on no other kind', () => {

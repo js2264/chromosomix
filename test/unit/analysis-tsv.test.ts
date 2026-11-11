@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { outputToTsv, provenanceLines, tsvName } from '@/analysis/write/tsv'
+import { outputToTsv, provenanceLines, textOf, tsvName } from '@/analysis/write/tsv'
 import type {
   CurveOutput,
   MatrixOutput,
@@ -88,7 +88,7 @@ const PROFILE: ProfileOutput = {
 
 describe('outputToTsv, profile', () => {
   it('writes a missing bin as an empty cell and never as the text NaN', () => {
-    const text = outputToTsv(PROFILE, PROVENANCE)
+    const text = textOf(outputToTsv(PROFILE, PROVENANCE))
     expect(text).not.toContain('NaN')
     expect(body(text)).toEqual([
       ['bin', 'start', 'end', 'value'],
@@ -99,7 +99,7 @@ describe('outputToTsv, profile', () => {
   })
 
   it('ends in exactly one newline', () => {
-    const text = outputToTsv(PROFILE, PROVENANCE)
+    const text = textOf(outputToTsv(PROFILE, PROVENANCE))
     expect(text.endsWith('\n')).toBe(true)
     expect(text.endsWith('\n\n')).toBe(false)
   })
@@ -131,7 +131,7 @@ describe('outputToTsv, curve', () => {
   }
 
   it('pads the shorter series rather than truncating the longer one', () => {
-    expect(body(outputToTsv(curve, PROVENANCE))).toEqual([
+    expect(body(textOf(outputToTsv(curve, PROVENANCE)))).toEqual([
       ['distance', 'short', 'short_low', 'short_high', 'long'],
       ['1000', '0.1', '0.08', '0.12', '0.2'],
       ['2000', '0.05', '0.04', '0.06', '0.1'],
@@ -151,7 +151,7 @@ describe('outputToTsv, curve', () => {
         { name: 'cis', x: Float64Array.from([0, 1, 2]), y: Float64Array.from([1, 0.5, 0]) },
       ],
     }
-    expect(body(outputToTsv(named, PROVENANCE))).toEqual([
+    expect(body(textOf(outputToTsv(named, PROVENANCE)))).toEqual([
       ['Sequence', 'cis'],
       ['I', '1'],
       ['II', '0.5'],
@@ -177,7 +177,7 @@ describe('outputToTsv, matrix', () => {
   }
 
   it('puts the ticks on both edges and the statistics above the table', () => {
-    const text = outputToTsv(matrix, PROVENANCE)
+    const text = textOf(outputToTsv(matrix, PROVENANCE))
     expect(text).toContain('# P2LL: 1.83')
     expect(body(text)).toEqual([
       ['offset', '-10 kb', '0', '+10 kb'],
@@ -188,7 +188,7 @@ describe('outputToTsv, matrix', () => {
 
   it('falls back to indices where an axis carries no ticks', () => {
     const bare: MatrixOutput = { ...matrix, xTicks: [], yTicks: [] }
-    expect(body(outputToTsv(bare, PROVENANCE))[0]).toEqual(['offset', '0', '1', '2'])
+    expect(body(textOf(outputToTsv(bare, PROVENANCE)))[0]).toEqual(['offset', '0', '1', '2'])
   })
 
   it('writes the edge profiles as a block of their own under the matrix', () => {
@@ -203,7 +203,7 @@ describe('outputToTsv, matrix', () => {
         right: [{ name: 'ATAC', values: Float64Array.from([4, Number.NaN]) }],
       },
     }
-    const text = outputToTsv(withEdges, PROVENANCE)
+    const text = textOf(outputToTsv(withEdges, PROVENANCE))
     expect(text).toContain('# aggregate profiles along the edges')
     // Split without trimming: the last row ends in the tab of a gap, and a
     // trim would take it off and make the assertion below a lie about the file.
@@ -217,7 +217,7 @@ describe('outputToTsv, matrix', () => {
   })
 
   it('writes no such block where the pileup has no profiles', () => {
-    expect(outputToTsv(matrix, PROVENANCE)).not.toContain('aggregate profiles')
+    expect(textOf(outputToTsv(matrix, PROVENANCE))).not.toContain('aggregate profiles')
   })
 
   it('does not put a positional tick list over the first few columns', () => {
@@ -231,7 +231,7 @@ describe('outputToTsv, matrix', () => {
       xTicks: ['-0.5', '1.5'],
       yTicks: ['-0.5', '0.5', '1.5'],
     }
-    const text = outputToTsv(scaled, PROVENANCE)
+    const text = textOf(outputToTsv(scaled, PROVENANCE))
     expect(text).toContain('# x ticks, evenly spaced across the axis: -0.5, 1.5')
     expect(text).toContain('# y ticks, evenly spaced across the axis: -0.5, 0.5, 1.5')
     expect(body(text)).toEqual([
@@ -239,6 +239,21 @@ describe('outputToTsv, matrix', () => {
       ['0', '1', '2', '3'],
       ['1', '4', '', '6'],
     ])
+  })
+
+  it('says where placed ticks stand, in columns, left to right', () => {
+    // A scaled metaplot's heatmap names its landmarks where they fall — Start
+    // and End wherever the flanks end — and lists them in the order they are
+    // labelled in, which is not the order along the axis. The file says each
+    // one's place, sorted, so it can be lined up against the column indices.
+    const placed: MatrixOutput = {
+      ...matrix,
+      xTicks: ['Start', 'End', '-1 kb', '+1 kb'],
+      xTickAt: [1 / 3, 2 / 3, 0, 1],
+    }
+    const text = textOf(outputToTsv(placed, PROVENANCE))
+    expect(text).toContain('# x ticks, at a column edge (0 to 3): -1 kb at 0, Start at 1, End at 2, +1 kb at 3')
+    expect(text).not.toContain('evenly spaced')
   })
 })
 
@@ -265,7 +280,7 @@ describe('outputToTsv, table', () => {
   }
 
   it('writes a value too small for its digits with an exponent, where the column allows it', () => {
-    const rows = body(outputToTsv(tests, PROVENANCE))
+    const rows = body(textOf(outputToTsv(tests, PROVENANCE)))
     expect(rows[0]).toEqual(['test', 'effect', 'p'])
     expect(rows[1]).toEqual(['Mann–Whitney U', '0.445', '6.53123e-23'])
     expect(Number(rows[1][2])).toBeCloseTo(6.53123e-23, 28)
@@ -290,7 +305,7 @@ describe('outputToTsv, table', () => {
       ],
       rows: [{ contig: 'IV', start: 1_000_000, end: 1_000_500 }],
     }
-    const text = outputToTsv(features, PROVENANCE)
+    const text = textOf(outputToTsv(features, PROVENANCE))
     expect(text).toMatch(/^# columns: Sequence, Start \(0-based\), End$/m)
     expect(body(text)[1]).toEqual(['IV', '1000000', '1000500'])
   })

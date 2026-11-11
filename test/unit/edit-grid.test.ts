@@ -1,3 +1,4 @@
+// @dev-feature edit
 /**
  * The lens at the picture's grid (SPECS §27.2, §27.9): which picture cell each
  * cell of the edited axis shows, the axis the lanes are drawn through, and the

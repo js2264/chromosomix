@@ -190,6 +190,32 @@ function recordingFetch(): {
   return { calls, impl }
 }
 
+describe('a HEAD that says the file has no bytes', () => {
+  /**
+   * jupyter-server-proxy, between a notebook and its kernel's file server
+   * behind JupyterHub (§21.5): every `HEAD` comes back `Content-Length: 0`, the
+   * backend's `Accept-Ranges` passed through. Believed, a 19 MB map was mounted
+   * as a file of no bytes and refused as "not an HDF5 file".
+   */
+  it('is not believed, and the one-byte probe gives the size', async () => {
+    const { RemoteRangeSource } = await import('@/sources/RemoteRangeSource')
+    const { calls, impl } = recordingFetch()
+    const emptied = (async (url: string, init?: RequestInit) => {
+      const answer = (await impl(url, init)) as Response
+      if (init?.method !== 'HEAD') return answer
+      const said = new Map([
+        ['content-length', '0'],
+        ['accept-ranges', 'bytes'],
+      ])
+      return { ...answer, headers: { get: (key: string) => said.get(key.toLowerCase()) ?? null } } as Response
+    }) as unknown as typeof fetch
+    const source = await RemoteRangeSource.open(URL_FOR(FILE), { fetchImpl: emptied })
+    expect(source.size).toBe(size)
+    expect(calls.map((call) => `${call.method} ${call.headers['Range'] ?? '-'}`)).toEqual(['HEAD -', 'GET bytes=0-0'])
+    source.close()
+  })
+})
+
 describe('a URL that carries its own signature', () => {
   /**
    * SPECS §24.6, and the whole of what it asks for: a presigned URL is signed

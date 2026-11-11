@@ -20,7 +20,7 @@ import { App } from '@/app/App'
 import type { Command } from '@/ui/commands'
 import { resetMounting } from '@/embed'
 import type { ViewState } from '@/types'
-import { all, setUpDom, type DomTeardown } from '../support/dom'
+import { all, setUpDom, type DomTeardown, stopsWithTheDom } from '../support/dom'
 
 let teardown: DomTeardown
 
@@ -44,7 +44,7 @@ function windowAt(search: string): { root: HTMLElement; app: App } {
   resetMounting()
   const root = document.createElement('div')
   document.body.appendChild(root)
-  return { root, app: new App(root) }
+  return { root, app: stopsWithTheDom(new App(root)) }
 }
 
 /** What the history was asked to do, from here until the returned undo. */
@@ -107,6 +107,35 @@ describe('a window mounted as an embed', () => {
     // A folded column is not a dead 30-pixel rail: it stands its own named tab,
     // which is what opens it where there is no header to open it from.
     expect(all(root, '.panel-column .panel-tab')).toHaveLength(2)
+  })
+
+  it('opens the columns its page asks for, and remembers nothing of them', () => {
+    // `?panels=` is the host's choice, not the reader's memory (§21.2): the
+    // documentation's live views ask for both columns open beside the picture
+    // they teach, and a published figure asks for nothing and gets them folded.
+    // Asked of the columns themselves: with no file open each has nothing to
+    // show and stands as its strip, whatever its fold, until one arrives.
+    const unfolded = (search: string): boolean[] => {
+      const app = windowAt(search).app as unknown as Record<string, { isCollapsed: boolean }>
+      return [app['annotationsPanel'].isCollapsed, app['aestheticsPanel'].isCollapsed].map((folded) => !folded)
+    }
+    expect(unfolded('?embed=1')).toEqual([false, false])
+    teardown()
+    teardown = setUpDom()
+    expect(unfolded('?embed=1&panels=open')).toEqual([true, true])
+    teardown()
+    teardown = setUpDom()
+    expect(unfolded('?embed=1&panels=aesthetics')).toEqual([false, true])
+    expect(Object.keys(window.localStorage).filter((key) => /fold|panel/i.test(key))).toEqual([])
+  })
+
+  it('marks its root as a frame, for the room the stylesheet gives the picture', () => {
+    // `--embed-room` (§21.3): the budgets sized against the window give back the
+    // furniture a frame does not have, and only under this mark.
+    expect(windowAt('?embed=1').root.classList.contains('is-embed')).toBe(true)
+    teardown()
+    teardown = setUpDom()
+    expect(windowAt('').root.classList.contains('is-embed')).toBe(false)
   })
 
   it('keeps the view and the place a remark can land', () => {
@@ -208,6 +237,15 @@ describe('a window mounted as an embed', () => {
     // the theme had just been set — so the row is identified by what the name
     // starts with rather than by the whole of it.
     expect(actions[0]).toMatch(/^Theme: /)
+    // How to use it, then how it is made (§5.5, §32): the documentation's book
+    // just before the source, opening the site's root in a tab of its own.
+    const docs = actions.indexOf('documentation')
+    expect(docs).toBeGreaterThan(0)
+    expect(actions[docs + 1]).toBe('source on GitHub')
+    const book = root.querySelector<HTMLAnchorElement>('.head-actions a[aria-label="documentation"]')
+    expect(book?.href).toBe('https://doc.chromosomix.app/')
+    expect(book?.target).toBe('_blank')
+    expect(book?.rel).toContain('noopener')
   })
 
   it('reads a hand-edited "no" as a plain window', () => {

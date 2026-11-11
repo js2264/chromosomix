@@ -3,11 +3,13 @@
  * does not (§12).
  *
  * HDF5 reads a cooler's pixels a dataset chunk at a time, three streams side by
- * side through one region of the file, and each miss of the source's 1 MiB cache
- * was a round trip of its own: a whole chromosome of a 5 GB `.mcool` was 63 of
- * them. The source now reads ahead once misses keep landing near each other —
- * and only then, because the scattered reads of opening a file are the ones the
- * §12 budgets count, and those must fetch what they ask for.
+ * side through one region of the file, and each miss of the source's cache was a
+ * round trip of its own: a whole chromosome of a 5 GB `.mcool` was 63 of them at
+ * 1 MiB chunks. The source now reads ahead once misses keep landing near each
+ * other — and only then, because the scattered reads of opening a file are the
+ * ones the §12 budgets count, and those must fetch what they ask for: one 256 KiB
+ * chunk each. The ramp is counted in bytes, so the smaller chunk streams as the
+ * megabyte one did.
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -15,6 +17,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { RemoteRangeSource } from '@/sources/RemoteRangeSource'
 
 const MiB = 1 << 20
+/** The production chunk: what one scattered read fetches. */
+const CHUNK = 256 << 10
 const URL_UNDER_TEST = 'https://bucket.test/big.mcool'
 const SIZE = 200 * MiB
 
@@ -93,14 +97,24 @@ describe('a remote source reading ahead', () => {
     const remote = await source()
     for (const at of [0, 50, 190, 90, 150, 20, 130, 70]) expectBytes(remote.readBytes(at * MiB + 100, 500), at * MiB + 100)
     expect(ranges).toHaveLength(8)
-    for (const [from, to] of ranges) expect(to - from + 1).toBe(MiB)
+    for (const [from, to] of ranges) expect(to - from + 1).toBe(CHUNK)
   })
 
   it('does not start on two near misses alone', async () => {
     const remote = await source()
     remote.readBytes(30 * MiB, 10)
     remote.readBytes(32 * MiB, 10)
-    for (const [from, to] of ranges) expect(to - from + 1).toBe(MiB)
+    for (const [from, to] of ranges) expect(to - from + 1).toBe(CHUNK)
+  })
+
+  it('ramps up in megabytes, whatever the chunk: 1 MiB ahead, then 2, 4, 8, to 16 MiB a fetch', async () => {
+    const remote = await source()
+    for (let at = 10 * MiB; at < 74 * MiB; at += CHUNK) expectBytes(remote.readBytes(at, CHUNK), at)
+    const sizes = ranges.map(([from, to]) => to - from + 1)
+    // Two near misses fetch their chunk alone; from the third, a megabyte more and
+    // doubling, until one fetch is the 16 MiB ceiling — what it needs included.
+    expect(sizes.slice(0, 7)).toEqual([CHUNK, CHUNK, CHUNK + MiB, CHUNK + 2 * MiB, CHUNK + 4 * MiB, CHUNK + 8 * MiB, 16 * MiB])
+    expect(Math.max(...sizes)).toBe(16 * MiB)
   })
 
   it('never fetches past the end of the file', async () => {

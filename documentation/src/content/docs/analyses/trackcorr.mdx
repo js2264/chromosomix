@@ -1,0 +1,43 @@
+---
+title: "Track correlation"
+description: "Measure how much every pair of loaded tracks agrees, by Spearman’s or Pearson’s correlation over windows or over a feature set."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="trackcorr" />
+
+Do two replicates agree? Does an insulation score follow a ChIP-seq track? **Track correlation** gives the correlation of every pair of the tracks you choose, over fixed windows along the genome or over the features of a set.
+
+## Running it
+
+Load two or more tracks ([Tracks and features](/files/tracks/)), open **Track correlation** on the **1D tasks** card of the **Analysis** panel and tick the **tracks**; no map is needed. The drawer shows the correlation matrix, on a colour scale centred on 0, and **Pairs**, every pair from the most correlated to the least.
+
+![The drawer of Track correlation for two ATAC-seq replicates and a 40 kb insulation score: the Spearman matrix over the 127,117 windows all three share, and the Pairs table, with ρ = 0.945 between the replicates and about 0 between either and the insulation.](../../../assets/screens/analyses/trackcorr-atac-replicates.webp)
+
+The same run from a shell:
+
+<TaskCommand id="trackcorr" />
+
+## Parameters
+
+**compare over** is the question. **fixed windows** asks whether the tracks agree everywhere, an answer the empty majority of the genome dominates; **a feature set** asks whether they agree where something is happening, usually what was meant. **window**, 100 bp by default, is the width at which a coverage track says something about a peak; wider windows smear a peak into its neighbourhood. **method** is Spearman by default, which ranks the values first, so one very deep locus cannot carry the coefficient; Pearson correlates the values themselves.
+
+<TaskParameters id="trackcorr" />
+
+## What it writes
+
+<TaskOutputs id="trackcorr" />
+
+## Reading the result
+
+A coefficient near 1 is two tracks that rise and fall together; near 0, no relation; below 0, one is high where the other is low. Each unit's value is the exact mean over the bases the track has a value for, and over fixed windows each sequence's last, shorter window is left out.
+
+A unit any one track lacks is left out of every pair, as in deepTools' `plotCorrelation`, so every coefficient is over the same units: one track with gaps, such as an insulation score where the map was sparse, narrows every pair. The note says how many units were left out, and **compared** beside **units** under the matrix how many are left; with fewer than three, no pair has a coefficient. To compare two tracks over everything they share, run them on their own.
+
+## Compared with deepTools
+
+[The validation](https://chromosomix.app/validation/#track-correlation-deeptools) holds the coefficients to pyBigWig's exact window means. deepTools reads a window's mean from a zoom level where the file has one fine enough, which moves its coefficients at the wider windows; at 100 bp it agrees to the digits it writes, hence *equivalent* rather than identical.

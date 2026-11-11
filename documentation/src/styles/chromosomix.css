@@ -1,0 +1,946 @@
+/*
+ * chromosomix's look, over Starlight's Rapide theme.
+ *
+ * Every value is one of the app's own tokens — `--cx-<name>`, which
+ * `scripts/docs-data.mjs` writes into `src/generated/tokens.css` from
+ * `src/ui/styles.css` — so a colour changed in the app is changed here at the
+ * next build. Rapide puts all of its rules in the `rapide` cascade layer, and
+ * nothing here is layered, so every rule below wins over Rapide's whatever its
+ * specificity.
+ *
+ * What is carried over, and from where in the app:
+ *   - the palettes, neutral greys and one blue, colour used for meaning only;
+ *   - the landing page's grain, a sub-pixel dot every 10 px, behind the page
+ *     and never behind the header or the sidebar, as the app's furniture is
+ *     solid and only its ground has a pattern;
+ *   - the header on the raised surface with a hairline under it, the mark and
+ *     the name in one line, the search well of "Search commands…";
+ *   - the headings of a group in small accented capitals, as "NEW HERE?";
+ *   - tiles drawn as the store tiles, cards and tables on the raised surface
+ *     with the resting shadow, the app's 6 px corners and its two fonts.
+ */
+
+/* ---- Starlight's palette, from the app's ------------------------------- */
+:root,
+::backdrop {
+  --sl-font: var(--cx-sans);
+  --sl-font-mono: var(--cx-mono);
+
+  --sl-color-black: var(--cx-bg);
+  --sl-color-gray-7: var(--cx-bg-sunken);
+  --sl-color-gray-6: var(--cx-bg-raised);
+  --sl-color-gray-5: var(--cx-border);
+  --sl-color-gray-4: var(--cx-text-faint);
+  --sl-color-gray-3: var(--cx-text-dim);
+  --sl-color-gray-2: color-mix(in srgb, var(--cx-text) 82%, var(--cx-text-dim));
+  --sl-color-gray-1: var(--cx-text);
+  --sl-color-white: color-mix(in srgb, var(--cx-text) 75%, white);
+
+  --sl-color-accent-low: var(--cx-accent-soft);
+  --sl-color-accent: color-mix(in srgb, var(--cx-accent) 78%, var(--cx-bg));
+  --sl-color-accent-high: var(--cx-accent);
+
+  /* Colour for meaning only: blue is the accent, green agreement, amber a
+     warning, red a refusal; a tip is the accent rather than Rapide's purple. */
+  --sl-color-blue-low: var(--cx-accent-soft);
+  --sl-color-blue: var(--cx-accent);
+  --sl-color-blue-high: var(--cx-accent);
+  --sl-color-purple-low: var(--cx-accent-soft);
+  --sl-color-purple: var(--cx-accent);
+  --sl-color-purple-high: var(--cx-accent);
+  --sl-color-green-low: color-mix(in srgb, var(--cx-ok) 14%, var(--cx-bg));
+  --sl-color-green: var(--cx-ok);
+  --sl-color-green-high: var(--cx-ok);
+  --sl-color-orange-low: var(--cx-warn-soft);
+  --sl-color-orange: var(--cx-warn);
+  --sl-color-orange-high: var(--cx-warn);
+  --sl-color-red-low: var(--cx-danger-soft);
+  --sl-color-red: var(--cx-danger);
+  --sl-color-red-high: var(--cx-danger);
+
+  --sl-color-bg-nav: var(--cx-bg-raised);
+  --sl-color-bg-sidebar: var(--cx-bg-raised);
+  --sl-color-bg-inline-code: var(--cx-bg-sunken);
+  --sl-color-hairline: var(--cx-border);
+  --sl-color-hairline-light: var(--cx-border);
+  --sl-color-hairline-shade: var(--cx-bg-sunken);
+
+  --sl-rapide-ui-bg-color: var(--cx-bg);
+  --sl-rapide-ui-header-bg-color: color-mix(in srgb, var(--cx-bg-raised) 94%, transparent);
+  --sl-rapide-ui-border-color: var(--cx-border);
+  --sl-rapide-ec-marker-bg-color: var(--cx-accent-soft);
+  --sl-rapide-ec-marker-border-color: var(--cx-accent);
+}
+
+:root[data-theme='light'] {
+  --sl-color-white: color-mix(in srgb, var(--cx-text) 80%, black);
+  --sl-color-gray-6: var(--cx-bg-muted);
+  --sl-color-accent: var(--cx-accent);
+  --sl-color-accent-high: color-mix(in srgb, var(--cx-accent) 72%, black);
+  --sl-color-green-low: color-mix(in srgb, var(--cx-ok) 10%, var(--cx-bg));
+}
+
+/* ---- the ground: the landing page's grain ------------------------------ */
+.main-frame,
+body:not(:has(.sidebar-pane)) {
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--cx-border) 50%, transparent) 0.8px, transparent 1px);
+  background-size: 10px 10px;
+}
+.sidebar-pane {
+  background-color: var(--sl-color-bg-sidebar);
+}
+.right-sidebar {
+  background: transparent;
+}
+
+/* ---- header: the app's toolbar ----------------------------------------- */
+/* The app's header, measure for measure (`.app-head` in the app's stylesheet):
+   53 pixels, 0.6rem by 1rem, on the raised surface with a hairline under it,
+   solid rather than Rapide's frosted glass. Starlight sizes the page around
+   the header from the same three numbers. */
+:root {
+  --sl-nav-height: 3.3125rem;
+  --sl-nav-pad-y: 0.6rem;
+  --sl-nav-pad-x: 1rem;
+}
+header.header {
+  padding-inline-end: var(--sl-nav-pad-x);
+  background-color: var(--cx-bg-raised);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-bottom: 1px solid var(--cx-border);
+}
+.cx-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+/* The mark at 26 pixels and the name beside it, as the app draws its brand. */
+.cx-title .site-title {
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--cx-text);
+  gap: 0.625rem;
+}
+.cx-title .site-title:hover {
+  color: var(--cx-accent);
+}
+.cx-title .site-title img {
+  height: 1.625rem;
+  width: auto;
+  border-radius: 0.22em;
+}
+.cx-docs,
+.cx-kicker {
+  font: 600 0.68rem / 1.2 var(--cx-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--cx-accent);
+}
+/* The menu of copies is the app's own select: a button's height and border. */
+.cx-version select {
+  font: 0.72rem var(--cx-mono);
+  color: var(--cx-text-dim);
+  background: var(--cx-bg-raised);
+  border: 1px solid var(--cx-border-strong);
+  border-radius: var(--cx-radius);
+  padding: 0.3rem 0.4rem;
+  line-height: 1rem;
+  max-width: 11rem;
+}
+.cx-version select:hover {
+  border-color: var(--cx-accent);
+  color: var(--cx-text);
+}
+/* A preview's copy: its pull request's number where the menu would be, in the
+   accent, since it is a copy nobody should mistake for a published one. */
+.cx-version-preview {
+  font: 600 0.72rem / 1rem var(--cx-mono);
+  color: var(--cx-accent);
+  background: var(--cx-accent-soft);
+  border: 1px solid var(--cx-accent);
+  border-radius: var(--cx-radius);
+  padding: 0.3rem 0.45rem;
+  white-space: nowrap;
+}
+
+/* The buttons on the right are the app's `.btn`: 0.78rem, 0.3rem by 0.65rem,
+   the strong hairline on the raised surface, and its one gesture on hover —
+   the border and the word take the accent and the button rises a pixel. An
+   icon at 16 pixels, so a button with a word and a button with a mark are one
+   height, 27.6 pixels, as in the app's header. */
+.cx-open-app,
+.cx-icon-button,
+starlight-rapide-theme-select button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  box-sizing: border-box;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0.3rem 0.65rem;
+  font: 400 0.78rem / 1rem var(--cx-sans);
+  white-space: nowrap;
+  color: var(--cx-text);
+  text-decoration: none;
+  border: 1px solid var(--cx-border-strong);
+  border-radius: var(--cx-radius);
+  background: var(--cx-bg-raised);
+  box-shadow: none;
+  cursor: pointer;
+  transition: border-color 120ms, color 120ms, background 120ms, box-shadow 120ms, transform 120ms;
+}
+.cx-icon-button svg,
+starlight-rapide-theme-select button svg {
+  width: 16px;
+  height: 16px;
+}
+.cx-open-app:hover,
+.cx-icon-button:hover,
+starlight-rapide-theme-select button:hover {
+  border-color: var(--cx-accent);
+  color: var(--cx-accent);
+  box-shadow: var(--cx-shadow-2);
+  transform: translateY(-1px);
+}
+.cx-open-app:active,
+.cx-icon-button:active,
+starlight-rapide-theme-select button:active {
+  transform: translateY(0);
+  box-shadow: var(--cx-shadow-1);
+}
+starlight-rapide-theme-select {
+  align-self: center;
+}
+/* The app's buttons stand 0.4rem apart with no rule between them. */
+header.header .right-group,
+header.header .social-icons {
+  gap: 0.4rem;
+}
+header.header .social-icons::after {
+  display: none;
+}
+/* The landing page's buttons, larger: the page's own call to action. */
+.cx-button {
+  color: var(--cx-text);
+  text-decoration: none;
+  border: 1px solid var(--cx-border);
+  border-radius: var(--cx-radius);
+  background: var(--cx-bg-raised);
+  box-shadow: var(--cx-shadow-1);
+}
+.cx-button:hover {
+  border-color: var(--cx-border-strong);
+  color: var(--cx-text);
+}
+@media (max-width: 50rem) {
+  .cx-open-app,
+  .cx-version,
+  .cx-docs {
+    display: none;
+  }
+}
+
+/* The search box is the app's "Search commands…": the sunken well, its words
+   on the left in the dim grey, and one key on the right, `Ctrl+K`, as the app
+   writes `Ctrl+P`. No magnifying glass: the app's has none. */
+site-search button[data-open-modal] {
+  box-sizing: border-box;
+  height: auto;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem 0.3rem 0.7rem;
+  background: var(--cx-bg-sunken);
+  border: 1px solid var(--cx-border-strong);
+  border-radius: var(--cx-radius);
+  color: var(--cx-text-dim);
+  font: 400 0.78rem / 1.45 var(--cx-sans);
+}
+site-search button[data-open-modal] > svg {
+  display: none;
+}
+site-search button[data-open-modal]:hover {
+  border-color: var(--cx-accent);
+  color: var(--cx-text);
+}
+site-search button[data-open-modal] > kbd {
+  gap: 0;
+  font: 0.72rem / 1.45 var(--cx-mono);
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--cx-border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--cx-bg-raised);
+  color: var(--cx-text-dim);
+}
+site-search button[data-open-modal] > kbd kbd {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+site-search button[data-open-modal] > kbd kbd + kbd::before {
+  content: '+';
+}
+
+/* ---- the version notice ------------------------------------------------ */
+/* As wide as the column of text, whatever it says: Rapide sets a banner at the
+   end of its row, so a short one would otherwise sit off to the right. */
+.cx-version-notice {
+  box-sizing: border-box;
+  width: calc(100% - 2 * var(--sl-content-pad-x));
+  max-width: var(--sl-content-width);
+  background: var(--cx-warn-soft);
+  color: var(--cx-text);
+  border: 1px solid color-mix(in srgb, var(--cx-warn) 45%, transparent);
+  border-radius: var(--cx-radius);
+  font-size: 0.85rem;
+  padding: 0.7rem 1rem;
+  box-shadow: none;
+}
+.cx-version-notice a {
+  color: var(--cx-text);
+  font-weight: 600;
+}
+.cx-version-notice[hidden] {
+  display: none;
+}
+
+/* ---- sidebar: groups headed like "NEW HERE?" on the landing page -------- */
+.sidebar-pane .top-level > li > details > summary .large {
+  font: 600 0.68rem / 1.2 var(--cx-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--cx-accent);
+}
+.sidebar-pane a {
+  font-size: 0.86rem;
+  color: var(--cx-text-dim);
+}
+.sidebar-pane a:hover {
+  color: var(--cx-text);
+}
+.sidebar-pane a[aria-current='page'] {
+  color: var(--cx-text);
+  font-weight: 600;
+}
+.sidebar-pane ul ul li:has(> a[aria-current='page']) {
+  border-inline-start-color: var(--cx-accent);
+}
+
+/* ---- content ----------------------------------------------------------- */
+.sl-markdown-content {
+  color: var(--sl-color-gray-2);
+}
+.sl-markdown-content a:not(.cx-tile, .cx-button, .cx-agreement, .sl-link-button, .cx-way-title) {
+  color: var(--cx-accent);
+  text-underline-offset: 0.2em;
+}
+.sl-markdown-content :is(h1, h2, h3, h4) {
+  color: var(--cx-text);
+  letter-spacing: -0.01em;
+}
+.content-panel h1 {
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+.sl-markdown-content :not(pre) > code {
+  font-variant-ligatures: none;
+  border: 1px solid var(--cx-border);
+  border-radius: 4px;
+  padding: 0.05em 0.3em;
+  font-size: 0.85em;
+}
+.sl-markdown-content table {
+  display: table;
+  width: 100%;
+  font-size: 0.85rem;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--cx-border);
+  border-radius: var(--cx-radius);
+  overflow: hidden;
+  background: var(--cx-bg-raised);
+  box-shadow: var(--cx-shadow-1);
+}
+.sl-markdown-content :is(th, td) {
+  border-bottom: 1px solid var(--cx-border);
+  padding: 0.45rem 0.7rem;
+  vertical-align: top;
+}
+.sl-markdown-content tr:last-child > td {
+  border-bottom: 0;
+}
+.sl-markdown-content thead th {
+  background: var(--cx-bg-sunken);
+  color: var(--cx-text-dim);
+  font: 600 0.68rem / 1.2 var(--cx-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-align: start;
+}
+.sl-markdown-content td code {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+/* A table wider than the column scrolls inside its own box, never the page
+   (`scrollingTables` puts every Markdown table in one). */
+.cx-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: var(--cx-radius);
+}
+/* Rapide makes the page a grid when it has a banner, as every copy but the
+   root's does; a grid's column grows to its widest table or line of code
+   unless it may shrink, and the page then scrolls sideways on a phone. */
+[data-has-sidebar] main:has(.sl-banner) {
+  grid-template-columns: minmax(0, 1fr);
+}
+main > .content-panel {
+  min-width: 0;
+}
+.cx-table-wrap table {
+  margin: 0;
+}
+.starlight-aside {
+  border-radius: var(--cx-radius);
+  border: 1px solid var(--cx-border);
+  border-inline-start-width: 3px;
+  background: color-mix(in srgb, var(--sl-color-asides-border, var(--cx-accent)) 8%, var(--cx-bg-raised));
+}
+.starlight-aside .starlight-aside__content {
+  color: var(--sl-color-gray-2);
+}
+.starlight-aside .starlight-aside__content code {
+  color: var(--cx-text);
+}
+.expressive-code .frame {
+  box-shadow: var(--cx-shadow-1);
+}
+.sl-link-button.primary {
+  background: var(--cx-accent);
+  color: var(--cx-on-accent);
+  border-color: var(--cx-accent);
+  border-radius: var(--cx-radius);
+}
+.sl-link-button.secondary,
+.sl-link-button.minimal {
+  border-radius: var(--cx-radius);
+  border: 1px solid var(--cx-border);
+  background: var(--cx-bg-raised);
+  color: var(--cx-text);
+}
+.card,
+.sl-link-card {
+  border-radius: var(--cx-radius);
+  border-color: var(--cx-border);
+  background: var(--cx-bg-raised);
+  box-shadow: var(--cx-shadow-1);
+}
+.cx-build {
+  margin-top: 1.5rem;
+  font-size: 0.78rem;
+  color: var(--cx-text-faint);
+}
+.cx-build a {
+  color: inherit;
+}
+
+/* ---- a task's page ----------------------------------------------------- */
+.cx-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  color: var(--cx-text-dim);
+  font-size: 0.88rem;
+}
+.cx-agreement {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: 500 0.78rem / 1 var(--cx-sans);
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--cx-border);
+  color: var(--cx-text-dim);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.cx-agreement::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+.cx-agreement-identical,
+.cx-agreement-equivalent {
+  border-color: color-mix(in srgb, var(--cx-ok) 55%, transparent);
+  color: var(--cx-ok);
+  background: color-mix(in srgb, var(--cx-ok) 10%, transparent);
+}
+a.cx-agreement:hover {
+  filter: brightness(1.1);
+}
+.cx-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.3rem 1rem;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--cx-border);
+  border-radius: var(--cx-radius);
+  background: var(--cx-bg-raised);
+  box-shadow: var(--cx-shadow-1);
+  font-size: 0.88rem;
+}
+.cx-facts dt {
+  font: 600 0.68rem / 1.9 var(--cx-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--cx-text-faint);
+  margin: 0;
+}
+.cx-facts dd {
+  margin: 0;
+  color: var(--cx-text);
+}
+@media (max-width: 30rem) {
+  .cx-facts {
+    grid-template-columns: 1fr;
+  }
+  .cx-facts dd {
+    margin-bottom: 0.4rem;
+  }
+}
+.cx-param-label {
+  display: block;
+  color: var(--cx-text);
+  font-weight: 500;
+}
+.cx-param-flag {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--cx-text-faint);
+  white-space: nowrap;
+}
+.cx-params-section th {
+  background: var(--cx-bg-sunken);
+  color: var(--cx-accent);
+  font: 600 0.68rem / 1.2 var(--cx-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-align: start;
+}
+.cx-params td:first-child {
+  min-width: 10rem;
+}
+.cx-params td:nth-child(2),
+.cx-params td:nth-child(3) {
+  min-width: 7rem;
+  color: var(--cx-text-dim);
+}
+.cx-outputs strong {
+  color: var(--cx-text);
+}
+.cx-note {
+  font-size: 0.85rem;
+  color: var(--cx-text-dim);
+}
+.cx-task-group + .cx-task-group {
+  margin-top: 1.75rem;
+}
+.cx-task-index td:first-child {
+  min-width: 13rem;
+}
+.cx-task-index td:first-child a {
+  font-weight: 600;
+}
+.cx-task-agreement {
+  text-align: end;
+}
+
+/* ---- home: the landing page's column, masthead and tiles --------------- */
+.cx-landing {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding-block: 3rem 4rem;
+}
+.cx-masthead {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.32em;
+  font-size: clamp(1.9rem, 8vw, 3.6rem);
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  color: var(--cx-text);
+}
+.cx-masthead img {
+  width: 1em;
+  height: 1em;
+  border-radius: 0.22em;
+  transform: translateY(0.108em);
+}
+.cx-tagline {
+  text-align: center;
+  color: var(--cx-text-dim);
+  font-size: 1.05rem;
+  max-width: 36rem;
+  margin: 1.1rem auto 0 !important;
+}
+.cx-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.6rem !important;
+}
+.cx-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font: 500 0.88rem / 1 var(--cx-sans);
+  padding: 0.65rem 0.95rem;
+}
+.cx-button.cx-filled {
+  background: var(--cx-accent);
+  border-color: var(--cx-accent);
+  color: var(--cx-on-accent);
+}
+.cx-button.cx-filled:hover {
+  color: var(--cx-on-accent);
+  filter: brightness(1.06);
+}
+.cx-landing .cx-kicker {
+  margin: 2.8rem 0 0.6rem;
+}
+.cx-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr));
+  gap: 0.55rem;
+  margin-top: 0 !important;
+}
+.cx-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.35rem;
+  padding: 1rem 0.8rem 0.9rem;
+  border: 1px solid var(--cx-border);
+  border-radius: var(--cx-radius);
+  background: var(--cx-bg-raised);
+  box-shadow: var(--cx-shadow-1);
+  text-decoration: none;
+  margin: 0 !important;
+}
+.cx-tile:hover {
+  border-color: var(--cx-border-strong);
+  box-shadow: var(--cx-shadow-2);
+}
+.cx-glyph {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 8px;
+  background: var(--cx-accent-soft);
+  color: var(--cx-accent);
+  margin-bottom: 0.25rem;
+}
+.cx-tile strong {
+  color: var(--cx-text);
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.cx-tile-text {
+  color: var(--cx-text-faint);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+/* The home page's masthead is its title: the page's own h1 stays for screen
+   readers and search, out of sight. */
+main:has(.cx-landing) .content-panel:has(> .sl-container > h1#_top) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* A picture of the app, framed as the app frames a card: its hairline, its
+   corner and its resting shadow, so a white panel does not run into the page
+   (`screens.mjs` marks them and holds each to the size the app drew it). */
+.sl-markdown-content img.cx-screen {
+  display: block;
+  height: auto;
+  border: 1px solid var(--cx-border);
+  border-radius: var(--cx-radius);
+  box-shadow: var(--cx-shadow-1);
+  background: var(--cx-bg-raised);
+}
+
+/* A picture that can become the app (`lib/live.mjs`): the picture, held to its
+   own width, with the button on its lower corner as the app puts its own on a
+   card; pressed, the app in a frame the page's width (`LiveViews.astro`
+   measures it), and a line under it. */
+.sl-markdown-content .cx-live {
+  position: relative;
+  display: block;
+  width: fit-content;
+}
+.sl-markdown-content .cx-live.is-live {
+  width: 100%;
+}
+.cx-live-start {
+  position: absolute;
+  right: 0.7rem;
+  bottom: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.8rem 0.45rem 0.65rem;
+  border: 1px solid var(--cx-accent);
+  border-radius: 999px;
+  background: var(--cx-accent);
+  color: var(--cx-on-accent);
+  font: 600 0.8rem / 1 var(--cx-sans);
+  box-shadow: var(--cx-shadow-2);
+  cursor: pointer;
+}
+.cx-live-start:hover {
+  filter: brightness(1.08);
+}
+.cx-live-start:focus-visible {
+  outline: 2px solid var(--cx-accent);
+  outline-offset: 2px;
+}
+/* Above Starlight's own rule for a frame in a page, which sizes it as a picture.
+   As tall as most of the window, since it is as wide as the page. */
+.sl-markdown-content .cx-live-frame {
+  display: block;
+  width: 100%;
+  height: clamp(26rem, 80vh, 54rem);
+  border: 1px solid var(--cx-border);
+  border-radius: var(--cx-radius);
+  box-shadow: var(--cx-shadow-1);
+  background: var(--cx-bg-raised);
+}
+/* While its grip is dragged, the frame lets the pointer through: it would
+   otherwise take the pointer as the drag passed over it, and the drag would
+   stall the moment it shrank the frame under the hand. */
+.cx-live.is-resizing {
+  user-select: none;
+}
+.cx-live.is-resizing .cx-live-frame {
+  pointer-events: none;
+}
+/* The contents list steps aside while a live frame is under it. Its sidebar is
+   a column the page's whole height, holding a fixed box wider than the window,
+   over the part of the page a live frame reaches into; so only the list itself
+   takes the pointer, and not even the list while it is away: the frame under
+   the empty rest of the sidebar was a picture that could be seen and not
+   clicked. */
+.right-sidebar-container,
+.right-sidebar {
+  pointer-events: none;
+}
+.right-sidebar-panel {
+  transition: opacity 160ms ease;
+}
+.right-sidebar-panel starlight-toc {
+  pointer-events: auto;
+}
+.cx-contents-away .right-sidebar-panel {
+  opacity: 0;
+}
+.cx-contents-away .right-sidebar-panel starlight-toc {
+  pointer-events: none;
+}
+/* The line under a live frame, and at its end, under the frame's corner, the
+   grip that resizes it. */
+.cx-live-foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.45rem;
+}
+.cx-live-note {
+  display: block;
+  color: var(--cx-text-dim);
+  font-size: 0.8rem;
+}
+.cx-live-grip {
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  margin-top: -0.2rem;
+  padding: 0;
+  border: 1px solid var(--cx-border-strong);
+  border-radius: var(--cx-radius);
+  background: var(--cx-bg-raised);
+  color: var(--cx-text-dim);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.cx-live-grip:hover,
+.cx-live.is-resizing .cx-live-grip {
+  border-color: var(--cx-accent);
+  color: var(--cx-accent);
+}
+.cx-live-grip:focus-visible {
+  outline: 2px solid var(--cx-accent);
+  outline-offset: 2px;
+}
+.cx-live-back {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--cx-accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+/* A key, drawn as a key: the app's hairline and resting surface, a heavier
+   lower edge, the mono face. */
+.sl-markdown-content kbd {
+  font: 500 0.78em / 1 var(--cx-mono);
+  padding: 0.16em 0.42em;
+  border: 1px solid var(--cx-border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--cx-bg-raised);
+  color: var(--cx-text);
+  white-space: nowrap;
+}
+
+/* ---- the ways to use it: a card per way, its picture on the ground's grain
+   (start/ways.mdx). The card is the store tile's surface; its picture sits in
+   the sunken well with the landing page's dots, so a drawing reads as a thing
+   on the app's own ground. ----------------------------------------------- */
+.cx-ways-kicker {
+  margin: 2.3rem 0 0.65rem !important;
+}
+.cx-ways {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  gap: 0.7rem;
+}
+.cx-way {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--cx-border);
+  border-radius: var(--cx-radius);
+  background: var(--cx-bg-raised);
+  box-shadow: var(--cx-shadow-1);
+  overflow: hidden;
+  transition: border-color 120ms, box-shadow 120ms, transform 120ms;
+}
+.cx-way:hover {
+  border-color: var(--cx-border-strong);
+  box-shadow: var(--cx-shadow-2);
+  transform: translateY(-1px);
+}
+.cx-way:has(.cx-way-title:focus-visible) {
+  outline: 2px solid var(--cx-accent);
+  outline-offset: 2px;
+}
+.cx-way-art {
+  padding: 0.85rem 1.1rem 0.55rem;
+  background-color: var(--cx-bg-sunken);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--cx-border-strong) 45%, transparent) 0.8px, transparent 1px);
+  background-size: 10px 10px;
+  border-bottom: 1px solid var(--cx-border);
+}
+.cx-way-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.75rem 0.9rem 0.85rem;
+}
+.cx-way-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--cx-text);
+  text-decoration: none;
+}
+.cx-way-title:focus-visible {
+  outline: none;
+}
+/* The name's link covers the card, so the whole card answers a click. */
+.cx-way-title::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.cx-way-elsewhere {
+  color: var(--cx-text-faint);
+}
+.cx-way-text {
+  margin-bottom: 0.25rem;
+  color: var(--cx-text-dim);
+  font-size: 0.82rem;
+  line-height: 1.42;
+}
+/* A link in the line is a link of its own, above the card's. */
+.cx-way-text a {
+  position: relative;
+  z-index: 1;
+}
+.sl-markdown-content code.cx-way-how {
+  align-self: flex-start;
+  max-width: 100%;
+  margin-top: auto;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--cx-border);
+  border-radius: 4px;
+  background: var(--cx-bg-sunken);
+  color: var(--cx-text-dim);
+  font: 0.72rem / 1.35 var(--cx-mono);
+  font-variant-ligatures: none;
+  overflow-wrap: anywhere;
+}
+/* One column, as on a phone: the picture beside the words, not above them,
+   so the nine fit in a few screens. */
+@container (max-width: 25.6rem) {
+  .cx-way {
+    flex-direction: row;
+  }
+  .cx-way-art {
+    flex: 0 0 38%;
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.55rem;
+    border-bottom: 0;
+    border-inline-end: 1px solid var(--cx-border);
+  }
+  .cx-way-body {
+    min-width: 0;
+    padding: 0.6rem 0.75rem 0.7rem;
+  }
+}
+.cx-ways-start {
+  justify-content: flex-start !important;
+  margin-top: 1.1rem !important;
+}

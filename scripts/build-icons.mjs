@@ -26,6 +26,9 @@ const LUCIDE = [
   'x',
   'check',
   'info',
+  // What a task re-implements, on its row in the Analysis column (`ui/taskReference.ts`):
+  // drawn rather than a `?` typed in a ring, which a font's metrics set off-centre.
+  'circle-question-mark',
   'keyboard',
   'sun',
   'moon',
@@ -180,12 +183,16 @@ const LUCIDE = [
   // locus box's `go` (§5.4).
   'move-left',
   'move-right',
-  // The ideogram view (§5.10), as the turn's two marks are its two pictures:
+  // The ideogram view (§5.11), as the turn's two marks are its two pictures:
   // chromosomes standing from one line, of different lengths, for the view as
   // it opens — and lying from one, for the view flipped. Each is the picture a
   // press would give.
   'align-start-horizontal',
   'align-start-vertical',
+  // The documentation (§32), on the header beside the shortcuts: an open book,
+  // the web's settled sign for *how to use this*, and distinct from the stores'
+  // row of books, which is somebody else's shelf of data.
+  'book-open',
 ]
 
 /**

@@ -51,6 +51,13 @@ export const GENERATED_ICONS = {
     ['path', {"d":"M12 8h.01"}],
     ],
   },
+  'circle-question-mark': {
+    shapes: [
+    ['circle', {"cx":"12","cy":"12","r":"10"}],
+    ['path', {"d":"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"}],
+    ['path', {"d":"M12 17h.01"}],
+    ],
+  },
   'keyboard': {
     shapes: [
     ['path', {"d":"M10 8h.01"}],
@@ -817,6 +824,12 @@ export const GENERATED_ICONS = {
     ['rect', {"width":"9","height":"6","x":"6","y":"14","rx":"2"}],
     ['rect', {"width":"16","height":"6","x":"6","y":"4","rx":"2"}],
     ['path', {"d":"M2 2v20"}],
+    ],
+  },
+  'book-open': {
+    shapes: [
+    ['path', {"d":"M12 5v16"}],
+    ['path', {"d":"M20.001 19A2 2 0 0022 17V5a2 2 0 00-1.999-2L16 3.002A5 5 0 0012 5a5 5 0 00-4-2H4a2 2 0 00-2 2v12a2 2 0 001.999 2H8a5 5 0 014 2 5 5 0 014-2z"}],
     ],
   },
   'bars-decreasing': {

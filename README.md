@@ -1,7 +1,9 @@
 # chromosomix
 
 [![Web app](https://img.shields.io/badge/web%20app-chromosomix.app-1f6feb)](https://chromosomix.app/)
+[![Documentation](https://img.shields.io/badge/docs-doc.chromosomix.app-1f6feb)](https://doc.chromosomix.app/)
 [![Tests](https://github.com/js2264/chromosomix/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/js2264/chromosomix/actions/workflows/test.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fchromosomix.app%2Fcoverage%2Fbadge.json)](https://chromosomix.app/coverage/)
 [![Deploy](https://github.com/js2264/chromosomix/actions/workflows/deploy.yml/badge.svg?branch=main)](https://github.com/js2264/chromosomix/actions/workflows/deploy.yml)
 [![npm](https://img.shields.io/npm/v/chromosomix?logo=npm)](https://www.npmjs.com/package/chromosomix)
 [![Release](https://img.shields.io/github/v/release/js2264/chromosomix?logo=github)](https://github.com/js2264/chromosomix/releases)
@@ -20,12 +22,12 @@ chromosomix launches in about a second and reads your data where it lives, on yo
 
 - Support for all genomic data types: 
   - Supports 1D genomic formats: bigWig, bigBed, BED, bedGraph, wig, GTF/GFF3, FASTA (+`.fai`), `.2bit`, BAM, VCF, barChart/bigBarChart, genePred/refFlat/bigGenePred, bedMethyl/bigMethyl, chrom.sizes, ...
-  - Supports 2D genomic formats: `.*cool`, `.hic`, HiC-Pro, `pairs(.gz)`, ..., at every resolution the file stores. Also supports interaction formats: BEDPE, and UCSC's `interact`/`bigInteract` and `longrange`/longTabix — drawn as arcs over the contact map and as their own lane in the 1D browser.
+  - Supports 2D genomic formats: `.*cool`, `.hic`, HiC-Pro, `pairs(.gz)`, ..., at every resolution the file stores. A `.pairs` is binned on import, and the same pass counts what `pairtools stats` counts — mapped, duplicates, cis and trans, pair types, strand convergence, library size — shown in the General panel and saved as a `.stats` file MultiQC reads. Also supports interaction formats: BEDPE, and UCSC's `interact`/`bigInteract` and `longrange`/longTabix — drawn as arcs over the contact map and as their own lane in the 1D browser.
   - Supports 3D genomic formats: WashU's g3d (text or binary), `.3dg`, and `bed3d`, drawn in 3D and synchronized with the maps and tracks view. Every model also leaves as a PDB for PyMOL, ChimeraX and the other molecular viewers, a chain per chromosome and bonds along the fibre, and reads back here. 
 
 - Perform analyses directly in the browser:
   - 1D analysis tasks: peak calling from a coverage track (yapc, with IDR between replicates), motif search, base composition and GC skew, the origin and terminus of replication, metaplots, track correlation, FRiP over a feature set, signal by group, interval overlap with a shuffle null, ...
-  - 2D analysis tasks: P(s) (and its four pair orientations), scalogram, diamond insulation, directionality index, HiC score, coverage, cis/trans per chromosome, virtual 4C, compartments annotation and saddle plot, the alignment of a bacterial chromosome's two arms, loops and borders detection, APA, loop ranking, ...
+  - 2D analysis tasks: a QC map report (one HTML page, and MultiQC sections from the CLI), P(s) (and its four pair orientations), scalogram, diamond insulation, directionality index, HiC score, TAD annotation (Juicer's Arrowhead), coverage, cis/trans per chromosome, virtual 4C, compartments annotation and saddle plot, the alignment of a bacterial chromosome's two arms, loops and borders detection, APA, loop ranking, ...
   - 3D analysis tasks: build a 3D model from the contact map (pastis-NB or ShRec3D), compare a 3D model with the contact map, and turn a 3D model into tracks.
 
 - Serverless browser & CLI-based: there is no upload, no required preprocessing step and no backend of any kind — the viewer is static files that read standard genome-wide formats directly. Every analysis can be run **interactively**, in the browser, or **programmatically**, with the `chromosomix` command line in a script or a pipeline: the same tasks, with the same parameters, producing the same results. A bottom Console panel in the browser records every run and reports the `chromosomix` command that repeats it.
@@ -79,6 +81,14 @@ double-clicking and you end up with a fully functional genome browser.
 It is attached to every [release](https://github.com/js2264/chromosomix/releases)
 as `chromosomix-<tag>.html`, and `npm run build:standalone` builds it from a clone.
 
+### For AI agents
+
+The site describes itself to language models at <https://chromosomix.app/llms.txt>, in the shape
+[llmstxt.org](https://llmstxt.org/) gives one, with reference pages generated from the app itself:
+how to write a link to a view, every analysis task with every parameter, the embed protocol, and the
+file, store and workspace formats. <https://chromosomix.app/llms-full.txt> is all of it, and this
+README, in one file.
+
 ## Embedding chromosomix in a page
 
 A minimal version of the viewer can be added to any HTML page as an `<iframe>`. Nothing needs to be installed. There is no extra package dependency and no modifications to make to the page's header, just drop the `<iframe>` in. The `src` attribute is the URL of the viewer, with a query string that tells it what to show.
@@ -95,6 +105,58 @@ A minimal version of the viewer can be added to any HTML page as an `<iframe>`. 
 ```
 
 Paste it into a page and it works (not rendered here though because GitHub does not allow `<iframe>`). The `src` URL is the same as the one you would use to open the viewer in a browser, with the addition of `?embed=1` to tell it to hide the header and tab strip. 
+
+The page holding the frame can drive it too: `postMessage` moves the view, adds tracks beside the map, and is told where the reader has taken it (SPECS §21.4).
+
+## In a Jupyter notebook
+
+The same viewer is a Jupyter widget: the app itself in a cell, driven from Python and telling Python where the reader has taken it. It works in JupyterLab, Notebook 7, VS Code, Colab and marimo.
+
+```bash
+pip install "git+https://github.com/js2264/chromosomix#subdirectory=widgets/python"
+```
+
+It is not on PyPI: pip installs it from this repository (git must be on the machine), and from a clone
+`pip install -e widgets/python` does.
+
+```python
+from chromosomix import Chromosomix
+
+view = Chromosomix(
+    'sample.mcool::/resolutions/5000',      # a path on the kernel's disk, or any address the app opens
+    region='chr2:10000000-14000000',
+    tracks=['ATAC.bw', 'genes.gtf.gz'],
+    transform='log10',
+)
+view                                        # the map, its tracks, its side panels
+
+view.goto('chr2:11000000-12000000')         # frame a region (or a locus, in the 1D browser)
+view.navigate(transform='log2', oe=True)    # any key the address bar carries
+view.add('model.g3d.gz')                    # the header's +: a track, a map, a 3D model beside the map
+view.observe(lambda change: print(change['new']['region']), names='state')
+```
+
+Files on the kernel's disk are served to the viewer by byte range from a server on `127.0.0.1`, with their sidecars beside them; nothing is uploaded. [`widgets/python/demo.ipynb`](widgets/python/demo.ipynb) walks through it on the yeast demo, and [`widgets/python/README.md`](widgets/python/README.md) says which viewer build the frame holds and how to pin one.
+
+## In R: R Markdown, Quarto, RStudio and Shiny
+
+The same viewer is an htmlwidget, in the R package under [`widgets/r`](widgets/r/README.md):
+
+```r
+remotes::install_github("js2264/chromosomix", subdir = "widgets/r")
+# or, from a clone: install.packages("widgets/r", repos = NULL, type = "source")
+
+library(chromosomix)
+chromosomix("sample.mcool::/resolutions/5000", region = "chr2:10000000-14000000",
+            tracks = c("ATAC.bw", "genes.gtf.gz"), transform = "log10") |>
+  chromosomix_goto("chr2:11000000-12000000") |>
+  chromosomix_navigate(oe = TRUE) |>
+  chromosomix_add("model.g3d.gz")
+```
+
+In Shiny, `chromosomixOutput()`, `renderChromosomix()` and `chromosomixProxy()` drive a view on screen,
+and `input$<id>_state` follows the reader. `system.file("examples", package = "chromosomix")` holds an
+R Markdown page of the yeast demo and a Shiny app driving it.
 
 ## Using the chromosomix analysis CLI
 
@@ -134,7 +196,9 @@ npm run build:cli && npm link
 
 ### Running tasks
 
-Once it is installed, run the following command to see the available tasks and their parameters:
+Once it is installed, run the following command to see the available tasks and their parameters
+(`chromosomix tasks --json` prints the same as one JSON document, with every value a choice takes,
+for a script or an agent):
 
 ```bash
 chromosomix tasks
@@ -173,8 +237,18 @@ chromosomix tasks
 ##       --factor (default 1.1)  log bins per step
 ##       --minSeparation (default 2)  minimum separation
 ##       --derivative (default true)  log-log slope
-##       --stranded (default false)  four orientations
-##       --pairsUri  .pairs file
+##       --no-balance  read the raw counts (balanced by default where the file carries weights)
+## 
+## pairsqc
+##     Pairs QC
+##       --pairs  .pairs file
+##       --reference  reference
+##       --enzyme (default "none")  enzyme
+##       --sites (default "")  sites
+## 
+## mapreport
+##     Map report
+##       --base (default "finest")  ladder from
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
 ## 
 ## scalogram
@@ -225,6 +299,18 @@ chromosomix tasks
 ##       --sequences  sequences
 ##       --ignoreDiags (default 0)  diagonals to ignore
 ##       --minValid (default 0.5)  minimum coverage of the line
+##       --no-balance  read the raw counts (balanced by default where the file carries weights)
+## 
+## arrowhead
+##     TAD annotation
+##       --sequences  sequences
+##       --matrixSize (default 2000)  window
+##       --minBlockSize (default 60)  smallest lenient domain
+##       --varThreshold (default 0.2)  variance at most
+##       --highSignThreshold (default 0.5)  sign agreement at least
+##       --maxLowSignThreshold (default 0.4)  sign agreement from
+##       --minLowSignThreshold (default 0)  down to
+##       --decrementLowSignThreshold (default 0.1)  in steps of
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
 ## 
 ## compartments
@@ -292,8 +378,8 @@ chromosomix tasks
 ##       --anchors (default "pairs")  anchors
 ##       --pairs  pairs
 ##       --features  features
-##       --at (default "centre")  anchor on
 ##       --mode (default "fixed")  mode
+##       --at (default "centre")  anchor on
 ##       --window (default 21)  half-width
 ##       --grid (default 51)  grid
 ##       --flankFraction (default 0.5)  flank
@@ -324,6 +410,7 @@ chromosomix tasks
 ##       --region  sequences
 ##       --alpha (default 3)  exponent α
 ##       --weights (default "contacts")  weight pairs by
+##       --seed (default 0)  seed
 ##       --iterations (default 150)  refinement steps
 ##       --no-balance  read the raw counts (balanced by default where the file carries weights)
 ## 
@@ -348,6 +435,13 @@ chromosomix tasks
 ##       --bothStrands (default true)  both strands
 ##       --mismatches (default 0)  mismatches
 ##       --limit (default 500000)  most sites
+## 
+## restriction
+##     Restriction sites
+##       --sequence  reference
+##       --sequences  sequences
+##       --enzyme (default "none")  enzyme
+##       --sites (default "")  sites
 ## 
 ## peaks
 ##     Peak calling
@@ -431,7 +525,7 @@ chromosomix tasks
 ##       --groupTrack  grouping track
 ##       --cut (default "sign")  cut it by
 ##       --quantiles (default 4)  quantiles
-##       --resolution (default 10000)  bin size
+##       --resolution (default 0)  bin size
 ##       --perFeature (default false)  score every feature
 ## 
 ## overlap
@@ -479,7 +573,18 @@ Each analysis is held to the package it reproduces — cooltools, coolpuppy, chr
 bedtools and a dozen others — on public data, command for command, in a notebook rendered with every
 release: <https://chromosomix.app/validation/>, with every number its figures draw in one table beside
 it, <https://chromosomix.app/validation/validation.txt>; and how long each command takes beside its
-reference, <https://chromosomix.app/timings/>.
+reference, <https://chromosomix.app/timings/>; and how long a map and a track take to draw beside
+juicebox.js and HiGlass, on the same files, <https://chromosomix.app/viewers/>. A fourth notebook holds
+the app to this command: ten
+tasks run in the app, in headless Chromium, Firefox and WebKit, then from the line its console wrote
+for each, and every file the two wrote compared, <https://chromosomix.app/parity/>. And what the commands cost on a machine
+like yours — the time and the peak memory of 23 analyses run genome-wide, up to a 1.08-billion-contact
+human map — is <https://chromosomix.app/laptop/>, rendered on a laptop and committed as
+`notebooks/laptop.html`; render `notebooks/laptop.qmd` from a clone to measure your own —
+`micromamba run -n open2c quarto render notebooks/laptop.qmd`, in the environment
+`notebooks/environment-laptop.yml` makes — and it downloads the data, runs each analysis once and
+tabulates them. The app lists all five in
+**About → Notebooks**, each with the one line of what it found.
 
 Every task writes its results where `--out` points, each named after the file it came from up to
 its first dot — `sample.coverage.coverage-total.tsv`. Two files of one command that would share a
@@ -492,11 +597,14 @@ value after it: `--stranded` turns it on, `--stranded=false` or `--no-stranded` 
 is none of its values is refused before any file is opened, with exit 2 and the values there are,
 and so is a number that is not one.
 
-Files are read from disk. A file named by an http or https address — the map, or what `--against`,
-`--sequence`, `--tracks`, `--features` or `--pairs` names — is downloaded first, whole, because the
-reader's range requests are synchronous, which a browser worker has and Node does not: it goes into
-`$TMPDIR`, with its progress on stderr, and is removed when the command ends. For several commands
-over one large remote file, download it once yourself and name the copy.
+Files are read from disk or from where they are published. A map named by an http or https address —
+a cooler, an `.mcool` rung, a `.hic`, an `.scool` or a `.pairs`, as the positional or after
+`--against` — and a bigWig, a `.2bit` or an indexed FASTA after `--tracks` or `--sequence` is read
+**by range**, as the app reads it: one rung of a seven-gigabyte `.mcool` costs that rung, and nothing
+is written to disk; a bedGraph or a wig after `--tracks` is read in one request. What is read whole
+from a copy — a `--features` or `--pairs` set, a HiC-Pro matrix, a workspace — and any file whose host
+will not serve a range is downloaded into `$TMPDIR` instead, with its progress on stderr, and removed
+when the command ends.
 
 ```bash
 chromosomix insulation *.mcool --sequences II --out results/
@@ -520,6 +628,13 @@ chromosomix apa sample.cool --features domains.bed --anchors features \
 # sites as a BED-shaped table, and their density on the open map's bin grid.
 chromosomix motif sample.cool --sequence ref.fa.gz --pattern GGTCANNNTGACC --mismatches 1 --out results/
 chromosomix overlap sample.cool --features peaks.bed --features boundaries.bed --a peaks.bed --b boundaries.bed
+
+# A library's quality from its contact list: the pairtools counts as figures,
+# the four orientations' P(s), and — with a reference and an enzyme — pair
+# classes, distance to the cut, fragments seen and coverage against sites.
+# Restriction sites alone digests the reference into a lane of cuts.
+chromosomix pairsqc sample.pairs.gz --bin-size 10000 --sequence ref.fa.gz --enzyme DpnII --out qc/
+chromosomix restriction sample.cool --sequence ref.fa.gz --enzyme Arima --out results/
 
 # The tasks that read tracks take them as --tracks: a bigWig, a bedGraph, a
 # wig, or a FASTA read as GC content. Repeat the flag or separate with commas.
@@ -570,6 +685,10 @@ chromosomix insulation sample.metacool --value balanced_by_depth --circular pCEN
 chromosomix coverage Hum53.pairs.gz --bin-size 5000 --rungs 4
 
 chromosomix replay workspace.chromosomix.json --over data/*.hic
+
+# What `pairtools stats` writes for a contact list, counted by the pass the
+# app's import makes, in pairtools' own format — for MultiQC.
+chromosomix stats sample.pairs.gz --out qc/
 ```
 
 ### Recovering the commands you ran
@@ -577,6 +696,14 @@ chromosomix replay workspace.chromosomix.json --over data/*.hic
 You do not have to write those lines from memory. The browser app has a **console** and every analysis run lands in it as the `chromosomix` command that repeats it, written the moment the run happens rather than when you look at the result. 
 
 The log is kept in your own browser for seven days or five hundred lines, whichever comes first. Nothing is uploaded; it is listed under *What this browser is remembering* (in the command palette, `Ctrl+P` → Help) with everything else this app keeps, and *forget everything* drops it.
+
+## Contributing
+
+Bug reports, fixes, file formats and analyses are welcome: [`CONTRIBUTING.md`](CONTRIBUTING.md) says how to
+build and test it and what a pull request carries, and
+[Adding a reader or a task](https://doc.chromosomix.app/contributing/readers-and-tasks/) where a new
+format or analysis goes. Taking part follows the [code of conduct](CODE_OF_CONDUCT.md); a security problem
+is reported privately, as [`SECURITY.md`](SECURITY.md) says.
 
 ## Licence
 

@@ -191,6 +191,12 @@ export class Surface {
     return this.waits.size > 0
   }
 
+  /** @internal Whether anything but a paint holds it back: a read, a track opening. */
+  get reading(): boolean {
+    for (const reason of this.waits) if (!QUIET_WAITS.has(reason)) return true
+    return false
+  }
+
   /** @internal What is on screen, for a report. */
   account(): SurfaceAccount & { noted: { status: 'gated' | 'error'; note: string } | null } {
     return { ...this.accountOf(), noted: this.noted }
@@ -213,6 +219,24 @@ export function begin(): () => void {
     tasks -= 1
     settle()
   }
+}
+
+/**
+ * Whether the picture waits on nothing but its paints: every navigation routed,
+ * every file opened, every read landed.
+ *
+ * Not the same as finished, and kept apart for a frame nobody is looking at. A
+ * cross-origin frame scrolled out of sight or hidden gets no animation frames,
+ * so its last paint is never made and {@link RENDERED} never comes — but its
+ * files are open all the same, and a host that only needs them to be
+ * (`App.addFromHost`, §21.4) asks this rather than wait for a reader to scroll.
+ */
+export function routed(): boolean {
+  if (tasks > 0) return false
+  for (const surface of surfaces) {
+    if (surface.live() && surface.reading) return false
+  }
+  return true
 }
 
 /** Whether anything on screen, or on its way to it, holds the picture back. */

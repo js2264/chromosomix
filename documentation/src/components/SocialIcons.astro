@@ -1,0 +1,16 @@
+---
+/**
+ * The right of the header: the app this copy describes — the live site for
+ * main and for the latest release, a release's own pinned build for an older
+ * one — and the repository. Buttons drawn as the app's header draws its own.
+ */
+import { Icon } from '@astrojs/starlight/components'
+import { APP_URL, IS_DEV, PREVIEW, REPOSITORY, VERSION } from '../lib/site.mjs'
+
+const pinned = !IS_DEV && APP_URL.includes(`/v/${VERSION}/`)
+// A preview's copy opens the pull request's own app, published beside it.
+const label = PREVIEW !== null ? `Open chromosomix #${PREVIEW}` : pinned ? `Open chromosomix ${VERSION}` : 'Open chromosomix'
+---
+
+<a class="cx-open-app" href={APP_URL}>{label}</a>
+<a class="cx-icon-button" href={REPOSITORY} aria-label="chromosomix on GitHub"><Icon name="github" size="1rem" /></a>

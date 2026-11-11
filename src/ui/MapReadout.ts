@@ -54,6 +54,11 @@ export interface ReadoutHost {
   scoreWord(): string
   /** The derived value at a cell of the square block, or `null` where nothing is derived. */
   derivedReading(row: number, col: number): string | null
+  /**
+   * The lower reading under a pointer (§5.10) — what its cells hold and its
+   * derived value there — or `null` where the pointer is not over one.
+   */
+  lower?(cell: Cell, square: Cell): { word: string; reading: string | null; value: number } | null
 }
 
 /** The readout line and the card beside the pointer, for one map and its lanes. */
@@ -75,6 +80,8 @@ export class MapReadout {
     colName: HTMLElement
     pos: HTMLElement
     distance: HTMLElement
+    /** The derived value, `O/E 1.95×`, over the count it was read from; hidden where nothing is derived. */
+    reading: HTMLElement
     count: HTMLElement
     /** The lane tooltip's block: a heading and however many lines it has. */
     lane: HTMLElement
@@ -115,6 +122,7 @@ export class MapReadout {
       colName: el('span', { class: 'cell-tip-name' }),
       pos: el('div', { class: 'cell-tip-pos' }),
       distance: el('div', { class: 'cell-tip-distance hidden' }),
+      reading: el('div', { class: 'cell-tip-reading hidden' }),
       count: el('div', { class: 'cell-tip-count' }),
       lane: el('div', { class: 'cell-tip-block hidden' }),
       laneTitle: el('div', { class: 'cell-tip-title' }),
@@ -129,6 +137,7 @@ export class MapReadout {
       el('div', { class: 'cell-tip-pair' }, this.tip.rowName, this.tip.times, this.tip.colName),
       this.tip.pos,
       this.tip.distance,
+      this.tip.reading,
       this.tip.count,
     )
     this.tip.lane.append(this.tip.laneTitle, this.tip.laneLines)
@@ -200,22 +209,10 @@ export class MapReadout {
       this.describeAlong(square, data, at)
       return
     }
-    // `cell.value` is what was *drawn*, which below the diagonal of a compared
-    // map is the second file's count, and under a ratio neither file's. So the
-    // numbers here come from the blocks themselves: each file's own count at
-    // this cell.
-    const compare = this.options.compare
-    const slot = square.row * data.ncols + square.col
-    const mine = this.second === null ? cell.value : data.values[slot]
-    const count = Number.isNaN(mine) ? 'NaN (unbalanced)' : fmt.num(mine)
-    const counts =
-      this.second === null || compare === undefined
-        ? `${this.host.scoreWord()} ${count}`
-        : `${compare.labels[0]} ${count} · ${compare.labels[1]} ${
-            Number.isNaN(this.second.data.values[slot])
-              ? 'NaN (unbalanced)'
-              : fmt.num(this.second.data.values[slot])
-          }`
+    // Below the diagonal of a map read two ways (§5.10), the cell is the lower
+    // reading's, named as its own key names it, with the number it was read as
+    // beside its derived value.
+    const below = this.host.lower?.(cell, square) ?? null
     // A derived cell is two questions, and answering only the second is what
     // makes a ratio map unreadable: "1.8× expected" is the reading, and "37
     // contacts" is what tells you whether to believe it. A departure computed
@@ -229,9 +226,32 @@ export class MapReadout {
     // told the upper one's O/E, which is a real number from a real cell and not
     // the cell they are pointing at.
     const lower = this.turned !== null && bandAt(this.turned, cell.row) === 1
-    const reading = lower
-      ? this.host.derivedReading(square.col, square.row)
-      : this.host.derivedReading(square.row, square.col)
+    const reading =
+      below !== null
+        ? below.reading
+        : lower
+          ? this.host.derivedReading(square.col, square.row)
+          : this.host.derivedReading(square.row, square.col)
+    // `cell.value` is what was *drawn*: below the diagonal of a compared map the
+    // second file's count, under a ratio neither file's, and under O/E the very
+    // ratio the reading above already gave — one file's line read `O/E 1.95× ·
+    // balanced 1.95` over a cell whose balanced count was 0.000537. So wherever a
+    // reading is derived, or two files are read, the number comes from the block
+    // itself: each file's own count at this cell. Where nothing is, the drawn
+    // value is the count, or the count as smoothed, which is what is on screen.
+    const compare = this.options.compare
+    const slot = square.row * data.ncols + square.col
+    const mine =
+      below !== null ? below.value : this.second === null && reading === null ? cell.value : data.values[slot]
+    const count = Number.isNaN(mine) ? 'NaN (unbalanced)' : fmt.num(mine)
+    const counts =
+      this.second === null || compare === undefined
+        ? `${below?.word ?? this.host.scoreWord()} ${count}`
+        : `${compare.labels[0]} ${count} · ${compare.labels[1]} ${
+            Number.isNaN(this.second.data.values[slot])
+              ? 'NaN (unbalanced)'
+              : fmt.num(this.second.data.values[slot])
+          }`
     // The genome each end belongs to, read before the distance because the
     // distance needs them: two MAGs may each have a `contig_1`, and on a
     // coarsened axis the name is most of what is left to tell them apart.
@@ -310,6 +330,12 @@ export class MapReadout {
     // compared map is asked at every position is how the two differ *here*, and
     // answering it with only the visible half would mean reading the picture
     // twice, once on each side of the diagonal, to compare one locus.
+    // The derived value on a line of its own, over the count it was read from:
+    // the line under the map always said both, and the card said only the
+    // count, so on a ratio map the number the picture is drawn in was nowhere
+    // beside the pointer.
+    tip.reading.classList.toggle('hidden', reading === null)
+    if (reading !== null) tip.reading.textContent = reading
     tip.count.classList.remove('hidden')
     tip.count.textContent = counts
     this.showTip(at)
@@ -358,6 +384,7 @@ export class MapReadout {
       tip.colGenome.classList.add('hidden')
     }
     tip.distance.classList.add('hidden')
+    tip.reading.classList.add('hidden')
     tip.count.classList.add('hidden')
     this.showTip(at)
   }

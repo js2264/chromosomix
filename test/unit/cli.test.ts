@@ -691,8 +691,8 @@ describe('running a task', () => {
  * 2 GiB — so a plain mouse FASTA was refused before a byte of it was parsed.
  * Now a FASTA with its `.fai` beside it, and a `.2bit`, are read by range
  * (`cli/reference.ts`), and what is pinned is that the answer cannot tell:
- * the motif search walks the index a piece at a time and the composition reads
- * each sequence whole off the disk, and both write what the whole read wrote.
+ * the motif search and the composition both walk the index a piece at a time,
+ * and both write what the whole read wrote.
  */
 describe('a --sequence read by range', () => {
   /** A deterministic genome over the sample's two sequences, with sites in it. */
@@ -781,7 +781,7 @@ describe('a --sequence read by range', () => {
     expect(rows.filter((row) => /^chrI\t/.test(row))).toEqual([])
   })
 
-  it('reads each sequence whole off the index for a task that needs it whole', async () => {
+  it('counts base composition through the .fai as it counts the file read whole', async () => {
     const runs: Record<string, string[]> = {}
     for (const [name, reference] of [['whole', whole], ['indexed', indexed]] as const) {
       reset()
@@ -929,6 +929,9 @@ describe('the annotations venue', () => {
     expect(files).toContain('sample.metaplot.metaplot-heatmap.tsv')
     const text = await readFile(join(where, 'sample.metaplot.metaplot.tsv'), 'utf8')
     expect(text).toMatch(/^# task: metaplot/m)
+    // The curve's column is the track as the app names its row, `signal`, so the
+    // drawer's TSV and this one have one header (notebooks/parity.qmd).
+    expect(text).toMatch(/^Distance from the anchor \(bp\)\tsignal\tsignal_low\tsignal_high$/m)
     expect(complained()).not.toMatch(/failed:/)
   })
 
@@ -957,10 +960,11 @@ describe('the annotations venue', () => {
     ).toBe(0)
     const text = await readFile(join(where, 'sample.frip.frip.tsv'), 'utf8')
     expect(text).toMatch(/^# task: frip/m)
-    // One row, named after the file, with a fraction in it: the arithmetic is
-    // goldened in `analysis-golden.test.ts`, and what is pinned here is that a
-    // shell reaches it through the same `sample`.
-    expect(text).toMatch(/signal\.bw\t0\.\d+/)
+    // One row, named after the file as the app names its row — `signal`, the
+    // suffix off — with a fraction in it: the arithmetic is goldened in
+    // `analysis-golden.test.ts`, and what is pinned here is that a shell reaches
+    // it through the same `sample`.
+    expect(text).toMatch(/^signal\t0\.\d+/m)
     expect(complained()).not.toMatch(/failed:/)
   })
 
@@ -975,8 +979,8 @@ describe('the annotations venue', () => {
     ).toBe(0)
     const text = await readFile(join(where, 'sample.trackcorr.trackcorr-table.tsv'), 'utf8')
     // A track and twice itself rank identically, so Spearman is exactly 1 —
-    // and the axes are file names, not `a1`.
-    expect(text).toMatch(/signal\.bw\ttwice\.bw\t1(\.0*)?$/m)
+    // and the axes are the files' names as the app's rows have them, not `a1`.
+    expect(text).toMatch(/^signal\ttwice\t1(\.0*)?$/m)
   })
 
   it('runs a track task with no contact map at all', async () => {
@@ -992,7 +996,7 @@ describe('the annotations venue', () => {
     expect(files).toContain('signal.frip.frip.tsv')
     const text = await readFile(join(where, 'signal.frip.frip.tsv'), 'utf8')
     expect(text).toMatch(/^# framing: signal\.bw · loaded tracks, no contact map/m)
-    expect(text).toMatch(/signal\.bw\t0\.\d+/)
+    expect(text).toMatch(/^signal\t0\.\d+/m)
   })
 
   it('calls peaks on a bigWig, with no map, and writes them as BED', async () => {
@@ -1075,8 +1079,8 @@ describe('the annotations venue', () => {
     expect(files).toContain('signal.groupsignal.groupsignal-tests.tsv')
     const summary = await readFile(join(where, 'signal.groupsignal.groupsignal-groups.tsv'), 'utf8')
     // Six stretches of 10 kb each, their means 4.5 … 54.5 on A and 64.5 … 114.5 on B.
-    expect(summary).toMatch(/signal\.bw\tA\t6\t60000\t29\.5\b/)
-    expect(summary).toMatch(/signal\.bw\tB\t6\t60000\t89\.5\b/)
+    expect(summary).toMatch(/^signal\tA\t6\t60000\t29\.5\b/m)
+    expect(summary).toMatch(/^signal\tB\t6\t60000\t89\.5\b/m)
     const tests = await readFile(join(where, 'signal.groupsignal.groupsignal-tests.tsv'), 'utf8')
     expect(tests).toMatch(/Mann–Whitney U\tA\tB\t-60\t-1\b/)
   })
@@ -1096,6 +1100,27 @@ describe('the annotations venue', () => {
     ).toBe(2)
     expect(complained()).toMatch(/notes\.txt is not a track/)
     expect(complained()).not.toMatch(/failed:/)
+  })
+
+  it('lists every task as one JSON document, with every value a choice takes', async () => {
+    reset()
+    expect(await main(['tasks', '--json'])).toBe(0)
+    const listed = JSON.parse(said()) as {
+      producer: string
+      inputs: Record<string, string>
+      outputs: Record<string, string>
+      tasks: Array<{ id: string; params: Array<{ key: string; flag: string; choices?: Array<{ value: string }> }> }>
+    }
+    expect(listed.producer).toMatch(/^chromosomix /)
+    // Every task the plain listing names, dev features' included: the command runs them all.
+    expect(listed.tasks.map((task) => task.id)).toEqual(TASKS.map((task) => task.id))
+    expect(Object.keys(listed.inputs)).toEqual(['featureSet', 'pairSet', 'track', 'sequence'])
+    expect(Object.keys(listed.outputs)).toContain('profile')
+    const apa = listed.tasks.find((task) => task.id === 'apa')
+    expect(apa?.params.find((param) => param.key === 'norm')?.choices?.map((choice) => choice.value)).toContain('matched')
+    expect(apa?.params.find((param) => param.key === 'balance')?.flag).toBe('--no-balance')
+    // The deck a comparison reads, spelled as the files a shell names.
+    expect(listed.tasks.find((task) => task.id === 'hicrep')?.params[0]?.flag).toBe('--against <file>')
   })
 
   it('lists every task with its flags, the track tasks included', async () => {
@@ -1154,7 +1179,8 @@ describe('the annotations venue', () => {
     expect(complained()).not.toMatch(/skipped/)
     expect(complained()).not.toMatch(/failed:/)
     const text = await readFile(join(where, 'sample.trackcorr.trackcorr-table.tsv'), 'utf8')
-    expect(text).toMatch(/signal\.bw\ttwice\.bw\t1(\.0*)?$/m)
+    // Named as the workspace's rows are, `signal` and `twice`.
+    expect(text).toMatch(/^signal\ttwice\t1(\.0*)?$/m)
   })
 })
 

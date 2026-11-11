@@ -137,6 +137,25 @@ export function isDomainPileup(params: Params): boolean {
 }
 
 /**
+ * Whether a domain pileup's windows are **stretched evenly** onto the grid by
+ * interpolation, rather than resampled with every domain's two ends pinned to
+ * the same two grid lines: a domain pileup over the expected.
+ *
+ * Over the expected because that normalisation draws nothing at random, so it
+ * is the one scaled pileup that can be held to coolpuppy's (`rescale=True`,
+ * `ooe=True`) cell for cell — and it is, in § 24 of the validation notebook
+ * (§18.10) — and held to it, it has to be cut and resampled as coolpuppy cuts
+ * and resamples it: the domain scaled about its middle, stretched evenly, every
+ * grid cell a dropped bin reaches left a gap (`zoomWindow` in analysis/apa.ts).
+ * The pinned layout is the better picture of a set of boundaries and stays with
+ * the distance-matched control and the raw pileup, which no other tool draws
+ * cell for cell anyway.
+ */
+export function stretchesEvenly(params: Params): boolean {
+  return isDomainPileup(params) && params.norm === 'oe'
+}
+
+/**
  * Whether the windows sit **on** the diagonal.
  *
  * Three anchor modes and only one of them does. A loop set is two anchors and a
@@ -148,7 +167,7 @@ export function isDomainPileup(params: Params): boolean {
  * the two stopped being the same answer when the third mode arrived.
  */
 export function onDiagonal(params: Params): boolean {
-  return params.anchors !== 'pairs' && params.anchors !== 'allpairs'
+  return params.anchors !== 'pairs' && params.anchors !== 'allpairs' && params.anchors !== 'consecutive'
 }
 
 /**
@@ -206,6 +225,20 @@ export function allPairs(params: Params): boolean {
   return params.anchors === 'allpairs'
 }
 
+/**
+ * Whether the pairs are **each feature with the next** along its sequence.
+ *
+ * Made from one feature set like {@link allPairs}, and read like a loaded loop
+ * set once made: one pair a neighbour, no separation range of its own, and the
+ * nearest loop (`minDist`) as the one floor — which is what a BEDPE of the same
+ * pairs gets, here and in coolpuppy. It is the pairing a set of boundary sites
+ * is asked about — are two consecutive CTCF peaks in contact — and the one no
+ * range over *every* pair can give: between two neighbours lies no third site.
+ */
+export function consecutivePairs(params: Params): boolean {
+  return params.anchors === 'consecutive'
+}
+
 /** How many separation bins the run splits its pairs into; 1 is a single pileup. */
 export function distanceBins(params: Params): number {
   if (onDiagonal(params)) return 1
@@ -253,6 +286,14 @@ const PARAMS: readonly ParamSpec[] = [
           'Off the diagonal, between every two features within a separation range — the test of ' +
           'whether a set of places contacts itself.',
       },
+      {
+        value: 'consecutive',
+        label: 'consecutive features',
+        needsKinds: INTERVAL_KINDS,
+        hint:
+          'Off the diagonal, between each feature and the next one along its sequence — the pairs ' +
+          'of neighbouring sites, such as consecutive CTCF peaks.',
+      },
     ],
   },
   {
@@ -267,6 +308,28 @@ const PARAMS: readonly ParamSpec[] = [
     label: 'features',
     when: (params) => params.anchors !== 'pairs',
   },
+  {
+    kind: 'choice',
+    key: 'mode',
+    label: 'mode',
+    default: 'fixed',
+    options: [
+      { value: 'fixed', label: 'fixed window', hint: 'Centre plus or minus a number of bins.' },
+      {
+        value: 'scaled',
+        label: 'scaled',
+        hint:
+          'Flank, the feature, flank — every window on one grid. Over a set of domains this is ' +
+          'the domain pileup: the TAD in the middle and its two boundaries as the cross through it.',
+      },
+    ],
+    // The chromosight pileup's window is its template's size. See {@link isScaled}.
+    when: (params) => params.norm !== 'chromosight',
+  },
+  // **Below the mode, not above it**: whether there is a point to choose is the
+  // mode's to say — a domain pileup's window is the feature, start to end — so
+  // the row follows the question that opens and closes it. Above it, the form
+  // grew a row between *features* and *mode* in one mode and lost it in the other.
   {
     kind: 'choice',
     key: 'at',
@@ -291,24 +354,6 @@ const PARAMS: readonly ParamSpec[] = [
       { value: 'start', label: 'start', hint: 'Its 5′ end — a TSS, on a gene model.' },
       { value: 'end', label: 'end', hint: 'Its 3′ end.' },
     ],
-  },
-  {
-    kind: 'choice',
-    key: 'mode',
-    label: 'mode',
-    default: 'fixed',
-    options: [
-      { value: 'fixed', label: 'fixed window', hint: 'Centre plus or minus a number of bins.' },
-      {
-        value: 'scaled',
-        label: 'scaled',
-        hint:
-          'Flank, the feature, flank — every window on one grid. Over a set of domains this is ' +
-          'the domain pileup: the TAD in the middle and its two boundaries as the cross through it.',
-      },
-    ],
-    // The chromosight pileup's window is its template's size. See {@link isScaled}.
-    when: (params) => params.norm !== 'chromosight',
   },
   {
     kind: 'number',
@@ -492,9 +537,10 @@ const PARAMS: readonly ParamSpec[] = [
     section: 'Control',
   },
   // **The nearest loop, coolpuppy's `mindist`**, five bins by default
-  // ({@link MIN_DIST_DEFAULT}). A loop set only, and the fixed mode only: *every
-  // pair* has a separation range of its own just below, and a scaled window is a
-  // fraction of its separation, which never reaches the diagonal. Measured
+  // ({@link MIN_DIST_DEFAULT}). A loop set, or the neighbours of a feature set,
+  // and the fixed mode only: *every pair* has a separation range of its own just
+  // below, and a scaled window is a fraction of its separation, which never
+  // reaches the diagonal. Measured
   // between the two anchors' centres, in base pairs against this many bins of
   // the file, which is how coolpuppy measures it.
   {
@@ -508,7 +554,8 @@ const PARAMS: readonly ParamSpec[] = [
     min: 0,
     integer: true,
     unit: 'bins',
-    when: (params) => usesPairSet(params) && !isScaled(params) && params.norm !== 'chromosight',
+    when: (params) =>
+      (usesPairSet(params) || consecutivePairs(params)) && !isScaled(params) && params.norm !== 'chromosight',
     section: 'Separation',
   },
   // **The range two features may be apart is a range of bin offsets**, which is
@@ -553,7 +600,7 @@ const PARAMS: readonly ParamSpec[] = [
     max: MAX_DISTANCE_BINS,
     integer: true,
     slider: true,
-    when: (params) => params.anchors === 'pairs' || params.anchors === 'allpairs',
+    when: (params) => !onDiagonal(params),
     section: 'Separation',
   },
   {
@@ -679,7 +726,9 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
         ? 'Choose a loop set. A BEDPE dropped on the Annotations panel becomes one.'
         : allPairs(params)
           ? 'Choose the feature set to pair with itself.'
-          : 'Choose a feature set to pile up on the diagonal.',
+          : consecutivePairs(params)
+            ? 'Choose the feature set whose neighbours to pair.'
+            : 'Choose a feature set to pile up on the diagonal.',
     }
   }
 
@@ -692,22 +741,25 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   // itself reports the number it actually generated.
   const anchors = allPairs(params) ? null : features
 
-  // **Refused in the form rather than at Run.** One cell of a scaled pileup is
-  // fed by windows at a dozen different separations — that is what scaling is —
-  // so it has no one diagonal offset for a P(s) to be looked up at, and
-  // dividing by one anyway is a plausible picture of nothing. The other three
-  // normalisations all apply; the distance-matched one is drawn at the same
-  // separations by construction and is the right answer here.
-  if (isScaled(params) && params.norm === 'oe') {
+  // **Refused in the form rather than at Run, for scaled pairs only.** A window
+  // is divided by the expected cell by cell, at each cell's own diagonal of the
+  // map, *before* it is resampled — so a scaled window has an expected as much
+  // as a fixed one does, and a domain pileup over it is coolpuppy's own and is
+  // held to it ({@link stretchesEvenly}). It used to be refused on the diagonal
+  // too, from when the finished pileup was divided by one expected per grid
+  // cell, which on a scaled grid has no meaning. Off the diagonal the scaled
+  // window is this task's own square about the loop and coolpuppy draws none
+  // like it, so there is nothing to hold it to; the distance-matched control is
+  // drawn at the same separations by construction.
+  if (isScaled(params) && params.norm === 'oe' && !onDiagonal(params)) {
     return {
       class: 'free',
       requests: 0,
       bytes: 0,
       note: 'Nothing to read.',
       refusal:
-        'Observed / expected needs one diagonal offset per cell, and a scaled window has a ' +
-        'different one in every feature. Use the distance-matched control, or turn the scaled ' +
-        'mode off.',
+        'Observed / expected on a scaled grid is for a feature set on the diagonal. For pairs, ' +
+        'use the distance-matched control, or turn the scaled mode off.',
     }
   }
 
@@ -842,11 +894,13 @@ export const APA_TASK: AnalysisTask = {
   version: 3,
   // **Not** `requires: ['expected']`, though §18.8 describes the O/E path as
   // needing it. `requires` is static and the runner resolves it before every
-  // run, so declaring it would compute a whole-file P(s) on every APA — while
-  // O/E is not the default and most runs never look at it. And the expected an
-  // APA needs is a narrower question than the task's: the diagonals its own
-  // windows reach, on the sequences its own anchors sit on, which the runner
-  // reads as one band per sequence and never deeper than the farthest window.
+  // run, so declaring it would compute a whole-file P(s) on every APA — the
+  // chromosight, distance-matched and raw (`none`) runs included, which never
+  // look at it — for a number that O/E, the default, does not need whole
+  // either. The expected an APA needs is a narrower question than the task's:
+  // the diagonals its own windows reach, on the sequences its own anchors sit
+  // on, which the runner reads as one band per sequence and never deeper than
+  // the farthest window.
   // It is *not* the windows' own cells, which is what it once was: an expected
   // taken from squares about a loop set is the mean of the places the set
   // picked, enriched by construction, and not the sequence's.

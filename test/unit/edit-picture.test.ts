@@ -1,3 +1,4 @@
+// @dev-feature edit
 /**
  * The stage's whole-genome picture (SPECS §27.9): read a band at a time, one
  * byte a cell, and a pyramid of means over it.

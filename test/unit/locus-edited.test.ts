@@ -1,3 +1,4 @@
+// @dev-feature edit
 /**
  * The axis through an edit (SPECS §27.2, §27.7): stretches that read backwards,
  * pieces of one original side by side, and a stretch that lands twice.

@@ -1,0 +1,64 @@
+---
+title: "Inter-arm alignment"
+description: "Measure how strongly the two arms of a bacterial chromosome are held together, and how far from the origin, from the secondary diagonal of its contact map."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="interarm" />
+
+Where SMC, loaded at *parS* beside the origin, zips the two arms of a bacterial chromosome together, its map carries a second diagonal through the origin. **Inter-arm alignment** turns that diagonal into numbers: how strongly the arms are held together, and how far from the origin.
+
+## Running it
+
+The arms are read from the origin: in the Chromosomes table, the first step of the breadcrumb ([Moving around](/browse/navigating/)), tick the sequence's **circular** box and type its **origin**, 1-based, or let [Origin and terminus](/analyses/oriter/) fill it in. Until then the origin is the first base, and the drawer says so.
+
+Then choose **Inter-arm alignment** in the **2D tasks** card of the **Analysis** panel (<kbd>4</kbd>) and press **run**. It makes **Inter-arm enrichment**, a track marked `*` on the **Tracks** card of the **Annotations** panel: how much each locus touches its mirror image, in log2. The curves and the table below are in the drawer.
+
+![The B. subtilis wild-type map at 10 kb framed on its origin, the secondary diagonal crossing the main one there, Inter-arm enrichment in a lane to its left, and the drawer beside it on Inter-arm alignment by distance from the origin, rising from below 0 at the origin to about 1 within 500 kb.](../../../assets/screens/analyses/interarm-origin-curve.webp)
+
+The same run from a shell, where `--circular` and `--origin` declare what the Chromosomes table holds:
+
+<TaskCommand id="interarm" />
+
+```sh
+chromosomix interarm ecoli.mcool::/resolutions/5000 --circular NC_000913.3 \
+  --origin NC_000913.3:3925744 --out results/
+```
+
+## Parameters
+
+**band** is how close to the secondary diagonal a cell must be to count, in bins either side; 0 is the diagonal alone. **window along the arms** is used only by the control, after detrend.
+
+<TaskParameters id="interarm" />
+
+## What it writes
+
+<TaskOutputs id="interarm" />
+
+## Reading the result
+
+Each cell is divided by the sequence's own distance decay, and the log2 averaged within **band** bins of the secondary diagonal by distance from the origin: **Inter-arm alignment by distance from the origin**, a curve per sequence. Near the origin and the terminus, where the diagonals meet, cells nearer the main diagonal than twice the band and two bins are left out: they measure compaction, not alignment.
+
+On the curve, 0 is no alignment: mirror images touch as often as any two loci as far apart. An aligned chromosome stands above 0 out from the origin, and falls back where the alignment ends. The same **after detrend** shares its axis. **Contact decay along the diagonal and along both arms** draws the two decays: along the diagonal, the short way round a circle, for the curve; within and across the arms for the control.
+
+### The table
+
+**Inter-arm alignment per sequence** has a row per chromosome:
+
+- **read as** circular or linear, and the **origin** used, 1-based.
+- **enrichment**: how many times as often mirror images touch as expected, from the origin out to the reach; 1 is no alignment, 2 twice as often. Where nothing reaches, it is the whole arm's.
+- **enrichment after detrend**: the same cells over the decay along both arms, which absorbs the secondary diagonal: a control on that detrending, near 1 where it works, not a second measure.
+- **reach**: how far from the origin, in base pairs, the enrichment holds before it falls four-fifths of the way from its peak back to 1 on a log scale, read from a running mean over 2 % of the arm.
+- **arm**: the length of the longer arm.
+
+As a guide, *Pseudomonas aeruginosa*, whose arms are aligned, reads 3.1 to 3.2 at 2 to 16 kb, reaching about 3.0 Mb of its 3.2 Mb arms, and 0.93 to 0.97 after detrend. *E. coli*, whose arms are not, reads 1.20 to 1.22: not exactly 1, because the stretch read is wherever its noise runs highest.
+
+### What to watch for
+
+- **Declare the circle.** A chromosome read as linear, with its origin near either end, has one arm; the drawer says so.
+- **Size.** A chromosome over 8,192 bins is left out and named: open the file at a coarser resolution. One under 8 bins is left out too.
+- **Comparing libraries.** On a deck, **run on all N maps** brings the tables together, with a column naming each row's map ([Maps side by side](/browse/deck/)).

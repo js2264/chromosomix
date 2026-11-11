@@ -25,7 +25,9 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { ViewerError } from '@/errors'
 import { HicFile } from '@/hic/HicFile'
+import { parseFooter, readFooter, readHeader } from '@/hic/format'
 import { hicHandle } from '@/hic/handle'
 import { HicStore } from '@/hic/store'
 import { planRead } from '@/metacooler/matrix'
@@ -207,3 +209,86 @@ describe('a v9 footer with no pointer to the normalisation index', () => {
     expect(Array.from(file.weights(0, 2))[0]).toBeCloseTo(1 / divisors[0], 5)
   })
 })
+
+/** A source that counts what it is asked for. */
+class CountingSource extends BytesSource {
+  readonly reads: Array<{ position: number; length: number }> = []
+  override readBytes(position: number, length: number): Uint8Array {
+    this.reads.push({ position, length })
+    return super.readBytes(position, length)
+  }
+}
+
+describe.each(VERSIONS)('a v%i footer is walked where it lies, not read whole', (version) => {
+  /**
+   * One long chromosome, so each expected-value vector is tens of kilobytes —
+   * what a real one is, where the footer is megabytes of values the reader skips
+   * (§3.6) around the few hundred bytes of framing it parses.
+   */
+  async function written(): Promise<Uint8Array> {
+    const long = [{ name: 'chr1', length: 3_000_000 }, ...CHROMS.slice(1)]
+    return (
+      await writeHic({
+        version,
+        chroms: long,
+        resolutions: [BIN, 500],
+        records: { '1_1': RECORDS },
+        blockBinCount: 16,
+        expectedValues: true,
+        norms: { [`KR/1/${BIN}`]: divisorsFor(long[0].length, BIN), [`VC/1/${BIN}`]: divisorsFor(long[0].length, BIN) },
+      })
+    ).bytes
+  }
+
+  it('finds what a whole read finds', async () => {
+    const bytes = await written()
+    const source = new CountingSource(bytes)
+    const header = readHeader(source)
+    const lead = version >= 9 ? 8 : 4
+    const whole = parseFooter(bytes.subarray(header.footerPosition), version, lead, {
+      fileSize: bytes.byteLength,
+      footerPosition: header.footerPosition,
+    })
+    const walked = readFooter(source, header)
+    expect([...walked.masterIndex]).toEqual([...whole.masterIndex])
+    expect([...walked.normVectors]).toEqual([...whole.normVectors])
+    expect(walked.normTypes).toEqual(whole.normTypes)
+    expect(walked.normVectors.size).toBeGreaterThan(0)
+  })
+
+  it('reads the framing and skips the values', async () => {
+    const bytes = await written()
+    const source = new CountingSource(bytes)
+    const header = readHeader(source)
+    source.reads.length = 0
+    const walked = readFooter(source, header)
+    expect(walked.normTypes).toEqual(['KR', 'VC'])
+    // The footer is the expected values, nearly all of it: hundreds of kilobytes
+    // here, megabytes in a real file. The walk asks for a few windows of it, and
+    // the source rounds each out to its own chunk.
+    const footer = bytes.byteLength - header.footerPosition
+    const asked = source.reads.reduce((sum, one) => sum + one.length, 0)
+    expect(footer).toBeGreaterThan(400_000)
+    expect(asked).toBeLessThan(footer / 10)
+  })
+
+  it('refuses a file that ends inside it, as a format error', async () => {
+    const bytes = await written()
+    const header = readHeader(new BytesSource(bytes))
+    // Cut part of the way into the expected values, and just short of the end:
+    // a walk that skips the values without reading them must still notice that
+    // the file is not long enough to hold them.
+    for (const cut of [header.footerPosition + 5_000, bytes.byteLength - 3]) {
+      const short = bytes.subarray(0, cut)
+      let caught: unknown = null
+      try {
+        readFooter(new CountingSource(short), header)
+      } catch (err) {
+        caught = err
+      }
+      expect(caught).toBeInstanceOf(ViewerError)
+      expect((caught as ViewerError).code).toBe('format')
+    }
+  })
+})
+

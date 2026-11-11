@@ -13,6 +13,9 @@ import {
   differsOnlyInPresentation,
   differsOnlyInPresentationOrScore,
   differsOnlyInScale,
+  hasLower,
+  LOWER_KEYS,
+  LOWER_READING_KEYS,
   matrixLevel,
   overviewLevel,
   parseViewState,
@@ -23,6 +26,7 @@ import {
   ViewStore,
   viewStateEquals,
   viewStateOf,
+  withoutLower,
 } from '../../src/state/ViewState'
 import { WHOLE_FILE_LEVELS } from '../../src/ui/Overview'
 import type { ViewState } from '../../src/types'
@@ -124,6 +128,26 @@ const CASES: ViewState[] = [
     // `false` rather than absent on purpose: absent *means* turned, so the
     // explicit square is the value that has to survive being written down.
     flip: false,
+    lower: true,
+    score2: 'count',
+    oe2: true,
+    smooth2: 'a50',
+    transform2: 'log2',
+    colormap2: 'RdBu_r',
+    vmin2: -2,
+    vmax2: 2,
+  },
+  // The lower triangle in a reading of its own (§5.10): balanced counts above
+  // the diagonal, their O/E below it on its own ramp.
+  {
+    uri: 'yeast.cool',
+    view: 'region',
+    region: 'II',
+    lower: true,
+    score2: 'balanced',
+    oe2: true,
+    transform2: 'log2',
+    colormap2: 'RdBu_r',
   },
 ]
 
@@ -657,3 +681,32 @@ describe('the saved place in the hash', () => {
     expect(differsOnlyInFocus(base, base)).toBe(false)
   })
 })
+
+describe('the lower reading (§5.10)', () => {
+  it('takes a despeckle and a transform this build offers, and drops the rest', () => {
+    const state = parseViewState('uri=a.cool&view=region&region=I&lower=1&smooth2=400&transform2=banana&vmax2=x')
+    expect(state).toStrictEqual({ uri: 'a.cool', view: 'region', region: 'I', lower: true })
+  })
+
+  it('is told to the mounted map rather than rebuilding it, as a score is', () => {
+    const held: ViewState = { uri: 'a.cool', view: 'region', region: 'I' }
+    const split: ViewState = { ...held, lower: true, score2: 'count', oe2: true, colormap2: 'viridis' }
+    expect(differsOnlyInPresentation(held, split)).toBe(false)
+    expect(differsOnlyInPresentationOrScore(held, split)).toBe(true)
+  })
+
+  it('is taken out whole, and is a fact about the state only where a key of it is set', () => {
+    const split: ViewState = { uri: 'a.cool', view: 'region', region: 'I', lower: false, vmin2: 1 }
+    expect(hasLower(split)).toBe(true)
+    expect(withoutLower(split)).toStrictEqual({ uri: 'a.cool', view: 'region', region: 'I' })
+    expect(hasLower(withoutLower(split))).toBe(false)
+  })
+
+  it('carries every key across a navigation but the clip', () => {
+    expect(LOWER_KEYS.filter((key) => !(LOWER_READING_KEYS as readonly string[]).includes(key))).toEqual([
+      'vmin2',
+      'vmax2',
+    ])
+  })
+})
+

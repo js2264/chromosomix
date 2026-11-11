@@ -84,6 +84,32 @@ export const STRUCTURE_REF = '3d'
 /** What a tracks cell is written as in the `maps` key. */
 export const TRACKS_REF = 'tracks'
 
+/**
+ * What a tracks cell's lanes are kept under, where a map's are kept under its
+ * file: `tracks:1` for the first tracks cell from the left, `tracks:2` for the
+ * second (§16.11).
+ *
+ * A lane is remembered against the file of the map it was drawn on
+ * (`AnnotationStore.parkedFor`), because a slot id is minted per deck and names
+ * nothing after a reload. A tracks cell has no file, so a track placed on one
+ * was written nowhere: a reload, or a workspace opened again, brought the cell
+ * back empty and the track on no picture at all. The cell's **seat** — which
+ * tracks cell it is, counting from the left — is the one thing about it that
+ * survives, and it is already what its name and its height are remembered by.
+ *
+ * Spelled with a scheme so that nothing reads it as a path: a workspace
+ * resolves every relative name against its own address (`resolveConfig`),
+ * and `tracks` alone would have become `<bucket>/tracks`.
+ */
+export function tracksCellKey(seat: number): string {
+  return `${TRACKS_REF}:${seat + 1}`
+}
+
+/** Whether a lane's key names a tracks cell (see {@link tracksCellKey}) rather than a file. */
+export function isTracksCellKey(uri: string): boolean {
+  return /^tracks:[1-9]\d*$/.test(uri)
+}
+
 /** Whether a ref names a map — a file with a worker behind it. */
 export function isMapRef(ref: PanelRef): ref is { kind: 'remote' | 'local'; uri: string } {
   return ref.kind === 'remote' || ref.kind === 'local'

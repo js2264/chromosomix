@@ -439,7 +439,13 @@ export class AnnotationLoader {
     // hand, the row removed. Any of those makes this answer stale.
     if (entry === undefined || entry.status !== 'detached') return
     if (file === null) {
-      this.store.update(id, { summary: 'dropped file — re-open it to draw it again' })
+      // A grant still held is one the browser wants a click for (§5.6), and the
+      // row's *allow access* is that click.
+      this.store.update(id, {
+        summary: hasHandle(name)
+          ? 'remembered file — allow access to draw it again'
+          : 'dropped file — re-open it to draw it again',
+      })
       return
     }
     // And the sidecar, under whichever name it was remembered by. Re-attaching

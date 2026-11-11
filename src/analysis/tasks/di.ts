@@ -195,12 +195,14 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
   }
 
   // **Priced over the sequences that can carry the window, not over the ticks.**
-  // A bin needs a whole window each side, so a sequence no longer than the
-  // window contributes nothing at any cost — and the run says so rather than
-  // reading it. With one ticked that is a refusal naming it, which is the same
-  // sentence the single dropdown used to produce; with several it counts them,
-  // since a metagenome's short contigs are the ordinary case and not a mistake.
-  const long = chosen.filter((entry) => entry.bins > window)
+  // A bin needs a whole window each side, so a sequence no longer than twice
+  // the window contributes nothing at any cost — the runner's own test
+  // (`run/di.ts`), on a line and on a circle alike — and the run says so rather
+  // than reading it. With one ticked that is a refusal naming it, which is the
+  // same sentence the single dropdown used to produce; with several it counts
+  // them, since a metagenome's short contigs are the ordinary case and not a
+  // mistake.
+  const long = chosen.filter((entry) => entry.bins > window * 2)
   if (long.length === 0) {
     const one = chosen.length === 1 ? chosen[0] : null
     return {
@@ -211,9 +213,9 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       refusal:
         one !== null
           ? `${one.name} is ${one.bins.toLocaleString()} bins and the window is ` +
-            `${window.toLocaleString()}, so no bin on it has a whole window either side. Use a ` +
-            'narrower window, or a longer sequence.'
-          : `No ticked sequence is longer than a ${window.toLocaleString()}-bin window, so no ` +
+            `${window.toLocaleString()}, so no bin on it has a whole window either side: it needs ` +
+            `more than ${(window * 2).toLocaleString()}. Use a narrower window, or a longer sequence.`
+          : `No ticked sequence is longer than twice a ${window.toLocaleString()}-bin window, so no ` +
             'bin on any of them has a whole window either side. Use a narrower window, or tick ' +
             'a longer sequence.',
     }

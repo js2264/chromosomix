@@ -97,6 +97,7 @@
 import { ViewerError } from '../errors'
 import type { ByteSource } from '../types'
 import { binCountFor, chromOffsetsFor, type PairsColumns, type PairsContig } from './format'
+import { PairStatsCounter, type PairStats } from './stats'
 import { decompressedStream, forEachLine, type SpanOptions } from './stream'
 
 const TAB = 0x09
@@ -122,9 +123,57 @@ export interface BinOptions {
   maxPixelBytes?: number
   onProgress?: (done: number, total: number, note?: string) => void
   cancelled?: () => boolean
+  /**
+   * Every record, as the pass has already found its fields — for a count this
+   * pass does not make itself.
+   *
+   * Pairs QC's restriction statistics are the case (`analysis/run/pairsqc.ts`):
+   * which fragment each read ended in is a fact about records, like the
+   * orientation curves and `pairtools stats`, and §3.7's record reader is not a
+   * thing this application should have two of. So a second counter rides the
+   * same scan and is handed exactly what {@link PairStatsCounter.add} is — the
+   * same arguments in the same order, called just after it for every record,
+   * the unmapped and the unknown included — and nothing is decoded for it.
+   */
+  onRecord?: RecordObserver
 }
 
+/**
+ * One record, as the scan found it: {@link PairStatsCounter.add}'s own shape.
+ *
+ * `c1`, `c2` are header indices, `-1` for a name the header does not declare
+ * (an unmapped `!` among them); `[c1From, c1To)` and `[c2From, c2To)` are where
+ * the names lie in `line`, for the rare caller that has to read one the header
+ * lacks; `p1`, `p2` the positions as written — 1-based, `-1` where not a number;
+ * `s1`, `s2` the strands' first bytes, `-1` where absent; and `[tFrom, tTo)` the
+ * pair type, `tFrom < 0` where the record has none.
+ *
+ * `line` is the scan's own buffer and is reused for the next record, so an
+ * observer reads what it needs from it before returning and keeps nothing.
+ */
+export type RecordObserver = (
+  line: Uint8Array,
+  c1: number,
+  c1From: number,
+  c1To: number,
+  c2: number,
+  c2From: number,
+  c2To: number,
+  p1: number,
+  p2: number,
+  s1: number,
+  s2: number,
+  tFrom: number,
+  tTo: number,
+) => void
+
 export interface BinnedPixels {
+  /**
+   * What `pairtools stats` counts over the records read (`pairs/stats.ts`), or
+   * absent on a table that was not binned from records — a coarser rung, a
+   * lifted map.
+   */
+  stats?: PairStats | null
   /**
    * The four orientation curves, or `null` where the file carries no strands.
    *
@@ -383,16 +432,19 @@ export async function binPairs(
   // record the loop is already walking, and a record whose strands sit past its
   // coordinates is scanned a little further along the line.
   const withStrands = columns.strand1 >= 0 && columns.strand2 >= 0
-  const want = withStrands
-    ? Math.max(
-        columns.chrom1,
-        columns.chrom2,
-        columns.pos1,
-        columns.pos2,
-        columns.strand1,
-        columns.strand2,
-      )
-    : Math.max(columns.chrom1, columns.chrom2, columns.pos1, columns.pos2)
+  // And the pair type, for `pairtools stats`' counts (`pairs/stats.ts`) — one
+  // field further along a pairtools record, after the two strands.
+  const pairType = columns.pairType ?? -1
+  const want = Math.max(
+    columns.chrom1,
+    columns.chrom2,
+    columns.pos1,
+    columns.pos2,
+    ...(withStrands ? [columns.strand1, columns.strand2] : []),
+    pairType,
+  )
+  const stats = new PairStatsCounter(contigs, pairType >= 0)
+  const observe = options.onRecord
 
   let longestContig = 0
   for (const contig of contigs) longestContig = Math.max(longestContig, contig.length)
@@ -503,12 +555,27 @@ export async function binPairs(
     let p2 = -1
     let s1 = -1
     let s2 = -1
+    let c1From = 0
+    let c1To = 0
+    let c2From = 0
+    let c2To = 0
+    let tFrom = -1
+    let tTo = -1
     const end = line.length
     for (let i = 0; i <= end; i++) {
       if (i !== end && line[i] !== TAB) continue
-      if (field === columns.chrom1) c1 = index.lookup(line, start, i)
-      else if (field === columns.chrom2) c2 = index.lookup(line, start, i)
-      else if (field === columns.pos1) p1 = readInt(line, start, i)
+      if (field === columns.chrom1) {
+        c1 = index.lookup(line, start, i)
+        c1From = start
+        c1To = i
+      } else if (field === columns.chrom2) {
+        c2 = index.lookup(line, start, i)
+        c2From = start
+        c2To = i
+      } else if (field === pairType) {
+        tFrom = start
+        tTo = i
+      } else if (field === columns.pos1) p1 = readInt(line, start, i)
       else if (field === columns.pos2) p2 = readInt(line, start, i)
       // One byte each, and only the first: a strand field is `+` or `-` in
       // every file that has one, and decoding it would allocate a string per
@@ -519,6 +586,12 @@ export async function binPairs(
       if (field > want) break
       start = i + 1
     }
+
+    // Every record, before anything below can turn one away: `pairtools stats`
+    // counts the unmapped and the unknown as well as what is binned.
+    stats.add(line, c1, c1From, c1To, c2, c2From, c2To, p1, p2, s1, s2, tFrom, tTo)
+    // And whatever else rides this pass, handed the same fields (`onRecord`).
+    if (observe !== undefined) observe(line, c1, c1From, c1To, c2, c2From, c2To, p1, p2, s1, s2, tFrom, tTo)
 
     if (c1 < 0 || c2 < 0) {
       skippedUnknownContig++
@@ -688,6 +761,7 @@ export async function binPairs(
       orientEdges === null || orientCounts === null
         ? null
         : { edges: orientEdges, counts: orientCounts, total: orientTotal },
+    stats: stats.result(options.spans !== undefined),
   }
   return needsReorder ? mergeDuplicates(result) : result
 }

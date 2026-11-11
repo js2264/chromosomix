@@ -126,8 +126,15 @@ describe('parsing a store', () => {
       reason: 'newer',
       version: STORE_VERSION + 1,
       producer: 'chromosomix 9.0.0',
+      format: 'store',
+      reads: STORE_VERSION,
     })
-    expect(refusalMessage(read as never, 'store.json')).toContain('newer version')
+    // A store's numbers, not a workspace's: it once said *workspace format 2*
+    // and named the workspace version this build reads.
+    const message = refusalMessage(read as never, 'store.json')
+    expect(message).toContain('newer version')
+    expect(message).toContain(`in store format ${STORE_VERSION + 1}. This build reads store format ${STORE_VERSION}.`)
+    expect(message).not.toContain('workspace')
   })
 
   it('treats a version that is not a whole number as a file that is not a store', () => {
@@ -476,16 +483,20 @@ describe('fetching a store', () => {
     expect(!result.ok && result.message).toContain('cross-origin')
   })
 
-  it('sends a reader stuck behind UCSC to a connected folder, in the app’s own word', async () => {
+  it('sends a reader stuck behind UCSC to a copy on a host that sends the header', async () => {
     // The measured note a `*.ucsc.edu` host gets on top of the CORS sentence
-    // (§24.10). A folder is *connected* on every screen that offers one
-    // (§26.4); this sentence alone still sent the reader to a *mounted* one,
-    // the word the landing page gave up.
+    // (§24.10). It once sent the reader to a connected folder, which lists a
+    // hub.txt dimmed and says to paste its address into the stores drawer
+    // (`browse/route.ts`): what works is a copy hosted where the header is
+    // sent, or the tracks dropped one by one. A folder is *connected* on every
+    // screen that offers one (§26.4), never *mounted*, the word the landing
+    // page gave up.
     const dead = (() => Promise.reject(new TypeError('Failed to fetch'))) as unknown as typeof fetch
     const result = await fetchStore('https://genome.ucsc.edu/hubs/demo/hub.txt', { fetchImpl: dead })
     const message = result.ok ? '' : result.message
     expect(message).toContain('genome.ucsc.edu among them')
-    expect(message).toContain('opening it from a connected folder')
+    expect(message).toContain('a copy of the hub and its files on a host that sends the header')
+    expect(message).toContain('A connected folder lists a hub.txt but does not open it as a hub.')
     expect(message).not.toMatch(/mount/i)
   })
 

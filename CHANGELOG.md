@@ -14,7 +14,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
-- **An ideogram view: every chromosome whole, side by side, with the tracks beside each (§5.10), as
+- **An ideogram view: every chromosome whole, side by side, with the tracks beside each (§5.11), as
   a dev feature (§29).** The switch in the Tracks card's new `picture` row — the browser's, and a
   map's — the palette's *Ideogram* or `z` draws the sequences ticked on the Sequences card, or the
   whole genome where none is, as a karyotype on one scale: standing in a row, each read downward with
@@ -46,6 +46,1089 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   (`SessionConfig.ideogram`); the orientation is in the link (`ideogram=vertical|horizontal`), and
   the figure exports as PNG or PDF — the whole picture at rest, the window as framed when magnified.
   `scripts/ui-ideogram-view.mjs` drives it on the yeast and human demos.
+
+### Changed
+
+- **A remote map reads in quarter-megabyte chunks, not megabyte ones (§6.1, §12).** Opening a cooler
+  walks HDF5 metadata a few hundred bytes at a time, scattered across the file, and each place cost a
+  whole chunk. The 7.9 GB 4DN map of K562 behind the landing page's *Human Hi-C data* (§24.11) read
+  24 MB in 21 requests before its first picture at MYC; it now reads 9.7 MB in 25. Read-ahead is
+  counted in bytes, so a stretch read chunk after chunk still runs a megabyte ahead and doubles to
+  16 MiB a fetch: a whole chromosome is about even (chromosome 2 of that map at 50 kb, 47 requests and
+  92 MB where it was 35 and 102, on screen in 24 s either way through a 100 ms, 50 Mbit/s link). The
+  tracks already read in 256 KiB chunks.
+- **The circularity check passes over a sequence longer than 10 Mb (§8.15).** The circles people map
+  are under it — a bacterial chromosome is about 4 Mb at the median, *Myxococcus xanthus*'s and
+  *Bradyrhizobium japonicum*'s about 9.1 — and the few above are niche (the myxobacteria *Sorangium*
+  and *Minicystis*, 13–16 Mb), left for the reader to tick. A eukaryote's chromosome was three reads
+  of a large file for an answer known in advance: 28 MB behind the first picture of the K562 map,
+  beside every track being fetched, where nothing is read now. The app's first-open check and
+  `chromosomix circular` both leave such a sequence as it was. With the smaller
+  chunk, the *Human Hi-C data* map's reads end in about 5 s through that link, where they took 22 s,
+  and it moves 9.7 MB where it moved 61.
+
+### Fixed
+
+- **The site no longer comes up blank after an update (§11).** The service worker filled its cache
+  through the browser's HTTP cache, which could hand it the build before's page, fetched minutes
+  earlier: every ordinary load then showed a blank page, and only a hard reload showed the app. It
+  now asks the server for every file and keeps a page only if every script it loads is this build's.
+  A browser already stuck on a blank page recovers by itself on its first visit after this build:
+  the new version takes over without the bar, which that page could not show, and reloads the tab.
+
+## [0.21.0] - 2026-11-05
+
+### Added
+
+- **The files a contributor looks for, and a page on adding a reader or a task.** `CONTRIBUTING.md`,
+  `CODE_OF_CONDUCT.md` (the Contributor Covenant 2.1), `SECURITY.md`, issue forms for a bug and a
+  feature request, and a pull request template whose checks are this repository's rules. The
+  documentation's *Contributing* group gains *Adding a reader or a task*: how a file is read and a
+  task runs, and where a track format, a contact-map format or a task goes, with what each must come
+  with. The README has a *Contributing* section.
+- **The Python widget carries its licence.** A wheel built from `widgets/python/` held no licence
+  text; `widgets/python/LICENSE`, the root's GPL-3.0 word for word, is now in it as its
+  `License-File`, and `test/unit/licences.test.ts` holds the copy to the original.
+- **The notebooks render every week, unpublished (§18.10).** `.github/workflows/notebooks.yml` also runs
+  on Sundays at 02:37 UTC, on `main`'s newest commit with every input at its default, and publishes
+  nothing — no push to the `notebooks` branch, no release assets, no deploy: its artifacts and its
+  summary are what it leaves, and a page it rendered says it was rendered on that schedule. It has a
+  concurrency group of its own, so it can neither cancel a release's run waiting behind another nor
+  hold one back.
+- **The deep human map on five sides (§18.10).** `notebooks/laptop.qmd` times its six analyses over
+  the IMR-90 map on the command line as before, and now in Chromium too — the map opened once, each
+  task run in turn in the same page, the pileup over the loops the first called there, the map moved to
+  250 kb for the compartments and back — the cooltools and coolpuppy script on one process as well as
+  on one a core, and cooltools' and coolpuppy's own commands one after another, as chromosomix's run,
+  each set to the API's defaults the script uses where the command's differ. The virtual 4C reads the
+  whole genome on every side, as the validation's § 10 does, where it read chr8 alone. coolpup.py needs
+  PyTables, setuptools 81.0.0 (the last with `pkg_resources`) and, on a Mac, multiprocessing-logging
+  0.3.4: `notebooks/environment-laptop.yml` adds them, and the page checks for them first. `notebooks/scripts/laptop.mjs` runs a plan with `steps` in one page, weighing the
+  browser throughout and timing the opening, each move to another rung and each run apart; the page
+  lays the browser's stretches end to end, as the commands are, leaving out what the driver does between
+  them. `pipeline.tsv`, the page's table, its figure and its summary have a side for each, and
+  `notebooks/scripts/timing.plot.R`'s panel c a row for each — chromosomix's command line and Chromium,
+  then the reference's commands, its script on several processes and on one — the panel as wide as the
+  page and growing with its rows, each side's end and peak written just past where it finished. Its
+  caption is three bullets — b's comparisons, every comparison the timings notebook makes, and the
+  deep map whole, the command line against cooltools' and coolpup.py's commands and Chromium against
+  the script — each in CPU time, wall clock and peak memory.
+
+### Changed
+
+- **The Notebooks workflow publishes without waiting for the laptop (§18.10).** Its `publish` job
+  needs the parity, the validation and the viewers alone, since the runner's render of the laptop is
+  published nowhere; a laptop render that stalled had held the pages back for hours. The laptop job
+  writes its own section of the run's summary (`pages.py summary laptop`), and is never the run's
+  failure: its render stops at 330 minutes, short of the job's limit, a render that fails or overruns
+  is a notice, and the job continues on error.
+- **`notebooks/viewers.qmd` draws each viewer the way it draws best without a GPU (§18.10).** All three
+  viewers were timed in a Chromium told to draw WebGL with SwiftShader, for HiGlass's sake, and that
+  browser composites every page on the emulated GPU, which no reader's browser does: chromosomix's
+  pictures of the yeast map from disk took 0.54–0.82 s there, and take 0.21–0.33 s in a Chromium launched
+  without the flags, compositing in software, where chromosomix and juicebox.js are now timed. HiGlass,
+  which draws nothing without WebGL, keeps its browser: one browser for all three that draws WebGL with
+  SwiftShader and composites in software reads its every frame back off the emulated GPU, and its
+  pictures took 1.17–1.32 s there against 0.34–0.37 s. The table's new `graphics` column says which
+  drew each run.
+- **Every workflow's actions run on Node 24.** GitHub runs Node 20 actions on Node 24 with a
+  deprecation warning, and will stop: `checkout` v7, `upload-artifact` v7, `download-artifact` v8,
+  `setup-node` v7, `setup-python` v7, `setup-java` v6, `github-script` v9, `cache` v6,
+  `upload-pages-artifact` v5, `deploy-pages` v5 and `action-gh-release` v3, each the newest major,
+  every input the workflows pass still one it takes. `r-lib/actions` v2 already ran on Node 24. The
+  Node the app is built and tested with is unchanged.
+- **The notebooks' runners are described as they are (§18.10).** `notebooks.yml` and SPECS said a
+  standard runner has 2 cores and 8 GB, a private repository's; the repository is public, and every
+  page of 0.20.0 ran on 4 cores and 15.6 GB. The memory shutdowns they record happened on the private
+  runner.
+- **`npm test` passes on a fresh clone, and leaves the dev features' tests to `npm run test:dev` (§29.6).**
+  It failed 491 tests in 13 suites there, every one for want of a fixture `npm run fixtures` builds with
+  metacooler, a private repository. Those suites now say `// @fixtures metacooler` in their header and
+  are left out while none of the fixtures is on disk. The 39 files that test a dev feature — the
+  reference editor, the dot plot and the multi-genome format — say `// @dev-feature <name>` and are left
+  out unless the run asks: `npm run test:dev`, `vitest --mode dev` or `CHROMOSOMIX_DEV_TESTS=1`. A run
+  says at its top what it left out and the command that runs it. CI's every vitest run, and
+  `npm version`'s check, ask for the dev features, so nothing goes untested on a push;
+  `test/unit/dev-tests.test.ts` fails the default run on a marker that names a feature the registry no
+  longer has, or that sits where it is not read.
+
+### Fixed
+
+- **A remote `.hic`'s whole genome is drawn four times sooner (§3.6).** The walk across its chromosome
+  pairs keeps six reads in flight, and in Chromium they went out one at a time: the browser's HTTP
+  cache lets one request per URL at its entry at once, holds the rest until it has, and every read of a
+  walk is of one URL. Its reads now go past the cache (`cache: 'no-store'`), as nothing kept them
+  anyway. From 4DN's bucket, the chicken map's whole genome at 2.5 Mb is 12–14 s where it was 60 s,
+  the mouse map's at 5 Mb 17 s where it was 75 s, and the yeast map's from the demo store 4 s where
+  it was 15 s, for the same requests and bytes. The census of §6.5 reads through the same call, and
+  goes past the cache too.
+- **A `.hic`'s walk across its chromosome pairs reads through gaps of 256 KiB, not 64 (§3.6)** — the
+  whole-genome picture and the census, from a bucket and from disk. Fewer requests for more bytes, now
+  that the walk's requests are in flight together: from the buckets, in Chromium, the yeast map's whole
+  genome is 1.7 s where it was 3.6 (8 requests and 11.9 MB, where 74 and 3.4 MB), the chicken map's
+  8.9 s where it was 12.4 (273 and 52.8 MB, where 432 and 29.9 MB), the mouse map's 14.2 s where it was
+  17.0 (374 and 35.9 MB, where 458 and 21.1 MB); from disk, the yeast map's 208 ms where it was 251 and
+  the chicken map's 438 where it was 497. On a link slower than about 7 MB/s, the chicken map's extra
+  23 MB give back part of the gain.
+- **A `.hic` opens reading its footer's framing, not the whole of it (§3.6).** The footer is nearly
+  all expected values the viewer never uses — 9.8 of the 4DN chicken map's 9.9 MB — and it was read
+  whole to reach the normalisation index past them. It is now walked: each section's few bytes of
+  framing are read and the values stepped over. On the chicken map from disk, in Chromium, the
+  chromosome, region and locus pictures are 254, 283 and 251 ms where they were 311, 323 and 292;
+  from 4DN's bucket every open reads 13.6 MB where it read 18.9. The two indexes it finds are the
+  ones a whole read found, on the yeast, chicken and mouse maps of `notebooks/viewers.qmd`.
+- **The Python widget's install line names where it is (§21.5).** The README, the widget's README, the
+  documentation's *In a Jupyter notebook* and *Ways to use it*, `llms.txt` and SPECS said
+  `pip install chromosomix`, and the package is not on PyPI. They now say
+  `pip install "git+https://github.com/js2264/chromosomix#subdirectory=widgets/python"`, which installs it
+  from the repository, with `@<tag>` to pin a release and `pip install -e widgets/python` from a clone.
+  The README's R section, which gave only the line for a clone, now gives
+  `remotes::install_github("js2264/chromosomix", subdir = "widgets/r")` first, as the R widget's README
+  and the documentation do.
+- **The laptop's deep human map runs on a Mac (§18.10).** `notebooks/scripts/cooltools_pipeline.py`
+  stopped at coolpuppy's pileup on macOS: there Python spawns its workers rather than forking them,
+  and coolpuppy's pool logs through `multiprocessing_logging`, which refuses any start method but
+  `fork`. The script asks for `fork`, as Linux gives it, and `notebooks/laptop.qmd` gets past the map.
+
+## [0.20.0] - 2026-11-04
+
+### Added
+
+- **The viewers have a page of their own (§18.10).** The time to a picture — one map and one track
+  in chromosomix, juicebox.js and HiGlass, from disk and from the bucket — moves out of the timings
+  into `notebooks/viewers.qmd`, published at <https://chromosomix.app/viewers/> with `viewers.tsv`
+  beside it, and a release keeps `viewers-<tag>.html` beside its tables. The timings are the
+  validation's commands alone. *About → Notebooks* lists five notebooks, the viewers among them, and
+  the pages link to each other as before.
+- **An environment for the laptop (§18.10).** `notebooks/environment-laptop.yml` makes one, named
+  `open2c`, for micromamba, mamba or conda — Quarto, Jupyter, the packages the page imports and the
+  four its deep human map runs, at the reference environment's versions — and
+  `micromamba run -n open2c quarto render notebooks/laptop.qmd` renders the page in it. The page now
+  looks for every package it needs, and for Node.js, before it downloads or runs anything, rather than
+  stopping hours in at the deep map, and names under *The machine* the Python it ran in and the version
+  of each reference package, with the pin where it differs.
+
+- **An embed opens its side panels when its page asks (§21.2).** `?embed=1&panels=open` opens the
+  Annotations and Aesthetics panels, `panels=annotations` or `panels=aesthetics` one of them; without
+  it they arrive folded, as before. Written nowhere, like any fold in a frame.
+- **The notebook widgets can be resized by the reader (§21.5).** A grip under the Jupyter widget's
+  and the R widget's frame changes its height, dragged or with the arrow keys, and a double click
+  puts back the height the notebook gave. In Python the reader's height is `widget.height`; in
+  Shiny it comes back as `input$<id>_height`.
+- **The documentation turns the page with the arrow keys, and a live view can be resized (§32.4).**
+  Left and right go to the previous and the next page, except in a field, the search or a block that
+  scrolls. Pressed, a live view opens with the app's two panels unfolded in a frame wide enough for
+  them, and the grip under its corner resizes it, by dragging or with the arrow keys. The page on
+  embedding shows a frame any page can make resizable, with a few lines of script.
+- **A pull request's preview carries its documentation (§32.5).** Beside the preview's app at
+  `chromosomix.app/pr/<number>/`, the documentation of the same head is published at
+  `chromosomix.app/pr/<number>/docs/`, replaced on every push and removed when the pull request
+  closes. Its live views open the preview's own app, its banner names the pull request, and the
+  pull request's comment gives both addresses. Documentation that does not build leaves the app's
+  preview published, and the comment says so.
+- **The Contact maps card opens a map in a cell of its own (§16.9).** Under the lower triangle's
+  rectangle a second one, *Load a map into a cell of its own*, takes a cooler — or several, or a
+  row of the Files column — and opens each in the deck beside the map, the first empty cell or a new
+  one at the end. It is there whenever a map is open, and stays once a second file fills the lower
+  triangle and that rectangle goes; its hint says what the triangle's cannot, *a cooler at any bin
+  size*. The card's only drop with a map open used to be the triangle's, so a new file reached the
+  deck from the card by no road at all.
+- **Live examples in the documentation (§32.4).** Ten pictures — the introduction's, moving around,
+  a contact map and its O/E, two maps compared, a ratio, one map read two ways, the 45° view, the
+  genome browser and an embed in a page — carry **Try it live**, which swaps the picture for the
+  app itself, embedded, on the same view of the demo data, across the page's width from the sidebar
+  to the window's edge, with a line to open it in a tab of its own or go back to the picture. The
+  contents list on the right steps aside while the frame is under it. Nothing of the app is loaded
+  until it is pressed, and each copy of the site embeds its own release's build.
+- **A documentation site, one copy per release (§32).** <https://doc.chromosomix.app> is written for
+  the people who use chromosomix: getting started, the files it opens and from where, using the
+  browser, every analysis, the command line, the notebook widgets, hosting data and publishing a
+  store of your own, privacy, and a glossary. *Ways to use chromosomix* draws the nine places it
+  runs — the web app, installed or not, the desktop app, one HTML file, a fixed release, your own
+  server, a web page, a notebook and a shell — and says how to start each. Its 75 pictures are the
+  real app, shot by a script per page on the demo data and shown at the size the app drew them.
+  Each task has a page whose method, validation result, command and every parameter are read from
+  the app's registry as the site is built, so they are that release's; the reference pages for
+  links, the command line, embedding and formats are the ones the app writes for language models,
+  and the release notes are this file, one page a release.
+  Every release gets its own copy, built from its tag, at `/v<version>/`; the latest is also at the
+  root and `main` at `/dev/`, and a menu in every copy's header lists them all. It is Starlight with
+  the Rapide theme in the app's own colours, grain and type. The source is `documentation/`
+  (`npm run docs:dev`); `.github/workflows/docs.yml` publishes it to the `gh-pages` branch of
+  js2264/chromosomix-docs with a deploy key, and builds without publishing until that key is set;
+  the pull-request suite builds it and checks every internal link.
+- **The app opens its documentation (§5.5, §32).** An open book in the header, between the shortcuts
+  and the source, opens <https://doc.chromosomix.app> in a tab of its own; so do *Documentation* in
+  the palette's Help, a line in *About* before the source, and the last lines of
+  `chromosomix --help`. Each opens the site's root — the latest release's copy — since the live
+  site, built from `main`, cannot name a copy of its own. The README carries a badge for it.
+- **Test coverage, over the whole app.** `npm run test:coverage` runs the full suite with V8
+  coverage over every file under `src/` and `electron/` — a file no test loads counts at zero, so
+  the figure is the app's and not the suite's — and prints it one row per area of the source, with
+  the files each leaves unloaded; `coverage/index.html` is the file-by-file view. The Tests workflow
+  reports the fixture-free suite's coverage on every push, and the full suite's where metacooler's
+  fixtures let it run, in each job's summary, with the report kept as an artifact for two weeks.
+  After every green full suite on `main`, the report is published at
+  <https://chromosomix.app/coverage/>, and the README's **Coverage** badge shows its line coverage
+  (docs/deploy.md).
+- **The laptop ends on a deep human map, start to finish, against the packages it reproduces
+  (§18.10).** `notebooks/laptop.qmd` now times six analyses one after the other over 4DN's IMR-90 in
+  situ Hi-C (4DNFIJTOIGOI, 1.08 billion contacts): loop calling and diamond insulation (10 bins) at
+  10 kb, compartments at 250 kb phased by GC content, APA over every loop called, raw, P(s) at 10 kb
+  over every diagonal, and a virtual 4C at 10 kb from the bin of *MYC*'s promoter, in cis — the first
+  five over the whole genome. `chromosomix` runs them as six commands; the reference is one Python
+  script running cooltools and coolpuppy in one process (`notebooks/scripts/cooltools_pipeline.py`).
+  Each side's start-up, each step and the whole are timed — CPU, wall clock and peak memory, the
+  memory weighed four times a second on a Mac as on Linux — and what the two wrote is compared step
+  by step. Every step is a line of `pipeline.tsv`, and every weighing of each side's memory a line of
+  `pipeline-memory.tsv`, both carried in the page and unpacked beside it at `laptop/`; the page and
+  `notebooks/scripts/timing.plot.R`'s panel c draw the memory against the wall clock, each phase
+  shaded, its peak and the end of each side marked. The laptop needs cooler, cooltools, coolpuppy and
+  bioframe for this part, and hg38 (3.2 GB) for its GC content.
+- **The parity runs in Firefox and WebKit too (§18.10).** `notebooks/parity.qmd` drives its ten
+  tasks in each of the three engines Playwright drives headless — Chromium, Firefox and WebKit — and
+  runs the line each browser's console wrote on the files that browser's sessions read, so the
+  pileup is over the loops that browser called. Every file is compared browser by browser:
+  `summary.tsv` has a `browser` column, each case lists its verdict in each browser and says whether
+  the three wrote the same line, and `PARITY_BROWSERS` names fewer. The Notebooks workflow installs
+  the two for the parity's job.
+
+### Changed
+
+- **The notebooks render all at once (§18.10).** `.github/workflows/notebooks.yml` starts the parity,
+  the validation with the timings after it, the viewers and the laptop together, each on a runner of
+  its own, so a run takes as long as its longest job, where the validation and the timings, the
+  viewers' pictures among them, had come to four hours after the parity's quarter of an hour, and
+  outran the six hours a job may take once the deep human map joined them. No
+  job waits for the parity to pass any more; the four published pages still go up together or not at
+  all. The timings stay on the validation's runner, since they run its commands on its files.
+
+- **A scaled metaplot's x axis says where the features start and end (§18.8).** It was labelled
+  with column numbers — `0`, `100`, `200`, `300` — which told a reader nothing about the plot. It is
+  now ticked at `Start` and `End`, the edges of the rescaled body, with round steps that fit the
+  plot's width between and outside them: `25%`, `50%`, `75%` (or tenths) through the body, and
+  `-5 kb` … `-1 kb` before the start and `+1 kb` … `+5 kb` after the end along the flanks. A wider
+  figure and a window wheeled into one part of the axis take finer steps, and a PNG or PDF carries
+  the ticks on screen; the axis now reaches the flanks' far ends; and the crosshair and the tooltip
+  spell the position the same way (`37.4%`, `-150 bp`). The per-feature heatmap under it, which had
+  five blank ticks, names `-5 kb`, `Start`, `50%`, `End` and `+5 kb` where they fall. The numbers
+  the curve's TSV and the command line write are unchanged.
+- **The laptop notebook's memory table gives a browser's whole peak (§18.10).** Its column for a
+  browser was what a run added to what the page held when **run** was pressed, beside the command
+  line's whole peak, so the app read as lighter than the command line in 49 of its 69 runs, though
+  its page held 160 MB to 1.4 GB before the run began. The table now gives the whole peak in every venue,
+  the page's in each browser, the app itself included, and beside it, for each browser, what the run
+  added; the sentence under the tables gives the median of each.
+- **The timings no longer time Pairs QC (§18.10).** Its seven commands — `chromosomix pairsqc`, and
+  `cooler cload`, `pairtools restrict` on each strand, the counts drawn from them, the coverage
+  against the cuts and `pairtools stats` as its reference — are written to `commands.json` and not
+  run by `notebooks/timing.qmd`, as §§ 20–23's are not: Pairs QC is still held to them in
+  `notebooks/validation.qmd` § 27, and timed nowhere. `notebooks/scripts/timing.plot.R` draws no
+  point for it.
+
+### Fixed
+
+- **A notebook's download asks again after a 404 (§18.10).** NCBI's server for GEO answered 404 Not
+  Found for the validation's yeast map, a file it had served to the parity's and the laptop's runners
+  minutes before and served to every request after, and the validation stopped on its first cell.
+  `notebooks/scripts/download.py` now asks a 404 again three times, after 2, 4 and 8 seconds, as it
+  asks a 500 or a 403 again, and still names a file that is truly not there within a quarter of a
+  minute; any other 4xx is raised at once, as before.
+
+- **An embedded map takes the frame's height (§21.3).** Every picture sized against the window counted
+  out a header, a tab strip, a breadcrumb row and a status bar that a frame does not have, so in an
+  850-pixel frame the map stopped 120 pixels short of the foot, over a band of empty page. It now
+  grows into it.
+- **The documentation looks like the app (§32.4).** Its header is the app's header, measure for
+  measure: the bar's height and padding, the mark, the search well and the app's buttons. The home
+  page's rows follow the sidebar's order, and *Open the browser* sits beside *What chromosomix is*.
+  The guides are a third shorter — 112,000 words down to 73,000 — and keep every control, default,
+  limit and warning they named. And a live view's right side, under the contents list, takes the
+  pointer again: the list's column, folded away or not, was still catching every click there.
+- **A deck cell's heading no longer runs into the next cell (§16.9).** Four maps across a column
+  with two side panels open are cells of 154 pixels, and a heading — a grip, the name, the sequence,
+  the star, the chain and the × — could not be less than 196: the name was cut to one letter and the
+  controls ran on past the cell's edge, the chain drawn over the next cell's grip and name. Where the
+  name cannot keep 6rem beside them, the controls now go together to a line under it, at the cell's
+  right, and the name takes the whole first line; in a narrower cell still they wrap again inside
+  it. Every kind of cell does this — the first map's, a structure's, a tracks cell's, an empty one.
+  The star and the chain in a heading are square, where `.btn`'s padding had made them 36 pixels
+  wide round a 13-pixel mark, and a collection's rung picker is as wide as the rung it shows, as the
+  sequence picker beside it already was — so a narrow cell's controls fit under its name on one line.
+- **An embed's bar fits a narrower frame (§21.3).** The bar was one row that scrolled, so in a frame
+  of 1,040 pixels the contacts box's example was cut, at 910, the width of an R Markdown page, the row
+  ended at `con`, at 720 the resolution and the box were out of sight, and at 480 the frame scrolled
+  sideways. The two now take a line of their own under the file and the place, together and with
+  their labels, and the file is named in full where it fits; narrower, the brand keeps its mark
+  alone; and at a phone's width the contacts box is put away and the resolution kept, its stops
+  wrapping and its slider gone, so a file of five resolutions keeps all five on the frame.
+- **The pointer gives a derived cell's reading and the count behind it (§7.5).** On one map drawn as
+  O/E, the line under the map read `O/E 1.95× · balanced 1.95`, the count being the ratio drawn
+  again, over a cell whose balanced count was 0.000537; and the card beside the pointer gave
+  `balanced 1.95` alone. Both now give the derived value, the card on a line of its own, and under
+  it the cell's own count; the expected map and the O/E along the arms read the same way.
+- **A sequence's name opens the sequence, and a gene typed whole is listed first (§5.4).** With a
+  gene model loaded, `IV` and Enter in a locus box opened the gene IVY1 rather than chromosome IV,
+  since Enter takes the first gene listed and IVY1 begins with `IV`; and `RAD5` was listed fifth,
+  after RAD59, RAD57, RAD55 and RAD54, so Enter opened RAD59. The sequence a name means now heads
+  the list wherever genes begin with it, read through every spelling the box accepts (`chrIV`,
+  `iv`), and a name or accession typed whole comes before the names it begins. The map's box, the
+  whole genome's and the 1D browser's all follow it.
+- **A host's error status is headed as the refusal it is (§10, §24.6).** A `404` or a `403` to the
+  `HEAD` a remote file is opened with was headed *That URI does not parse*, and its message sent a
+  reader with a private bucket to *Open a file → Private buckets*, which no longer exists. A
+  presigned link that had expired, which skips the `HEAD`, failed the range probe under *That host
+  does not serve byte ranges*. Both are now headed *The host would not give this file*, with advice
+  for a public file, a private bucket (*connect a bucket…*) and a presigned link, and an expired
+  presigned link says that it is one; a host that answers a range with the whole file is still told
+  it serves no ranges. The Google sign-in offer and the command line's whole download, which read
+  the same codes, are unchanged.
+- **The HiC-Pro conversion hint names `--one-based` (§3.9).** HiC-Pro numbers its bins from 1, and
+  `cooler load -f coo` reads a COO file's bin ids from 0 unless it is told otherwise.
+- **A store from a newer build is called a store (§24.1)**, in its own format's numbers: the refusal
+  said *workspace format 2* and the workspace version this build reads.
+- **The note for a hub on UCSC's servers says what works (§24.10)**: a copy of the hub and its files
+  on a host that sends the header, or the tracks dropped one by one. It sent the reader to a
+  connected folder, which lists a `hub.txt` dimmed and opens no hub.
+- **The directionality index's price refuses what its runner cannot score (§18.8).** A bin needs a
+  whole window each side, so a sequence must be longer than twice the window; the price refused
+  only one no longer than the window, and a sequence in between was priced, read and then dropped
+  without a score.
+- **The drawer says where a new 3D model goes (§25.3)**: a structure cell of its own, beside what the
+  deck shows, rather than *add one from the deck's bar if none is open*.
+- **SPECS, the notes under `docs/` and the glossary say what the code does** where they had drifted:
+  the tutorial's 58 steps (§30), which builds keep a connected folder (§24.2), the two 3D tasks'
+  ρ (§25.6), the desktop notes on compressed hosts, writing and what quitting leaves, the store
+  generator's anonymous listing, where the stored-data screen is, and the console's key.
+- **The notebooks no longer fail on one failed download (§18.10).** Both runs of the Notebooks
+  workflow for 0.19.0 stopped a minute into the parity, on its first file: NCBI's server for GEO
+  answered `500 Internal Server Error`, as it did that day to about one request in two, and now and
+  then `403 Forbidden`, to requests it answered in full a second later. Every file the four notebooks
+  fetch now goes through `notebooks/scripts/download.py`, which asks again after a server's error, a
+  connection cut or timed out, or a body shorter than announced, with a wait that doubles to half a
+  minute, resumes from the byte it reached where the server takes a range, and gives up after twenty
+  failures in a row; the range reads and size checks of the timings' viewers do the same.
+
+## [0.19.0] - 2026-11-01
+
+### Added
+
+- **The site describes itself to AI agents in full (§11).** `llms.txt` now says the four things an
+  agent can do with chromosomix — write a link, run an analysis, embed and drive the viewer, publish
+  data — names every task, and links five reference pages that the app writes about itself, under
+  `chromosomix.app/llms/`:
+  - `links.md`: every key a link's fragment takes, with its values, the views, the two forms of a
+    coordinate, the query (`embed`, `config`, `store`), pinned builds, and example links, each of
+    which opens what it says;
+  - `cli.md`: installing the command, writing one, what it writes, its exit statuses, examples, and
+    the usage `--help` prints;
+  - `tasks.md`: every task, each with what it reads and writes, the shape of its command, and every
+    parameter's flag, what it takes, its default and what it does — every value a choice takes
+    included, which `chromosomix tasks` never printed;
+  - `embed.md`: the `<iframe>`, the six `postMessage` messages and their rules, a host page's script,
+    and the Jupyter and R widgets;
+  - `data.md`: the formats and their sidecars, what a host must serve, the built-in stores, and a
+    store file and the smallest workspace a lab can write by hand.
+
+  **All of it is written by the site build, from the source it builds**, so every deploy of `main`
+  refreshes it with nothing to remember and nothing generated committed: `llms.txt`'s lists — the
+  tasks, the stores, the colour maps — and each page are read from what they describe (the task
+  registry, the hash reader's own keys, the command's usage, the embed channel, the store shelf), and
+  `npm run dev` serves them live. `llms-full.txt` is now the README followed by the five pages, in the
+  order `llms.txt` links them. The deploy stops before publishing if the build left out `llms.txt` or a
+  page it links, and after publishing fetches `chromosomix.app/llms.txt` and its first page as an
+  agent would, failing if they do not answer. `llms.txt` was a file kept by hand in `public/`.
+
+- **`chromosomix tasks --json` (§23).** The task listing as one JSON document: per task its id,
+  title, what it reads and writes — the files a run leaves as a whole included, such as the map
+  report's page — the tasks it runs first, and every parameter with its flag as the
+  parser takes it, its default, every value a choice takes, its range and unit; with how a parameter
+  naming a file is given one, and what each kind of result is written as. For a script or an agent
+  writing commands for the installed version.
+
+- **TAD annotation: Juicer's Arrowhead, ported (§18.8, §18.9).** A 2D task after the HiC score that
+  calls contact domains from the corners of the squares they make on the map, so they can nest, share
+  an edge, or leave an unstructured stretch uncalled — where insulation's and the directionality
+  index's domains tile the sequence. A port of `juicer_tools arrowhead` as Juicer Tools 1.22.01 runs
+  it: its window (`-m`, 2,000 bins), its strict pass (variance ≤ 0.2, sign agreement ≥ 0.5), its lenient pass (0.4 down to 0 by 0.1, kept past 60 bins where it crosses no
+  strict edge), the merging of nearby corners and Juicer's order, every sum in the Java's order, a
+  contact in a dropped bin `NaN` as Juicer keeps it, and the lenient blocks tried in the order the jar's
+  own `HashSet` gives them — its `HighScore.hashCode`, read off the bytecode, and `HashMap`'s buckets
+  down to the red-black trees crowded ones become. The domains open on the map as corners
+  and leave as a BED, and Juicer's `_blocks.bedpe` columns — corner score, `uVarScore`, `lVarScore`,
+  `upSign`, `loSign` — are a table beside them. `chromosomix arrowhead` runs it from a shell. Its
+  golden is Juicer's own output over the demo `.hic` at 2 and 4 kb, raw and KR-balanced, and the port
+  is equal to it to the last bit — 102 domains, every score (`npm run fixtures:arrowhead`, which needs
+  Java and the jar); and on 4DN's K562 in situ Hi-C at 10 kb, chromosomes 21 and 22, every one of
+  Juicer's 177 domains raw and 200 with KR is the port's, at the same corners with the same scores
+  (`notebooks/validation.qmd` § 28).
+
+- **Map report (§18.8).** A 2D task after Pairs QC that runs P(s), Coverage and Cis and trans per
+  sequence as they run on their own, adds the library's totals — contacts, cis, trans, within a bin, cis
+  by separation, and `pairtools stats`' counts where the map was binned from a `.pairs` — and a
+  **resolution ladder**: at each bin size, coarsest first, from the file's finest resolution (opened
+  beside the map when another is on screen) doubled and the file's own rungs, the mean and median
+  contacts per bin, the count 80 % of bins reach, and the empty and nearly empty shares, a contact
+  counted at both its ends as Juicer's `calculate_map_resolution.sh` counts it. Numbers only, no pass
+  or fail. Every figure and table is in the drawer and exports on its own, and *HTML report* saves the
+  run as one self-contained page: a tab per question (Overview, Library, Resolutions, P(s), Coverage,
+  Cis & trans, About), figures with a hover card and legend chips that hide a series, each saved as SVG
+  or TSV, sortable and filterable tables, light and dark, a phone's width and a print of every tab —
+  nothing fetched. `chromosomix mapreport` writes the page too, and four MultiQC custom-content files
+  (`*_mqc.tsv`, `*_mqc.json`) a pipeline's MultiQC collects, one row per library. The ladder is cooler's own coarsening to the digits
+  written, at every one of the GEO yeast Micro-C file's ten resolutions, 50 bp to 25.6 kb
+  (`notebooks/validation.qmd` § 29).
+
+- **Example sessions on the landing page (§24.11).** Under *Just looking?* and *Pick an example
+  session*, in the margin beside the store tiles — under them on a narrow page — four buttons, each
+  opening one tab in the tab it was pressed in, and each with the Analysis column's `?`, whose tip
+  says what the tab holds and where it is from:
+  - *Human Hi-C data*: 4DN's in situ Hi-C of K562 (Rao et al. 2014, 907 million contacts) at 10 kb
+    over MYC, PVT1 and the blood enhancer cluster on chr8, with no deck; IGV's hg38 RefSeq genes,
+    sequence and bands above it; 4DN's insulation, boundaries and E1 and ENCODE's subcompartments
+    down its left; ENCODE's CTCF ChIA-PET loops on it; and ENCODE's ChIP-seq, ATAC-seq and DNase-seq
+    of the same cells under it, as five overlaid pairs — CTCF with RAD21, H3K4me3 with H3K27ac,
+    Pol II with H3K36me3, H3K27me3 with H3K9me3, ATAC with DNase — each track on its own axis. The
+    gene model and the bands are read from IGV's bucket, whose copy answers a page where UCSC's does
+    not.
+  - *Yeast micro-C data* and *Linear tracks*: the lab's store's yeast micro-C figure and its yeast
+    landscape in the 1D browser, read from the address the store's cards read them from.
+  - *Comparing data*: chicken DT40 Hi-C from 4DN (Gibcus et al. 2018), G2 above the diagonal and
+    60 min into mitosis below it, over 40 Mb of chromosome 1 at 100 kb, with each map's compartment
+    eigenvector and insulation on the edge beside its own triangle, on one axis per kind.
+
+- **The subsample and every normalisation held to cooler and cooltools in CI, run on the day and not
+  read from a golden (§6.4, §6.5, §7.5).** The goldens job of `.github/workflows/test.yml` now
+  installs cooltools beside cooler and, with the other fixtures cooler can write, has them reprocess
+  the demo yeast Micro-C (`npm run fixtures:reprocessed`, into gitignored fixtures); two new suites
+  compare this app with what they wrote. `test/unit/subsample-cooltools.test.ts` draws ten million
+  contacts as the contacts box does and holds the draw to `cooltools random-sample --exact`'s as two
+  draws from one distribution: the total exact, every pair of sequences and every bin's coverage
+  within the noise two draws leave, every pixel spread as a draw without replacement spreads it, as
+  many pixels holding each count, and the file's weights times `√(T/N)` to `cooler balance` over
+  cooltools' draw — the median ratio 1.0004. `test/unit/normalise-cooler.test.ts` holds `balanced`
+  to cooler's `matrix(balance=True)` on a copy `cooler balance` rewrote, VC and VC √ to one round of
+  `cooler balance` with every filter off, and ICE to cooltools' iterative correction, over three
+  chromosomes at 1 kb and, after `cooler coarsen`, the whole genome and a block between two
+  chromosomes at 16 kb: every cell to Float32's precision, and in fact within the half unit its own
+  rounding costs. Made to fail on purpose, it does — a draw with replacement, ICE stopped early, VC
+  averaged over empty bins.
+
+### Changed
+
+- **Compartments by cooltools' method are cooltools', to the digits they are written in (§18.8).**
+  E1 agreed with `cooltools.eigs_cis` at r = 0.9985 to 0.99993 chromosome by chromosome on the mouse
+  map at 100 kb, the A/B call differed in up to 1.1% of a chromosome's bins, and on chr4 and chr15 one
+  tool's third component was the other's fourth. The difference was the expectation: `eigs_cis` does
+  not divide by `expected_cis` but by one it takes from each chromosome's square — each diagonal's
+  mean up to about the thirty-fifth and, beyond it, the mean of a group of diagonals at most 3% wide —
+  where the app divided every cell by its own diagonal's mean, which left the far cells on a sawtooth
+  of a percent or two against cooltools'. It now divides by cooltools', with that expectation's two
+  small rules: the near diagonal pooled as the ones cooltools sets it to, and a group with no
+  contacts left undivided. On the mouse map (§ 3 of the validation notebook) and on the zoo's
+  *P. aeruginosa*, *C. necator* and *E. coli* maps at 8 kb, every component is cooltools' to within
+  3·10⁻¹² in r and 5·10⁻⁶ in any bin — the six significant digits a track is written to — the
+  eigenvalues to the table's three decimals, the A/B call the same in every bin, and E2 and E3 the
+  same components on every chromosome. The saddle and the Lieberman-Aiden method still divide by each
+  diagonal's own mean, as `cooltools.saddle` does by `expected_cis`, and the correlation's
+  eigenvectors, A/B call and saddle are what they were; the *of contacts* share is measured over
+  cooltools' matrix under both methods, which moves the correlation's in the third decimal. Version 4
+  of the task. The second observed/expected it makes of each chromosome costs a twentieth of the run:
+  over the mouse map, 16.7 s of CPU where it was 16.0, against 28.2 s for cooltools.
+
+- **Signal by group compares one value per entry by default (§18.8).** Its bin size is 0 unless one is
+  typed, where it was the open map's resolution: each run of a name, merged where its features overlap
+  or touch, each stretch of the rest between two, and each run of bins in one group of a track is one
+  value, and an entry across a circular sequence's origin is one entry. The tests count their values as
+  independent, and the bins of one compartment are not — over *P. aeruginosa*'s 782 8-kb bins in 110
+  compartments, A against B in GC had a P of 2·10⁻²⁰ in 8 kb bins and 3·10⁻² in 128 kb ones, its effect
+  the same at both. A bin size gives the stretches of at most a bin it gave before, number for number,
+  and a `chromosomix groupsignal` line with no `--resolution` is now one value per entry; the task's
+  version is 2. Over § 3's compartments on chr19, § 23 of the validation notebook holds both ways to
+  pyBigWig and SciPy to the digits written, P and q to their four places above 10⁻⁴ where an exponent
+  does not write them, and by entry the run takes 0.64 s against the 10 kb stretches' 1.2 s.
+
+- **The laptop notebook runs each of its 23 analyses in the app, in Chromium, Firefox and WebKit, as
+  well as on the command line (§18.10).** What a genome-wide analysis costs was measured on the command
+  line alone, where a reader runs most of them in the browser. Each is now run again in each of the
+  three browser engines Playwright drives headless — Chromium, which Chrome and Edge are built on;
+  Firefox; and WebKit, Safari's engine — as a reader runs it (`notebooks/scripts/laptop.mjs`): the
+  files the command names dropped on the landing page, a map framed on its whole genome at the
+  command's resolution, the task opened from the Analysis panel, every flag of the command set in its
+  form, and **run** pressed once the map is drawn, its circles measured and the browser idle — a
+  browser of its own for each, so nothing an earlier run held is counted. Its time is the app's own, dispatch to result; its CPU time and peak
+  memory are the page's, sampled five times a second as the operating system counts them, the same way
+  in the three, with all of the browser's processes kept beside them. Every file a command names is
+  read through before each run, so the first venue to read an 8.3 GB map does not pay alone for
+  reading it from disk. `LAPTOP_BROWSERS` names the
+  browsers, all three unless it says. The table under the results is one row a run; the page shows the
+  time, the CPU time and the memory with a column for each venue, each browser against the command line
+  and against Chromium, how many finished in each, the five analyses at two depths and the figure, and
+  the line each browser's console wrote for each run is held to the command it ran, flag by flag, and to
+  the others'. The memory table's column for a browser is what the run added to what the page already
+  held, and a sentence gives the geometric means of each browser's CPU time and peak memory over the
+  command line's. Its findings are written by the page itself, where they were inline expressions that a
+  Quarto before 1.4 printed as code. The runner's render installs Playwright's three browsers and may
+  take close to six hours.
+
+- **ICE balances to Float32's precision (§7.5).** It went on until every bin's marginal was within
+  1e-5 of their mean, which left its cells up to 3·10⁻⁵ from cooltools' iterative correction; it now
+  goes on to 1e-9 while the cell budget allows, and its cells are cooltools' to the half unit in the
+  last place their own rounding costs. That is some thirty rounds more — chromosome IV of the yeast
+  Micro-C at 1 kb takes 0.6 s where it took 0.35 — and nothing a colormap can show, so a block is
+  still called balanced at 1e-5: no caption that said balanced now says it stopped before
+  convergence.
+
+### Removed
+
+- **Telemetry, all of it (§1, §11, §13, §18.10; §31 is gone).** The site sends nothing on its own
+  behalf any more: no visit, no format opened, no task, error, install or *allow access* counted, and
+  no request to Umami. About's *Telemetry* section and its switch go, and so does the landing page's
+  clause about it, whose privacy note says again that there is no upload, no account and no server;
+  so do `src/telemetry.ts`, the `TELEMETRY_ENDPOINT` and `TELEMETRY_WEBSITE` build variables and the
+  deploy's use of them. C1 is again *no server-side component of any kind*. *forget everything*
+  keeps no key back: a `chromosomix:telemetry` left by an earlier version is swept with the rest, and
+  nothing reads it. The gallery script is now `scripts/ui-allow.mjs`, and drives *allow access*
+  alone.
+
+### Fixed
+
+- **`llms.txt`, a mistyped address and every other file beside the app open as themselves in a
+  browser that has visited the site (§11).** The service worker answered every page load on
+  chromosomix.app with the app, except a list of known addresses, so `chromosomix.app/llms.txt`
+  typed into the address bar showed the landing page — as did `robots.txt`, `sitemap.xml`, the
+  licences linked from *About*, and an address that does not exist, which should be a 404. A hard
+  reload or a private window showed the file, since neither goes through the worker, and agents, which
+  run no worker, always saw it. The worker now answers only the app's own address — the root and
+  `index.html`, with any query and hash — and leaves everything else to the network. A browser already
+  holding the old worker takes the fix when it accepts the bar offering the new version.
+
+- **A task's required steps keep a balancing the task answered for them, from the shell as in the app
+  (§18.2).** `chromosomix` re-derived every required step's *use balancing weights* from the file even
+  where the task had answered it, which `AnalysisRunner.plan` never did; no task answered one before the
+  map report, whose cis and trans are of the raw counts in both.
+
+- **A FASTA dropped with its `.fai` and nothing else opens by range (§8.8).** The two were paired, and
+  the index went to the sequence track — but not to the question asked first, which sequences the
+  genome has, so the FASTA was read whole for it, and one past 300 MB, `mm10.fa` beside its
+  `mm10.fa.fai`, was refused for want of an index. Dropped with a track or a feature file it opened,
+  since that file named the genome instead.
+
+## [0.18.0] - 2026-10-30
+
+### Added
+
+- **A domain pileup over the expected, as coolpuppy draws it (§18.8).** APA scaled on a feature set
+  took every normalisation but observed / expected, refused from when the finished pileup was divided
+  by one expected a grid cell. Each window is divided cell by cell at its own diagonals before it is
+  resampled, so the scaled window has an expected too, and choosing observed / expected now draws
+  coolpuppy's rescaled local pileup (`rescale=True`, `ooe=True`) and nothing else: each domain scaled
+  about its middle by its flank each side, snapped out to whole bins, stretched evenly onto the grid by
+  linear interpolation (cooltools' `zoom_array`) and every grid cell a dropped bin or a near diagonal
+  reaches left blank, the axis one straight line from −f to 1 + f. Over GM12878's 305 TADs on chr19 at
+  2 kb it is coolpuppy's within 5·10⁻⁶ in every cell, the same 151 cells blank, which § 24 of the
+  validation notebook now holds; Fig. 2's TAD panel is drawn this way on both sides. The pinned layout
+  stays with the distance-matched control and the raw pileup. Pairs scaled over the expected are still
+  refused, there being no pileup of coolpuppy's like that window to hold them to.
+
+### Changed
+
+- **APA's *anchor on* is the row below *mode*.** It sat between *features* and *mode*, so choosing the
+  scaled mode closed a row above the control that had just been used, and the fixed mode opened it
+  again.
+
+- **Base composition is eight times faster, every number the same (§18.8).** Over mm10 in 10 kb
+  bins, `chromosomix composition` took 53 s of CPU and takes 6.5 s, against 68 s for bioframe and
+  Biopython on the same machine — 1.3 times faster than them before, ten times now — and every file
+  it writes is byte for byte what it wrote. The bases are counted a word at a time, as additions of
+  packed counts, where a branch on each base was one the processor could not predict; a reference
+  read by range in the shell — a FASTA with its `.fai`, or a `.2bit` — is counted a few megabases at
+  a time rather than a chromosome held at a time; and a FASTA read through its `.fai` has its line
+  endings gathered out by the index's own arithmetic, a line at a time, rather than looked for byte
+  by byte. The counting is the app's too, for a FASTA held whole, and the origin and terminus call's.
+
+- **P(s) over a mammalian map is two and a half times faster, every number the same (§18.8).** With
+  balancing on, how many bin pairs each separation could hold was counted by walking every sequence
+  once per separation, which on a mouse map at 10 kb was six of the run's eleven seconds; it is now the
+  pairs less those touching a dropped bin, from running counts, plus the pairs of dropped bins, and
+  takes four hundredths of a second. `chromosomix expected` over that map took 11.0 s of CPU and takes
+  4.1 s, both files it writes the same; the yeast map's, whose sequences are short, is as it was.
+
+- **chromosight's pattern detection is two and a half times faster, every number the same (§18.8).**
+  Over the yeast Micro-C at 800 bp, loops took 25 s of CPU and take 10, against 42 s for chromosight
+  1.6.3 on the same machine, and the six files the run writes are row for row what they were. The
+  correlation, nine-tenths of the time, sums four neighbouring windows at once from the band copied
+  row by row; masks a cell by multiplying by 0 rather than by a branch; and scores every window
+  inside the square — where the undetectable bins put nearly half — by the two mask rules that can
+  apply there rather than the five that can at the frame. Each window adds the same cells in the
+  same order, and a test holds every window to the one-window computation bit for bit.
+
+### Fixed
+
+- **A TSV or bedGraph longer than a string is written (§18.7).** `chromosomix composition
+  --resolution 200` over hg38 wrote the GC content's files and stopped at the GC skew's TSV with
+  *failed: Invalid string length*: every text writer joined its file into one string before writing it,
+  and V8 makes none past about 512 MB. The writers now hand their rows over a block at a time, which the
+  shell writes as they are formatted and the browser makes a `Blob` of, so a file is as long as the
+  disk allows; every file is byte for byte what it was.
+- **Base composition runs on a FASTA dropped with its `.fai` (§8.8, §18.8).** A genome over 64 MB is
+  read by range from its index, and the browser offered the task, priced it as free over residues the
+  worker did not hold, and ended the run in a note that they were not here whole. It counts by range, as
+  the shell already did, a few megabases a read and the same counts as the sequence held whole, and the
+  line beside **Run** prices the read as the motif search's does: every base, its bytes, and over a
+  network a request a read. A Stop is seen between two reads.
+- **A pileup's centre is coolpuppy's bin (§18.8).**** APA cut its window about a feature's midpoint
+  rounded to the nearest base, which put a feature an odd number of bases long into the next bin
+  wherever its midpoint sat half a base before a bin edge; coolpuppy floors it. The midpoint is now
+  rounded down, as the metaplot's centre already was, for a feature set's anchors and a loaded loop
+  set's alike. On Fig. 2's pileup of consecutive CTCF peaks at 2 kb, one peak of 2,106 moved cells up
+  to 1.4 % from coolpuppy's; every cell is now within 5·10⁻⁶.
+
+## [0.17.0] - 2026-10-26
+
+### Added
+
+- **The viewer in a Jupyter notebook (§21.5).** `pip install chromosomix` (from a clone,
+  `pip install -e widgets/python`) gives `Chromosomix`, the app itself in a cell — the map, its
+  tracks, its side panels and its gestures — as an anywidget for JupyterLab, Notebook 7, VS Code,
+  Colab and marimo: `Chromosomix('sample.mcool::/resolutions/5000', region='chr2:10-14Mb',
+  tracks=['ATAC.bw'], transform='log10')`. `goto`, `navigate` and `add` drive it from Python, and
+  `state` — a traitlet a cell can `observe` — follows where the reader takes it. A file on the
+  kernel's disk is served to the viewer by byte range from a server on `127.0.0.1`, its sidecars
+  beside it; behind JupyterHub through jupyter-server-proxy, in Colab through Colab's proxy. The
+  frame holds the site, a release by its permanent address (`viewer='0.17.0'`), any build, or the
+  npm package fetched once by `install_viewer()` so the notebook works offline.
+  `widgets/python/demo.ipynb` drives the yeast demo, and `demo_marimo.py` the same in marimo, where
+  the wrapper is read and the widget driven; `scripts/ui-jupyter-widget.mjs` runs it in JupyterLab
+  and shoots every frame. The local file server serves no dot-named file, follows a link by its own
+  name so a DataLad or git-annex file finds its index, ignores a `Range` it cannot read, and prints
+  nothing when a reader hangs up; behind JupyterHub, where only a viewer the kernel serves can read
+  through the hub's login, the widget warns when its frame is the site.
+
+- **The viewer in R: an htmlwidget for R Markdown, Quarto, RStudio and Shiny (§21.5).** The
+  `chromosomix` R package (`widgets/r/`, `install.packages("widgets/r", repos = NULL)` from a clone)
+  draws the app on a page — `chromosomix(map, region = "IV:1000000-1400000", tracks = c("ATAC.bw",
+  "genes.gtf"), transform = "log10")` — and `chromosomix_goto()`, `chromosomix_navigate()` and
+  `chromosomix_add()` move it: piped onto a widget before it is drawn, which is how a static page moves
+  its views, or of one on screen in Shiny through `chromosomixProxy()`, where `input$<id>_state`
+  follows the reader. Files on this machine are served to the viewer by byte range from the R
+  session, their sidecars beside them; behind RStudio Server through RStudio's proxy. The examples are
+  an R Markdown page of the yeast demo and a Shiny app driving it
+  (`system.file("examples", package = "chromosomix")`), whose controls follow the viewer without
+  echoing back into it; `scripts/ui-r-widget.mjs` renders and runs both and shoots every widget.
+  The local file server serves no dot-named file, follows a link by its own name so a DataLad or
+  git-annex file finds its index, streams a whole file rather than read it into R, and ignores a
+  `Range` it cannot read; while knitting, an installed viewer is framed from the site rather than
+  from a session that ends with the render.
+
+- **`chromosomix:add`, a host page putting files in an embed (§21.4).** The sixth message of the
+  embed's channel: a list of addresses, each put in the tab as the header's `+` puts one — a track
+  beside the map, another map or a model beside it, a workspace — once the map the `src=` named is
+  drawn, and answered with the state once they are in. The view state has no word for a track; this
+  is how a page that frames a map puts its tracks beside it. A host's messages are now carried out
+  in the order they came, so a `navigate` sent after an `add` lands on what the add opened, and
+  `chromosomix:ready` lists the messages the frame takes (`accepts`), so a host can tell a frame that
+  takes files from one built before this. The Jupyter and R widgets read it: a viewer before 0.17.0
+  draws the map without the tracks, and the widget says above the frame how many it could not add.
+
+- **Pairs QC: a library's quality from its `.pairs`, and its restriction fragments (§18.8).** A new
+  task in the 2D card for a map binned from a `.pairs` — or any map, given the `.pairs` it came from.
+  It draws the four orientations' P(s) (moved here from P(s)), the pair types, cis and trans past
+  1–40 kb and the `pairtools stats` table, from the import's own counts at no cost. With a FASTA or
+  `.2bit` and an enzyme it adds the restriction-fragment statistics HiCUP readers look for: pair
+  classes by orientation (dangling end, self-circle, same strand, re-ligation, valid, trans), the
+  distance from each read to the next cut, the fragments seen, and coverage against sites per bin
+  with Spearman ρ. Each read end is placed by the cut on its **own strand** — a `−` read's 5′ end
+  sits `L − 2k` past the top-strand cut once an overhang is filled in, 3 bp for DpnII — so a dangling
+  end is counted as one. `chromosomix pairsqc sample.pairs.gz --bin-size 10000 --sequence ref.fa
+  --enzyme DpnII --out qc/`. Held to `pairtools stats`, `pairtools restrict` (once per strand) and
+  `cooltools.coverage` on a yeast library and its R64 reference in `notebooks/validation.qmd` §27:
+  every count identical. Its row's `?` (§18.1) names pairtools' paper.
+
+- **Restriction sites: a reference digested by an enzyme, a kit or typed sites (§18.8).** DpnII
+  (MboI, Sau3AI), HindIII, NcoI, EcoRI, BglII, HinfI, DdeI, MseI, NlaIII, CviQI and AluI, the Arima
+  kit, or names and IUPAC sites with the cut marked (`G^ANTC`). A lane of the cuts and the cuts per
+  bin, read by range from a large reference as *find a motif* is. Its cuts are `bioframe.digest`'s
+  and `cooler digest`'s **less two**: both add 1 to Biopython's already 1-based position, so every
+  fragment boundary they write is 2 bp late. Held to `bioframe.digest` in `notebooks/validation.qmd`
+  §26, every cut and every bin's count the same, and its row's `?` (§18.1) names bioframe's paper.
+
+- **`pairtools stats` for every `.pairs` the app imports, and a command that writes it (§3.7).** The
+  import counts, in the pass that bins the map, everything `pairtools stats` counts — records mapped
+  on both sides, on one and on neither, duplicates, cis and trans and cis past 1 to 40 kb, every pair
+  type, the four orientations by separation and where they converge, and the library's size — and
+  the General column shows it as a **Pairs statistics** card, each row a count and the share pairtools
+  and MultiQC give it, with **save .stats** writing the whole table in pairtools' own format.
+  `chromosomix stats sample.pairs.gz --out qc/` writes the same file from a shell. A port of pairtools
+  1.1.2's `PairCounter`, held to pairtools' own output on a committed fixture with every pair type in
+  it (`test/unit/pairs-stats.test.ts`, `npm run fixtures:pairstats`): every key and every count and
+  fraction the same, the library estimate to 1e-12. The pair type is counted and nothing is decided
+  from it — the map is the same with the column or without it.
+  The card draws three small charts from the same counts, with no run: the pair types as one bar,
+  cis and cis past 1–40 kb as columns, and P(s) by orientation with where the four meet — in the
+  theme's colours, dark included.
+
+- **The lower triangle in a reading of its own (§5.10).** On a map of one file, the Map card has a
+  second tab, `◣ lower`: switched on, the triangle below the diagonal is drawn with its own score,
+  smoothing, O/E, transform, colours and clip — balanced counts above the diagonal and their O/E
+  below it, on two ramps and two keys. Everything else — the window, the resolution, the turn, the
+  overlays, the tracks — stays the map's. Switching it on starts it from the map's own reading, so
+  the press changes nothing until a field does; each triangle is pooled and coloured apart, and each
+  scale measured on its own reading's whole square, so the upper's colours do not move. The second
+  key is editable, the readout names the reading under the pointer, an exported figure's caption
+  says both, and a turned map is two bands, each cut from its own reading. A lower score that is
+  another column or the balancing the other way reads the block a second time from the same file.
+  In the link as `lower`, `score2`, `oe2`, `smooth2`, `transform2`, `colormap2`, `vmin2` and
+  `vmax2`, carried across a navigation but for the clip, and dropped when a second file or a deck
+  is opened.
+
+- **The paper's GM12878 panels in the lab store (§24.2, §24.3).** *The Chromosomix paper* opens on
+  two new tabs over 4DN's in situ Hi-C of GM12878 (Rao et al. 2014, 4DNFIXP4QG5B: 4,010,478,943
+  contacts, 27 GB, read in place). **Fig. 1a**: chr14:88.55–90.10 Mb at 5 kb, three cells across —
+  the map, with ENCODE's CTCF ChIA-PET of GM12878 in its lower triangle (Ruan lab, ENCSR184YZV, a
+  Juicer `.hic`: two formats out of two consortia in one square, §5.7), both as O/E smoothed
+  adaptively, with its insulation and borders above it, its compartments and E1 at 250 kb at its left, the
+  4C profile from chr14:89,150,001-89,180,000 under it, and the TAD and its borders marked; a tracks
+  cell with ENCODE's CTCF, ATAC-seq and its peaks, both strands of total RNA-seq, CTCF's motif, UCSC's
+  refGene and hg38 sequence; and the pastis-NB model of the window, drawn as sticks, its TAD borders as
+  beads and every bead coloured by its distance to one pinned inside the central sub-TAD. **Fig. 2**:
+  the map on chr19 at 10 kb with two labs' CTCF ChIP-seq (Broad's ENCSR000AKB and UW's ENCSR000DRZ,
+  fold change over control) and ATAC-seq, and nothing computed: each task of the figure's chain opens on its
+  recipe — insulation at four scales, the peaks on the two CTCF tracks as replicates, the APA between
+  each peak and the next at 2 kb, the metaplots — so the figure's chromosomix panels are made in the
+  browser from the map and the tracks alone. Everything else not a consortium's file is the app's own
+  output — and genome-wide, the peaks (39,075) and the insulation at four scales — made by
+  `scripts/make_rsg_store.py derive --steps gm12878` on the map's rungs read by range
+  (`notebooks/scripts/cool_subset.py`), never the 27 GB.
+
+- **Fig. 2's chain, held to its references (§18.10).** The validation notebook's § 24 runs what the
+  paper's Fig. 2 runs on GM12878, each link by chromosomix and by the package it reproduces, each fed
+  what the one before it wrote in chromosomix: insulation at four scales against `cooltools.insulation`,
+  CTCF's peaks on two labs' ChIP-seq as replicates against yapc 0.1 with IDR 2.0.3, APA between
+  consecutive peaks against coolpuppy, and the metaplot of CTCF, ATAC-seq and the insulation about
+  the peaks against deepTools' `computeMatrix`, `plotProfile` and `plotHeatmap`. It reads chr19 of
+  4DN's 27-GB map by range (`notebooks/scripts/cool_subset.py`), ENCODE's tracks held to their MD5s,
+  and its commands are timed with the rest.
+
+- **APA between consecutive features (§18.8).** A fourth choice of anchors, *consecutive features*
+  (`--anchors consecutive`), pairs every feature of a set with the next one along its sequence —
+  consecutive CTCF peaks — and piles the pairs up off the diagonal, held to the nearest loop as a
+  loaded loop set is.
+  Its pileup is coolpuppy's over a BEDPE of the same pairs within 5·10⁻⁶ (validation notebook § 24),
+  so Fig. 2's chain — insulation, peaks, the APA between them and the metaplots — runs in the app from
+  the map and the tracks alone, with no pair file made outside it.
+
+- **What a task re-implements, on its row (§18.1).** A `?` in a circle at the right of a task's title
+  in the Analysis column names the published method it follows, how it came out against it in the
+  validation notebook, and the paper's DOI as a link, in a small tip shown on hover. Green where the
+  validation found it identical or equivalent — 22 tasks, from coverage and insulation to pastis-NB
+  and the metaplot — and in the text's colour where it is untested: the scalogram, the HiC score and
+  per-cell contact QC. A mark, not a button: a press on it opens no task. Tasks that follow no
+  published method have none.
+
+- **The notebooks, in *About* (§18.10).** A *Notebooks* tab names the four published notebooks — the
+  validation, the timings and the parity, which GitHub Actions renders with every release, and the
+  laptop, rendered by hand — each linking to its page, with a sentence on what it holds chromosomix
+  to and, read from the `rendered.json` published beside it, the one line of what it found and when,
+  from which build, on what machine and by which run, or by hand, it was rendered. The stamps are read when the tab is chosen, never when *About* opens;
+  one that cannot be read leaves the link alone. The desktop app, the single file, the package's copy
+  and a dev server link the deployed site's pages; the single file reads no stamp.
+
+- **A remembered local file is one click away after a restart (§5.6, §8.6).** Chromium keeps a
+  dropped or chosen file's grant across a restart but asks again before handing the file over, and
+  asking needs a click the restore path does not have — so a restored tab landed on *drop the same
+  file below* for a file the browser still knew, under a red note saying no page could re-open it.
+  In that note's place the picker now says *This browser remembers rep1.cool and 4 other files, and
+  only needs your permission to read them again* beside **allow access to all 5 files**, and a
+  detached track reads *remembered file — allow access to draw it again* with **allow access** before
+  *or re-open this file*. One press asks for every file the browser remembers, the one the tab is
+  waiting on first, and Chromium's prompt offers *allow on every visit*: the tab's map, its tracks
+  and their indexes reopen, and so does every other tab on screen waiting on a file — a tab restored
+  and never looked at stays unopened until clicked. Firefox and Safari keep no grants, and show no
+  button.
+
+- **Anonymous telemetry on the website, with a switch in About (§31).** The site sends a visit, a
+  format opened, a task run and how long it took, an error code met, an install and an *allow access*
+  answered — each a word from a fixed list, checked against it before it is sent, and never a file
+  name, a URL, a locus, a message or the page's own address. Posted with no cookie and no referrer to
+  Umami (`https://cloud.umami.is/api/send`, free up to its Hobby plan's limit, or a self-hosted
+  Umami), named by the repository's `TELEMETRY_ENDPOINT` and `TELEMETRY_WEBSITE` variables
+  (docs/deploy.md), when the page is idle, at most two hundred a page. On by default with no banner;
+  **About → telemetry** turns it off at once, *forget everything* keeps it off, and a browser
+  sending Global Privacy Control sends nothing; Do Not Track, which Safari and Firefox have
+  retired, is not read. Only the site's own build at the site's own address sends any:
+  the archived pins, the previews, the package, the desktop app, the single file, embeds and
+  automated browsers never do.
+
+- **The app held to its own command line, in a notebook (§18.10).** `notebooks/parity.qmd` runs ten
+  tasks in the app, in headless Chromium — insulation, compartments, P(s), coverage, virtual 4C, loop
+  calling, a motif search and APA on GEO's yeast Micro-C at 1.6 kb, framed on chrIV, and peak calling
+  and the metaplot on GEO's yeast ATAC-seq — saves every file the app offers for each run through the
+  buttons a reader presses, runs the line the console wrote for it with `chromosomix`, and compares
+  the two sets file by file: identical (a bigWig byte for byte, a text file line for line, its `#`
+  provenance set aside), or the data apart. Rendered with the validation and the timings on every
+  release and published at <https://chromosomix.app/parity/>, with every file and its verdict in
+  `summary.tsv` beside it.
+  The app and the command line must be built from one commit or nothing runs, and a session the
+  app refuses to open stops at the app's own words rather than after a ten-minute wait.
+
+- **The validation notebook holds four more analyses to their references, and does not time them
+  (§18.10).** `notebooks/validation.qmd` adds cis and trans per sequence against cooltools'
+  `expected_cis` and `expected_trans`, on a chicken map whose microchromosomes meet one another at
+  nearly twice what indifference predicts; the compartment call's saddle against `cooltools.saddle`
+  over chromosomix's own E1, cell for cell; the fraction of signal in features against pyBigWig's
+  exact sums; and signal by group against pyBigWig's exact stretch means, rank for rank in each group,
+  and NumPy's and SciPy's summaries and rank tests. Their commands are written to `commands.json`
+  with the others and left out of `notebooks/timing.qmd`'s runs.
+
+- **Time and memory on your own machine (§18.10).** `notebooks/laptop.qmd` runs 23 analyses
+  genome-wide through `chromosomix`, once each — on the validation's 69-million-contact mouse map and
+  yeast Micro-C, on 4DN's 1.08-billion-contact IMR-90 map (Rao et al. 2014), and on two ATAC-seq
+  replicates and the mm10 sequence — and tabulates the wall-clock and CPU time and the peak memory of
+  each, with the machine it ran on, a figure, and every command at the end. It needs Quarto with
+  pandas, matplotlib and pyfaidx, and a built command line; the data, about 13.7 GB, are downloaded
+  once, each held to its MD5. Render it on your own laptop, or read it at
+  <https://chromosomix.app/laptop/>: a render made by hand, on a laptop, and committed as
+  `notebooks/laptop.html`, the one rendered page `.gitignore` lets through. The page is one file that
+  carries its table and its `rendered.json`, and the deploy unpacks the two beside it, so publishing
+  a render is committing the file. The Notebooks workflow renders it on a GitHub runner with every
+  release too, and keeps that as the run's artifact and in its summary only: never on the site, nor
+  on a release, and whether it rendered no longer holds back the other pages.
+
+- **The `.hic` reader held to `hic-straw` on a file Juicer Tools wrote (§3.6).**
+  `test/unit/hic-straw-oracle.test.ts` read only fixtures this repository's own writer produced, so
+  straw and this reader agreed on our reading of the format and never met a block Juicer laid out.
+  It now reads the demo map too, `demo/yeast/Yeast_hic.hic` (v8, Juicer Tools 1.9.9), with both
+  readers, every cell of four windows — a whole chromosome with its short last bin, a window inside
+  another, a megabase off the diagonal, and between two chromosomes — at all five resolutions, raw
+  counts exactly and KR-balanced ones to float32 precision, through `MetaCooler` as a view reads it.
+  The map is committed, so this runs on every push with nothing to build.
+
+### Changed
+
+- **P(s)'s four orientations moved to Pairs QC (§18.8).** The toggle and its `.pairs` box left the
+  P(s) form; a stored run, a link or a `chromosomix expected --stranded` line still draws the same
+  curves, with a note saying where they live now. A composite's required task can now take the
+  answers its own form asked (`upstreamParams`), which is how Pairs QC hands the reference and the
+  enzyme to the digest.
+
+- **The command line reads an address by range, as the app does, rather than downloading it whole
+  (§23.1).** A map — a cooler, an `.mcool` rung, a `.hic`, an `.scool`, a `.pairs` and its `.px2` —
+  an `--against`, a bigWig or `.2bit` in `--tracks`, and a `.2bit` or an indexed FASTA in
+  `--sequence` are read through the app's own `RemoteRangeSource`, with its cache, coalescing and
+  read-ahead, and nothing of them is written to disk: one rung of the demo's 46 MB *E. coli*
+  `.mcool` costs 2.6 MB in three requests, and a metaplot of one chromosome's peaks over a 15 MB
+  bigWig 5.2 MB, where the command used to fetch both whole first. Node has no synchronous request,
+  so a helper thread fetches while the task's thread waits on `Atomics.wait` (`cli/syncFetch.ts`),
+  and a range source is mounted under h5wasm's Node filesystem as a path no file lies behind
+  (`h5/lazyFile.ts`). Every file a command writes over an address is the file it writes over the
+  same bytes on disk (`test/unit/cli-range.test.ts`). What is read whole from a copy is unchanged —
+  a feature set, a HiC-Pro matrix, a workspace — and so is any address whose host will not serve a
+  range, now said on stderr. A `404` names its status, a request that got no answer its cause, and
+  neither its query. The console's note that a remote line downloads the whole file is gone with the
+  download.
+
+- **A second file whose chromosomes run on past the first's opens in the lower triangle (§5.7).** A
+  Juicer `.hic` keeps the mitochondrion after `Y`, where a 4DN cooler of the same assembly stops at
+  `chrY`, and the two were refused for counting 25 sequences against 24. While the second list opens
+  with the whole of the first, every bin the picture reads is the same locus in both, so the pair is
+  drawn; the other way round is still refused, and the refusal now says which way round to open it.
+  §5.7 also says what balanced means beside a `.hic`: Juicer's KR is in the library's depth where a
+  cooler's balancing sums to one, so the two are compared as O/E.
+
+- **The paper's bacterial panels are Fig. S3a–c (§24.2).** The three tabs that were Fig. 2a–c — *C.
+  necator* along both arms, the *B. subtilis* ParB time course and *P. aeruginosa*'s condensin
+  mutants — are named for the supplementary figure they now make, behind Fig. 2's new tab.
+
+- **About is three tabs, and the licences are one of them (§22.4).** *Overview* — what the viewer is,
+  the tutorial and the source, with the build stamp and the version picker in a footer under it that
+  never scrolls away — then *Notebooks* and *Licences*, each about that alone. The stamp used to sit
+  under the licences, which had pushed it out of sight on a laptop. The row of tabs is walked with
+  ← and →, Home and End.
+
+- **C1 is "no server-side component of our own" (§1).** It was "of any kind"; the site's telemetry
+  (§31) goes to a third-party endpoint the app never reads from or waits on. The landing page's
+  privacy note says no server ever sees a file, and adds a clause on the telemetry where the site
+  sends it; the README says the same.
+
+- **pastis-NB's fit runs on every core, and gives the same model on any number of them (§25.6,
+  §23.1).** Each evaluation of the likelihood, and of pastis' MDS start before it, is now summed in
+  bands of rows laid out by the bead count alone, and the bands are shared among helper workers —
+  web workers in the app, one fewer than the cores and seven at most, as the correlation's are, and
+  Node worker threads on the command line — while the thread that asked computes a stretch of its
+  own. The same helpers serve the MDS and then the likelihood, and a helper still starting is not
+  waited for: the thread that asked computes its bands until it says it is up. The bands' values and
+  gradients are added in band order whatever the threads, so the model is the same bits on one
+  thread and on eight: the command line's `--threads 1` and `--threads 4` write the same bed3d, and
+  the app's model, made with three helpers, is the command line's on one thread. On the validation's
+  yeast Micro-C at 12.8 kb (905 beads) a model takes 4.6 s with `--threads 4` where it takes 12.5 s
+  on one, at 6.4 kb (1,807 beads) 13 s where it takes 41, and in Chromium a model of chromosome IV
+  at 1 kb (1,400 beads) 9 s where it took 20.7 — on a four-core machine that draws the page on the
+  same cores. A page shares no memory with its workers, so each helper is sent its rows of a
+  triangle once per objective, the copies held to 512 MB; the command line allocates the counts on
+  a `SharedArrayBuffer` and its helpers read the one matrix. A helper that cannot start, or fails,
+  has its bands computed by the thread that asked, with the same numbers. The command line gains
+  `--threads N`, **one by default**, so that the times `notebooks/timing.qmd` sets beside the
+  references' are one core's; the estimate prices a hundred steps on the threads the run will have
+  and counts the helpers' copies in its memory. The walk underneath (`structure/lbfgs.ts`) now asks
+  for each evaluation rather than making it, so the threads can be awaited.
+
+- **pastis-NB is now pastis-NB as pastis runs it, and from the same seed gives pastis' model
+  (§25.6).** *Model from the map* departed from pastis on purpose in three places, and no longer
+  does in any of them. **The dispersion** was a moment estimate per separation, held fixed; it is
+  now pastis' curve against the mean — the bias-corrected counts' mean and variance at each
+  separation (`compute_mean_variance`), and `r = exp(c₀ + c₁ log λ)` fitted through them
+  (`ExponentialDispersion(degree=1)`) — read off at each pair's own mean as the beads move, its
+  derivative in the gradient. On the validation's yeast map it is pastis' curve to seven figures,
+  `r = 3.22 · λ^0.151`, where the old estimate ran the other way (11 near the diagonal, 123 far).
+  **The likelihood** is the whole negative binomial, gamma functions and all, with pastis' `β = 1`
+  and the biases scaled to a mean of 1: at pastis' own final model its value is pastis' to ten
+  figures. **The start** was ShRec3D's classical scaling and sixty SMACOF steps; it is now pastis'
+  MDS — the relative stress over the counted pairs — from beads placed at random by numpy's own
+  Mersenne Twister, so a new **seed** control, shown under pastis-NB, places every bead where
+  pastis' `random_state` does. Both are solved to pastis' tolerances by an L-BFGS that now uses
+  SciPy's L-BFGS-B constants (a thousandth for Armijo, twenty probes, ten pairs of history, a
+  restart on a failed search). The fit table shows the curve, the seed, the MDS's steps and the
+  `−log L` pastis would report; the scale β row is gone, β being 1.
+
+  **What that buys, on the validation's yeast Micro-C at 12.8 kb (905 beads), against pastis from
+  the same seed:** distances within chromosomes agree at Spearman ρ = 0.988, 0.993 and 0.978 for
+  seeds 0, 1 and 2, between chromosomes at 0.982, 0.997 and 0.901, and the per-chromosome Procrustes
+  disparity is 0.016, 0.002 and 0.036 — where pastis agrees with *itself* across seeds at 0.94–0.95,
+  0.50–0.57 and 0.085–0.094, and the old port agreed with pastis at 0.87–0.88, 0.40–0.47 and
+  0.22–0.24, outside pastis' own spread. The old port ranked the contacts within chromosomes better
+  (ρ 0.945 against pastis' 0.868–0.873); the new one ranks them as pastis does (0.872).
+
+  **And the time.** The default 150 steps take about 12 seconds from the command line on that map
+  (7 before, 65–80 for pastis): a pastis evaluation is a logarithm and an exponential per pair for
+  the dispersion's power of the mean, a logarithm for the spread and one for the gamma functions,
+  about twenty passes' worth of a SMACOF stress where the old one was eight. Its MDS start costs a
+  third of a second where pastis' costs nine, and the counts are the only matrix it holds — one
+  `n²` matrix where both methods held two, so twelve thousand beads is half a gigabyte, not one.
+  150 steps is where pastis' own runs end on that map (125–148); raised to pastis' gradient
+  tolerance a run goes on to a likelihood about a thousand units better than pastis', in 900 steps.
+  One small difference is new, and deliberate: a separation whose variance is within a Poisson's own scatter
+  of its mean is left out of the curve, and with fewer than three left the counts are read as
+  Poisson — on a real map every separation is in, and on Poisson counts pastis would fit a curve
+  that loses the model.
+
+- **The notebooks render a job each, and the run's summary has a section each (§18.10).**
+  `.github/workflows/notebooks.yml` renders the parity first, then the validation with the timings
+  (which run the validation's commands on its inputs) beside the laptop, each job on a runner of its
+  own installing what it needs through `.github/actions/notebooks-setup`; a last job publishes the
+  four pages only if all rendered. The summary gives each notebook its address, version and render
+  time, the one line of findings the notebook now writes with its stamp (`rendered.json`), and its
+  table, folded. Where each page is published and which files go beside it is one table,
+  `notebooks/scripts/pages.py`, which the workflow and `rendered.py` both read.
+
+- **The validation gives a reference a process a core, at most four, and every render logs the
+  memory (§18.10).** On the two-core, 8 GB runner a private repository is given, six renders of the
+  notebooks in nine were shut down mid-step ("The runner has received a shutdown signal"), four in
+  the cell where cooltools computes the expected over the mouse genome at 10 kb with four
+  processes, the largest alone at 3.6 GB. `notebooks/validation.qmd`'s `THREADS` is now the
+  machine's cores up to four, so the timings' `threads` column reads 2 on that runner; and each
+  render runs through `notebooks/scripts/memory.sh`, which writes the memory in use and available,
+  and the three programs holding the most, into the job's log every ten seconds: a runner shut down
+  for want of memory leaves no error and runs no step after it, and that log is what is left.
+
+- **The timings' peak memory is every process of a run together (§18.10).** `notebooks/timing.qmd`
+  recorded the largest resident set any one process of a run reached, so a reference that runs a
+  pool of workers was credited with its largest worker alone: cooltools' expected over the mouse
+  genome at 10 kb read 3.8 GB when its four processes held 9.5 to 12 GB between them. Each run is now
+  weighed four times a second while it runs, its process and every process under it, by their
+  proportional set sizes — a page forked workers share counted once between them, not again in each
+  — and the most they held together is the `peak_mb` column of `timings.tsv`, in place of
+  `max_rss_mb`, never less than the largest resident set any one reached. A command of one process,
+  as every `chromosomix` command is, reads as before. A table on disk with the old column is timed
+  again. Where the system does not list a process's children, as macOS does not, the column is the
+  largest process alone, and the page says which.
+
+- **The command line names a track as the app does (§23.1).** A file opened under `--tracks` is
+  called what the app calls its row — `signal` for `signal.bw` — in a metaplot's columns, a
+  correlation's axes, FRiP's and Signal by group's rows and every label a run writes, where it was the
+  file's base name. The shell's tables and the drawer's now share their headers.
+
+- **Peak calling over a genome is nine times faster and holds less than a quarter of the memory,
+  every number the same (§18.8).** With IDR over a mouse ATAC-seq pair, genome-wide, a call took 29
+  minutes and 1.27 GB on a 4-core 2.1 GHz Xeon and takes 3 minutes and 290 MB, on the one thread it
+  always ran on. The 456-tap convolution, which was nine-tenths of the time, is summed piece by piece rather
+  than base by base, each base's terms added in the order they were; a replicate's own second derivative is
+  summed only where the pooled one is concave, the only bases it scores; of the 6.5 million candidates,
+  only those that can still be among the 100,000 strongest are held, where every one was held to the
+  end; IDR bisects the pseudo-values both replicates share once a round rather than once each; and a
+  window's whole scan — pieces, pooling, both convolutions, the concave mask and the regions — runs in
+  a WebAssembly kernel with SIMD (`npm run wasm:yapc` rebuilds it), with the TypeScript where
+  WebAssembly has no SIMD. Each is tested bit for bit against what it replaced (§18.10), and the
+  validation's comparison with yapc 0.1 on chr19 is unchanged to the last digit.
+
+### Fixed
+
+- **An embed no longer recalls another frame's tracks (§21.2).** The memory of each file — its
+  tracks, marks and filters — was kept in `sessionStorage`, which every frame a page holds on one
+  origin shares; with no tab strip, every embed started with the same session id. Two embeds of one
+  map on a page, or two notebook widgets, showed the first one's tracks in the second, and a frame
+  reloaded in place showed its own twice. An embed now keeps that memory in the frame alone.
+
+- **A map read through a proxy that empties a `HEAD` opens (§11).** jupyter-server-proxy, the way
+  into a notebook kernel's files behind JupyterHub, answers every `HEAD` with `Content-Length: 0`
+  and passes the server's `Accept-Ranges` through, and the reader took both at their word: a 19 MB
+  `.cool` was mounted as a file of no bytes and refused as "not an HDF5 file", while its bigWigs,
+  read by range, drew. A `HEAD` stating no bytes is now followed by the one-byte probe, whose
+  `Content-Range` gives the size.
+
+- **A map in a deck keeps its size in a short window (§16.5).** Each deck cell's map took its height
+  from the window less the tracks stacked under it, with no floor, so a deck of two in a
+  620-pixel-tall window — a notebook's frame, a laptop with its tools open — drew a map with three
+  tracks under it as a 42-pixel thumbnail. It now has the single view's 20rem floor, and the page
+  scrolls, as the single view's does.
+
+- **A band below zero is drawn about its line (§18.13).** A curve's band is two stacked edges, and
+  the chart library stacks only values of one sign unless told otherwise: a band whose lower edge was
+  negative had its width stacked on zero, a strip from 0 to the band's width far from its line. Every
+  metaplot of an insulation track, a log ratio, drew its bands so; they are stacked whatever the signs.
+
+- **A workspace's analysis recipes come back (§18.2).** What each task was last set to, and how its
+  figures were styled, are saved in a workspace so that reproducing a figure is opening it and pressing
+  Run — and the drawer kept them under the map's address with its resolution, where a workspace
+  neither put them back nor looked for them: every task opened on its defaults, a saved workspace
+  carried none of what was run, and switching resolution forgot the form. They are kept under the
+  tab's key for the file, which is the workspace's own, so the paper's Fig. 2 tab opens each task of
+  its chain on the figure's recipe.
+
+- **A tracks cell keeps its tracks (§16.11).** A track placed on a deck's tracks cell was kept against
+  the file of the map it was on, and a tracks cell has none: a reload, a saved workspace opened again
+  or a link brought the cell back empty and the track drawn nowhere. A tracks cell's tracks are kept by
+  its seat — `tracks:1` for the first from the left, as its name and its height already were — and
+  come back with the cell.
+
+- **A model's pinned bead is kept with it (§25.5).** *Spatial distance to pinned bin* and *contacts
+  with pinned bin* colour a model from the bead the reader pinned, and the pin went with the page: a
+  model saved coloured by distance came back coloured from nothing. The pin is kept on the model's row,
+  by the sequence and base pair at its middle, and comes back with a session, a workspace or a link.
+
+- **A metaplot's columns are deepTools' (§18.8).** Three things put a profile off `computeMatrix`'s by
+  up to a percent. An odd-length feature's centre was its midpoint rounded up, one base right of
+  deepTools'; a window a sequence end clipped spread what was left over whole columns, so every column
+  of that row stood a little off its place; and a track was read at the column's width, which takes a
+  zoom level up to twice as wide, whose records straddle the columns' edges — 0.7 % on the insulation
+  about CTCF peaks in 10-kb columns. The centre is now deepTools', a clipped window keeps step-wide
+  columns, and a track is read at its own resolution a megabase at a time: over GM12878's CTCF peaks
+  the profiles of CTCF, ATAC-seq and the insulation agree with deepTools within 5·10⁻⁶ (§ 24 of the
+  validation notebook), at 1.7 s rather than 1.1 s for the insulation, in 210 MB rather than 300;
+  mouse ATAC-seq about all 35,034 RefSeq TSSs (§ 14) stays identical and takes the 5.5 s it took, in
+  350 MB rather than 410.
+
+- **Signal by group's stretches are their exact means (§18.8).** A stretch was read at a twentieth
+  of a typical stretch's width, from a zoom level wherever the file had one that fine, and a zoom
+  record is a mean over its own span: on 4DN's mouse ATAC-seq on chr19, the 896 bp records carried
+  each neighbour's signal into a stretch's ends, the 10 kb stretches came out a median 0.2 % from
+  their own means and one in thirteen more than 1 %, and the Mann–Whitney U between the two
+  compartments as much as 0.2 % from SciPy's on the exact means. Every track is now read as track correlation
+  reads a window — at its own resolution, a megabase at a time, each record weighted by how much of
+  the stretch it covers, pyBigWig's `stats(…, exact=True)` — and the same run agrees with pyBigWig
+  to within 5 × 10⁻⁶ in every stretch and with SciPy to every digit written in every test, in 1.0 s
+  where it took 0.9 s, and half the memory. A track the groups are cut from, and the per-feature
+  table, are read the same way.
 
 ## [0.16.0] - 2026-10-20
 

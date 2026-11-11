@@ -148,15 +148,31 @@ function roundsFor(cells: number): number {
 }
 
 /**
- * When the marginals are flat enough to stop.
+ * When the marginals are flat enough to call the block balanced.
  *
- * The variance of the marginals divided by their mean, which is the same
- * convergence test `cooler balance` uses. 1e-5 is far below what a 256-entry
- * colormap can show — the picture stops changing several rounds earlier — but
- * the number also has to satisfy someone comparing the result against a stored
- * weight column, and there the tolerance is the size of the disagreement.
+ * The largest relative departure of any bin's marginal from their mean. 1e-5 is
+ * far below what a 256-entry colormap can show — the picture stops changing
+ * several rounds earlier — so a block that gets this far is drawn and captioned
+ * as balanced, without the qualification {@link BalanceResult.converged} puts on
+ * one the rounds ran out on. It is not where the loop stops while it can afford
+ * to go on: that is {@link BALANCE_PRECISION}.
  */
 export const BALANCE_TOLERANCE = 1e-5
+
+/**
+ * When the marginals are flat enough to stop, rounds permitting.
+ *
+ * The cells are handed on as Float32, and someone comparing them with a
+ * reference — cooltools' iterative correction, `cooler balance` — is comparing
+ * to that precision: the weights left 1e-9 from the fixed point put each cell
+ * within the half unit in the last place its own rounding costs
+ * (`test/unit/normalise-cooler.test.ts`). Stopping at {@link BALANCE_TOLERANCE}
+ * left them 1e-5 apart. Iterative correction converges geometrically, so the
+ * four decades between the two are some thirty rounds, and the cell budget still
+ * caps them: a block that runs out between the two is balanced to what it
+ * reached and still called converged.
+ */
+export const BALANCE_PRECISION = 1e-9
 
 /**
  * What a derived array is, beside the numbers.
@@ -329,7 +345,10 @@ function scaleToUnitMean(marginal: Float64Array, power: 0.5 | 1): Float64Array {
  */
 export interface BalanceResult {
   values: Float32Array
-  /** Whether the marginals reached {@link BALANCE_TOLERANCE} before the rounds ran out. */
+  /**
+   * Whether the marginals reached {@link BALANCE_TOLERANCE} before the rounds
+   * ran out — whether or not they went on to {@link BALANCE_PRECISION}.
+   */
   converged: boolean
 }
 
@@ -394,10 +413,8 @@ export function balanceBlock(block: BlockValues): BalanceResult {
         rowWeight[r] *= Math.sqrt(target / mass)
         colWeight[r] = rowWeight[r]
       }
-      if (drift < BALANCE_TOLERANCE) {
-        converged = true
-        break
-      }
+      if (drift < BALANCE_TOLERANCE) converged = true
+      if (drift < BALANCE_PRECISION) break
       continue
     }
 
@@ -428,10 +445,8 @@ export function balanceBlock(block: BlockValues): BalanceResult {
       drift = Math.max(drift, Math.abs(mass / colTarget - 1))
       colWeight[c] *= colTarget / mass
     }
-    if (drift < BALANCE_TOLERANCE) {
-      converged = true
-      break
-    }
+    if (drift < BALANCE_TOLERANCE) converged = true
+    if (drift < BALANCE_PRECISION) break
   }
 
   const out = new Float32Array(nrows * ncols)

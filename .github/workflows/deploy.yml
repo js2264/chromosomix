@@ -31,6 +31,7 @@ env:
   ARCHIVE_BRANCH: pages-archive
   STORES_BRANCH: stores
   NOTEBOOKS_BRANCH: notebooks
+  COVERAGE_BRANCH: coverage
 
 jobs:
   build:
@@ -43,9 +44,9 @@ jobs:
       contents: write
       pull-requests: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
@@ -90,6 +91,20 @@ jobs:
           GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
           GOOGLE_API_KEY: ${{ vars.GOOGLE_API_KEY }}
           DROPBOX_APP_KEY: ${{ vars.DROPBOX_APP_KEY }}
+
+      # The files for language models — llms.txt, the pages it links under
+      # llms/ and llms-full.txt — are written by the build above from this
+      # commit's source (scripts/llms.mjs, SPECS §11), so every deploy of main
+      # refreshes them with nothing committed. A build that wrote none, or a
+      # page llms.txt links that is missing, stops the deploy here rather than
+      # publishing a summary whose links 404.
+      - name: Check the files for language models
+        run: |
+          test -s dist/llms.txt && test -s dist/llms-full.txt
+          pages=$(grep -oE '\(https://chromosomix\.app/llms/[a-z0-9-]+\.md\)' dist/llms.txt | sed -E 's#^\(https://chromosomix\.app/##; s#\)$##')
+          test -n "$pages"
+          for page in $pages; do test -s "dist/$page" || { echo "llms.txt links $page, which the build did not write"; exit 1; }; done
+          echo "llms.txt, llms-full.txt and $(echo "$pages" | wc -l) pages written"
 
       # The same source again, for the copy that stays reachable after the next
       # push. No typecheck: the build above already ran one over this tree, and
@@ -152,9 +167,10 @@ jobs:
           fi
 
       # The rendered notebooks, which notebooks.yml keeps on a branch of their
-      # own on the same terms as the stores: the validation and the timings
-      # (SPECS §18.10), each a self-contained page with its files beside it.
-      # Absent until that workflow has published once.
+      # own on the same terms as the stores: the validation, the timings, the
+      # viewers and the parity (SPECS §18.10), each a self-contained page with
+      # its files beside it. Absent until that workflow has published once. The laptop is not
+      # among them: it is rendered by hand and committed (below).
       - name: Fetch the rendered notebooks
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -164,7 +180,23 @@ jobs:
           if git ls-remote --exit-code --heads "$remote" "$NOTEBOOKS_BRANCH" >/dev/null 2>&1; then
             git clone --quiet --depth 1 --branch "$NOTEBOOKS_BRANCH" "$remote" rendered
           else
-            echo "No $NOTEBOOKS_BRANCH branch yet — /validation/ and /timings/ appear once the Notebooks workflow has run."
+            echo "No $NOTEBOOKS_BRANCH branch yet — /validation/, /timings/, /viewers/ and /parity/ appear once the Notebooks workflow has run."
+          fi
+
+      # The full suite's coverage report and the badge.json the README's badge
+      # is drawn from, which the `coverage` job of test.yml keeps on a branch of
+      # its own after every green full suite on `main`, on the same terms again.
+      # Absent until that job has published once, and the badge says so.
+      - name: Fetch the coverage report
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          remote="https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
+          if git ls-remote --exit-code --heads "$remote" "$COVERAGE_BRANCH" >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch "$COVERAGE_BRANCH" "$remote" coverage-report
+          else
+            echo "No $COVERAGE_BRANCH branch yet — /coverage/ appears once the Tests workflow has published the full suite's."
           fi
 
       # Previews belong to open pull requests, and preview.yml removes one when
@@ -244,9 +276,17 @@ jobs:
       # not copied: those are the dated copies, which the branch keeps and the
       # site has no reason to serve.
       #
-      # `validation/` and `timings/` are the rendered notebooks, copied whole
-      # from their branch, each directory named rather than globbed so that the
-      # branch can never put anything else at the site's root.
+      # `validation/`, `timings/`, `viewers/` and `parity/` are the rendered notebooks, copied
+      # whole from their branch, each directory named — by `pages.py published`,
+      # the one table of them — rather than globbed, so that the branch can never
+      # put anything else at the site's root; a `laptop/` the branch still holds
+      # from before is not one of them. `laptop/` is the page rendered by hand
+      # and committed as notebooks/laptop.html: `pages.py committed` writes it
+      # as `laptop/index.html` and unpacks the table and the stamp the page
+      # carries beside it. No `laptop/` until one is committed.
+      #
+      # `coverage/` is the coverage branch's tree, every file of it but its
+      # `.git`: the HTML report and `badge.json`.
       - name: Assemble the site
         run: |
           set -euo pipefail
@@ -259,16 +299,21 @@ jobs:
             if [ -d stores/sessions ]; then cp -R stores/sessions dist/stores/sessions; fi
             echo "Copied $(find dist/stores -name '*.json' | wc -l) store and session files."
           fi
-          for page in validation timings; do
+          for page in $(python3 notebooks/scripts/pages.py published); do
             if [ -f "rendered/$page/index.html" ]; then cp -R "rendered/$page" "dist/$page"; fi
           done
+          python3 notebooks/scripts/pages.py committed dist
+          if [ -f coverage-report/index.html ]; then
+            cp -R coverage-report dist/coverage
+            rm -rf dist/coverage/.git
+          fi
           parts=(dist dist/v)
-          for part in dist/pr dist/stores dist/validation dist/timings; do
+          for part in dist/pr dist/stores dist/validation dist/timings dist/viewers dist/parity dist/laptop dist/coverage; do
             if [ -d "$part" ]; then parts+=("$part"); fi
           done
           du -sh "${parts[@]}"
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
@@ -283,4 +328,24 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
+
+      # What an agent fetches, fetched as one would, from the address just
+      # published: llms.txt answers with the summary, and the first page it
+      # links answers too. The CDN may hold the previous copy for a few
+      # minutes, so this asks that the files are there, not that they are new.
+      - name: Check llms.txt is served
+        env:
+          SITE: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsS -A 'chromosomix-deploy-check' "${SITE}llms.txt" -o llms.txt && head -1 llms.txt | grep -q '^# chromosomix'; then
+              page=$(grep -oE 'https://chromosomix\.app/llms/[a-z0-9-]+\.md' llms.txt | head -1 | sed 's#https://chromosomix\.app/##')
+              if [ -z "$page" ] || curl -fsS -o /dev/null "${SITE}${page}"; then
+                echo "${SITE}llms.txt is served"; exit 0
+              fi
+            fi
+            sleep 20
+          done
+          echo "::error::${SITE}llms.txt or its first page did not answer after two minutes"
+          exit 1

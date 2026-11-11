@@ -299,6 +299,8 @@ export function parseStore(text_: string): StoreFile | ConfigRefusal {
     return {
       reason: 'newer',
       version,
+      format: 'store',
+      reads: STORE_VERSION,
       ...(typeof producer === 'string' && producer !== '' ? { producer } : {}),
     }
   }
@@ -719,8 +721,10 @@ function hostNote(url: string): string {
   return (
     ` As of September 2026 UCSC's servers — ${host} among them — do not send that header, so no ` +
     'browser-only viewer can read a hub hosted there. Pasting the text gets past it for the hub ' +
-    'itself, but its bigDataUrls are on the same hosts and will not open either; downloading the ' +
-    'hub and opening it from a connected folder is the way that works.'
+    'itself, but its bigDataUrls are on the same hosts and will not open either. What works is a ' +
+    'copy of the hub and its files on a host that sends the header — a bucket of your own — with ' +
+    'that copy’s hub.txt address pasted here; or the tracks downloaded and dropped on the window one ' +
+    'by one. A connected folder lists a hub.txt but does not open it as a hub.'
   )
 }
 

@@ -1,3 +1,5 @@
+// @dev-feature metacool
+// @fixtures metacooler
 /**
  * Which genome each stretch of a contig axis belongs to.
  *

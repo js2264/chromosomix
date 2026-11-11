@@ -1,0 +1,110 @@
+---
+title: "Aggregate peak analysis"
+description: "Pile up the contact map at a set of loops or features, as coolpuppy does, and read its enrichment."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="apa" />
+
+Aggregate peak analysis averages the contact map over a set of places, so a pattern too faint to see at any one of them stands out in the mean. Over loops it shows whether they are there; over every pair of a peak set, whether those places touch more than places like them; over domains, whether contact stops at their edges.
+
+## Running it
+
+It needs a map and a set loaded on the **Annotations** panel: a loop set (BEDPE, interact or longrange; see [Interactions](/files/interactions/)) or a feature set (BED, narrowPeak, GTF and the rest; see [Tracks and features](/files/tracks/)). A set a task called works too, such as the loops of [Loop calling](/analyses/loops/) or the domains of [diamond insulation](/analyses/insulation/).
+
+In the **Analysis** panel (<kbd>4</kbd>), choose **Aggregate peak analysis**, pick the **anchors** and the set, and press **run**:
+
+- **loop set**: a window at each pair, leaving out loops nearer the diagonal than **nearest loop**.
+- **feature set**: a window on the diagonal at each feature, about the point **anchor on** names; *start* and *end* follow the strand.
+- **every pair of a feature set**: a window between every two features within the separation range. Past 200,000 pairs, a uniform sample is taken, the same each time.
+- **consecutive features**: each feature with the next along its sequence.
+
+![The yeast demo's loops piled up over the expected, APA · observed / expected, with a dark red dot at its centre, windows 1426 and P2LL 1.30 under it, and the ATAC track's aggregate along its top and right edges.](../../../assets/screens/analyses/apa-pileup.webp)
+
+The same run from a shell:
+
+<TaskCommand id="apa" />
+
+```sh
+# A loop set, over the expected
+chromosomix apa sample.mcool::/resolutions/10000 --pairs loops.bedpe --out results/
+
+# Each CTCF peak with the next along its chromosome
+chromosomix apa sample.mcool::/resolutions/10000 --anchors consecutive --features ctcf_peaks.bed --out results/
+
+# A domain pileup: every domain stretched onto one grid, half its length either side
+chromosomix apa sample.mcool::/resolutions/2000 --anchors features --features domains.bed --mode scaled --out results/
+```
+
+## Parameters
+
+The **anchors**, the **mode** and the **normalisation** decide what the picture is of; the cards under them, **Control**, **Separation**, **Ranking** and **Tracks**, appear only when they apply. Start from the defaults, 21 bins either side over the expected, and change one setting at a time.
+
+<TaskParameters id="apa" />
+
+## What it writes
+
+<TaskOutputs id="apa" />
+
+## Reading the result
+
+### The picture
+
+Under **observed / expected**, the default, the pileup is **APA · observed / expected**: each window is divided, cell by cell, by its sequence's expected contact at that separation, then averaged. Under **distance-matched** the pileup is divided by its shifted controls' pileup. Either way 1 is the middle of a diverging scale and above it is more contact than expected: real loops give a dot at the centre. Under **none** the pileup is the raw mean, on the map's own scale.
+
+A fixed window's axes are distances from the anchor, `-21 kb` to `+21 kb` at the default half-width on a 1 kb map; a domain pileup's run from 0 to 1 along the feature, flanks either side.
+
+### P2LL, and the per-anchor table
+
+**windows** counts the anchors that contributed. **P2LL** is the mean of the centre, a fifth of the window across, over the mean of the lower-left corner of the same size, a background at a comparable separation. Above 1 is enrichment. The **Per anchor** table gives each window's P2LL and separation, strongest first.
+
+### The loop spectrum
+
+The **Loop spectrum**, for anchors off the diagonal, sets each window's P2LL against its separation, with the median in log-spaced bands. Loops at short range and noise at long range average into one plausible dot in the pileup; here they come apart.
+
+### Domain pileups
+
+Scaled, over a feature set on the diagonal, the pileup is a domain pileup: each domain the square in the middle, its boundaries the cross through it. P2LL is the wrong number here, reading well above 1 even for a set with no boundaries, so a domain pileup reports **in / out**: the block just inside the domain at its widest separation, over the same block across each boundary. Above 1, contact stops at the edge; 1 means no boundary. **Per anchor** lists each domain's in / out.
+
+Over the expected, windows are stretched evenly onto the grid, as coolpuppy rescales them, with gaps where values are missing. Under the distance-matched control or none, each domain's two ends are pinned to the same grid lines, the better picture of a set of boundaries. Scaled windows over pairs run only under those two.
+
+### Under the Chromosight normalisation
+
+The map is detrended by its own distance law, every window is the size of the **template**, and each anchor is scored as chromosight scores it. The pileup is drawn on chromosight's fixed scale, seismic from 0 to 2 with 1 in the middle. A **score spectrum** shows every anchor's correlation with the template, its title counting those that reach the template's calling threshold; off the diagonal, the **loop spectrum** sets those scores against separation; **Per anchor** gives each score, p-value and q-value. An anchor whose window holds too many undetectable or empty pixels is listed with no score and adds nothing to the pileup. Track aggregates are not drawn.
+
+### Track aggregates
+
+Each track ticked under **track aggregates**, a bigWig or a computed track, is averaged over the pileup's windows (never the controls) and drawn along the top and right edges, on its own range, printed in the key. Off the diagonal, **same profile both sides** pools each pair's two anchors; untick it where the order of a BEDPE's anchors means something, such as a promoter always first. A track that could not be read is left out, and the drawer says so.
+
+### Splitting and ranking
+
+- **Split by separation into** cuts a set off the diagonal into up to six log-spaced bands, each with its own control. One pileup from 30 kb to 2 Mb averages a strong short-range contact and a weak long-range one into a picture of neither.
+- **Rank by**, over a feature set on the diagonal, sorts it by a numeric column; **then** takes the **top N**, or cuts it into **K groups** piled up on their own. The strongest group beside the weakest is what tests a set of calls.
+
+### What to watch for
+
+- **Loops near the diagonal.** Nothing below the diagonal is used, and **diagonals left out** removes the main diagonal and the one beside it: a window that reaches the diagonal has gaps there, and its cells near it, P2LL's lower-left corner among them, average fewer loops. From twice the half-width plus two bins, coolpuppy's default floor, no window reaches the first two diagonals; this task's **nearest loop** is 5 bins unless you set it.
+- **Missing windows.** A window that runs off its sequence is not piled up; a half-empty one adds what it has.
+- **Random controls.** The same **seed** gives the same distance-matched controls; the spread between two seeds' pileups is the scale to read a difference on.
+
+## Compared with coolpuppy
+
+Windows are cut as coolpuppy cuts them, from the upper triangle with `min_diag` diagonals left out, and observed / expected divides each window by cooltools' `balanced.avg` before the mean. In [§ 11 of the validation](https://chromosomix.app/validation/#aggregate-peak-analysis-coolpuppy), on a mouse Hi-C map at 10 kb, the raw and observed / expected pileups have the same gaps as coolpuppy's and agree in every other cell within float32 rounding; over shifted controls the two differ as two coolpuppy runs do. § 12 holds the **Chromosight** normalisation to `chromosight quantify`, and § 24 holds pileups of consecutive CTCF peaks and of domains to coolpuppy.
+
+To set a coolpuppy run beside one of these, give both the same settings; the default nearest loop differs:
+
+| chromosomix | coolpuppy |
+| --- | --- |
+| `--window 5` (bins either side) | `flank=50_000` at 10 kb: the half-width times the bin size |
+| `--minDiag 2` | `min_diag=2` |
+| `--minDist 12`: twice the half-width and two | `mindist='auto'`, its default |
+| `--minDist 0` | `mindist=0` |
+| `--norm none` | `ooe=False` |
+| `--norm oe` | `ooe=True`, with an expected |
+| `--anchors features` | `local=True` |
+| `--norm matched --controls 5 --minShift 50 --maxShift 500` | `nshifts=5`, with `minshift` and `maxshift` in base pairs |
+| `--anchors features --mode scaled --grid 51 --flankFraction 0.5 --norm oe` | `local=True`, `rescale=True`, `rescale_size=51`, `rescale_flank=0.5`, with an expected |

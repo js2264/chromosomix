@@ -1,5 +1,5 @@
 /**
- * Drive the ideogram view (§5.10) in headless Chromium and write what each state
+ * Drive the ideogram view (§5.11) in headless Chromium and write what each state
  * looks like, every page opened with the dev features asked for (`?dev`, §29).
  *
  * The yeast tracks demo, from a session this script writes to `demo/yeast/` and

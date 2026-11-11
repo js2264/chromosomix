@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @dev-feature dotplot
 /**
  * The dot plot as a view of its own, in a DOM (SPECS §28.2): the streak under
  * the pointer named on both axes, a press keeping it named, the wheel zooming

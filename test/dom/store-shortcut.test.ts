@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from '@/app/App'
 import { resetMounting } from '@/embed'
 import { KEYS, type Command } from '@/ui/commands'
-import { setUpDom, type DomTeardown } from '../support/dom'
+import { setUpDom, type DomTeardown, stopsWithTheDom } from '../support/dom'
 
 let teardown: DomTeardown
 
@@ -40,7 +40,7 @@ describe('the backslash', () => {
   it('opens the drawer, closes it again, and is left alone while typing', () => {
     const root = document.createElement('div')
     document.body.appendChild(root)
-    new App(root)
+    stopsWithTheDom(new App(root))
     const drawer = document.querySelector('.store-drawer') as HTMLElement
     expect(drawer).not.toBeNull()
     expect(KEYS.stores).toBe('\\')
@@ -64,7 +64,7 @@ describe('the backslash', () => {
   it('is printed on the header button and listed with the command', () => {
     const root = document.createElement('div')
     document.body.appendChild(root)
-    const app = new App(root) as unknown as { commands(): Command[] }
+    const app = stopsWithTheDom(new App(root)) as unknown as { commands(): Command[] }
     const toggle = document.querySelector('.head-files button[aria-label="stores"]') as HTMLButtonElement
     expect(toggle).not.toBeNull()
     expect(toggle.title).toContain('\\')

@@ -1,0 +1,76 @@
+---
+/**
+ * Above every page: the page's own banner where it has one, then which
+ * version this is when it is not the latest release.
+ *
+ * Main's copy says so as it is built, and so does a pull request's preview,
+ * which links its pull request and never asks the manifest: it is served on
+ * the app's site, whose `/versions.json` is the app's. A release's copy cannot
+ * know at build time whether a later release will follow it, so it asks the
+ * manifest in the browser and speaks only when one has: the root copy is
+ * always the latest and never does.
+ */
+import Default from '@astrojs/starlight/components/Banner.astro'
+import { BASE, IS_DEV, MANIFEST, PREVIEW, PREVIEW_URL, SITE, VERSION } from '../lib/site.mjs'
+---
+
+<Default />
+{
+  PREVIEW !== null ? (
+    <div class="sl-banner cx-version-notice" data-pagefind-ignore>
+      This is a <strong>preview</strong> of <a href={PREVIEW_URL}>pull request #{PREVIEW}</a>, for its review: it is
+      replaced on every push and taken down when the pull request closes. The published documentation is at{' '}
+      <a href={`${SITE}/`}>doc.chromosomix.app</a>.
+    </div>
+  ) : IS_DEV ? (
+    <div class="sl-banner cx-version-notice" data-pagefind-ignore data-cx-dev data-manifest={MANIFEST}>
+      This is the documentation of chromosomix’s <strong>unreleased</strong> version, built from <code>main</code>.
+      <span data-cx-latest-offer hidden>
+        {' '}<a data-cx-latest-link href="/">Read the latest release’s</a>.
+      </span>
+    </div>
+  ) : (
+    BASE !== '/' && (
+      <div class="sl-banner cx-version-notice" data-pagefind-ignore hidden data-cx-older={VERSION} data-base={BASE} data-manifest={MANIFEST}>
+        This is the documentation of chromosomix <strong>{VERSION}</strong>. The latest release is{' '}
+        <strong data-cx-latest />: <a data-cx-latest-link href="/">read this page there</a>.
+      </div>
+    )
+  )
+}
+
+<script>
+  // Main's copy offers the latest release's only once there is one: before the
+  // first, the root sends a reader straight back here.
+  for (const notice of document.querySelectorAll<HTMLElement>('[data-cx-dev]')) {
+    fetch(notice.dataset.manifest ?? '/versions.json', { cache: 'no-cache' })
+      .then((response) => (response.ok ? (response.json() as Promise<{ latest: string | null }>) : null))
+      .then((manifest) => {
+        if (manifest === null || manifest.latest === null) return
+        const offer = notice.querySelector<HTMLElement>('[data-cx-latest-offer]')
+        const link = notice.querySelector<HTMLAnchorElement>('[data-cx-latest-link]')
+        if (link !== null) {
+          link.textContent = `Read ${manifest.latest}’s`
+          if (location.pathname.startsWith('/dev/')) link.href = `/${location.pathname.slice('/dev/'.length)}`
+        }
+        if (offer !== null) offer.hidden = false
+      })
+      .catch(() => {})
+  }
+
+  for (const notice of document.querySelectorAll<HTMLElement>('[data-cx-older]')) {
+    const version = notice.dataset.cxOlder
+    const base = notice.dataset.base ?? '/'
+    fetch(notice.dataset.manifest ?? '/versions.json', { cache: 'no-cache' })
+      .then((response) => (response.ok ? (response.json() as Promise<{ latest: string | null }>) : null))
+      .then((manifest) => {
+        if (manifest === null || manifest.latest === null || manifest.latest === version) return
+        const latest = notice.querySelector('[data-cx-latest]')
+        const link = notice.querySelector<HTMLAnchorElement>('[data-cx-latest-link]')
+        if (latest !== null) latest.textContent = manifest.latest
+        if (link !== null && location.pathname.startsWith(base)) link.href = `/${location.pathname.slice(base.length)}`
+        notice.hidden = false
+      })
+      .catch(() => {})
+  }
+</script>

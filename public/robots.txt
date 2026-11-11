@@ -1,5 +1,6 @@
 # chromosomix.app — every crawler is welcome, those of language models included.
 # A summary written for them: https://chromosomix.app/llms.txt
+# and everything it links, in one file: https://chromosomix.app/llms-full.txt
 #
 # /v/ holds a frozen copy of the app for each release and recent commit, and /pr/
 # a preview of each open pull request: copies of the app at the root, kept for

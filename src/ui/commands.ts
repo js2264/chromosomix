@@ -198,7 +198,7 @@ export const KEYS = {
    */
   mapToggle: 'v',
   /**
-   * The ideogram view (§5.10): every chromosome whole, side by side, with the
+   * The ideogram view (§5.11): every chromosome whole, side by side, with the
    * tracks beside each — and back to the browser's own picture.
    *
    * `z`, one of the three letters the single-key space had left, and on the

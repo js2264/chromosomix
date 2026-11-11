@@ -63,7 +63,7 @@ export class SessionCommands {
   }
 
   /**
-   * The ideogram (§5.10), `Z`: every chromosome whole, side by side, with the
+   * The ideogram (§5.11), `Z`: every chromosome whole, side by side, with the
    * tracks beside each — from the browser, or from a map, which is put down as
    * `v` puts it down. A switch titled by its noun and wearing its state
    * (§26.4); a dev feature (§29), so absent while the switch is off.
@@ -107,7 +107,7 @@ export class SessionCommands {
     const chip = (on: boolean): 'on' | 'off' => (on ? 'on' : 'off')
     const expected = this.session.current?.panel?.expectedLit ?? null
     if (this.session.assembly !== null) {
-      // Over the ideogram (§5.10) the whole genome is its camera at rest —
+      // Over the ideogram (§5.11) the whole genome is its camera at rest —
       // every chromosome whole again — and the browser's window, which is where
       // it goes back to when the ideogram is put away, is left where it was.
       const ideogram = this.session.ideogramShown

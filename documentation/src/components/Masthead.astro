@@ -1,0 +1,12 @@
+---
+/**
+ * The home page's title, as the app's landing page draws its own: the mark
+ * beside the name, one line, the size of a name on a cover. The page's own
+ * `<h1>` is kept for search and screen readers, and hidden by the stylesheet.
+ */
+import mark from '../generated/mark.png'
+---
+
+<div class="cx-masthead" aria-hidden="true">
+  <img src={mark.src} alt="" width="192" height="192" /><span>chromosomix</span>
+</div>

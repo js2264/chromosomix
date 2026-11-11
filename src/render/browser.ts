@@ -588,7 +588,7 @@ export function drawBoundaries(
  * browser's lanes alike (§8.16): the arcs stand on the edge a signal's baseline
  * is on and rise the way a signal grows, and a flip hangs them from the other —
  * and beside a standing chromosome in the ideogram view they bow out to its
- * right (§5.10). `only` keeps the pairs with both ends on that one sequence:
+ * right (§5.11). `only` keeps the pairs with both ends on that one sequence:
  * the ideogram view draws a chromosome's own loops in its lane and the pairs
  * between two chromosomes as curves across the picture, so a lane that drew
  * those too would draw each of them twice, the second time as an arc cut off at

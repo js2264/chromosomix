@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+// @dev-feature metacool
 /**
  * Where a computed result goes on a file that has a store and no worker.
  *

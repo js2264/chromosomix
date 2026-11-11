@@ -23,6 +23,7 @@
  * window clipped at the end of the array would lie.
  */
 
+import { countSpan } from '../../annotations/composition'
 import { binsForLength } from '../context'
 import type { AnalysisContext, AnalysisTask, CostEstimate, Params, ParamSpec } from '../types'
 import { READY, waitingFor } from '../types'
@@ -122,13 +123,37 @@ function estimate(context: Parameters<AnalysisTask['estimate']>[0], params: Para
     bins += binsForLength(contig.length, binsize)
     bases += contig.length
   }
+  const into = `into ${bins.toLocaleString()} bins of ${binsize.toLocaleString()} bp`
+
+  // A reference read by range (§8.8, §8.21) — a FASTA over the whole-read line
+  // dropped with its `.fai`, or a `.2bit` — is read whole to be counted, a few
+  // megabases at a time, and priced as the motif search prices the same read:
+  // the bytes its bases are, and over a network one request a read. Said
+  // *free* with residues "in the worker that holds them", a genome dropped
+  // with its index was offered a run that read three gigabytes it said it
+  // already had.
+  const sequence = context.entries.find((row) => row.id === entry)
+  const byRange = sequence?.byRange
+  if (byRange !== undefined) {
+    const span = countSpan(binsize)
+    let reads = 0
+    for (const contig of context.contigs) reads += Math.max(1, Math.ceil(contig.length / span))
+    return {
+      class: 'scan',
+      requests: sequence?.source.kind === 'remote' ? reads : null,
+      bytes: Math.round(bases * byRange.bytesPerBase),
+      note:
+        `Every base of ${sequence?.label ?? 'the reference'}, ${(bases / 1e6).toFixed(1)} Mb, ` +
+        `read by range and counted ${(span / 1e6).toFixed(1)} Mb at a time, ${into}`,
+    }
+  }
   return {
     class: 'free',
     requests: 0,
     bytes: 0,
     note:
       `No file reads: one pass over ${(bases / 1e6).toFixed(1)} Mb of residues in the worker ` +
-      `that holds them, into ${bins.toLocaleString()} bins of ${binsize.toLocaleString()} bp`,
+      `that holds them, ${into}`,
   }
 }
 

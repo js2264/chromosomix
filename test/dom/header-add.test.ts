@@ -15,11 +15,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { App } from '@/app/App'
 import { resetMounting } from '@/embed'
-import { all, setUpDom, type DomTeardown } from '../support/dom'
+import { all, setUpDom, stopsWithTheDom, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
-/** The windows a test mounted, whose status bars tick until they are stopped. */
-const mounted: App[] = []
 
 beforeEach(() => {
   teardown = setUpDom()
@@ -31,9 +29,6 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const close of all<HTMLButtonElement>(document.body, '.modal-head .btn-close')) close.click()
-  // Stopped before the document goes: a status bar's second-by-second tick
-  // that outlives it throws into whichever file the worker runs next.
-  for (const app of mounted.splice(0)) app['status']?.destroy()
   teardown()
   window.history.replaceState(null, '', '/')
   resetMounting()
@@ -43,7 +38,7 @@ function mount(): App {
   const root = document.createElement('div')
   document.body.appendChild(root)
   const app = new App(root)
-  mounted.push(app)
+  stopsWithTheDom(app)
   return app
 }
 

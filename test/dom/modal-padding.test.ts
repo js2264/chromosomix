@@ -31,7 +31,7 @@ import { describe, expect, it } from 'vitest'
 const css = readFileSync(resolve(process.cwd(), 'src/ui/styles.css'), 'utf8')
 
 /** The bodies that are flush on purpose. Everything else is inset. */
-const FLUSH = ['palette-body', 'feature-body', 'stage-modal']
+const FLUSH = ['palette-body', 'feature-body', 'about-body', 'stage-modal']
 
 describe('the padding every dialog body gets', () => {
   it('is one rule over the panel’s children, not a list of body classes', () => {
@@ -55,10 +55,10 @@ describe('the padding every dialog body gets', () => {
   })
 
   it('exempts the bodies that have to reach the panel’s own edges', () => {
-    // Two carry a border across the whole width — the palette's search box, the
-    // feature card's footer rule — and the stage carries a divider the reader
-    // drags, which sizes the settings column from the modal's own right edge and
-    // would be a padding out if the body were inset.
+    // Three carry a border across the whole width — the palette's search box, the
+    // feature card's footer rule, About's row of tabs — and the stage carries a
+    // divider the reader drags, which sizes the settings column from the modal's
+    // own right edge and would be a padding out if the body were inset.
     const flush = new RegExp(
       FLUSH.map((name) => `\\.modal-panel\\s*>\\s*\\.${name}`).join(',\\s*') + '\\s*\\{([^}]*)\\}',
     )
@@ -68,6 +68,9 @@ describe('the padding every dialog body gets', () => {
     // …and each of them pads its own rows, so nothing is edge to edge.
     expect(css).toMatch(/\.palette-body\s*>\s*\.input\s*\{[^}]*padding:/)
     expect(css).toMatch(/\.feature-rows\s*\{[^}]*padding:/)
+    expect(css).toMatch(/\.about-tabs\s*\{[^}]*padding:/)
+    expect(css).toMatch(/\.about-panels\s*\{[^}]*padding:/)
+    expect(css).toMatch(/\.about-foot\s*\{[^}]*padding:/)
     expect(css).toMatch(/\.stage-body\s*\{[^}]*padding:/)
   })
 

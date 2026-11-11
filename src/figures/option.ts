@@ -19,8 +19,10 @@
  *   relabelled for the range they are actually showing.
  */
 
+import { scaledLabel } from '../analysis/run/labels'
 import { fmt } from '../ui/dom'
 import { axisNumber } from '../units'
+import { scaledTicks } from './scaledTicks'
 import { boxSummary, density, histogram, sorted } from './stats'
 import {
   isCategorical,
@@ -129,7 +131,7 @@ function pairs(series: FigureSeries, style: FigureStyle): Array<[number, number]
 /**
  * How the abscissa is spelled, where the quantity on it has a unit.
  *
- * Three ways it can. A figure whose x is in **bins** carries the bin size and is
+ * Four ways it can. A figure whose x is in **bins** carries the bin size and is
  * multiplied up. A figure whose x is already in **base pairs** says so in its
  * own axis name — `Genomic separation (bp)` — and takes `fmt.bp` directly: that
  * axis used to fall through to the plain magnitude spelling, so a P(s) reaching
@@ -137,6 +139,9 @@ function pairs(series: FigureSeries, style: FigureStyle): Array<[number, number]
  * read `4.0 kb`, `10.0 kb`, `100.0 kb`, `1.00 Mb` (§26.2). And a figure whose x
  * is a **list** carries the list's names, one per value, and each tick is the
  * name of the thing standing at it — a sequence, under its own bar.
+ *
+ * And a **scaled region**'s abscissa, a column index, is spelled as the place
+ * along a feature each column is (`CurveOutput.xScaled`).
  *
  * A name is drawn only where the tick lands *on* one of the values, because a
  * tick at 3.5 names nothing: there is no sequence between the fourth and the
@@ -149,6 +154,9 @@ function pairs(series: FigureSeries, style: FigureStyle): Array<[number, number]
  * {@link axisNumber}.
  */
 function xFormatter(spec: XyFigureSpec): ((value: number) => string) | undefined {
+  // A scaled region's column is spelled as where it is: `Start`, `37.4%`, `+1.2 kb`.
+  const scaled = spec.xScaled
+  if (scaled !== undefined) return (value: number) => scaledLabel(scaled, value)
   const binsize = spec.binsize
   if (binsize !== undefined) return (value: number) => fmt.bp(value * binsize)
   if (/\(bp\)/i.test(spec.xLabel ?? '')) return (value: number) => fmt.bp(value)
@@ -437,7 +445,14 @@ export function figureFit(spec: XyFigureSpec, style: FigureStyle, which: 'x' | '
         if (drawnHere) xs.push(x)
       }
     }
-    return fitOf(xs, xLog, marks.includes('points') ? FIT_ROOM : 0)
+    const fit = fitOf(xs, xLog, marks.includes('points') ? FIT_ROOM : 0)
+    // A scaled region runs from the outer edge of its first column to the outer
+    // edge of its last, where its flanks end — the samples are the columns'
+    // centres, half a column in, and the `-5 kb` at each end would be off the
+    // axis. The heatmap under it is drawn edge to edge too.
+    const scaled = spec.xScaled
+    if (scaled === undefined || xLog) return fit
+    return fit === null ? [scaled.from, scaled.to] : [Math.min(fit[0], scaled.from), Math.max(fit[1], scaled.to)]
   }
   // The ordinate fits **what is drawn in the abscissa's window**: a P(s) a
   // task opens from 4 kb would otherwise keep room above it for the first
@@ -539,6 +554,51 @@ export function logTicks(low: number, high: number): number[] | null {
   return out
 }
 
+/** How wide an xy figure's plot is drawn, and how wide a label in it is, in pixels. */
+export interface AxisRoom {
+  width: number
+  measure(label: string): number
+}
+
+/** The width an xy figure is assumed to be drawn at where nobody said. */
+const ASSUMED_WIDTH = 640
+
+/**
+ * The room an xy figure's abscissa has, drawn in a box `plot` wide: the box
+ * less the insets {@link optionOf} keeps and the ordinate's labels and name.
+ *
+ * An estimate, and close enough for what it is for — choosing how many ticks
+ * fit (`scaledTicks`) — without the chart drawn first: an export is built for a
+ * page that is never on screen.
+ */
+export function axisRoom(
+  spec: XyFigureSpec,
+  style: FigureStyle,
+  theme: FigureTheme,
+  plot?: { width: number; height: number },
+): AxisRoom {
+  const side =
+    !isCategorical(style.mark) && style.legend === 'right'
+      ? sideLegend(spec.series.map((series) => series.name), style, theme, plot)
+      : null
+  const insets = 8 + (side === null ? 16 : side.room)
+  // The ordinate's name and its labels: the name gap it is given, a line for
+  // the name, and a little over — a tick too many is worse than one too few.
+  const ordinate = style.fontSize * 6
+  return {
+    width: Math.max(1, (plot?.width ?? ASSUMED_WIDTH) - insets - ordinate),
+    measure: (label) => widthOf(theme, label, style.fontSize),
+  }
+}
+
+/** {@link axisRoom} with no box and no page to measure on. */
+function defaultRoom(style: FigureStyle): AxisRoom {
+  return {
+    width: ASSUMED_WIDTH,
+    measure: (label) => label.length * style.fontSize * 0.6,
+  }
+}
+
 /**
  * An xy figure's axis as drawn: its bounds and which of its end labels print
  * ({@link reachOf}), from the window the style holds or the fit. What the chart
@@ -549,6 +609,11 @@ export function axisReach(
   spec: XyFigureSpec,
   style: FigureStyle,
   which: 'x' | 'y',
+  /**
+   * How wide the plot is drawn and how wide a label is, where the ticks are
+   * chosen for the width — a scaled region's ({@link axisRoom}).
+   */
+  room?: AxisRoom,
 ): { bounds: ChartOption; labels: ChartOption; ticks?: number[] } {
   const histo = style.mark === 'histogram'
   // A histogram's count is the library's, from zero, and its window the zoom's.
@@ -559,6 +624,20 @@ export function axisReach(
     histo ? histogram(series.y, style.bins).edges : which === 'x' ? series.x : series.y,
   )
   const reach = reachOf(style[which].domain, figureFit(spec, style, which), values, log)
+  const scaled = spec.xScaled
+  if (which === 'x' && scaled !== undefined && !log && !histo && !isCategorical(style.mark)) {
+    const [low, high] = style.x.domain ?? [reach.bounds['min'], reach.bounds['max']]
+    if (typeof low !== 'number' || typeof high !== 'number') return reach
+    const across = room ?? defaultRoom(style)
+    const ticks = scaledTicks(scaled, [low, high], across.width, across.measure, style.fontSize)
+    // Nothing round in a window wheeled down past a column: the library's
+    // ticks, spelled as places along the feature all the same.
+    if (ticks.length === 0) return reach
+    // Every tick is a landmark spaced from its neighbours already, so each is
+    // labelled — the far end of a flank too, which is an end of the axis and
+    // never a round number of columns.
+    return { ...reach, labels: { ...reach.labels, showMinLabel: true, showMaxLabel: true }, ticks }
+  }
   if (!log) return reach
   // The ticks are the shown window's: the window where there is one, else the
   // axis.
@@ -785,7 +864,7 @@ export function optionOf(
 
   const built = categorical
     ? distributionOption(spec, style, theme, shown)
-    : xyOption(spec, style, theme, shown)
+    : xyOption(spec, style, theme, shown, axisRoom(spec, style, theme, plot))
 
   return {
     backgroundColor: theme.background,
@@ -926,6 +1005,7 @@ function xyOption(
   style: FigureStyle,
   theme: FigureTheme,
   shown: Entry[],
+  room: AxisRoom,
 ): ChartOption {
   const histo = style.mark === 'histogram'
   const series: ChartOption[] = []
@@ -968,7 +1048,7 @@ function xyOption(
   const ySpelling = histo ? undefined : yFormatter(spec)
   // A histogram's axes are a quantity and a count, neither of them a series' x
   // or y, so its windows stay the zoom's alone.
-  const xReach = axisReach(spec, style, 'x')
+  const xReach = axisReach(spec, style, 'x', room)
   const yReach = axisReach(spec, style, 'y')
 
   return {
@@ -1144,6 +1224,11 @@ function lineSeries(entry: Entry, style: FigureStyle, fillOpacity: number): Char
  * a stacked pair draws a ribbon; both are silent and neither is in the legend,
  * because a band is part of the series it belongs to rather than a series of
  * its own.
+ *
+ * **Stacked whatever the signs** (`stackStrategy: 'all'`). ECharts stacks only
+ * values of one sign by default, so a band whose lower edge is below zero had
+ * its width stacked on zero instead: a strip from 0 to the band's width, nowhere
+ * near its line — every insulation profile, a log ratio, drew its band so.
  */
 function bandSeries(entry: Entry, style: FigureStyle): ChartOption[] {
   const low = entry.series.low as number[]
@@ -1168,6 +1253,7 @@ function bandSeries(entry: Entry, style: FigureStyle): ChartOption[] {
   const quiet = {
     type: 'line',
     stack,
+    stackStrategy: 'all',
     symbol: 'none',
     silent: true,
     legendHoverLink: false,

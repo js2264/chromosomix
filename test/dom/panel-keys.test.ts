@@ -21,7 +21,7 @@ import { resetMounting } from '@/embed'
 import type { Command } from '@/ui/commands'
 import { resetLayout } from '@/ui/keyboardLayout'
 import type { SidePanel } from '@/ui/SidePanel'
-import { setUpDom, type DomTeardown } from '../support/dom'
+import { setUpDom, type DomTeardown, stopsWithTheDom } from '../support/dom'
 
 let teardown: DomTeardown
 let connected: string[] = []
@@ -57,7 +57,7 @@ interface Columns {
 function windowWithAFile(commands: Command[] = []): Columns {
   const root = document.createElement('div')
   document.body.appendChild(root)
-  const app = new App(root)
+  const app = stopsWithTheDom(new App(root))
   const stand = {
     hasFile: true,
     isBrowsing: false,

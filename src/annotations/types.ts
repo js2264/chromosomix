@@ -1559,6 +1559,18 @@ export interface StructureStyle {
    */
   mirrorX: boolean
   mirrorY: boolean
+  /**
+   * The bead the reader pinned (§25.5), as the sequence and base pair at its
+   * middle — `chr14:89599000` — or `''` for none.
+   *
+   * What *spatial distance to pinned bin* and *contacts with pinned bin* colour
+   * from. It was the cell's alone and went with the page, so a model saved
+   * coloured by distance came back coloured from nothing; kept with the model,
+   * as the colouring that reads it is, by position rather than by bead index,
+   * so it still names the same place on a model of that window at another
+   * resolution.
+   */
+  pin: string
 }
 
 export function defaultStructureStyle(): StructureStyle {
@@ -1589,6 +1601,7 @@ export function defaultStructureStyle(): StructureStyle {
     align: '',
     mirrorX: false,
     mirrorY: false,
+    pin: '',
   }
 }
 
@@ -1673,7 +1686,23 @@ export function structureStyleOf(value: unknown): StructureStyle {
     align: typeof row['align'] === 'string' && (row['align'] as string).length <= 200 ? (row['align'] as string) : '',
     mirrorX: row['mirrorX'] === true,
     mirrorY: row['mirrorY'] === true,
+    pin: typeof row['pin'] === 'string' && PIN.test(row['pin'] as string) ? (row['pin'] as string) : '',
   }
+}
+
+/** A stored pin: a sequence name, a colon, a base pair (see {@link StructureStyle.pin}). */
+const PIN = /^[^\s]{1,200}:\d{1,12}$/
+
+/** A pin's sequence and base pair, or `null` for none. */
+export function pinOf(pin: string): { contig: string; bp: number } | null {
+  if (!PIN.test(pin)) return null
+  const at = pin.lastIndexOf(':')
+  return { contig: pin.slice(0, at), bp: Number(pin.slice(at + 1)) }
+}
+
+/** A bead's place written as a pin: the sequence and the base pair at its middle. */
+export function pinAt(contig: string, start: number, end: number): string {
+  return `${contig}:${Math.round((start + end) / 2)}`
 }
 
 /**

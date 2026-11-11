@@ -748,14 +748,14 @@ and it is also the one that needs a real optimiser, a dispersion parameter fitte
 several restarts to avoid local optima.
 
 **Both are built, and the second is the default.** The first two prices were paid:
-`structure/lbfgs.ts` is the optimiser (L-BFGS with a strong-Wolfe line search, which is what pastis
-reaches for through SciPy) and `dispersionBySeparation` fits the dispersion per genomic separation
-by the method of moments over log-spaced bins, which is pastis-NB's own claim — that overdispersion
-is not one number for a map but grows as the counts thin out. The third is **not** paid: there are
-no restarts, so the answer is one deterministic model rather than the best of several local optima,
-and the MDS model is the start rather than noise, which is pastis' own procedure and is what makes a
-single start defensible. The paragraphs below describe the ShRec3D path, which is still what
-**Method → ShRec3D** runs and still what pastis-NB is initialised from.
+`structure/lbfgs.ts` is the optimiser (L-BFGS with a strong-Wolfe line search and SciPy's
+L-BFGS-B constants, which is what pastis reaches for) and `structure/negbinom.ts` is pastis-NB as
+pastis runs it — its moments per genomic separation, its curve of the dispersion against the mean,
+read at each pair's mean as the model moves, its whole negative binomial, and its MDS start from
+random positions drawn by numpy's own generator, so a seed here is pastis' seed. The third is
+**not** paid: there are no restarts, so the answer is one model per seed rather than the best of
+several local optima, as pastis' is. The paragraphs below describe the ShRec3D path, which is what
+**Method → ShRec3D** runs; pastis-NB no longer stands on it.
 
 **What is done about the pairs the map never counted.** This is where ShRec3D's cost lives: it
 completes the distance matrix by a **shortest-path closure** (Floyd–Warshall), which is cubic in
@@ -780,10 +780,10 @@ on the distances; its NB mode gets the same effect through the likelihood, where
 automatically a tighter constraint. So the weighting was this solver's way of buying the one
 property of the likelihood view that matters most, without the optimiser the likelihood view needs —
 and now that the optimiser is here, the likelihood buys it outright, which is why **Weight pairs
-by** is shown only under ShRec3D. The identity that makes the two comparable: the negative
-binomial's pull on a pair is the Poisson's own `μ − c` shrunk by `r/(r + μ)`, so the likelihood is a
-*per-pair* weighting fitted from the data, where **Weight pairs by** is one rule applied to every
-pair alike.
+by** is shown only under ShRec3D. The identity that makes the two comparable: where the
+dispersion is one number, the negative binomial's pull on a pair is the Poisson's own `μ − c`
+shrunk by `r/(r + μ)`, so the likelihood is a *per-pair* weighting fitted from the data, where
+**Weight pairs by** is one rule applied to every pair alike.
 
 **What is given up, and said plainly.** One consensus structure, not an ensemble; no restarts, so
 one deterministic answer rather than a distribution over local optima; no explicit constraints

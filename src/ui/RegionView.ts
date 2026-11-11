@@ -53,7 +53,8 @@ import {
 import { axisRegion } from './mapSelection'
 import { blockSummary } from './mapSummary'
 import { icon, iconButton } from './icons'
-import { presentationOf, secondBlock, type CompareRead } from './compare'
+import { presentationOf, secondBlock, type CompareRead, type LowerRead } from './compare'
+import type { LowerPresentation } from './LowerReading'
 import { attachRefine, poolingRung, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
@@ -164,6 +165,12 @@ export interface RegionViewProps {
    */
   annotations?: AnnotationContext
   /**
+   * The sequence a name typed into the box means, as the file names it, or
+   * `null` (`findContig`'s ladder: `chr4`, `4` and `IV` alike). With genes on
+   * offer the box lists it first, so `IV` opens chromosome IV and not IVY1.
+   */
+  sequenceNamed?(text: string): string | null
+  /**
    * A second cooler in the lower-left triangle (`render/compare.ts`).
    *
    * The same block, read from the other file. The two agree about contigs and
@@ -172,6 +179,17 @@ export interface RegionViewProps {
    * has to be parsed twice.
    */
   compare?: CompareRead
+  /**
+   * The lower triangle in a reading of its own (§5.10), for the map's second
+   * tab; absent beside a second file and in a deck.
+   */
+  lower?: LowerPresentation
+  /**
+   * The second read that reading needs where its score is another column or
+   * the balancing the other way — the same requests as the first, asked of the
+   * same file again (`ui/compare.ts`). Never beside {@link compare}.
+   */
+  lowerRead?: LowerRead
   /** File and genome context for the exported figure's caption. */
   caption?: FigureSubject
   /**
@@ -520,6 +538,9 @@ export class RegionView {
                 ...hit,
                 value: regionLabel(hit.value),
               })),
+            ...(props.sequenceNamed === undefined
+              ? {}
+              : { sequence: (text: string) => props.sequenceNamed?.(text) ?? null }),
           }),
     })
     // Ordinary bordered buttons, like `go` beside them: these move the view, and
@@ -548,6 +569,7 @@ export class RegionView {
       ...(presentationOf(props.compare) === undefined
         ? {}
         : { compare: presentationOf(props.compare) }),
+      ...(props.lower === undefined ? {} : { lower: props.lower }),
       initial: props.scale,
       // Same shape as the genome view: heading names the selection, controls
       // live in the sidebar. Only the Contigs card is missing, because inside a
@@ -935,7 +957,7 @@ export class RegionView {
         return {
           cancel: own.cancel,
           promise: own.promise.then(async (block) => {
-            const second = await secondBlock(this.props.compare, (client) =>
+            const second = await secondBlock(this.props.compare ?? this.props.lowerRead, (client) =>
               client.request<'matrix'>(query(rowExtent, colExtent, rung, binsPerCell)),
             )
             return second === undefined ? { result: block } : { result: block, second }
@@ -1092,7 +1114,7 @@ export class RegionView {
           ...(this.props.value === undefined ? {} : { value: this.props.value }),
         }
         const result: MatrixResult = await this.props.client.request<'matrix'>(ask)
-        const second = await secondBlock(this.props.compare, (client) =>
+        const second = await secondBlock(this.props.compare ?? this.props.lowerRead, (client) =>
           client.request<'matrix'>(ask),
         )
         if (this.disposed) return
@@ -1133,7 +1155,7 @@ export class RegionView {
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
       }
       const result: MatrixResult = await this.props.client.request<'matrix'>(pair)
-      const second = await secondBlock(this.props.compare, (client) =>
+      const second = await secondBlock(this.props.compare ?? this.props.lowerRead, (client) =>
         client.request<'matrix'>(pair),
       )
       if (this.disposed) return

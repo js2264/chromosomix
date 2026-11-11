@@ -1,4 +1,4 @@
-"""What timing.qmd's first section asks of each viewer, worked out from the files themselves.
+"""What viewers.qmd asks of each viewer, worked out from the files themselves.
 
 Every run is one map and one track, at one resolution, in one viewer. The resolution is the
 plan's, never the viewer's: each viewer is asked for it in the one way it offers, and a viewer
@@ -21,12 +21,14 @@ import struct
 import urllib.request
 from pathlib import Path
 
+from download import urlopen
+
 
 def _read(location, start, length):
     """Bytes of a local file or of a URL, by range."""
     if str(location).startswith(('http://', 'https://')):
         request = urllib.request.Request(str(location), headers={'Range': f'bytes={start}-{start + length - 1}'})
-        with urllib.request.urlopen(request) as response:
+        with urlopen(request) as response:
             return response.read()
     with open(location, 'rb') as handle:
         handle.seek(start)

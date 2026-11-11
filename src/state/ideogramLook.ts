@@ -1,5 +1,5 @@
 /**
- * How the ideogram view draws its chromosomes (§5.10), for one open file.
+ * How the ideogram view draws its chromosomes (§5.11), for one open file.
  *
  * What a reader sets in the Tracks card's ideogram rows: how thick a
  * chromosome is drawn, how long the longest one is, the room between two,

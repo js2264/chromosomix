@@ -1,3 +1,4 @@
+// @dev-feature metacool
 /**
  * A selection of genomes is drawn *as* genomes.
  *

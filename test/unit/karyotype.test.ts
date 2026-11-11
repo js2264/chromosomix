@@ -1,5 +1,6 @@
+// @dev-feature ideogram
 /**
- * The ideogram view (§5.10): every sequence drawn whole, side by side, with the
+ * The ideogram view (§5.11): every sequence drawn whole, side by side, with the
  * tracks beside each.
  *
  * The claims are the layout's — one scale for every chromosome, standing in a

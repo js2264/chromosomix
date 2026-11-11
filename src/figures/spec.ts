@@ -35,6 +35,7 @@ import type {
   CurveOutput,
   MatrixOutput,
   ProfileOutput,
+  ScaledAxis,
   TableColumn,
   TaskOutput,
 } from '../analysis/types'
@@ -132,6 +133,12 @@ export interface XyFigureSpec {
    * drawn at the ticks (`CurveOutput.xTicks`).
    */
   xTicks?: string[]
+  /**
+   * Where a scaled region's parts meet, where the abscissa is one: the same
+   * kind of spelling, for an axis of columns whose ticks are its landmarks
+   * (`CurveOutput.xScaled`, `figures/scaledTicks.ts`).
+   */
+  xScaled?: ScaledAxis
   stats?: FigureStat[]
 }
 
@@ -224,6 +231,7 @@ function xyOfCurve(output: CurveOutput): XyFigureSpec {
     yDomain: output.yDomain === undefined ? undefined : [...output.yDomain],
     mark: opening,
     xTicks: output.xTicks === undefined ? undefined : [...output.xTicks],
+    ...(output.xScaled === undefined ? {} : { xScaled: { ...output.xScaled } }),
     stats: undefined,
     series: output.series.map((series, index) => ({
       id: ids[index],

@@ -19,10 +19,12 @@ import { runDotplot } from './dotplot'
 import { runOriTer } from './oriter'
 import { runOverlap } from './overlap'
 import { runPeaks } from './peaks'
+import { runRestriction } from './restriction'
 import { runTrackCorrelation } from './trackcorr'
 
 export const TRACK_RUNNERS: Record<string, TrackTaskRunner> = {
   motif: runMotif,
+  restriction: runRestriction,
   peaks: runPeaks,
   composition: runComposition,
   dotplot: runDotplot,

@@ -1,0 +1,68 @@
+---
+/**
+ * Every parameter of a task, from the registry: its name in the app's form,
+ * its flag on the command line, what it takes, what a run uses when it is left
+ * alone, and what it does. Grouped under the headings the app's form uses.
+ */
+import { inline } from '../lib/inline.mjs'
+import { task } from '../lib/tasks.mjs'
+
+interface Props {
+  id: string
+}
+const entry = task(Astro.props.id)
+const sections = []
+for (const param of entry.params) {
+  const name = param.section ?? ''
+  let section = sections.find((item) => item.name === name)
+  if (section === undefined) {
+    section = { name, params: [] }
+    sections.push(section)
+  }
+  section.params.push(param)
+}
+const labelled = sections.length > 1 || sections[0]?.name !== ''
+---
+
+{
+  entry.params.length === 0 ? (
+    <p>This task takes no parameters.</p>
+  ) : (
+    <div class="cx-table-wrap">
+      <table class="cx-params">
+        <thead>
+          <tr>
+            <th scope="col">Parameter</th>
+            <th scope="col">Takes</th>
+            <th scope="col">Default</th>
+            <th scope="col">What it does</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sections.map((section) => (
+            <>
+              {labelled && (
+                <tr class="cx-params-section">
+                  <th scope="rowgroup" colspan="4">
+                    {section.name === '' ? 'General' : section.name}
+                  </th>
+                </tr>
+              )}
+              {section.params.map((param) => (
+                <tr>
+                  <td>
+                    <span class="cx-param-label">{param.label}</span>
+                    <code class="cx-param-flag">{param.flag}</code>
+                  </td>
+                  <td set:html={inline(param.takes)} />
+                  <td set:html={inline(param.fallback)} />
+                  <td set:html={param.about === '' ? '—' : inline(param.about)} />
+                </tr>
+              ))}
+            </>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}

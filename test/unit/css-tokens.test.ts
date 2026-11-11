@@ -50,6 +50,7 @@ const SET_FROM_SCRIPT = [
   '--deck-columns',
   '--deck-plot',
   '--deck-plot-h',
+  '--embed-bar-h',
   '--lane-bottom',
   '--lane-pad-bottom',
   '--lane-pad-left',

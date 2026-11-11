@@ -222,7 +222,7 @@ export function drawKey(
     /**
      * The box round the key, its ground and its edge: on by default, as a key
      * over a map's cells needs one to be read against them. Off for a key on
-     * paper that is not over a picture — the ideogram's colour scale (§5.10) —
+     * paper that is not over a picture — the ideogram's colour scale (§5.11) —
      * where a box is a frame round nothing; the ramp keeps its own edge, which
      * is what shows its white end on white paper.
      */

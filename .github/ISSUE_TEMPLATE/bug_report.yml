@@ -1,0 +1,58 @@
+name: Bug report
+description: Something chromosomix does wrong, or a file it should open and does not.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to see it
+      description: >-
+        The steps, from opening the app. A link to the view is the fastest way to show it, when
+        the file is public: the link button in the header copies it.
+    validations:
+      required: true
+  - type: input
+    id: file
+    attributes:
+      label: The file
+      description: Its format, and where it is (its address, a data store, or your own disk).
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where you ran it
+      multiple: true
+      options:
+        - The web app (chromosomix.app)
+        - The desktop app
+        - The one HTML file
+        - The command line
+        - The Jupyter widget
+        - The R widget
+        - Embedded in another page
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: About → version, or `chromosomix --version`.
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Browser and system
+      placeholder: Firefox 140, macOS 15
+  - type: textarea
+    id: output
+    attributes:
+      label: What it said
+      description: The error, the lines of the app's Console, or a screenshot.
+      render: text

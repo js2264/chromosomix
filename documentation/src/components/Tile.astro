@@ -1,0 +1,21 @@
+---
+/**
+ * One tile, drawn as the landing page draws a store: a glyph, a name and a
+ * line. Its `href` is written as the page writes any link, from the root; the
+ * Markdown pipeline puts it under the copy's base (`base-links.mjs`).
+ */
+import { Icon } from '@astrojs/starlight/components'
+
+interface Props {
+  href: string
+  icon: Parameters<typeof Icon>[0]['name']
+  title: string
+}
+const { href, icon, title } = Astro.props
+---
+
+<a class="cx-tile" href={href}>
+  <span class="cx-glyph"><Icon name={icon} /></span>
+  <strong>{title}</strong>
+  <span class="cx-tile-text"><slot /></span>
+</a>

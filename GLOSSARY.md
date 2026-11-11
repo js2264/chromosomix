@@ -583,9 +583,11 @@ first.
 How much more variable a map's counts are than a Poisson's would be, as the `r` of a negative
 binomial whose variance is `μ + μ²/r` (§25.6). Large `r` is no overdispersion at all — a Poisson,
 and a run that finds it says so rather than implying a parameter it did not measure. pastis-NB fits
-`r` **per genomic separation** rather than once for the map, because Hi-C counts scatter further
-from their mean the further apart the two loci are; the effect on the model is that a pair's pull is
-the Poisson's own, shrunk by `r/(r + μ)`.
+`r` **as a curve against the mean**, `r = exp(c₀ + c₁ log λ)`, through the dispersion the counts
+show at each genomic separation, and reads each pair's `r` off it at the model's own mean for the
+pair — so it moves with the beads. Where `r` is one number, a pair's pull is the Poisson's own,
+shrunk by `r/(r + μ)`; where it follows the mean, the pull carries a second term for how much more
+the map is believed as the pair's mean changes.
 
 ### card
 
@@ -1060,7 +1062,7 @@ What this window has done, written as the commands that would do it again (§23,
 maps is six lines, each its own `chromosomix` command, a failure and a Stop included — and,
 commented, the files opened, the tracks loaded and the files written. What it hands over is a shell
 script; its **provenance** toggle puts each run's whole provenance block above its command, and is
-off by default. Window furniture, opened with `` ` `` and outliving every tab; kept in `localStorage`
+off by default. Window furniture, opened with Control and `` ` `` (`ui/commands.ts`, `console: 'ctrl+`'` — the key alone folds the Files column) and outliving every tab; kept in `localStorage`
 for seven days and 500 lines, and listed with what the browser is remembering; never in an embed.
 
 ---

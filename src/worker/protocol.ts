@@ -32,6 +32,7 @@ import type { NameContext, NameMatch } from '../genome/naming'
 import type { S3Credential } from '../s3/sigv4'
 import type { Column, Extent, Info, Layout, ParsedRange, SourceStats, Table } from '../types'
 import type { Census, ResampleMode } from '../metacooler/resample'
+import type { PairStats } from '../pairs/stats'
 
 // ---------------------------------------------------------------------------
 // Byte sources
@@ -307,6 +308,12 @@ export interface PairsImportSummary {
    * the file rather than a failure.
    */
   orientation: OrientationSummary | null
+  /**
+   * What `pairtools stats` counts over the same records (`pairs/stats.ts`),
+   * counted in the same pass and carried for the same reason: the records are
+   * gone once the pass ends, and every one of these numbers is about records.
+   */
+  stats: PairStats | null
   /** The binning that produced this map, so a second mount can reproduce it. */
   binning: PairsBinning
 }

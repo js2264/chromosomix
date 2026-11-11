@@ -1,5 +1,5 @@
 /**
- * The time to a picture, in three viewers: what timing.qmd's first section runs.
+ * The time to a picture, in three viewers: what viewers.qmd runs.
  *
  *   node viewers.mjs PLAN.json RESULTS.jsonl
  *
@@ -186,29 +186,48 @@ function unmount(dir) {
 // ---------------------------------------------------------------------------
 
 const proxy = process.env.HTTPS_PROXY
-const browser = await chromium.launch({
-  // Chromium itself, in its headless mode, rather than Playwright's headless shell: the browser a
-  // reader would open the viewers in.
+const proxied = proxy ? [`--proxy-server=${proxy}`, '--proxy-bypass-list=127.0.0.1;localhost'] : []
+
+/**
+ * Chromium itself, in its headless mode, rather than Playwright's headless shell: the browser a
+ * reader would open the viewers in — two of it, launched alike but for how they draw, since a
+ * runner has no GPU and no one way of drawing without one is fair to all three viewers.
+ *
+ * **chromosomix and juicebox.js** draw in a 2D canvas, and get the browser as it is on a machine
+ * with no GPU: every page composited in software. **HiGlass** draws through WebGL, which such a
+ * browser does not offer, so it gets one told to draw WebGL with SwiftShader, a GPU emulated on the
+ * CPU, which then composites every page on the emulated GPU as well. Each costs the other kind of
+ * viewer what a reader's GPU never would. All three used to be timed in the second: chromosomix's
+ * pictures of the yeast map from disk took 0.54–0.82 s there, and take 0.21–0.33 s in the first,
+ * while juicebox.js's moved by a few hundredths. And one browser for all three that draws WebGL with
+ * SwiftShader and composites in software (`--disable-gpu-compositing`, as `laptop.mjs` launches)
+ * reads every WebGL frame back off the emulated GPU: HiGlass's pictures took 1.17–1.32 s there, and
+ * take 0.34–0.37 s in its own. So each viewer is drawn the way it draws best here, and each run's line
+ * says which (`graphics`).
+ */
+const browser = await chromium.launch({ channel: 'chromium', args: ['--no-sandbox', ...proxied] })
+const webgl = await chromium.launch({
   channel: 'chromium',
   args: [
     '--no-sandbox',
-    // HiGlass draws through WebGL; a runner has no GPU, so it is drawn by SwiftShader, as every
-    // other picture here is drawn by the CPU.
     '--use-gl=angle',
     '--use-angle=swiftshader',
     '--enable-unsafe-swiftshader',
     '--ignore-gpu-blocklist',
-    ...(proxy ? [`--proxy-server=${proxy}`, '--proxy-bypass-list=127.0.0.1;localhost'] : []),
+    ...proxied,
   ],
 })
 const version = browser.version()
+/** How each viewer's pictures are drawn, as each run's line records it. */
+const GRAPHICS = { chromosomix: 'software', juicebox: 'software', higlass: 'swiftshader' }
 
 /**
  * A fresh context and page, whose requests are kept with the time each began — on the epoch, so
- * they can be cut at the picture's own moment — except those for the pages and their code.
+ * they can be cut at the picture's own moment — except those for the pages and their code. In
+ * `within`, the software browser unless a viewer needs WebGL.
  */
-async function fresh(base) {
-  const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 })
+async function fresh(base, within = browser) {
+  const context = await within.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 })
   const reports = []
   await context.exposeBinding('__rendered', (_source, report) => reports.push(report))
   await context.addInitScript(() => {
@@ -404,7 +423,7 @@ async function juicebox(run, base, juiceboxWidth) {
 /** HiGlass: higlass-python's server for this run, and a viewer of the map and the track over it. */
 async function higlass(run, base) {
   const served = await startHiGlass(run)
-  const { context, page, requests, errors } = await fresh(base)
+  const { context, page, requests, errors } = await fresh(base, webgl)
   try {
     await page.goto(`${base}/viewers/higlass.html`)
     await page.waitForFunction(() => window.ready === true)
@@ -507,12 +526,13 @@ try {
     } catch (error) {
       result = { status: 'error', note: String(error).slice(0, 500) }
     }
-    const line = { id: run.id, run: run.run, started, page_cache: cache, chromium: version, ...result }
+    const line = { id: run.id, run: run.run, started, page_cache: cache, chromium: version, graphics: GRAPHICS[run.tool], ...result }
     appendFileSync(resultsPath, `${JSON.stringify(line)}\n`)
     console.log(`${run.id} #${run.run}: ${line.status}${line.ms === undefined ? '' : ` ${Math.round(line.ms)} ms`}${line.note ? ` (${line.note})` : ''}`)
   }
 } finally {
   await browser.close()
+  await webgl.close()
   server.close()
   rmSync(scratch, { recursive: true, force: true })
 }

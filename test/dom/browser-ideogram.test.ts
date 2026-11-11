@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
+// @dev-feature ideogram
 /**
- * The ideogram's place in the browser (§5.10): where its switch is, which card
+ * The ideogram's place in the browser (§5.11): where its switch is, which card
  * its rows are in, what it draws, and what putting it away hands back.
  *
  * The switch is in the Tracks card's `picture` row and nowhere in the bar; the
@@ -15,7 +16,9 @@
  * makes a drag a stretch again once a drag moves the picture.
  *
  * Read off `data-karyotype`, which says where each chromosome went: jsdom draws
- * nothing, and the stub context lets the layout run.
+ * nothing, and the stub context lets the layout run. Switched off, the ideogram
+ * leaves nothing, which is `dev-ideogram-gate.test.ts`'s, in the run that holds
+ * the app every reader gets (§29.6).
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -191,13 +194,6 @@ describe('the ideogram’s switch and rows', () => {
     expect(view.el.querySelector('.browser-bar button[title^="Ideogram"]')).toBeNull()
     const titles = [...view.sideEl.querySelectorAll('.controls-title')].map((node) => node.textContent?.trim())
     expect(titles).not.toContain('Ideogram')
-  })
-
-  it('is absent with the dev feature off, and so are the ideogram’s rows', async () => {
-    resetDevFeatures(false)
-    const { view } = await mount(YEAST)
-    expect(switchOf(view)).toBeNull()
-    expect(tracksCard(view).querySelector('.ideogram-only')).toBeNull()
   })
 
   it('shows the ideogram’s rows while it is drawn, and steps the one axis’s controls aside', async () => {

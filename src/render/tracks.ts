@@ -444,7 +444,7 @@ export interface TrackPaint {
   /**
    * A `heatmap`'s colour at `t` in `0..1`, in place of `colormap`, for a ramp
    * whose top end is not a table's: a chromosome coloured by a line track is
-   * drawn from white to the track's own colour (§5.10), as a 3D model can be
+   * drawn from white to the track's own colour (§5.11), as a 3D model can be
    * (`TRACK_TINT_RAMP`, §25.5).
    */
   ramp?: (t: number) => string

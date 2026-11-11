@@ -40,6 +40,8 @@ import { openMap } from '../../worker/open'
 import { correlationField, type CorrelationField } from '../compartments'
 import { useCorrelationThreads } from '../pearsonThreads'
 import { spawnGramWorker } from './spawnGram'
+import { useLikelihoodThreads } from '../likelihoodThreads'
+import { spawnLikelihoodWorker } from './spawnLikelihood'
 import { adaptiveSmoothValues } from '../../render/smooth'
 import { abortError, type JobContext } from '../job'
 import { RUNNERS } from '../run/index'
@@ -63,10 +65,11 @@ const ctx = self as unknown as DedicatedWorkerGlobalScope
 // shares its bands with helper workers, one fewer than the cores, since this
 // thread computes a stretch of its own (`pearsonThreads.ts`). Seven at most:
 // past that the copies of the rows cost more than the cores give back.
-useCorrelationThreads(
-  spawnGramWorker,
-  Math.max(0, Math.min(7, (typeof navigator === 'undefined' ? 1 : navigator.hardwareConcurrency || 1) - 1)),
-)
+const HELPERS = Math.max(0, Math.min(7, (typeof navigator === 'undefined' ? 1 : navigator.hardwareConcurrency || 1) - 1))
+useCorrelationThreads(spawnGramWorker, HELPERS)
+// pastis-NB's likelihood shares its bands the same way, as many helpers, and
+// gives the same bits on any number of them (`likelihoodThreads.ts`).
+useLikelihoodThreads(spawnLikelihoodWorker, HELPERS)
 
 // The reader worker starts fetching h5wasm at module scope, while the user is
 // still choosing a file, because it is certain to need it within the second.

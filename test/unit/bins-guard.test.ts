@@ -1,3 +1,4 @@
+// @fixtures metacooler
 /**
  * The `/bins` guard (spec §3.3, M1 task 7).
  *

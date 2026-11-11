@@ -65,10 +65,13 @@
  */
 
 import type { OpenResult } from '../worker/protocol'
+import { convergenceOf, libraryComplexity, writePairtoolsStats, type PairStats } from '../pairs/stats'
 import { devFeature } from '../state/devFeatures'
-import { el, fmt } from './dom'
+import { button, el, fmt } from './dom'
+import { downloadBlob } from './export'
 import { resolutionLabel } from '../units'
 import { cardTitle, foldable, icon, iconButton, startFolded } from './icons'
+import { cisChart, decayChart, slotOfType, typeSegments, typesBar } from './pairsCharts'
 import { recordCard, type RecordSpec } from './RecordCard'
 
 /**
@@ -156,6 +159,7 @@ export class InfoPanel {
       this.sequenceHost,
       this.minimapHost,
       this.recordHost,
+      this.pairsBlock(),
       this.unassignedBlock(),
       this.metadataBlock(),
     )
@@ -428,6 +432,130 @@ export class InfoPanel {
   }
 
   /**
+   * What `pairtools stats` says of the records a `.pairs` import read (§3.7).
+   *
+   * Only on a map imported from one: every number here is about records, which
+   * no other container keeps, and the import counted them in the pass that
+   * binned the map (`pairs/stats.ts`). The rows are the ones a reader judges a
+   * library by — how much of it mapped, how much was duplicated, how much is
+   * cis and how far it reaches — each as a count and as the share pairtools
+   * and MultiQC give it, so the number here is the number in their reports.
+   * The rest of what pairtools counts is in the file the button writes, in its
+   * own format, rather than in forty more rows.
+   *
+   * Three small charts sit among the rows, each under the rows it pictures
+   * (`ui/pairsCharts.ts`): the pair types as one bar under *duplicates*, with
+   * the chips as its key; cis past each distance as columns under the last of
+   * those rows; and P(s) by orientation under *strands meet*, with the point
+   * it names marked. Each is left out where the file has nothing to draw — no
+   * `pair_type` column, no cis pair, no strands — rather than drawn empty.
+   */
+  private pairsBlock(): HTMLElement | null {
+    const stats = this.props.info.pairs?.stats ?? null
+    if (stats === null) return null
+    const share = (part: number, whole: number): string =>
+      whole > 0 ? `${fmt.int(part)} · ${fmt.pct(part / whole)}` : fmt.int(part)
+    // Each share's denominator is pairtools': of every record for the first
+    // three, of the mapped for the duplicates, and of the unique mapped — the
+    // `total_nodups` every `frac_cis` is over — for the rest. Said on the key,
+    // so the value stays a count and a percentage a narrow column can hold.
+    const rows: Array<[string, string, string]> = [
+      ['records', fmt.int(stats.total), 'Every record in the file.'],
+      ['mapped', share(stats.totalMapped, stats.total), 'Both sides mapped, of every record.'],
+      ['one side', share(stats.totalSingleSidedMapped, stats.total), 'One side mapped, of every record.'],
+      ['unmapped', share(stats.totalUnmapped, stats.total), 'Neither side mapped, of every record.'],
+      [
+        'duplicates',
+        stats.pairTypeColumn ? share(stats.totalDups, stats.totalMapped) : 'not marked',
+        'Pairs typed DD, of the mapped.',
+      ],
+      ['cis', share(stats.cis, stats.totalNodups), 'Both sides on one sequence, of the unique mapped pairs.'],
+      ['trans', share(stats.trans, stats.totalNodups), 'On two sequences, of the unique mapped pairs.'],
+      // The shares past 1, 2, 4, 10, 20 and 40 kb are the chart under these
+      // two rows, each column labelled with its share and its exact count on
+      // hover: six rows of the same numbers above it made the card twice the
+      // height for nothing a reader could not already read off the columns.
+      ['library size', libraryText(stats), 'Distinct molecules, estimated from the duplicates as pairtools does.'],
+      ['strands meet', convergenceText(stats), convergenceTitle(stats)],
+    ]
+    // A word beside the mark, because what it saves is a format with a name a
+    // reader looks for — the file MultiQC and `pairtools stats --merge` read.
+    const save = button(
+      'save .stats',
+      () => void downloadBlob(new Blob([writePairtoolsStats(stats)], { type: 'text/plain' }), statsName(this.props.info.uri)),
+      {
+        class: 'btn btn-small pairs-stats-save',
+        title: 'Save every count as pairtools writes them: a .stats file MultiQC and `pairtools stats --merge` read.',
+      },
+    )
+    save.prepend(icon('download', { size: 13 }))
+    // Each chart under the last row it pictures, across both of the table's
+    // columns, so the rows on either side of it keep one key column.
+    const after = new Map<string, HTMLElement>()
+    const types = this.pairTypesBlock(stats)
+    if (types !== null) after.set('duplicates', types)
+    const cis = cisChart(stats)
+    if (cis !== null) after.set('trans', cis)
+    const decay = decayChart(stats)
+    if (decay !== null) after.set('strands meet', decay)
+    return el(
+      'div',
+      { class: 'card pairs-stats' },
+      cardTitle('Pairs statistics', 'library'),
+      el(
+        'div',
+        { class: 'kv pairs-stats-table' },
+        ...rows.flatMap(([key, value, title]) => {
+          const [k, v] = keyValue(key, value)
+          k.title = title
+          const chart = after.get(key)
+          return chart === undefined ? [k, v] : [k, v, chart]
+        }),
+      ),
+      ...(stats.scoped
+        ? [el('p', { class: 'hint', text: 'Counted over the sequences the index let the import read, not the whole file.' })]
+        : []),
+      ...(stats.pairTypeColumn
+        ? []
+        : [el('p', { class: 'hint', text: 'This file has no pair_type column, so no record is counted as a duplicate.' })]),
+      el('div', { class: 'pairs-stats-actions' }, save),
+    )
+  }
+
+  /**
+   * The pair types: one bar of every record by its type, and a chip a type
+   * under it, so a line breaks between two types and never inside one. The
+   * chips are the bar's key — each carries its segment's swatch, the folded
+   * types all the neutral one — so the bar needs no legend of its own.
+   */
+  private pairTypesBlock(stats: PairStats): HTMLElement | null {
+    if (stats.pairTypes.length === 0) return null
+    const segments = typeSegments(stats)
+    const bar = typesBar(stats)
+    return el(
+      'div',
+      { class: 'pairs-stats-chart pairs-stats-types-block' },
+      el('div', { class: 'pairs-stats-caption', text: 'pair types' }),
+      bar,
+      el(
+        'p',
+        { class: 'pairs-stats-types', title: 'Every pair type in the file, the most common first.' },
+        ...stats.pairTypes.map(([type, count]) => {
+          const slot = slotOfType(segments, type)
+          return el(
+            'span',
+            { class: 'pairs-stats-type' },
+            ...(bar === null
+              ? []
+              : [el('span', { class: `pairs-stats-swatch ${slot === 0 ? 'is-other' : `is-s${slot}`}`, attrs: { 'aria-hidden': 'true' } })]),
+            `${type} ${fmt.int(count)}`,
+          )
+        }),
+      ),
+    )
+  }
+
+  /**
    * The single retained `__unbinned__` number, labelled as a QC statistic and
    * not as a genome.
    */
@@ -496,6 +624,44 @@ export class InfoPanel {
     if (stored) startFolded(card)
     return card
   }
+}
+
+/** pairtools' library estimate, in molecules, or what it means where it is not a number. */
+function libraryText(stats: PairStats): string {
+  // Estimated from the duplicates, so not at all from a file that marks none,
+  // and without bound from one that marks none duplicated — pairtools' `nan`.
+  if (!stats.pairTypeColumn) return 'not estimated'
+  if (stats.totalDups === 0 && stats.totalMapped > 0) return 'unbounded'
+  const size = libraryComplexity(stats.totalMapped, stats.totalDups)
+  if (!(size > 0)) return '—'
+  return `${fmt.int(Math.round(size))} molecules`
+}
+
+/** Where the four orientations converge, as pairtools finds it. */
+function convergenceText(stats: PairStats): string {
+  // Nothing to compare — no strands in the file, or no cis pair — is not
+  // agreement everywhere.
+  const counted = Object.values(stats.distFreq).some((counts) => counts.some((count) => count > 0))
+  if (!counted) return '—'
+  const convergence = convergenceOf(stats)
+  if (convergence.distance === null) return 'everywhere'
+  return `past ${resolutionLabel(convergence.distance)}`
+}
+
+/** What {@link convergenceText} measured, and which orientation strayed furthest. */
+function convergenceTitle(stats: PairStats): string {
+  const { strands } = convergenceOf(stats)
+  return (
+    'The separation past which the four strand orientations each stay within 5% of their mean, ' +
+    'as pairtools finds it' +
+    (strands === null ? '.' : `; ${strands} strays furthest.`)
+  )
+}
+
+/** `sample.pairs.gz` → `sample.stats`, as pairtools names its own. */
+function statsName(uri: string): string {
+  const name = uri.split('::')[0].split(/[?#]/)[0].split('/').pop() ?? 'pairs'
+  return `${name.replace(/\.pairs(am)?(\.b?gz)?$/i, '') || 'pairs'}.stats`
 }
 
 function keyValue(key: string, value: string): HTMLElement[] {

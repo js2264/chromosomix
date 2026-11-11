@@ -31,6 +31,8 @@ import type {
 /** The parts of an open file this needs, named so nothing imports `Session`. */
 export interface ContextInput {
   uri: string
+  /** See {@link AnalysisContext.memoryKey}. */
+  memoryKey?: string
   layout: LayoutKind
   binsize: number
   nBins: number
@@ -140,6 +142,7 @@ export function buildAnalysisContext(input: ContextInput): AnalysisContext {
 
   return {
     uri: input.uri,
+    ...(input.memoryKey === undefined ? {} : { memoryKey: input.memoryKey }),
     layout: input.layout,
     hasGenomes: input.hasGenomes,
     hasWeights: input.hasWeights,

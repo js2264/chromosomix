@@ -22,6 +22,8 @@
  * parser that fetches for itself sits outside every one of them.
  */
 
+import { readFileSync } from 'node:fs'
+
 import { describe, expect, it } from 'vitest'
 
 // The ESM build by path: the package's `main` is a CommonJS bundle with no
@@ -32,6 +34,7 @@ import Straw from 'hic-straw/dist/hic-straw.esm.js'
 
 import { HicFile } from '@/hic/HicFile'
 import { HicStore } from '@/hic/store'
+import { MetaCooler } from '@/metacooler/MetaCooler'
 import { planRead } from '@/metacooler/matrix'
 import type { ByteSource, Extent, SourceStats } from '@/types'
 import { writeHic, type HicRecord } from '../support/hicWriter'
@@ -294,5 +297,146 @@ describe('normalisation vectors', () => {
       const ourNormed = (before as number) * weights[record.bin1] * weights[record.bin2]
       expect(ourNormed).toBeCloseTo(record.counts, 5)
     }
+  })
+})
+
+/**
+ * A file Juicer Tools wrote, read by both.
+ *
+ * Every case above reads a fixture `test/support/hicWriter` produced, so what
+ * the two readers agree on is this repository's idea of the format. That is the
+ * idea worth checking first and still not the format: nothing above holds a
+ * block Juicer laid out, a ladder of five resolutions, or a vector its balancer
+ * wrote. The demo map holds all three — a v8 `.hic` of yeast Hi-C whose header
+ * names `Juicer Tools Version 1.9.9`, at 1, 2, 4, 8 and 16 kb, with VC, VC_SQRT
+ * and KR — and it is committed, so this runs on every push with nothing to build.
+ *
+ * Read through `MetaCooler`, because that is the path a view and an analysis
+ * take, and compared on every cell of each window, raw and balanced. Raw counts
+ * are compared exactly: both readers decode the same float32. Balanced ones to
+ * float32 precision, since straw divides by the stored vector and this reader
+ * multiplies by its reciprocal.
+ */
+describe('the demo .hic, which Juicer Tools wrote', () => {
+  const HIC = new URL('../../demo/yeast/Yeast_hic.hic', import.meta.url).pathname
+  const bytes = new Uint8Array(readFileSync(HIC))
+  const straw = new Straw({ file: new StrawBytesFile(bytes) })
+
+  it('has the same sequences and resolutions to both readers', async () => {
+    const meta = await straw.getMetaData()
+    const file = HicFile.open(new BytesSource(bytes))
+    expect(file.header.attributes.software).toBe('Juicer Tools Version 1.9.9')
+    expect(meta.version).toBe(8)
+    expect(file.header.version).toBe(8)
+    expect(file.resolutions).toEqual([...meta.resolutions].sort((a, b) => a - b))
+    // Straw reports Juicer's `ALL` first; this reader drops it, as above.
+    expect(meta.chromosomes[0].name).toBe('ALL')
+    expect(file.chroms).toEqual(
+      meta.chromosomes.slice(1).map((chrom) => ({ name: chrom.name, length: chrom.size })),
+    )
+  })
+
+  interface Side {
+    chrom: string
+    start: number
+    end: number
+  }
+
+  // Every start is a multiple of 16 kb, so of every rung, and straw's window
+  // and this reader's cover the same bins. Ends at a chromosome's length keep
+  // its short last bin in the comparison.
+  const WINDOWS: Array<{ name: string; a: Side; b: Side }> = [
+    {
+      name: 'chromosome I, whole',
+      a: { chrom: 'I', start: 0, end: 230_218 },
+      b: { chrom: 'I', start: 0, end: 230_218 },
+    },
+    {
+      name: 'a window inside IV',
+      a: { chrom: 'IV', start: 992_000, end: 1_392_000 },
+      b: { chrom: 'IV', start: 992_000, end: 1_392_000 },
+    },
+    {
+      name: 'IV, a megabase off the diagonal',
+      a: { chrom: 'IV', start: 0, end: 160_000 },
+      b: { chrom: 'IV', start: 1_200_000, end: 1_360_000 },
+    },
+    {
+      name: 'I against III',
+      a: { chrom: 'I', start: 0, end: 230_218 },
+      b: { chrom: 'III', start: 0, end: 316_620 },
+    },
+  ]
+
+  describe.each([1000, 2000, 4000, 8000, 16000])('at %i bp', (binSize) => {
+    it.each(WINDOWS)('$name, raw and balanced', async ({ a, b }) => {
+      const file = HicFile.open(new BytesSource(bytes), { binSize })
+      const mc = MetaCooler.fromHic(`oracle.hic::/resolutions/${binSize}`, new BytesSource(bytes))
+      try {
+        const extent = (side: Side): Extent => {
+          const base = mc.contigExtent(side.chrom)[0]
+          return [base + side.start / binSize, base + Math.ceil(side.end / binSize)]
+        }
+        const rows = extent(a)
+        const cols = extent(b)
+        const ncols = cols[1] - cols[0]
+        const square = a.chrom === b.chrom && a.start === b.start && a.end === b.end
+
+        // Straw's records into the grid this reader returns. Both are the
+        // stored upper triangle in straw's frame — chromosome-local bins — so
+        // a square window is mirrored, as `MetaCooler.matrix` mirrors it.
+        const grid = async (norm: string): Promise<Map<number, number>> => {
+          const out = new Map<number, number>()
+          const region = (side: Side) => ({ chr: side.chrom, start: side.start, end: side.end })
+          const records = await straw.getContactRecords(norm, region(a), region(b), 'BP', binSize)
+          for (const record of records) {
+            const r = record.bin1 - a.start / binSize
+            const c = record.bin2 - b.start / binSize
+            out.set(r * ncols + c, record.counts)
+            if (square) out.set(c * ncols + r, record.counts)
+          }
+          return out
+        }
+
+        const raw = await mc.matrix({ rows, cols })
+        expect([raw.nrows, raw.ncols]).toEqual([rows[1] - rows[0], ncols])
+        const theirs = await grid('NONE')
+        expect(theirs.size).toBeGreaterThan(0)
+        const rawMismatches: string[] = []
+        for (let i = 0; i < raw.values.length; i++) {
+          const expected = theirs.get(i) ?? 0
+          if (raw.values[i] !== expected) rawMismatches.push(`${i}: ${raw.values[i]} ≠ ${expected}`)
+        }
+        expect(rawMismatches.slice(0, 5)).toEqual([])
+
+        // The normalisation is whichever this reader serves for the two
+        // chromosomes, asked of straw by name. The two must agree: a window
+        // whose axes were balanced by different vectors is one straw cannot
+        // express, and would be a finding here rather than a skip.
+        const chromIndex = (side: Side): number => file.chroms.findIndex((c) => c.name === side.chrom)
+        const norm = file.normTypeFor(chromIndex(a))
+        expect(norm).not.toBeNull()
+        expect(file.normTypeFor(chromIndex(b))).toBe(norm)
+
+        const balanced = await mc.matrix({ rows, cols, balance: true })
+        const theirsBalanced = await grid(norm as string)
+        expect(theirsBalanced.size).toBeGreaterThan(0)
+        const balancedMismatches: string[] = []
+        for (let i = 0; i < balanced.values.length; i++) {
+          const ours = balanced.values[i]
+          const expected = theirsBalanced.get(i)
+          // Straw drops a record whose bins the balancer threw out; this reader
+          // keeps the cell and makes it `NaN`, which is cooler's spelling.
+          const agrees =
+            expected === undefined
+              ? ours === 0 || Number.isNaN(ours)
+              : Math.abs(ours - expected) <= 1e-6 * Math.abs(expected)
+          if (!agrees) balancedMismatches.push(`${i}: ${ours} ≠ ${expected}`)
+        }
+        expect(balancedMismatches.slice(0, 5)).toEqual([])
+      } finally {
+        mc.close()
+      }
+    })
   })
 })

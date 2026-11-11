@@ -107,3 +107,15 @@ describe("About's licences", () => {
     expect(noticesUrl()).toMatch(/THIRD-PARTY-NOTICES\.txt$/)
   })
 })
+
+// The Python widget is built from `widgets/python/` alone, so the licence a
+// wheel carries is the copy beside its `pyproject.toml`, which hatchling picks
+// up by name. A copy that drifts from the root's is a package under words the
+// project does not use.
+describe("the Python widget's licence", () => {
+  it('is the repository’s, word for word', () => {
+    expect(readFileSync(join(root, 'widgets/python/LICENSE'), 'utf8')).toBe(
+      readFileSync(join(root, 'LICENSE'), 'utf8'),
+    )
+  })
+})

@@ -471,7 +471,7 @@ export interface BrowserViewProps {
    */
   hoverSource?: string
   /**
-   * The ideogram this browser opens as (§5.10), from the view state: every
+   * The ideogram this browser opens as (§5.11), from the view state: every
    * chromosome whole, standing in a row or lying in a column. Absent is the
    * browser's own picture. Offered only on the session's own browser, and only
    * with the dev feature on (§29).
@@ -492,7 +492,7 @@ export interface BrowserViewProps {
 }
 
 /**
- * The ideogram (§5.10), laid out and filled for one frame: what its paint, its
+ * The ideogram (§5.11), laid out and filled for one frame: what its paint, its
  * hit test, its readout and its key share — the browser's {@link Lane}s, one
  * per slot of the stack beside every chromosome, so a lane beside a chromosome
  * is filled and painted by the code that fills and paints one under the ruler.
@@ -661,7 +661,7 @@ interface Lane {
   /**
    * The axis the frame's units are on, where it is not the browser's own: the
    * ideogram's, which is the whole genome whatever the browser's window has
-   * ticked (§5.10). Absent is {@link BrowserView.trackAxis}.
+   * ticked (§5.11). Absent is {@link BrowserView.trackAxis}.
    */
   axis?: LocusAxis
   /**
@@ -1027,7 +1027,7 @@ export class BrowserView {
   private published = false
   /**
    * Which way the ideogram's chromosomes run while this browser draws one
-   * (§5.10), or `null` while it draws its own picture.
+   * (§5.11), or `null` while it draws its own picture.
    */
   private karyotype: KaryotypeOrientation | null = null
   /** The ideogram as the last frame laid it out and filled it. */
@@ -1041,7 +1041,7 @@ export class BrowserView {
   /** Where on a chromosome the hand is, for the hairline across it. */
   private khover: { place: ChromosomePlace; along: number } | null = null
   /**
-   * Where the ideogram is looked at from (§5.10): magnified by the wheel about
+   * Where the ideogram is looked at from (§5.11): magnified by the wheel about
    * the pointer and moved by a drag or a sideways scroll. At rest as the
    * ideogram opens, and again when it is flipped or draws other chromosomes;
    * held through anything else that lays it out again — a look, a track, the
@@ -1069,7 +1069,7 @@ export class BrowserView {
   private readonly ideogramToggle: HTMLButtonElement | null
   /**
    * The Tracks card, which carries the ideogram's rows as well as the lanes'
-   * (§5.10) and shows each set while its picture is drawn (`is-ideogram`).
+   * (§5.11) and shows each set while its picture is drawn (`is-ideogram`).
    */
   private readonly tracksEl: HTMLElement
   /** Its flip, which turns the chromosomes from standing to lying. */
@@ -1154,7 +1154,7 @@ export class BrowserView {
     // becomes*, which is the region bar's grammar; `zoomBy` takes a
     // magnification, which is this view's — hence the reciprocal.
     this.zooms = ZOOM_STEPS.map((step) => zoomButton(step, () => this.zoomBy(1 / step.factor)))
-    // The ideogram's switch (§5.10), in the Tracks card's `picture` row: the
+    // The ideogram's switch (§5.11), in the Tracks card's `picture` row: the
     // session's own browser only, and only with the dev feature on (§29) — off
     // is absent, not greyed. The standing chromosomes are the picture a press
     // gives, as the turn's mark is.
@@ -1657,12 +1657,12 @@ export class BrowserView {
   /**
    * How large the figure is: the whole canvas, name column included, down to
    * the last track — or the ideogram's own extent, key and names and all, which
-   * is past the window where its chromosomes could not fit in one (§5.10).
+   * is past the window where its chromosomes could not fit in one (§5.11).
    */
   private figureSize(): { width: number; height: number } {
     const frame = this.karyo
     if (this.karyotype !== null && frame !== null) {
-      // Magnified, the window as the reader framed it (§5.10).
+      // Magnified, the window as the reader framed it (§5.11).
       if (frame.layout.zoom > 1) return { width: frame.options.width, height: frame.options.height }
       return { width: Math.ceil(frame.layout.width), height: Math.ceil(frame.layout.height) }
     }
@@ -1725,7 +1725,7 @@ export class BrowserView {
   applyLocus(locus: string | undefined): void {
     // While the ideogram is drawn the window is where the browser goes back
     // to, and not a reason to tick a sequence: the ideogram draws the ticked
-    // ones (§5.10). Left unapplied, so the ideogram put away applies it.
+    // ones (§5.11). Left unapplied, so the ideogram put away applies it.
     if (this.karyotype !== null) return
     if (locus === this.reported) return
     this.reported = locus
@@ -1859,7 +1859,7 @@ export class BrowserView {
       return
     }
     // In the ideogram a place is opened in the browser's own picture, as a click
-    // on a chromosome opens it: one sequence is read along one axis (§5.10).
+    // on a chromosome opens it: one sequence is read along one axis (§5.11).
     // The whole genome is what the ideogram already shows.
     if (this.karyotype !== null) {
       if (parsed !== 'whole') this.props.onIdeogramChange?.(undefined, formatLocus(parsed))
@@ -2161,7 +2161,7 @@ export class BrowserView {
     ZOOM_STEPS.forEach((step, at) => {
       const node = this.zooms[at]
       if (node === undefined) return
-      // The ideogram's camera (§5.10): magnified about the middle of the
+      // The ideogram's camera (§5.11): magnified about the middle of the
       // window, from every chromosome whole to a base a pixel.
       if (this.karyotype !== null) {
         const layout = this.karyo?.layout
@@ -3234,7 +3234,7 @@ export class BrowserView {
     /**
      * The one sequence whose pairs a lane of arcs draws, where the picture
      * draws the pairs between two sequences elsewhere — the ideogram's, beside
-     * each chromosome (§5.10).
+     * each chromosome (§5.11).
      */
     only?: string,
   ): void {
@@ -3603,7 +3603,7 @@ export class BrowserView {
     return lane === undefined ? null : this.laneImageOf(lane)
   }
 
-  /** {@link laneImage}, of a lane in hand — one beside a chromosome of the ideogram's too (§5.10). */
+  /** {@link laneImage}, of a lane in hand — one beside a chromosome of the ideogram's too (§5.11). */
   private laneImageOf(lane: Lane): HTMLCanvasElement | null {
     const { frame } = lane
     const [x, y, width, height] = laneRect(frame, frame.alongFrom, frame.alongTo, 0, frame.thickness)
@@ -3714,7 +3714,7 @@ export class BrowserView {
   /**
    * What a label block handed back, made pointable: its range's two ends and
    * its names as text boxes, its chips as colour inputs, its autoscale spot as
-   * a button. A lane's label and a line of the ideogram's key alike (§5.10).
+   * a button. A lane's label and a line of the ideogram's key alike (§5.11).
    */
   private keepLabel(entries: AnnotationEntry[], boxes: LaneLabelBoxes): void {
     for (const hit of boxes.limits) this.rangeHits.push({ entries, hit })
@@ -3797,7 +3797,7 @@ export class BrowserView {
   private shownLimits(id: string): { min: number; max: number } | null {
     const extent = this.extentOf(id)
     // In the ideogram the pair is the track's over every chromosome, which is
-    // what its key's range says (§5.10).
+    // what its key's range says (§5.11).
     if (this.karyotype !== null) {
       const entry = this.props.store.entries.find((each) => each.id === id)
       return entry === undefined ? null : resolveLimits(entry.style.limits, extent, scaleOf(entry.style), unitOf(entry.style))
@@ -3861,7 +3861,7 @@ export class BrowserView {
     /**
      * What the samples are read for: the browser's window, by default; the
      * whole axis at the ideogram's resolution for a lane beside one of its
-     * chromosomes (§5.10), under a scope of its own — one read for every
+     * chromosomes (§5.11), under a scope of its own — one read for every
      * chromosome, which each lane then places on its own stretch.
      */
     sampling?: Sampling,
@@ -4130,7 +4130,7 @@ export class BrowserView {
 
   /**
    * The Tracks card: how the stack is sized, scaled and drawn — and, where the
-   * ideogram is offered, which picture the tracks are drawn as (§5.10): its
+   * ideogram is offered, which picture the tracks are drawn as (§5.11): its
    * switch and its flip in a `picture` row at the top, as the Map card's own
    * pictures are, and its rows under them while it is drawn. The controls
    * about the browser's one axis — the whole genome fitted across it, the name
@@ -5308,7 +5308,7 @@ export class BrowserView {
   }
 
   /**
-   * The browser's keys over the ideogram, on its camera (§5.10): the arrows
+   * The browser's keys over the ideogram, on its camera (§5.11): the arrows
    * move the picture a fifth of the window, `+` and `−` magnify it three times
    * about the middle and back, and `0` is every chromosome whole again.
    */
@@ -5350,7 +5350,7 @@ export class BrowserView {
   }
 
   // -------------------------------------------------------------------------
-  // The ideogram (§5.10)
+  // The ideogram (§5.11)
   // -------------------------------------------------------------------------
 
   /**
@@ -6360,7 +6360,7 @@ export class BrowserView {
   /**
    * A release over the ideogram: a press that did not travel opens its
    * chromosome whole, a drag opens the stretch it chose — each in the browser's
-   * own picture, one sequence along one axis (§5.10). While a mark is being
+   * own picture, one sequence along one axis (§5.11). While a mark is being
    * placed (§8.1), the press is the place and the drag the box, as they are in
    * the browser.
    */
@@ -6414,7 +6414,7 @@ export class BrowserView {
     this.props.onIdeogramChange?.(undefined, formatLocus(range))
   }
 
-  /** Put the ideogram away for one chromosome, whole, in the browser's own picture (§5.10). */
+  /** Put the ideogram away for one chromosome, whole, in the browser's own picture (§5.11). */
   private openChromosome(contig: string): void {
     const whole = this.props.assembly.contigs.find((each) => each.name === contig)
     if (whole === undefined) return
@@ -6422,7 +6422,7 @@ export class BrowserView {
   }
 
   /**
-   * The wheel over the ideogram (§5.10). Up and down magnify it about the
+   * The wheel over the ideogram (§5.11). Up and down magnify it about the
    * pointer — the chromosome under it longer and wider, its neighbours leaving
    * the window on either side — and down again to every chromosome whole.
    * Sideways, or with Shift, it moves the chromosomes left and right.
@@ -6607,7 +6607,7 @@ export class BrowserView {
   }
 
   /**
-   * The Tracks card's rows for the ideogram (§5.10), shown while it is drawn:
+   * The Tracks card's rows for the ideogram (§5.11), shown while it is drawn:
    * what fills the chromosomes and in what colour, how thick and how long they
    * are and how far apart, and whether the lanes beside them are fitted to the
    * window — and the flip, which goes in the card's `picture` row beside the
@@ -7031,7 +7031,7 @@ export class BrowserView {
     y = Math.min(Math.max(y, minY), Math.max(minY, maxY - height))
 
     // Through the stage's own scroll, which an ideogram wider than the window
-    // has (§5.10): the card is positioned in the stage's content, not its box.
+    // has (§5.11): the card is positioned in the stage's content, not its box.
     this.tooltip.style.left = `${x - rect.left + this.stage.scrollLeft}px`
     this.tooltip.style.top = `${y - rect.top + this.stage.scrollTop}px`
   }

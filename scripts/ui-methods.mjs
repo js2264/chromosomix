@@ -5,7 +5,8 @@
  * defaults to, and its screenshot stops where the drawer's table runs past the
  * window. What a reviewer of the **Method** control wants is the part that
  * differs: the form under each method — the weighting control is ShRec3D's
- * question and is not asked under a likelihood — and the whole of each fit
+ * question and is not asked under a likelihood, the seed pastis-NB's and not
+ * asked under ShRec3D — and the whole of each fit
  * table, scrolled to, including the row that says what the negative binomial
  * found that a Poisson could not.
  *
@@ -52,12 +53,23 @@ const shot = async (name) => {
   console.log('shot', name)
 }
 const fold = async (title) => {
-  for (const b of await page.$$(`button[title^="${title}"]`)) {
+  for (const b of await page.$$(`[title^="${title}"]`)) {
     if (await b.isVisible()) {
       await b.click()
       await sleep(600)
       return
     }
+  }
+  // The panels' toggles name their key in the title — `(4)` — and the key does
+  // what the button does wherever the button is drawn.
+  const key = await page.evaluate((t) => {
+    const found = document.querySelector(`[title^="${t}"]`)
+    return /\((\d)\)$/.exec(found?.getAttribute('title') ?? '')?.[1] ?? null
+  }, title)
+  if (key !== null) {
+    await page.locator('body').click({ position: { x: 5, y: 1090 } })
+    await page.keyboard.press(key)
+    await sleep(600)
   }
 }
 
@@ -106,6 +118,12 @@ try {
     return select === undefined ? [] : [...select.options].map((o) => o.textContent?.trim())
   })
   console.log('methods offered:', methods.join(' | '))
+  // pastis' `random_state`: a question for the likelihood alone.
+  const seedShown = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('label')].some((l) => /^seed$/i.test((l.textContent ?? '').trim()) && l.offsetParent !== null),
+    )
+  console.log('seed control shown under pastis-NB:', await seedShown())
 
   await shot('m1-method-nb-form')
   await runAnd('negative binomial')
@@ -133,6 +151,7 @@ try {
   // hard-codes the capital reports a control missing when it was only renamed.
   const weighting = await page.evaluate(() => /weight pairs by/i.test(document.body.textContent ?? ''))
   console.log('weighting control shown under ShRec3D:', weighting)
+  console.log('seed control shown under ShRec3D:', await seedShown())
   await shot('m3-method-shrec3d-form')
   await runAnd('ShRec3D')
   console.log('\n--- ShRec3D ---')

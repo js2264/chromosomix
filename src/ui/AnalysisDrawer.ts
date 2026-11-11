@@ -271,6 +271,14 @@ function isParamValue(value: unknown): value is ParamValue {
  * none of them back on import. One scope, one reader, and the fixed list is
  * complete again.
  */
+/**
+ * Where this map's recipes and figure styles are kept: the session's key for it
+ * where there is one, which is what a workspace saves and puts back (§18.2).
+ */
+function memoryOf(context: AnalysisContext | null): string {
+  return context === null ? '' : (context.memoryKey ?? context.uri)
+}
+
 function recallParamsFor(task: AnalysisTask, uri: string): Params {
   const out: Record<string, ParamValue> = { ...defaultParams(task.params) }
   const held = recallParams(uri, task.id)
@@ -456,6 +464,13 @@ function rasterOf(figure: PlotFigure): HTMLCanvasElement {
  * of them stops doing that.
  */
 /** A label as a filename: lower case, words joined by hyphens, nothing else. */
+/** A file's own name less its extensions, as `chromosomix` names what it writes. */
+function fileBaseName(uri: string): string {
+  const path = uri.split('::')[0]
+  const last = path.split(/[\\/]/).pop() ?? path
+  return last.split('?')[0].split('#')[0].replace(/\..*$/, '') || 'map'
+}
+
 function plainName(label: string): string {
   return (
     label
@@ -502,6 +517,12 @@ export class AnalysisDrawer {
   private readonly noteEl = el('div', { class: 'analysis-note hidden' })
   private readonly recordEl: HTMLElement
   private readonly recordNote = el('span', { class: 'analysis-note' })
+  /**
+   * The run as a whole, where the task leaves it so (§18.7) — the map report's
+   * page. Beside the provenance it was written with, because it is the same
+   * kind of thing: the run, leaving, rather than one of its figures.
+   */
+  private readonly documentsEl = el('span', { class: 'analysis-documents' })
   private readonly notesEl = el('ul', { class: 'analysis-notes hidden' })
   private readonly outputsEl = el('div', {
     // The body is a flex column with a gap and these blocks want the same one,
@@ -626,7 +647,7 @@ export class AnalysisDrawer {
       // second of two hundred. Whether it can be pressed, and what it says when
       // it cannot, are written in {@link paintCli} — both are properties of the
       // task the result came from rather than of the drawer.
-      this.cliButton,
+      this.cliButton,      this.documentsEl,
     )
 
     this.el = el(
@@ -946,7 +967,7 @@ export class AnalysisDrawer {
       this.form.setContext(context)
       return
     }
-    this.params = recallParamsFor(task, context.uri)
+    this.params = recallParamsFor(task, memoryOf(context))
     const runner = this.options.runner
     const form = new ParamForm({
       specs: task.params,
@@ -977,7 +998,7 @@ export class AnalysisDrawer {
     // Remembered on every edit rather than on Run, so that reproducing a figure
     // is opening the session and pressing Run (§18.2) — including the run the
     // reader configured, thought better of, and came back to.
-    rememberParams(context.uri, task.id, next)
+    rememberParams(memoryOf(context), task.id, next)
     this.syncRun(task, context)
   }
 
@@ -1020,7 +1041,7 @@ export class AnalysisDrawer {
     // handed them answered: what the run's own record is remembered against
     // when it comes back (`asAsked`), so a reader who pressed Run without
     // typing still has a form that follows the map.
-    rememberParams(context.uri, task.id, this.params)
+    rememberParams(memoryOf(context), task.id, this.params)
     return resolveSeeds(task.params, context, this.params)
   }
 
@@ -1340,7 +1361,7 @@ export class AnalysisDrawer {
     const block = figureBlock({
       output,
       task: `${this.current?.id ?? 'task'}:combined`,
-      uri: this.context()?.uri ?? '',
+      uri: memoryOf(this.context()),
       extras: [
         button('TSV', () => this.saveCombinedTsv(output, maps), {
           class: 'btn',
@@ -1362,7 +1383,7 @@ export class AnalysisDrawer {
     maps: ReadonlyArray<{ label: string; provenance: Provenance }>,
   ): void {
     const stamp = fileStamp(new Date())
-    const blob = new Blob([combinedToTsv(output, maps)], { type: 'text/tab-separated-values' })
+    const blob = new Blob([...combinedToTsv(output, maps)], { type: 'text/tab-separated-values' })
     void downloadBlob(blob, tsvName(this.current?.id ?? 'task', output, stamp))
   }
 
@@ -1450,6 +1471,7 @@ export class AnalysisDrawer {
     this.recordNote.textContent = `computed in ${durationText(result.ms)} at ${finishedAt(result)}`
     this.recordNote.title = provenance.createdAt
     this.paintCli(provenance)
+    this.paintDocuments(result)
 
     // The things the reader must be told that are not errors — *412 of 5,000
     // windows dropped for missing data*. Above the pictures, because a note that
@@ -1546,7 +1568,7 @@ export class AnalysisDrawer {
     const block = figureBlock({
       output,
       task: this.current?.id ?? 'task',
-      uri: this.context()?.uri ?? '',
+      uri: memoryOf(this.context()),
       extras: [
         // The two formats a genome browser opens, on the one file where this
         // drawer is the only place they are offered from (§18.7).
@@ -1622,8 +1644,8 @@ export class AnalysisDrawer {
           ? `${fmt.int(outputs.length)} tracks added to the Tracks card in the Annotations panel, marked *.`
           : 'Added to the Tracks card in the Annotations panel, marked *.'
         : where === 'structure'
-          ? 'Added to the Structures card in the Annotations panel, and shown in the deck’s ' +
-            'structure cell (add one from the deck’s bar if none is open).'
+          ? 'Added to the Structures card in the Annotations panel, and shown in a structure ' +
+            'cell of its own, beside what the deck already shows.'
           : where === 'overlay' && this.context()?.hasMap === false
             ? many
               ? `${fmt.int(outputs.length)} sets added to the Tracks card in the Annotations panel as 1D tracks, marked *.`
@@ -1779,7 +1801,7 @@ export class AnalysisDrawer {
 
   private saveTsv(output: TaskOutput, provenance: Provenance): void {
     const stamp = fileStamp(new Date())
-    const blob = new Blob([outputToTsv(output, provenance)], {
+    const blob = new Blob([...outputToTsv(output, provenance)], {
       type: 'text/tab-separated-values',
     })
     void downloadBlob(blob, tsvName(provenance.task, output, stamp))
@@ -1905,6 +1927,24 @@ export class AnalysisDrawer {
    * wired to something that writes a command line the command then rejects,
    * which the reader finds out somewhere else, later, with the app closed.
    */
+  /** The buttons that save the run as a whole, for a task that leaves one (§18.7). */
+  private paintDocuments(result: TaskResult): void {
+    const task = taskById(result.provenance.task)
+    const offered = (task?.documents ?? []).filter((document) => document.shellOnly !== true)
+    this.documentsEl.replaceChildren(
+      ...offered.map((document) =>
+        button(document.label, () => {
+          const base = fileBaseName(result.provenance.framing.uri)
+          const blob = new Blob([document.write(result, base)], { type: document.type })
+          void downloadBlob(blob, `${base}.${result.provenance.task}.${document.id}-${fileStamp(new Date())}.${document.extension}`)
+        }, {
+          class: 'btn',
+          title: 'Every figure and table of this run on one page, with its notes and provenance, in a file that needs nothing beside it.',
+        }),
+      ),
+    )
+  }
+
   private paintCli(provenance: Provenance): void {
     // A task this build has never heard of — a result restored from a session
     // written by a later one — is the one run with no command: the flags are

@@ -1,3 +1,4 @@
+// @fixtures metacooler
 /**
  * The transpose (spec §5.3) — M2's real deliverable.
  *

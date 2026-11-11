@@ -25,6 +25,39 @@ export interface CompareRead extends ComparePresentation {
   onFailure(message: string): void
 }
 
+/**
+ * A second read of the **open** file, for the lower triangle's own reading
+ * (§5.10) where its score is another `/pixels` column or the balancing the
+ * other way: the same questions as the first read, with those two answered
+ * differently. Where its score reads the same cells there is no second read,
+ * and the map derives both triangles from the one block.
+ */
+export interface LowerRead {
+  /** The file's own reader, asking with the lower reading's balancing and column. */
+  client: Pick<ReaderClient, 'request'>
+  /** The read failed; the map draws one reading over the whole square and says why. */
+  onFailure(message: string): void
+}
+
+/**
+ * A reader that asks every question with another balancing and column — the
+ * lower reading's (§5.10) — and otherwise is the one it wraps, cache and all.
+ */
+export function rereading(
+  client: ReaderClient,
+  read: { balance: boolean; value?: string },
+): Pick<ReaderClient, 'request'> {
+  return {
+    request: (payload, onProgress) => {
+      const asked = { ...payload } as typeof payload & { balance?: boolean; value?: string }
+      if ('balance' in asked) asked.balance = read.balance
+      if (read.value === undefined) delete asked.value
+      else asked.value = read.value
+      return client.request(asked, onProgress)
+    },
+  }
+}
+
 /** The half of {@link CompareRead} the heatmap panel is given. */
 export function presentationOf(compare: CompareRead | undefined): ComparePresentation | undefined {
   if (compare === undefined) return undefined
@@ -45,17 +78,16 @@ export function presentationOf(compare: CompareRead | undefined): ComparePresent
  * one call over a union.
  */
 export async function secondBlock(
-  compare: CompareRead | undefined,
-  read: (client: ReaderClient) => Promise<MatrixResult>,
+  compare: CompareRead | LowerRead | undefined,
+  read: (client: Pick<ReaderClient, 'request'>) => Promise<MatrixResult>,
 ): Promise<MatrixResult | undefined> {
   if (compare === undefined) return undefined
   try {
     return await read(compare.client)
   } catch (err) {
+    const who = 'labels' in compare ? compare.labels[1] : 'The lower triangle’s score'
     compare.onFailure(
-      `${compare.labels[1]} could not answer this view: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      `${who} could not answer this view: ${err instanceof Error ? err.message : String(err)}`,
     )
     return undefined
   }

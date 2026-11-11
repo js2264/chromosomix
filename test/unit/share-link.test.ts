@@ -377,6 +377,20 @@ describe('reading a link', () => {
     ])
   })
 
+  it('sends a lane on a tracks cell', async () => {
+    // Keyed on the cell's seat (`tracksCellKey`), which names no file of
+    // anybody's, and the `tracks` it seats travels in `maps`: held back, the
+    // recipient's tracks cell would open empty.
+    const config = configOf({
+      lanes: [laneOn('a3', 'tracks:1'), laneOn('a4', 'tracks:2')],
+      state: { uri: 'https://bucket.example.org/a.mcool', view: 'region', maps: 'tracks|tracks' },
+    } as Partial<SessionConfig>)
+    expect(decoded(await decodeShare(await encodeShare(config)))?.lanes).toEqual([
+      laneOn('a3', 'tracks:1'),
+      laneOn('a4', 'tracks:2'),
+    ])
+  })
+
   it('holds back a lane on a local companion opened deep in a collection', async () => {
     // Why the filter asks the *address* rather than whether the name is in
     // `deck.locals`. A look is keyed on `slot.ref.uri`, the string `locals`

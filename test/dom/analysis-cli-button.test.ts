@@ -295,14 +295,13 @@ describe('the button', () => {
    * what stops the drawer becoming a second place they can go stale.
    */
   it('carries a caveat on the clipboard, and counts it', async () => {
-    const view = open(
-      insulation,
-      result('insulation', { window: 10 }, { uri: 'https://example.org/yeast.mcool' }),
-    )
+    // A reproducibility run whose record does not name the maps it compared.
+    const hicrep = taskById('hicrep') as AnalysisTask
+    const view = open(hicrep, result('hicrep', {}))
     view.button.click()
     await settled()
     expect(copied[0].split('\n')[0].startsWith('# ')).toBe(true)
-    expect(copied[0]).toContain('remote')
+    expect(copied[0]).toContain('--against')
     expect(view.status()).toMatch(/1 note/)
     view.destroy()
   })

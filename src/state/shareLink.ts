@@ -41,6 +41,7 @@ import { TEXT_INFLATE_MAX, inflateCapped, inflationCap, type InflationPolicy } f
 import { isRefusal, type ConfigRefusal, type SessionConfig } from './SessionConfig'
 import { buildWorkspaceFile, parseWorkspaceFile } from './workspace'
 import type { MapNames } from '../ui/mapNames'
+import { isTracksCellKey } from '../panels/deck'
 
 /**
  * The fragment key a shared session travels under.
@@ -272,7 +273,9 @@ export function forSharing(config: SessionConfig): SessionConfig {
   // companion opened at one rung of a collection is stored here as
   // `rep2.mcool::/resolutions/1000` while `locals` holds `rep2.mcool`, and a
   // name-set test would wave it through.
-  const lanes = (config.lanes ?? []).filter((lane) => openableElsewhere(lane.uri))
+  // A tracks cell's lanes travel too: their key is the cell's seat (`tracksCellKey`), which names
+  // no file of anybody's, and the `tracks` it seats is in `maps` for the recipient to open.
+  const lanes = (config.lanes ?? []).filter((lane) => openableElsewhere(lane.uri) || isTracksCellKey(lane.uri))
   if (lanes.length === 0) delete shared.lanes
   else shared.lanes = lanes
   // Where the sender's local files are on the sender's disk (§20.6): a fact

@@ -19,7 +19,7 @@
  */
 
 import { ViewerError } from '../errors'
-import { begin, RENDERED, type RenderedReport } from '../perf/rendered'
+import { begin, RENDERED, routed, type RenderedReport } from '../perf/rendered'
 import { parseViewState, serialiseViewState, viewStateEquals } from '../state/ViewState'
 import { HistoryJournal } from '../state/historyJournal'
 import { historyItems } from '../ui/historyMenu'
@@ -34,6 +34,7 @@ import { StoreDrawer } from '../ui/StoreDrawer'
 import { registerShelf } from '../ui/examples'
 import type { StoreEntry } from '../state/store'
 import { splitUri } from '../ui/labels'
+import { canonicalUrl } from '../sources/rewrite'
 import {
   AESTHETICS_PANEL,
   ANALYSIS_PANEL,
@@ -118,6 +119,7 @@ import { Session, reserveSessionIds, type SessionHost } from './Session'
 import { EmbedChannel, embedChannel } from './EmbedChannel'
 import { TabStrip } from './TabStrip'
 import { highestId, readSessions, writeSessions, type SessionSnapshot } from './sessions'
+import { DOCS_URL } from '../documentation/site'
 
 /** Where "source" points, from the about dialog and the header. */
 const REPO_URL = 'https://github.com/js2264/chromosomix'
@@ -343,6 +345,8 @@ export class App implements SessionHost {
    * the whole window and the host it would be answering is the reader.
    */
   private readonly channel: EmbedChannel | null = null
+  /** The boot's first picture finished, in an embed: what a host's files wait for. */
+  private booted: Promise<void> = Promise.resolve()
   /**
    * The embed bar's brand, which is also the way out to the full viewer.
    *
@@ -440,6 +444,16 @@ export class App implements SessionHost {
     this.aestheticsPanel = new SidePanel(AESTHETICS_PANEL, relayout, settled, remembers)
     this.analysisPanel = new SidePanel(ANALYSIS_PANEL, relayout, settled, remembers)
     this.filesPanel = new SidePanel(FILES_PANEL, relayout, settled, remembers)
+    // Unless the page that frames this one asks for them open (`?panels=`,
+    // `embed.ts`): the documentation's live views show the controls beside the
+    // picture they teach. Opened as the reader would open them, and like any
+    // fold in a frame, remembered nowhere.
+    if (this.embed) {
+      for (const name of mounting().panels) {
+        const panel = name === 'annotations' ? this.annotationsPanel : this.aestheticsPanel
+        panel.reveal()
+      }
+    }
     this.files = new FilesCard({
       // The panel's arrow means what the header's `+` means, so it goes to the
       // same place: a second map beside the one that is open, anything else on
@@ -567,6 +581,17 @@ export class App implements SessionHost {
     })
     source.appendChild(icon('github'))
 
+    // How to use it, beside how it is made: doc.chromosomix.app (§32), in a tab
+    // of its own, as the source is — a reader halfway through a figure does not
+    // want this one navigated away.
+    const docs = el('a', {
+      class: 'btn btn-icon',
+      href: DOCS_URL,
+      title: 'Documentation: the browser, the files it opens, every analysis and the command line',
+      attrs: { target: '_blank', rel: 'noopener noreferrer', 'aria-label': 'documentation' },
+    })
+    docs.appendChild(icon('book-open'))
+
     const head = el(
       'header',
       { class: 'app-head' },
@@ -665,11 +690,12 @@ export class App implements SessionHost {
         'div',
         { class: 'head-actions' },
         // About the window rather than the work in it: theme, shortcuts,
-        // source, about.
+        // documentation, source, about.
         this.theme.el,
         iconButton('keyboard', withKey('Keyboard shortcuts', KEYS.shortcuts), () =>
           this.openShortcutsDialog(),
         ),
+        docs,
         source,
         iconButton('info', 'About this viewer', () => this.openAboutDialog()),
       ),
@@ -796,6 +822,20 @@ export class App implements SessionHost {
     // slot stays: it is where a session's remarks and refusals land, and an
     // embed that swallowed those would fail silently for the one reader who
     // could report it.
+    // The stylesheet's word for the same subtraction: every picture sized
+    // against the window's height counts out a header, a tab strip, the
+    // breadcrumb row and the status bar, and a frame has one bar instead of
+    // the four (`--embed-room` in `ui/styles.css`). The bar is not one height —
+    // a narrower frame gives the resolution and the contacts box a line of their
+    // own, and a phone's the trail too (§21.3) — so it is measured, and the view
+    // measured again whenever it changes.
+    root.classList.toggle('is-embed', this.embed)
+    if (bar !== null && typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(() => {
+        root.style.setProperty('--embed-bar-h', `${bar.getBoundingClientRect().height}px`)
+        this.current?.relayout()
+      }).observe(bar)
+    }
     root.append(
       ...(bar === null
         ? [head, this.tabs.el, this.restoreSlot, this.noticeSlot, this.breadcrumbSlot]
@@ -993,6 +1033,7 @@ export class App implements SessionHost {
       this.channel = embedChannel({
         state: () => this.current?.state ?? null,
         navigate: (state) => this.goTo(state),
+        add: (files) => this.addFromHost(files),
       })
     }
 
@@ -1007,8 +1048,61 @@ export class App implements SessionHost {
       window.addEventListener(RENDERED, (event) => {
         this.channel?.rendered((event as CustomEvent<RenderedReport>).detail)
       })
+      // The boot's first picture — the map the host's `src=` named, its error,
+      // or the picker — which a host's files wait for (`addFromHost`): drawn,
+      // or, in a frame out of sight that makes no animation frames and so never
+      // paints, routed and read with only its paints to come.
+      this.booted = new Promise((drawn) => {
+        window.addEventListener(RENDERED, () => drawn(), { once: true })
+        const look = (): void => {
+          if (routed()) drawn()
+          else setTimeout(look, 100)
+        }
+        // After `booting()` below, which ends the boot's own wait.
+        setTimeout(look, 0)
+      })
     }
     booting()
+  }
+
+  /**
+   * Files a host page put in this tab (`chromosomix:add`, §21.4), by address.
+   *
+   * The header's `+` with an address typed into it, once per address and in
+   * order: the first opens as the tab's file where the tab has none, and every
+   * other is added — a map beside the map, a track among the tracks. Each waits
+   * for whatever is opening to finish first, the map the host's `src=` named
+   * above all, or a track would arrive at a tab that is still empty and open in
+   * the map's place.
+   *
+   * Nothing is added before the boot's first picture is finished — or, in a
+   * frame out of sight, routed with only its paints to come — either: the map a
+   * `src=` names opens through a navigation, and a session marks itself as
+   * opening only some way into it.
+   *
+   * An address is canonicalised at this door as at the URL box's (§24.5), and
+   * only `http:` and `https:` are kept: the list is another origin's, and those
+   * are the schemes with a server on the other end — the rule `?config=` keeps.
+   */
+  private async addFromHost(files: string[]): Promise<void> {
+    await this.booted
+    for (const raw of files) {
+      const url = canonicalUrl(raw.trim())
+      if (!/^https?:\/\//i.test(url)) continue
+      const session = this.current
+      if (session === undefined) return
+      await settledOpening(session)
+      const { path } = splitUri(url)
+      const source = { kind: 'remote', url: path } as const
+      if (!session.hasFile && !session.isBrowsing) {
+        // An empty tab takes the first as its file; a tab whose own file was
+        // refused keeps the refusal on screen. Opening a track over it would
+        // put a 1D browser where the host's map should be, and report it
+        // drawn — the failure the host most needs to hear, hidden.
+        if (session.state !== null) return
+        await session.openPicked(url, source)
+      } else await session.addRemote(url, source)
+    }
   }
 
   /**
@@ -2577,6 +2671,13 @@ export class App implements SessionHost {
           ]),
       { id: 'about', group: 'Help', title: 'About this viewer', run: () => this.openAboutDialog() },
       {
+        id: 'docs',
+        group: 'Help',
+        title: 'Documentation',
+        hint: 'doc.chromosomix.app: the browser, the files it opens, every analysis and the command line',
+        run: () => window.open(DOCS_URL, '_blank', 'noopener'),
+      },
+      {
         id: 'source',
         group: 'Help',
         title: 'Source on GitHub',
@@ -2816,4 +2917,21 @@ function sessionStorageOrNull(): Storage | null {
   } catch {
     return null
   }
+}
+
+/**
+ * Resolve once `session` is opening nothing: what {@link App.addFromHost} waits
+ * on before each file. Asked, not subscribed to — an open is announced nowhere
+ * a caller could await, and the one a host's `src=` started was begun before
+ * the host had said anything — a few times a second, for as long as an open
+ * may take, which a `.pairs` import measures in minutes.
+ */
+function settledOpening(session: { opening: string | null }, poll = 100): Promise<void> {
+  return new Promise((settled) => {
+    const check = (): void => {
+      if (session.opening === null) settled()
+      else setTimeout(check, poll)
+    }
+    check()
+  })
 }

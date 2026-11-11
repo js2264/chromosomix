@@ -1,0 +1,41 @@
+# The laptop's environment: what notebooks/laptop.qmd is rendered in, on your own machine.
+#
+#   micromamba create -f notebooks/environment-laptop.yml       # or conda / mamba env create -f …
+#   micromamba run -n open2c quarto render notebooks/laptop.qmd
+#
+# Quarto and Jupyter to render the page; pandas, matplotlib, numpy and pyfaidx for its tables, its
+# figures and the mouse sequence; and, for its last part alone — the deep human map, start to finish —
+# the four packages the reference script runs (notebooks/scripts/cooltools_pipeline.py). Every version
+# is notebooks/requirements.txt's, the reference environment the validation holds chromosomix to, so
+# that the deep map is timed against the packages that page checks it against; in another environment the
+# page says the versions it found. Python, pip and Quarto — its own build, which brings Pandoc — come from
+# conda-forge, for Linux and for macOS alike; the Python packages from PyPI.
+#
+# Node.js (22.12 or later), the app's build, the command line and Playwright's browsers are not here:
+# they come from the repository, with npm, as the page's *To render* says.
+name: open2c
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - quarto=1.10.19
+  - pip
+  - pip:
+      - jupyter==1.1.1
+      - ipykernel==7.4.0
+      - pandas==2.3.3
+      - matplotlib==3.11.2
+      - numpy==2.5.4
+      - pyfaidx==0.9.0.4
+      - bioframe==0.8.0
+      - cooler==0.10.4
+      - cooltools==0.7.1
+      - coolpuppy==1.1.0
+      # What coolpuppy's own command line, coolpup.py, needs beyond the package, for the deep map's side of
+      # the reference's commands: PyTables, which it writes its pileup with; setuptools 81.0.0, the last to
+      # ship pkg_resources, which the h5sparse it imports calls (notebooks/requirements.txt's 84.0.0 does not
+      # ship it, and the validation never runs coolpup.py); and multiprocessing-logging 0.3.4, as 0.4.0 refuses
+      # to log from workers spawned rather than forked, as macOS starts them.
+      - tables==3.11.1
+      - setuptools==81.0.0
+      - multiprocessing-logging==0.3.4

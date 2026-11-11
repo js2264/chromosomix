@@ -16,12 +16,14 @@ name: Tests
 #     push, not only when the second job can build fixtures.
 #   - the second job builds every oracle a runner can build. Its public half
 #     needs no credential: the demo maps fetched from the lab's bucket and their
-#     oracles rebuilt with the public `cooler` package, and the fixtures `cooler`
-#     and `g3dtools` alone can write. Its private half is the full suite over
-#     `make_fixtures.py`'s output, which needs metacooler — not on PyPI, and a
-#     private repository, so it is checked out with the METACOOLER_REPO_TOKEN
-#     secret (a fine-grained token with read access to js2264/metacooler's
-#     contents) and skipped, with a warning saying so, where that is not set.
+#     oracles rebuilt with the public `cooler` package, the fixtures `cooler`
+#     and `g3dtools` alone can write, and the demo yeast Micro-C as `cooler` and
+#     `cooltools` reprocess it, which the subsample and the normalisations are
+#     held to. Its private half is the full suite over `make_fixtures.py`'s
+#     output, which needs metacooler — not on PyPI, and a private repository, so
+#     it is checked out with the METACOOLER_REPO_TOKEN secret (a fine-grained
+#     token with read access to js2264/metacooler's contents) and skipped, with
+#     a warning saying so, where that is not set.
 #
 # Every step that installs, fetches or generates is allowed to fail without
 # failing the build, and the job says plainly in its summary what did not run,
@@ -29,6 +31,10 @@ name: Tests
 # to ignore the badge. That used to mean the job was green while it compared
 # nothing: `pip install metacooler` failed on every run. The test steps
 # themselves are never allowed to fail quietly.
+#
+# Every vitest run here is `--mode dev`: the tests of the dev features (SPECS
+# §29), which a plain `npm test` leaves out (test/support/suites.ts), run on
+# every push like the rest, because a dev feature is tested like any other.
 
 on:
   push:
@@ -48,8 +54,8 @@ jobs:
     name: typecheck, build and fixture-free tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
@@ -61,8 +67,21 @@ jobs:
       # ever leave the repository.
       - name: Put the demo maps in place
         run: npm run fixtures:demo
+      # Measured over the whole app, not over the files the suite loads
+      # (vitest.config.ts): this half's figure, on every push. The full suite's
+      # is the goldens job's, where metacooler's fixtures let it run.
       - name: Tests that need no fixtures
-        run: npm run test:nofixtures
+        run: npm run test:nofixtures -- --coverage --mode dev
+      - name: Coverage of the fixture-free suite
+        if: always() && hashFiles('coverage/coverage-summary.json') != ''
+        run: node scripts/coverage-summary.mjs --title 'fixture-free suite'
+      - name: Keep the coverage report
+        if: always() && hashFiles('coverage/coverage-summary.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-fixture-free
+          path: coverage/
+          retention-days: 14
       - name: Build
         run: npm run build
 
@@ -84,13 +103,18 @@ jobs:
     env:
       # `secrets` cannot be read in an `if:`, so its presence travels in env.
       HAS_METACOOLER_TOKEN: ${{ secrets.METACOOLER_REPO_TOKEN != '' }}
+    # Whether the full suite ran and passed, which is what `coverage` below
+    # publishes from: a figure from a red suite, or from the public half alone,
+    # is not the app's.
+    outputs:
+      coverage: ${{ steps.full-suite.outcome == 'success' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - run: npm ci
@@ -99,10 +123,13 @@ jobs:
       # The public half: no credential, every run.
       # ---------------------------------------------------------------------
 
-      - name: Install cooler and g3dtools
+      # cooler from 0.11, the first whose `balance` counts a pixel on the main
+      # diagonal once in a bin's marginal, as the dense block the app normalises
+      # does: one round of an older one is not the app's VC.
+      - name: Install cooler, cooltools and g3dtools
         id: cooler
         continue-on-error: true
-        run: python -m pip install cooler g3dtools
+        run: python -m pip install 'cooler>=0.11' cooltools g3dtools
 
       # From the bucket and not from `demo/`, so a map that changed or vanished
       # there is found here rather than by a reader of the published store.
@@ -124,9 +151,15 @@ jobs:
 
       - name: The demo maps against their oracles
         if: steps.demo.outcome == 'success'
-        run: npx vitest run test/unit/demo-maps.test.ts
+        run: npx vitest run --mode dev test/unit/demo-maps.test.ts
 
-      - name: Build the fixtures cooler and g3dtools can write
+      # `fixtures:reprocessed` is the demo yeast Micro-C as cooler and cooltools
+      # reprocess it — `cooltools random-sample --exact`, `cooler balance`,
+      # `cooler coarsen`, cooltools' iterative correction — for the subsample and
+      # normalisation suites (SPECS §6.4, §6.5, §7.5). Like the rest it is built
+      # here and never committed, so a release of either package that disagrees
+      # with the app is found on the run that installed it.
+      - name: Build the fixtures cooler, cooltools and g3dtools can write
         id: public-fixtures
         if: steps.cooler.outcome == 'success'
         continue-on-error: true
@@ -135,6 +168,7 @@ jobs:
           npm run fixtures:hicpro
           npm run fixtures:pairs
           npm run fixtures:g3d
+          npm run fixtures:reprocessed
 
       # ---------------------------------------------------------------------
       # The private half: metacooler's own repository, with a read token.
@@ -144,7 +178,7 @@ jobs:
         id: metacooler
         if: env.HAS_METACOOLER_TOKEN == 'true'
         continue-on-error: true
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: js2264/metacooler
           ref: devel
@@ -166,19 +200,36 @@ jobs:
         run: npm run fixtures
 
       - name: Full suite, against the Python oracles
+        id: full-suite
         if: steps.fixtures.outcome == 'success'
-        run: npm test
+        run: npm test -- --coverage --mode dev
+
+      # The app-wide figure, which only this run can give: the twelve reader
+      # suites and the request budgets over metacooler's fixtures are what the
+      # check job's figure leaves out. The badge goes in the report's directory,
+      # so the artifact below carries both to the `coverage` job.
+      - name: Coverage of the full suite
+        if: always() && steps.fixtures.outcome == 'success' && hashFiles('coverage/coverage-summary.json') != ''
+        run: node scripts/coverage-summary.mjs --title 'full suite' --badge coverage/badge.json
+      - name: Keep the coverage report
+        if: always() && steps.fixtures.outcome == 'success' && hashFiles('coverage/coverage-summary.json') != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-full
+          path: coverage/
+          retention-days: 14
 
       # Without metacooler the full suite cannot run, but the suites the public
       # fixtures feed can — each of them skips by name in the always-on job.
       - name: The suites the public fixtures feed
         if: steps.fixtures.outcome != 'success' && steps.public-fixtures.outcome == 'success'
         run: >-
-          npx vitest run
+          npx vitest run --mode dev
           test/unit/scool.test.ts test/unit/hicpro.test.ts
           test/unit/pairs-cload-oracle.test.ts test/unit/pairs-mcool-roundtrip.test.ts
           test/unit/g3d-binary-oracle.test.ts test/unit/g3d-binary-worker.test.ts
           test/unit/msgpack.test.ts test/dom/error-view.test.ts
+          test/unit/subsample-cooltools.test.ts test/unit/normalise-cooler.test.ts
 
       - name: Report what ran and what did not
         if: always()
@@ -193,19 +244,138 @@ jobs:
           {
             echo "| oracle | outcome |"
             echo "|---|---|"
-            echo "| cooler + g3dtools installed | ${COOLER} |"
+            echo "| cooler + cooltools + g3dtools installed | ${COOLER} |"
             echo "| demo maps fetched from the bucket | ${DEMO} |"
             echo "| demo oracles rebuilt identically | ${DEMO_GOLDEN} |"
-            echo "| fixtures built by cooler / g3dtools | ${PUBLIC_FIXTURES} |"
+            echo "| fixtures built by cooler / cooltools / g3dtools | ${PUBLIC_FIXTURES} |"
             echo "| metacooler checked out (METACOOLER_REPO_TOKEN) | ${METACOOLER:-skipped} |"
             echo "| metacooler fixtures, full suite | ${FIXTURES:-skipped} |"
           } >> "$GITHUB_STEP_SUMMARY"
           if [ "$FIXTURES" != "success" ]; then
             echo "::warning title=Full suite not run::metacooler's fixtures were not built (set the METACOOLER_REPO_TOKEN secret to a token that can read js2264/metacooler), so the twelve reader suites over them and the metacool request budgets did not run. The demo maps and the public fixtures still did, where their own steps say so."
           fi
+          if [ "$PUBLIC_FIXTURES" != "success" ]; then
+            echo "::warning title=Public fixtures not built::cooler, cooltools or g3dtools did not build their fixtures, so the .pairs (cooler cload pairs) and binary g3d oracles and the subsample and normalisations against cooler and cooltools did not run in this job, nor the .scool and HiC-Pro ones unless metacooler's fixtures rebuilt them. Run npm run fixtures:scool, fixtures:hicpro, fixtures:pairs, fixtures:g3d and fixtures:reprocessed and look at the error."
+          fi
           if [ "$DEMO" != "success" ]; then
             echo "::warning title=Demo maps not fetched::the demo maps could not be fetched from the public bucket, so the reader was not compared with cooler on them in this job."
           fi
           if [ "$DEMO_GOLDEN" != "success" ] && [ "$DEMO" = "success" ] && [ "$COOLER" = "success" ]; then
             echo "::warning title=Demo oracles drifted::rebuilding test/golden/demo with this cooler did not reproduce the committed files; run npm run fixtures:demo-golden and look at the diff."
+          fi
+
+  # The full suite's coverage, published at `<site>/coverage/` — the report, and
+  # the `badge.json` the README's badge is drawn from — on the terms the stores
+  # and the notebooks are (docs/deploy.md): Pages replaces the whole site on
+  # every deployment and only deploy.yml deploys it, so this force-pushes the
+  # report to an orphan `coverage` branch as one commit and asks for a deploy,
+  # which copies the branch into `coverage/` then and on every run after.
+  #
+  # A job of its own so that the one holding a token that can write runs none
+  # of the code under test, only what the goldens job left in its artifact.
+  # Only a push to `main` publishes: a pull request's coverage is in its run's
+  # summary and its artifact, and is not the site's.
+  coverage:
+    name: publish the full suite's coverage
+    needs: goldens
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.goldens.outputs.coverage == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      # The `coverage` branch.
+      contents: write
+      # The deploy it asks for at the end.
+      actions: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: coverage-full
+          path: report
+
+      # One orphan commit, force-pushed: the branch's only interesting state is
+      # its tip, and the deploy clones it on every push to `main`.
+      - name: Publish to the coverage branch
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -s report/index.html && test -s report/badge.json
+          short=$(echo '${{ github.sha }}' | cut -c1-7)
+          cd report
+          git init --quiet --initial-branch coverage
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit --quiet -m "coverage: full suite at $short, $(jq -r .message badge.json) of lines"
+          git push --quiet --force "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git" \
+            HEAD:refs/heads/coverage
+
+      # The publisher of the site, as stores.yml and notebooks.yml ask it. A run
+      # dispatched by the workflow token is one of the two kinds GitHub delivers
+      # for that token.
+      - name: Ask the deploy to publish the site
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy.yml --ref main --repo '${{ github.repository }}'
+
+  # The notebook widgets (SPECS §21.5): the Python package under `widgets/python`
+  # and the R package under `widgets/r`. Neither needs the app built — each test
+  # suite holds what its widget hands the frame and what its file server answers
+  # — so they run on their own, beside the app's.
+  widgets:
+    name: the Jupyter and R widgets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: The Jupyter widget's tests
+        run: |
+          python -m pip install -e widgets/python pytest
+          python -m pytest -q widgets/python/tests
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: widgets/r
+          extra-packages: any::rcmdcheck
+          needs: check
+      - name: The R widget's check and tests
+        uses: r-lib/actions/check-r-package@v2
+        with:
+          working-directory: widgets/r
+          args: 'c("--no-manual")'
+          error-on: '"warning"'
+
+  # The documentation site (SPECS §32): built as main's copy is, but at the root,
+  # which is the one place its link checker runs — every internal link of every
+  # page, generated or written, to a page or a heading that exists. It reads
+  # the app's source (`scripts/docs-data.mjs`), so a task added to the registry
+  # without a page, a token the theme reads that the stylesheet dropped, or a
+  # validation section a task cites that the notebook lost, fails here.
+  # `.github/workflows/docs.yml` publishes it; nothing here does.
+  docs:
+    name: the documentation site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            documentation/package-lock.json
+      # The site reads the app's source through Vite, and nothing an install
+      # script fetches (Electron's binary) is any part of that.
+      - run: npm ci --ignore-scripts
+      - run: npm ci --prefix documentation
+      - name: Build the site, every internal link checked
+        run: npm run docs:build
+      - name: Every page written
+        run: |
+          if grep -rln 'TODO(docs)' documentation/src/content/docs; then
+            echo "::error title=Unwritten pages::the pages above are still marked TODO(docs)"
+            exit 1
           fi

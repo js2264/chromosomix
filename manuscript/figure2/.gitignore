@@ -1,2 +1,6 @@
-# The paper store's inputs (about 370 MB) and the commands' outputs: fetched or rerun, never committed.
+# The inputs and the tools' working files: fetched or rerun, never committed.
 build/
+# The rendered page and what Quarto keeps beside it.
+reference.html
+reference_files/
+.quarto/

@@ -449,7 +449,7 @@ feature that does not work at all without an account. The folder box on the same
 sign-in, and not on screen until it has happened — takes the address bar of a folder open in Drive
 (`https://drive.google.com/drive/folders/<id>`, with or without the `/u/0` account segment) or the
 bare id; an empty box is all of My Drive. What this browser then keeps is the folder's name and its
-id, listed under **About → what is stored**; the token is not kept, so the folder survives a reload
+id, listed under *What this browser is remembering* (the palette, Help); the token is not kept, so the folder survives a reload
 and the sign-in does not.
 
 The listing asks `drive/v3/files` for the files whose `parents` contains that id, one level at a

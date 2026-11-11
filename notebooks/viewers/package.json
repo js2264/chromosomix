@@ -1,7 +1,7 @@
 {
   "name": "chromosomix-viewer-timings",
   "private": true,
-  "description": "The two viewers timing.qmd times chromosomix against, at the versions it names, and the browser driver that times all three. Not part of the app.",
+  "description": "The two viewers viewers.qmd times chromosomix against, at the versions it names, and the Playwright that drives all three there and the app in the parity and the laptop. Not part of the app.",
   "license": "GPL-3.0-or-later",
   "dependencies": {
     "higlass": "2.3.5",

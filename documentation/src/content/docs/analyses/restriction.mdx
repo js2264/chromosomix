@@ -1,0 +1,45 @@
+---
+title: "Restriction sites"
+description: "Find where a restriction enzyme cuts a reference sequence, as a track of cuts and a count of cuts per bin."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="restriction" />
+
+**Restriction sites** digests the loaded reference with the enzyme or kit a Hi-C library was made with, and lays out every cut as a point, beside the number of cuts in each bin; [Pairs QC](/analyses/pairsqc/) cuts its fragments with it. Unlike [Find a motif](/analyses/motif/) with `GATC` typed in, it places each cut where the enzyme cuts within its site — DpnII before the `G` of `GATC`, NlaIII after the `G` of `CATG` — so a fragment boundary is the cut, to the base.
+
+## Running it
+
+Load the reference as a FASTA or a `.2bit`, open **Restriction sites** on the **1D tasks** card of the **Analysis** panel, choose the **reference** and the **enzyme**, which starts on `none`, and tick the **sequences**. The count per bin needs an open map; without one, only the cuts are made.
+
+The cuts are a track on the **Tracks** card named after the digest, `DpnII sites` for DpnII, and the count per bin a second, `DpnII site density`; a note counts the cuts and the fragments they make.
+
+![The yeast Micro-C map of IV between 1.0 and 1.4 Mb with the DpnII sites and the DpnII site density as two new lanes along its left edge, beside the drawer, whose note reads 36,062 DpnII cuts on 16 sequences: 36,078 fragments, 336 bp long on average.](../../../assets/screens/analyses/restriction-dpnii.webp)
+
+The same run from a shell:
+
+<TaskCommand id="restriction" />
+
+## Parameters
+
+**enzyme** offers the enzymes Hi-C libraries are made with, each shown with its site and where it cuts, such as DpnII `^GATC`, which MboI and Sau3AI share, and the Arima kit, which cuts with DpnII and HinfI at once. **custom** opens **sites**: enzyme names, aliases such as MboI, or IUPAC sites with a `^` where the top strand is cut, separated by commas, such as `G^ANTC, HindIII`. A site without its `^`, or looser than a four-base cutter, is refused with the reason.
+
+<TaskParameters id="restriction" />
+
+## What it writes
+
+<TaskOutputs id="restriction" />
+
+## Reading the result
+
+Each cut is a one-base point at the first base after the top strand's cut, where the fragment to its right begins, named by the enzyme that made it, so the two enzymes of a kit can be told apart. A sequence with no site is one fragment, end to end.
+
+The density is the cuts in each bin, and a bin with none is a zero. It shows where the enzyme cut often and where it left long fragments.
+
+## Compared with bioframe
+
+Every cut is 2 bp earlier than in `bioframe.digest` and `cooler digest`, whose fragment boundaries are 2 bp late. Bear it in mind beside a fragment file from either, such as one handed to `pairtools restrict`.

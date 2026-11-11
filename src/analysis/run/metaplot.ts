@@ -41,6 +41,7 @@ import {
 } from '../job'
 import { makeRandom } from '../random'
 import type { CurveSeries, MatrixOutput, TaskOutput } from '../types'
+import { scaledLabel } from './labels'
 
 /** One feature, flattened out of the parallel arrays a `FeatureSet` keeps. */
 interface Feature {
@@ -221,7 +222,7 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
 
       built.push({
         group: index,
-        rows: await rowsFor(job, entry, plan.windows, plan.layout, step),
+        rows: await rowsFor(job, entry, plan.windows, plan.layout),
         count: plan.windows.length,
         layout: plan.layout,
       })
@@ -291,6 +292,8 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
     label: 'Metaplot',
     series,
     xLabel: axis.label,
+    // A scaled region's column, spelled by where it is along the feature.
+    ...(axis.scaled === undefined ? {} : { xScaled: axis.scaled }),
     // A y axis still reading *Mean signal* over standardised rows would name a
     // unit the numbers are no longer in — the one lie a relabelled axis is for.
     yLabel: zscore ? 'Signal (z-score, per track)' : 'Mean signal',
@@ -307,20 +310,36 @@ export const runMetaplot: TrackTaskRunner = async (job) => {
 }
 
 /**
+ * How many bases one `sample` request asks for, at most, and how many windows:
+ * the batches a sequence's windows are read in, as *Signal by group* reads its
+ * stretches (`run/groupsignal.ts`).
+ */
+const CHUNK_BASES = 1 << 20
+const CHUNK_WINDOWS = 4096
+
+/**
  * Every window's row, for one track.
  *
- * Grouped by sequence before sampling, which is the whole performance story:
- * `sample` picks one zoom level per request and coalesces adjacent blocks, so a
- * thousand features on one chromosome cost one call. Regions are matched back to
- * their windows by index, since the worker drops the ones its file cannot
- * answer.
+ * Read **at the track's own resolution** — a bigWig's base-level records, never
+ * a zoom level — because a column is the mean over the bases it covers and a
+ * zoom record is a mean over *its* span, which straddles the column's edges.
+ * It asked `sample` for the column's width, which takes any zoom level up to
+ * twice that wide (bbi's rule): the records themselves at 50 bp on most tracks,
+ * and on a base-level ChIP-seq track read in 10 kb columns, records of up to
+ * 20 kb. deepTools' `computeMatrix` reads every base, as *Signal by group* and
+ * *Track correlation* now do; `windowRow` weighs each record by how much of a
+ * column it covers, so the records make the exact mean.
+ *
+ * By sequence, the windows in order along it, a batch at a time, so what is
+ * held is one batch's records: a megabase, or one window wider than that. Each
+ * stretch is asked for once, and the reply matched back by the coordinates it
+ * echoes, since `sample` drops what its file cannot answer.
  */
 async function rowsFor(
   job: TrackJobContext,
   entry: string,
   windows: Window[],
   layout: Layout,
-  step: number,
 ): Promise<Float64Array> {
   const rows = new Float64Array(windows.length * layout.slots).fill(Number.NaN)
   const byContig = new Map<string, number[]>()
@@ -330,47 +349,57 @@ async function rowsFor(
     else held.push(i)
   }
 
-  for (const [, indices] of byContig) {
-    job.throwIfCancelled()
+  for (const [contig, indices] of byContig) {
     // **Each stretch asked for once.** Features that share an anchor share a
     // window — the transcripts of a gene that start at one TSS, a fifth of the
     // RefSeq set — and a stretch asked for twice is read, parsed and handed back
-    // twice for the same numbers. The reply is matched by coordinates below, so
-    // every feature finds its stretch whichever of them asked.
-    const asked = new Set<string>()
-    const regions: Region[] = []
+    // twice for the same numbers. Every feature finds its stretch by its
+    // coordinates, whichever of them asked.
+    const asking = new Map<string, number[]>()
     for (const i of indices) {
-      const window = windows[i]
-      const key = `${window.start}-${window.end}`
-      if (asked.has(key)) continue
-      asked.add(key)
-      regions.push({ contig: window.contig, start: window.start, end: window.end })
+      const key = `${windows[i].start}-${windows[i].end}`
+      const held = asking.get(key)
+      if (held === undefined) asking.set(key, [i])
+      else held.push(i)
     }
-    const set = await job.sample(entry, regions, step)
-    // `sample` answers in the order it was asked, having dropped what it could
-    // not answer — so the reply is matched by its echoed coordinates rather than
-    // by position, which would silently shift every row after the first drop.
-    const byKey = new Map<string, (typeof set.regions)[number]>()
-    for (const region of set.regions) byKey.set(`${region.contig}:${region.start}-${region.end}`, region)
+    const regions: Region[] = [...asking.keys()]
+      .map((key) => {
+        const [start, end] = key.split('-').map(Number)
+        return { contig, start, end }
+      })
+      .sort((a, b) => a.start - b.start || a.end - b.end)
     // And each row made once: a window the same as one already done — same
     // stretch, strand and columns, and same body where it has one — is that
     // row again, copied.
     const done = new Map<string, number>()
-    for (const i of indices) {
-      const window = windows[i]
-      const samples = byKey.get(`${window.contig}:${window.start}-${window.end}`)
-      if (samples === undefined) continue
-      const { body } = window
-      const key =
-        `${window.start}-${window.end}:${window.strand}:${window.slotFrom}-${window.slotTo}` +
-        (body === undefined ? '' : `:${body.start}-${body.end}:${body.slotFrom}-${body.slotTo}`)
-      const same = done.get(key)
-      if (same !== undefined) {
-        rows.copyWithin(i * layout.slots, same * layout.slots, (same + 1) * layout.slots)
-        continue
+    for (let first = 0; first < regions.length; ) {
+      job.throwIfCancelled()
+      let last = first + 1
+      let bases = regions[first].end - regions[first].start
+      while (last < regions.length && last - first < CHUNK_WINDOWS) {
+        bases += regions[last].end - regions[last].start
+        if (bases > CHUNK_BASES) break
+        last++
       }
-      done.set(key, i)
-      rows.set(windowRow(samples, window, layout.slots), i * layout.slots)
+      const set = await job.sample(entry, regions.slice(first, last), 1)
+      first = last
+      for (const samples of set.regions) {
+        for (const i of asking.get(`${samples.start}-${samples.end}`) ?? []) {
+          const window = windows[i]
+          const { body, span } = window
+          const key =
+            `${window.start}-${window.end}:${window.strand}:${window.slotFrom}-${window.slotTo}` +
+            (span === undefined ? '' : `:${span.start}-${span.end}`) +
+            (body === undefined ? '' : `:${body.start}-${body.end}:${body.slotFrom}-${body.slotTo}`)
+          const same = done.get(key)
+          if (same !== undefined) {
+            rows.copyWithin(i * layout.slots, same * layout.slots, (same + 1) * layout.slots)
+            continue
+          }
+          done.set(key, i)
+          rows.set(windowRow(samples, window, layout.slots), i * layout.slots)
+        }
+      }
     }
   }
   return rows
@@ -426,14 +455,29 @@ export function clipOf(values: Float32Array): [number, number] | null {
  * cannot be lined up against the curve at all. The ends are the axis's own ends
  * (`figures/matrixOption.spreadTicks`), so the two pictures agree column for
  * column.
+ *
+ * A scaled region's are its landmarks, where they fall: `Start` and `End` at
+ * the body's edges, which are wherever the flanks end — evenly spread only when
+ * the body is twice a flank — then the flanks' far ends and the middle of the
+ * body, spelled as the curve's ticks are (`run/labels.scaledLabel`). In that
+ * order, which is the order the painter labels them in, each where it clears
+ * the ones before: a ten-column body between two 5 kb flanks keeps both its
+ * edges named and loses its `50%`.
  */
-function heatmapTicks(layout: Layout): string[] {
-  const { x } = axisFor(layout)
-  if (x.length === 0) return []
-  const scaled = layout.bodyTo > layout.bodyFrom
-  // In the scaled layout the abscissa is a slot number, which is not a unit
-  // anybody reads; the three parts are named in the axis label instead.
-  if (scaled) return ['', '', '', '', '']
+function heatmapTicks(layout: Layout): { labels: string[]; at?: number[] } {
+  const { x, scaled } = axisFor(layout)
+  if (x.length === 0) return { labels: [] }
+  if (scaled !== undefined) {
+    const marks = [scaled.start, scaled.end]
+    if (scaled.start > scaled.from) marks.push(scaled.from)
+    if (scaled.to > scaled.end) marks.push(scaled.to)
+    marks.push((scaled.start + scaled.end) / 2)
+    const span = scaled.to - scaled.from
+    return {
+      labels: marks.map((mark) => scaledLabel(scaled, mark)),
+      at: marks.map((mark) => (mark - scaled.from) / span),
+    }
+  }
   // **The axis's own ends, not the bins' centres.** `axisFor` answers with the
   // centre of each column, so the middle column of a 50 bp grid is at +25 and
   // the first at −1,975: true to the half bin, and an axis nobody can read,
@@ -444,11 +488,13 @@ function heatmapTicks(layout: Layout): string[] {
   const step = layout.flankStep > 0 ? layout.flankStep : 1
   const lo = x[0] - step / 2
   const hi = x[x.length - 1] + step / 2
-  return [0, 0.25, 0.5, 0.75, 1].map((fraction) => {
-    const value = lo + fraction * (hi - lo)
-    const kb = Math.abs(value) >= 10_000
-    return kb ? `${Number((value / 1000).toFixed(1))} kb` : String(Math.round(value))
-  })
+  return {
+    labels: [0, 0.25, 0.5, 0.75, 1].map((fraction) => {
+      const value = lo + fraction * (hi - lo)
+      const kb = Math.abs(value) >= 10_000
+      return kb ? `${Number((value / 1000).toFixed(1))} kb` : String(Math.round(value))
+    }),
+  }
 }
 
 /** One curve's rows, kept for its heatmap: its group's features, one row each. */
@@ -532,6 +578,7 @@ function heatmapOf(
     values.set(rows.subarray(order[row] * layout.slots, (order[row] + 1) * layout.slots), row * layout.slots)
   }
   const clip = clipOf(values)
+  const ticks = heatmapTicks(layout)
   return {
     kind: 'matrix',
     id: index === 0 ? 'metaplot-heatmap' : `metaplot-heatmap-${index + 1}`,
@@ -547,7 +594,8 @@ function heatmapOf(
       run.tracks === 1
         ? `Features, strongest first (${count.toLocaleString()})`
         : `Features, strongest first across ${run.tracks} tracks (${count.toLocaleString()})`,
-    xTicks: heatmapTicks(layout),
+    xTicks: ticks.labels,
+    ...(ticks.at === undefined ? {} : { xTickAt: ticks.at }),
     yTicks: [],
     colormap: 'viridis',
     ...(clip === null ? {} : { range: clip }),

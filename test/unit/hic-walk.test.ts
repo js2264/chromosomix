@@ -196,6 +196,8 @@ const URL_UNDER_TEST = 'https://bucket.test/walk.hic'
 let served: Uint8Array = new Uint8Array(0)
 /** Every range the stub was asked for, inclusive at both ends as `Range` spells it. */
 const ranges: Array<[number, number]> = []
+/** The cache mode each ranged `fetch` asked for, in order. */
+const cacheModes: Array<RequestCache | undefined> = []
 
 class RangeXhr {
   status = 0
@@ -231,7 +233,7 @@ class RangeXhr {
  * says — and the exact reads, which come through `fetch` rather than the
  * synchronous request and are held to the same rule: a range, or nothing.
  */
-const probe = (async (_url: string, init?: { method?: string; headers?: HeadersInit }) => {
+const probe = (async (_url: string, init?: { method?: string; headers?: HeadersInit; cache?: RequestCache }) => {
   if (init?.method === 'HEAD') {
     return new Response(null, {
       status: 200,
@@ -244,6 +246,7 @@ const probe = (async (_url: string, init?: { method?: string; headers?: HeadersI
   const from = Number(match[1])
   const end = Math.min(Number(match[2]), served.byteLength - 1)
   ranges.push([from, end])
+  cacheModes.push(init?.cache)
   return new Response(served.slice(from, end + 1), {
     status: 206,
     headers: { 'content-range': `bytes ${from}-${end}/${served.byteLength}` },
@@ -260,6 +263,7 @@ function stub(key: string, value: unknown): void {
 
 beforeEach(() => {
   ranges.length = 0
+  cacheModes.length = 0
 })
 
 afterEach(() => {
@@ -395,6 +399,16 @@ describe('an exact read of a remote file', () => {
     expect(source.cachedChunkCount()).toBe(0)
     // The probe, and the one read.
     expect(source.stats()).toEqual({ requests: 2, bytes: 300 })
+  })
+
+  it('goes round the browser’s HTTP cache, which would let one of a walk’s reads out at a time', async () => {
+    // Chromium's cache lets one request per URL write its entry at once, and
+    // the rest wait on it: a walk's six reads of one file went out one after
+    // another, each a full round trip. `no-store` keeps them out of the cache
+    // entry, so they are on the wire together.
+    const source = await remote()
+    await Promise.all([source.readExact(1_000, 64), source.readExact(50_000, 64), source.readExact(90_000, 64)])
+    expect(cacheModes).toEqual(['no-store', 'no-store', 'no-store'])
   })
 
   it('is answered from the chunks already held, for nothing', async () => {

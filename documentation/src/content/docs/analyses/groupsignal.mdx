@@ -1,0 +1,54 @@
+---
+title: "Signal by group"
+description: "Compare a track’s values between groups of the genome, such as A and B compartments, with violins and rank tests."
+---
+
+import TaskCommand from '@components/TaskCommand.astro'
+import TaskOutputs from '@components/TaskOutputs.astro'
+import TaskParameters from '@components/TaskParameters.astro'
+import TaskSummary from '@components/TaskSummary.astro'
+
+<TaskSummary id="groupsignal" />
+
+Is compartment A richer in GC than B? **Signal by group** reads one or more tracks over groups of the genome, draws each group as a violin and tests the groups against one another by ranks.
+
+## Running it
+
+Load or make the tracks to compare, such as GC content from [Base composition](/analyses/composition/) or the eigenvector from [Compartments](/analyses/compartments/). Open **Signal by group** on the **1D tasks** card of the **Analysis** panel, tick the **tracks**, and under **groups from** choose:
+
+- **a feature set** (**features**), split under **split the set by** by **name** (A and B on a compartment call), **strand**, **score, in quantiles** or **nothing: one group**. The bases it does not cover are one more group, *rest of the genome*, unless you turn off **the rest as a group**.
+- **a track** (**grouping track**), its bins cut by **sign**, `above 0` and `below 0`, or into **quantiles**. The bins are **bin size** wide, or the open map's, or 10 kb with no map open.
+
+The drawer shows a violin per group for each track, and the tables below. Groups made from a track are also written out as a set of intervals named by group, for other tasks to read.
+
+![The drawer of Signal by group for GC content in the A and B compartments of the P. aeruginosa PAK chromosome: a violin for each group, the Groups table, and Between groups, where Mann–Whitney U gives an effect of 0.411 and a P of 0.0002.](../../../assets/screens/analyses/groupsignal-gc-compartments.webp)
+
+The same run from a shell:
+
+<TaskCommand id="groupsignal" />
+
+## Parameters
+
+**bin size** sets what one observation is, and so what the P means. At 0, the default, an entry is one value: a run of a group's features, merged where they overlap or touch; a stretch of the rest between two of them; or a run of bins in one group. Any other size cuts entries into stretches of at most that many bases. Leave it at 0 to test; set it to describe.
+
+<TaskParameters id="groupsignal" />
+
+## What it writes
+
+<TaskOutputs id="groupsignal" />
+
+## Reading the result
+
+**Groups** gives, for each track and group, the entries (or stretches), the bases they cover, the mean, SD, median and quartiles, and **Mean − rest**: the group's mean less that of every other stretch. Each value is the track's exact mean over the bases it has a value for.
+
+**Between groups** tests every two groups with Mann–Whitney U, giving the **Median difference** and the rank-biserial **Effect**: +1 where every value of the group is above every value of the other, −1 where every one is below, 0 where they mix evenly. Three groups or more are also tested together with Kruskal–Wallis H. Both are SciPy's asymptotic forms, Mann–Whitney with its continuity correction. **q** is Benjamini–Hochberg over every test of the run, and a very small P or q is written with an exponent, never as 0.
+
+### Read the effect, not only the P
+
+The tests take their observations as independent, and the bins of one compartment are not: cut into bins, a compartment gives more observations, and a smaller P, with no more evidence. On *P. aeruginosa*, GC in A against B has an effect of 0.42, 0.39 and 0.43 at 8, 32 and 128 kb, and a P of 2·10⁻²⁰, 6·10⁻⁵ and 3·10⁻².
+
+### What to watch for
+
+- An empty group, such as the rest of the genome beside a call that covers every base, and features on sequences the assembly lacks, are left out and named.
+- Cut by sign, a bin with no reading, or reading exactly 0, is in no group; a note counts them.
+- A violin of more than 20,000 values is drawn from 20,000 of them; the tests use every value.

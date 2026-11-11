@@ -1,5 +1,5 @@
 /**
- * The ideogram's switch (§5.10), one button in two Tracks cards: the
+ * The ideogram's switch (§5.11), one button in two Tracks cards: the
  * browser's, where it is lit while the ideogram is drawn, and a map's, where a
  * press puts the map down to draw it, as `v` puts it down. One mark and one
  * sentence in both, so the switch is one control wherever the tracks are — as

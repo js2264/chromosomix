@@ -5,7 +5,10 @@
  * second, with A called over the first half and B over the next 30 kb: A must
  * come out higher than B and than the rest, every stretch of it higher than
  * every stretch of B, and the grouping by a track's sign must find the same
- * boundary and write it out as intervals.
+ * boundary and write it out as intervals. Every track is read at its own
+ * resolution, never from a zoom level whose records straddle a stretch's edge.
+ * By default each entry is one value — a run of features, a gap between them, a
+ * run of bins — and one across a circle's origin is one entry, not two.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -14,6 +17,8 @@ import { FeatureBuilder } from '@/annotations/featureset'
 import type { FeatureSet, Region, TrackSampleSet, TrackSamples } from '@/annotations/types'
 import type { TrackJobContext } from '@/analysis/job'
 import { cut, runGroupSignal } from '@/analysis/run/groupsignal'
+import { GROUP_SIGNAL_TASK } from '@/analysis/tasks/groupsignal'
+import { defaultParams } from '@/analysis/types'
 import type {
   AnalysisFraming,
   CurveOutput,
@@ -30,29 +35,51 @@ const TRACKS: Record<string, (at: number) => number> = {
   gc: (at) => (at < 50_000 ? 0.7 : 0.5),
   e1: (at) => (at < 40_000 ? 1 : -1),
   ramp: (at) => at / LENGTH,
+  wave: (at) => (at < 20_000 || at >= 80_000 ? 1 : -1),
 }
 
-/** Answers in 1 kb intervals over each region asked, as a bigWig's zoom level would. */
-function sample(entry: string, regions: Region[]): Promise<TrackSampleSet> {
+/** The track's own records, and its one zoom level's: each a mean over its span. */
+const OWN = 100
+const ZOOM = 896
+
+/** Every resolution a run asked for, and the longest region. */
+const asked: number[] = []
+let longest = 0
+
+/**
+ * Answers over each region asked as a bigWig does: from its zoom level where
+ * that is at most twice the bases per pixel asked for, as bbi picks one, and
+ * from its own records otherwise — a zoom record laid across an edge carries
+ * the far side's signal.
+ */
+function sample(entry: string, regions: Region[], basesPerPixel: number): Promise<TrackSampleSet> {
+  asked.push(basesPerPixel)
+  for (const region of regions) longest = Math.max(longest, region.end - region.start)
   const f = TRACKS[entry]
+  const width = ZOOM <= 2 * basesPerPixel ? ZOOM : OWN
+  const meanOver = (start: number): number => {
+    let sum = 0
+    for (let at = start; at < start + width; at++) sum += f(at)
+    return sum / width
+  }
   const answers: TrackSamples[] = regions.map((region) => {
-    const from = Math.floor(region.start / 1000)
-    const to = Math.ceil(region.end / 1000)
-    const starts = Int32Array.from({ length: to - from }, (_, i) => (from + i) * 1000)
+    const from = Math.floor(region.start / width)
+    const to = Math.ceil(region.end / width)
+    const starts = Int32Array.from({ length: to - from }, (_, i) => (from + i) * width)
     return {
       contig: region.contig,
       start: region.start,
       end: region.end,
       starts,
-      ends: Int32Array.from(starts, (start) => start + 1000),
-      values: Float32Array.from(starts, (start) => f(start + 500)),
+      ends: Int32Array.from(starts, (start) => start + width),
+      values: Float32Array.from(starts, meanOver),
       min: null,
       max: null,
       variant: null,
-      summary: false,
+      summary: width === ZOOM,
     }
   })
-  return Promise.resolve({ basesPerPixel: 1000, regions: answers, extent: null })
+  return Promise.resolve({ basesPerPixel, regions: answers, extent: null })
 }
 
 function compartments(): FeatureSet {
@@ -75,13 +102,17 @@ const FRAMING: AnalysisFraming = {
   level: 'bin',
 }
 
-async function run(params: Params, set: FeatureSet = compartments()): Promise<{ outputs: TaskOutput[]; notes: string[] }> {
+async function run(
+  params: Params,
+  set: FeatureSet = compartments(),
+  { length = LENGTH, circular = [] as string[] } = {},
+): Promise<{ outputs: TaskOutput[]; notes: string[] }> {
   const notes: string[] = []
   const job: TrackJobContext = {
     params: { tracks: ['gc'], resolution: 10_000, ...params },
-    framing: FRAMING,
+    framing: { ...FRAMING, circular },
     inputs: {
-      contigLengths: { chr: LENGTH },
+      contigLengths: { chr: length },
       features: { features: set },
       labels: { gc: 'GC content', e1: 'E1', ramp: 'ramp', ab: 'A/B compartments' },
     },
@@ -90,7 +121,7 @@ async function run(params: Params, set: FeatureSet = compartments()): Promise<{ 
     progress: () => {},
     note: (text) => notes.push(text),
     sample,
-    lengthOf: () => LENGTH,
+    lengthOf: () => length,
   }
   return { outputs: await runGroupSignal(job), notes }
 }
@@ -150,6 +181,21 @@ describe('groups from a feature set', () => {
     expect(figure?.series).toHaveLength(2)
   })
 
+  it('reads every track at its own resolution, never a zoom level’s', async () => {
+    asked.length = 0
+    const { outputs } = await run({ ...params, perFeature: true })
+    expect(new Set(asked)).toEqual(new Set([1]))
+    // A's stretches all read 0.7 and B's 0.5, the stretches either side of 50 kb
+    // too, where a zoom record across the edge would mix the two.
+    const groups = table(outputs, 'groupsignal-groups')
+    for (const row of groups?.rows ?? []) expect(Number(row.sd)).toBeLessThan(1e-9)
+    expect(Number(groups?.rows[0].mean)).toBeCloseTo(0.7, 6)
+    expect(Number(groups?.rows[1].mean)).toBeCloseTo(0.5, 6)
+    const perFeature = table(outputs, 'groupsignal-features')
+    expect(Number(perFeature?.rows[0].track1)).toBeCloseTo(0.7, 6)
+    expect(Number(perFeature?.rows[1].track1)).toBeCloseTo(0.5, 6)
+  })
+
   it('refuses to run without a set, and says why', async () => {
     const { outputs, notes } = await run({ ...params, features: '' })
     expect(outputs).toEqual([])
@@ -176,6 +222,64 @@ describe('groups from a track', () => {
     expect(names).toHaveLength(2)
     expect(names?.[0]).toMatch(/^Q1 \(/)
     expect(table(outputs, 'groupsignal-groups')?.rows.map((row) => row.n)).toEqual([5, 5])
+  })
+})
+
+describe('one value per entry, the default', () => {
+  const params: Params = { groupBy: 'features', features: 'ab', split: 'name', outside: true, resolution: 0 }
+
+  it('is what a run asks for unless a bin size is given', () => {
+    expect(defaultParams(GROUP_SIGNAL_TASK.params).resolution).toBe(0)
+  })
+
+  it('compares each run of a name, merged where its features touch, and each gap of the rest', async () => {
+    const touching = new FeatureBuilder()
+    touching.add('chr', 0, 25_000, { name: 'A' })
+    touching.add('chr', 25_000, 50_000, { name: 'A' })
+    touching.add('chr', 50_000, 80_000, { name: 'B' })
+    const { outputs, notes } = await run(params, touching.finish())
+    const groups = table(outputs, 'groupsignal-groups')
+    expect(groups?.rows.map((row) => row.n)).toEqual([1, 1, 1])
+    expect(groups?.rows.map((row) => row.bases)).toEqual([50_000, 30_000, 20_000])
+    expect(Number(groups?.rows[0].mean)).toBeCloseTo(0.7, 6)
+    expect(Number(groups?.rows[1].mean)).toBeCloseTo(0.5, 6)
+    expect(groups?.columns.find((column) => column.key === 'n')?.label).toBe('Entries')
+    expect(notes.join(' ')).toContain('Compared over 3 entries')
+  })
+
+  it('counts an entry across a circular sequence’s origin once', async () => {
+    const wrapping = new FeatureBuilder()
+    wrapping.add('chr', 0, 10_000, { name: 'A' })
+    wrapping.add('chr', 10_000, 90_000, { name: 'B' })
+    wrapping.add('chr', 90_000, LENGTH, { name: 'A' })
+    const linear = table((await run(params, wrapping.finish())).outputs, 'groupsignal-groups')
+    expect(linear?.rows.map((row) => row.n)).toEqual([2, 1])
+    const circle = table((await run(params, wrapping.finish(), { circular: ['chr'] })).outputs, 'groupsignal-groups')
+    expect(circle?.rows.map((row) => row.n)).toEqual([1, 1])
+    expect(circle?.rows.map((row) => row.bases)).toEqual([20_000, 80_000])
+    // Its mean over both sides of the origin: 10 kb at 0.7 and 10 kb at 0.5.
+    expect(Number(circle?.rows[0].mean)).toBeCloseTo(0.6, 6)
+  })
+
+  it('compares each run of bins in one group of a track, joined across a circle’s origin', async () => {
+    const sign = { groupBy: 'track', groupTrack: 'wave', cut: 'sign', resolution: 0 }
+    const linear = table((await run(sign)).outputs, 'groupsignal-groups')
+    expect(linear?.rows.map((row) => row.group)).toEqual(['above 0', 'below 0'])
+    expect(linear?.rows.map((row) => row.n)).toEqual([2, 1])
+    const circle = table((await run(sign, compartments(), { circular: ['chr'] })).outputs, 'groupsignal-groups')
+    expect(circle?.rows.map((row) => row.n)).toEqual([1, 1])
+    expect(circle?.rows.map((row) => row.bases)).toEqual([40_000, 60_000])
+  })
+
+  it('reads an entry longer than a megabase a piece at a time, its mean the same', async () => {
+    const whole = new FeatureBuilder()
+    whole.add('chr', 0, 2_500_000, { name: 'A' })
+    longest = 0
+    const { outputs } = await run({ ...params, outside: false }, whole.finish(), { length: 2_500_000 })
+    expect(longest).toBeLessThanOrEqual(1 << 20)
+    const groups = table(outputs, 'groupsignal-groups')
+    expect(groups?.rows[0].n).toBe(1)
+    expect(Number(groups?.rows[0].mean)).toBeCloseTo((50_000 * 0.7 + 2_450_000 * 0.5) / 2_500_000, 9)
   })
 })
 

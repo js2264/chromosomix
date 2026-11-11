@@ -1,5 +1,5 @@
 /**
- * The ideogram view (§5.10): every sequence of a genome drawn whole, side by
+ * The ideogram view (§5.11): every sequence of a genome drawn whole, side by
  * side, with the tracks beside each one.
  *
  * Nothing here draws a track. A chromosome is given a **frame per lane** —
@@ -121,7 +121,7 @@ export interface KaryotypePoint {
 }
 
 /**
- * Where the picture is looked at from, on screen (§5.10): how far it is
+ * Where the picture is looked at from, on screen (§5.11): how far it is
  * magnified, and the point of it in the middle of the window.
  */
 export interface KaryotypeCamera {
@@ -596,7 +596,7 @@ export function tracePill(
 }
 
 /**
- * What a chromosome is filled with (§5.10).
+ * What a chromosome is filled with (§5.11).
  *
  * - `bands` — its cytoBand's stains, which is what a karyotype is.
  * - `plain` — one colour.
@@ -720,7 +720,7 @@ export const TRANS_CAP = 4000
 
 /**
  * The pairs of a pair set whose two ends are on two chromosomes in the picture,
- * drawn as curves between them (§5.10).
+ * drawn as curves between them (§5.11).
  *
  * A chromosome's own pairs are its lane's — `drawArcs`, as in the browser — and
  * the pairs between two are these: each leaves its chromosome straight across
@@ -1146,7 +1146,7 @@ export function cameraOf(layout: KaryotypeLayout): KaryotypeCamera {
 
 /**
  * The camera that magnifies the picture to `zoom` about a point of the window,
- * what is under that point staying there (§5.10). `layout` is the picture on
+ * what is under that point staying there (§5.11). `layout` is the picture on
  * screen, and `relayout` lays the same picture out at another magnification.
  * The zoom is held to what the picture allows — one at the least, a base a
  * pixel at the most — and the point in the middle to what it can show there

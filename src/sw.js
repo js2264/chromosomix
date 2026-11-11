@@ -37,43 +37,128 @@ const PRECACHE = __PRECACHE__
 const PRECACHED = new Set(PRECACHE)
 
 /**
- * The archived builds this worker must keep its hands off.
+ * The addresses that *are* the app, and the only navigations this worker answers.
  *
- * The site publishes a copy of every push under `<base>v/<commit>/`, and the
- * whole point of that copy is that opening it runs *that* code. But this worker
- * is registered at `<base>`, so those URLs are inside its scope, and the
- * navigation branch below answers every navigation in scope with the cached
- * shell of the build the worker belongs to. Without this prefix, clicking a
- * pinned version would load the newest app at a pinned address: the right URL,
- * the wrong code, and no symptom to notice it by.
+ * The app is one document. Every view lives in the URL's hash, and every option
+ * a link carries — `?config=`, `?store=`, `?embed=1` — in its query, so the
+ * scope directory itself, and `index.html` as its alias, are the whole of the
+ * app's address space. Everything else in scope is somebody else's document and
+ * goes to the network as if this worker were not here: `llms.txt`, the pages
+ * under `llms/` and `llms-full.txt`, `robots.txt`, `sitemap.xml`,
+ * `THIRD-PARTY-NOTICES.txt`, an archived build at `v/<commit>/`, a pull
+ * request's preview at `pr/<n>/`, the rendered notebooks, and an address that
+ * is nothing at all, which the host answers with its 404.
+ *
+ * An allowlist, after a denylist that kept failing open. The worker used to
+ * answer *every* navigation with the cached shell and pass through a list of
+ * known exceptions — `v/`, then `pr/`, then each notebook as it was published —
+ * and every file beside the app that was not on the list was shown as the app:
+ * `llms.txt` typed into a browser that had visited the site came back as the
+ * landing page, and only a hard reload, which skips the worker, showed the
+ * file. Nothing about that is visible to a test that fetches the file, or to an
+ * agent, since neither runs a worker; it is a reader's browser that lies.
  *
  * Read from `self.location` rather than substituted, because the worker is
  * emitted beside the shell it serves and therefore already knows where it is.
  * `new URL('./', …)` is the directory this file sits in, which is the scope.
  */
 const SCOPE_DIR = new URL('./', self.location.href).pathname
-// …and the same for pull-request previews under `pr/<number>/`, which are the
-// same kind of copy at a different address (docs/deploy.md), and for the
-// rendered notebooks under `validation/` and `timings/` (notebooks.yml), which
-// are pages of their own and no build at all. Each is passed through with and
-// without its trailing slash: Pages answers `…/validation` with a redirect to
-// `…/validation/`, and answering the first with the shell would never let the
-// redirect be seen.
-const PINNED_PREFIXES = ['v/', 'pr/', 'validation/', 'timings/'].map((dir) => `${SCOPE_DIR}${dir}`)
-const passedThrough = (pathname) =>
-  PINNED_PREFIXES.some((prefix) => pathname.startsWith(prefix) || pathname === prefix.slice(0, -1))
+const isApp = (pathname) => pathname === SCOPE_DIR || pathname === `${SCOPE_DIR}index.html`
 
 /**
- * Fill the cache, then wait.
+ * The same-origin scripts a page loads, as paths: what has to be there for it
+ * to start at all.
  *
- * No `skipWaiting()` here: a worker that takes over immediately swaps the
- * assets under a page that is already running, which is how a half-updated app
- * ends up asking for a chunk that no longer exists. The new worker waits until
- * the page says it is ready — see the message handler — and the page only says
- * so when the user has agreed to reload.
+ * Scripts and nothing else, because a script is what a page cannot do without:
+ * a stylesheet that is missing is a page without its styles, a module that is
+ * missing is a page with nothing on it. Read with a pattern rather than a
+ * parser, which a worker does not have; the page it reads is one this site's
+ * build wrote, and `test/unit/sw-install.test.ts` holds the source page to a
+ * single script so that what the build makes of it is what this reads.
+ */
+function scriptsOf(html) {
+  const paths = []
+  for (const [, src] of html.matchAll(/<script\b[^>]*?\ssrc\s*=\s*["']([^"']+)["']/gi)) {
+    const url = new URL(src, self.location.href)
+    if (url.origin === self.location.origin) paths.push(url.pathname)
+  }
+  return paths
+}
+
+/**
+ * Whether a cache this worker is replacing holds a page that cannot start.
+ *
+ * That is a cache whose copy of the app's page loads a script the cache does
+ * not hold. Its worker answers every load of the app with that page, the page
+ * asks for the script, the script has left the site with the build it belonged
+ * to, and the reader sees a blank page on every ordinary reload, while a hard
+ * reload, which skips the worker, shows the app. Nothing on that page runs, so
+ * the bar that would offer this worker never appears, and this worker would
+ * wait until every tab of the site was closed.
+ *
+ * Every worker published before the install below checked its page can be in
+ * that state: it filled its cache through the HTTP cache, which could hand it
+ * the build before's page.
+ */
+async function stranded() {
+  for (const name of await caches.keys()) {
+    if (name === CACHE) continue
+    const cache = await caches.open(name)
+    const page = await cache.match(SCOPE_DIR)
+    if (page === undefined) continue
+    for (const path of scriptsOf(await page.text())) {
+      if ((await cache.match(path)) === undefined) return true
+    }
+  }
+  return false
+}
+
+/**
+ * Fill the cache with this build, asked of the server, and wait.
+ *
+ * **Every file is asked of the server** (`cache: 'no-cache'`), never taken from
+ * the browser's HTTP cache, because one of them is not content-hashed: the
+ * app's page itself. GitHub Pages serves it with a `max-age` of ten minutes, so
+ * a page the browser fetched in that time, for an earlier worker's install or a
+ * hard reload, can be the build before's. A worker that stored it answered every
+ * load from then on with a page asking for scripts that had left the site: a
+ * blank page on every ordinary reload. The hashed files cost a 304 each.
+ *
+ * **The page is checked before anything is stored**: every same-origin script
+ * it loads must be one of this build's. The server is not the last word either,
+ * since its CDN can serve the build before's page for a few minutes after a
+ * deploy. A page that fails is refused, the install fails with the reason, the
+ * worker in place stays, and the browser tries again on the next visit. A
+ * fetch or a check that fails leaves nothing stored, as `addAll` did.
+ *
+ * Then **wait**, with one exception. A worker that takes over immediately
+ * swaps the assets under a page that is already running, which is how a
+ * half-updated app ends up asking for a chunk that no longer exists. The new
+ * worker waits until the page says it is ready (see the message handler), and
+ * the page only says so when the user has agreed to reload. The exception is
+ * a worker it replaces that is {@link stranded}: there is no running page to
+ * swap anything under and no page to ask, so this worker takes over at once,
+ * and `activate` reloads the pages it took over.
  */
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)))
+  event.waitUntil(
+    (async () => {
+      const responses = await Promise.all(PRECACHE.map((url) => fetch(new Request(url, { cache: 'no-cache' }))))
+      responses.forEach((response, i) => {
+        if (!response.ok) throw new Error(`${PRECACHE[i]} answered ${response.status}`)
+      })
+      const scripts = scriptsOf(await responses[0].clone().text())
+      const foreign = scripts.filter((path) => !PRECACHED.has(path))
+      if (scripts.length === 0 || foreign.length > 0) {
+        throw new Error(
+          `the page at ${PRECACHE[0]} is not this build's: it loads ${scripts.join(', ') || 'no script'}`,
+        )
+      }
+      const cache = await caches.open(CACHE)
+      await Promise.all(PRECACHE.map((url, i) => cache.put(url, responses[i])))
+      if (await stranded()) await self.skipWaiting()
+    })(),
+  )
 })
 
 /**
@@ -82,12 +167,22 @@ self.addEventListener('install', (event) => {
  * Two sweeps, because there are two ways to be stale. Caches from other builds
  * go by name. Entries *inside* this cache are pruned against the list as well,
  * for the case the name cannot catch: two builds of the same commit — a rebuild
- * between deploys — share a cache, and `addAll` only ever adds, so the old
+ * between deploys — share a cache, and an install only ever adds, so the old
  * chunks would sit there until the version changed.
+ *
+ * And **reload the pages taken over from a {@link stranded} worker**: they are
+ * blank, and the reader would otherwise have to reload once more to see the
+ * app. Only those pages: by the time this runs the activation has handed them
+ * to this worker, and `clients.claim()` has not yet added the pages no worker
+ * controlled, such as one a hard reload loaded, which are running. Not awaited,
+ * because a reload's own request waits until this worker is activated, which
+ * is when this handler is done.
  */
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
+      const rescue = await stranded()
+      const taken = rescue ? await self.clients.matchAll({ type: 'window' }) : []
       const names = await caches.keys()
       await Promise.all(names.filter((name) => name !== CACHE).map((name) => caches.delete(name)))
       const cache = await caches.open(CACHE)
@@ -96,6 +191,9 @@ self.addEventListener('activate', (event) => {
       )
       await Promise.all(stale.map((request) => cache.delete(request)))
       await self.clients.claim()
+      for (const client of taken) {
+        if (isApp(new URL(client.url).pathname)) client.navigate(client.url).catch(() => {})
+      }
     })(),
   )
 })
@@ -115,13 +213,12 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return
 
   // A reload, or a link into the app: answer with the cached shell, and fall
-  // back to the network on a cold cache. Every view lives in the URL *hash*, so
-  // one entry serves every link the app publishes — with two exceptions, a link
-  // to an archived build and a link to a rendered notebook. Each is a different
-  // document under the same scope and has to come from the network, or the
-  // reader gets this build wearing that page's address.
+  // back to the network on a cold cache. Every view lives in the URL's hash and
+  // query, so one entry serves every link the app publishes. A navigation to
+  // any other path is a different document under the same scope and is left to
+  // the network, or the reader gets this build wearing that page's address.
   if (request.mode === 'navigate') {
-    if (passedThrough(new URL(request.url).pathname)) return
+    if (!isApp(new URL(request.url).pathname)) return
     event.respondWith(
       caches.match(PRECACHE[0]).then((cached) => cached ?? fetch(request)),
     )
