@@ -67,8 +67,10 @@ describe('the clip boxes', () => {
     expect(built.low.value).toBe('-2')
     expect(built.high.value).toBe('8.5')
     expect(built.note.textContent).toBe('auto · -2.0 counts – 8.5 counts')
-    // Nothing to hand back while it is already the data's.
-    expect(built.auto.disabled).toBe(true)
+    // Still there to press: in auto it asks for the range of what is in view now.
+    expect(built.auto.disabled).toBe(false)
+    built.auto.click()
+    expect(built.changes).toEqual([null])
     expect(built.clip.el.classList.contains('clip-manual')).toBe(false)
   })
 
@@ -117,7 +119,8 @@ describe('the clip boxes', () => {
     built.auto.click()
     expect(built.changes.at(-1)).toBeNull()
     expect(built.clip.el.classList.contains('clip-manual')).toBe(false)
-    expect(built.auto.disabled).toBe(true)
+    // And stays there to press again, for wherever the reader goes next.
+    expect(built.auto.disabled).toBe(false)
   })
 
   it('leaves a box alone while it is being typed in', () => {

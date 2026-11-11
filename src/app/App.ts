@@ -21,6 +21,7 @@
 import { ViewerError } from '../errors'
 import { begin, RENDERED, routed, type RenderedReport } from '../perf/rendered'
 import { parseViewState, serialiseViewState, viewStateEquals } from '../state/ViewState'
+import { linkState, openedState } from '../state/landing'
 import { HistoryJournal } from '../state/historyJournal'
 import { historyItems } from '../ui/historyMenu'
 import { openMenu } from '../ui/Menu'
@@ -2220,7 +2221,10 @@ export class App implements SessionHost {
   // -------------------------------------------------------------------------
 
   private writeHash(state: ViewState | null, options: { replace: boolean }): void {
-    const hash = state === null ? '' : `#${serialiseViewState(state)}`
+    // A file open at its landing rung is written as the file alone, which opens
+    // there anyway: the rung is where it was opened, not what is on screen
+    // (§3.4, `state/landing.ts`).
+    const hash = state === null ? '' : `#${serialiseViewState(linkState(state))}`
     if (window.location.hash === hash) return
     this.writingHash = true
     const url = `${window.location.pathname}${window.location.search}${hash}`
@@ -2298,7 +2302,9 @@ export class App implements SessionHost {
       void this.openSharedHash()
       return
     }
-    this.goTo(parseViewState(window.location.hash))
+    // A file named alone is the entry it landed on here, so a step back to it is
+    // a step within it rather than an open of the same file over again.
+    this.goTo(openedState(parseViewState(window.location.hash), this.current?.state?.uri))
   }
 
   /**
@@ -2513,14 +2519,19 @@ export class App implements SessionHost {
         id: 'refine-on-zoom',
         group: 'View',
         title: 'Refine on zoom',
-        // One line, and it no longer sends the reader to a button that is not
-        // there: `MatrixPanel`'s `OFFER_REFINE` is false, because refinement is
-        // one preference across a whole deck rather than a property of one
-        // map, so the picture row holds the turn and the baseline and this is a
-        // palette command only (§2).
-        hint: 'Zooming past the block in hand reads the window again at a finer grid.',
-        state: chipOf(refineEnabled()),
-        run: () => void toggleRefine(),
+        // The same switch as the tick at the head of the resolution row: one
+        // preference across a whole deck rather than a property of one map, so
+        // it is not in any map's picture row, where a button for it, never
+        // shown, has gone.
+        hint:
+          'On, a map is read at the resolution of the screen and zooming reads it finer, down to ' +
+          'the finest the file stores. A resolution picked in the bar wins over it; off, a map ' +
+          'with none picked is drawn at the resolution it was opened at.',
+        // The map in front's own answer — a pick in its link wins (§3.4) — and
+        // the session's own toggle, so unticking here keeps what is on screen
+        // as the tick does.
+        state: chipOf(this.current?.refining ?? refineEnabled()),
+        run: () => (this.current == null ? void toggleRefine() : this.current.toggleRefining()),
       },
       {
         id: 'fold-sidebar',
@@ -2832,7 +2843,8 @@ export class App implements SessionHost {
   private tutorialHost(): TutorialHost {
     return {
       view: () => this.current?.state ?? null,
-      binsize: () => this.current?.binsize ?? null,
+      binsize: () => this.current?.resolution ?? null,
+      refining: () => this.current?.refining ?? refineEnabled(),
       score: () => this.current?.scoreInForce ?? null,
       file: () => this.current?.fileUri ?? null,
       sequences: () => this.current?.contigNames() ?? null,

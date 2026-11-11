@@ -63,6 +63,7 @@ const SET = '4DNESC23ZYOF'
     search: () => page.locator('.store-drawer .portal-search').fill(SET),
     'open-set': () => page.click('.store-drawer .portal-session'),
     'look-general': () => page.click('.tour-card .tour-next'),
+    'refine-off': () => page.click('.crumb-res .res-refine input'),
   }
 
   await page.goto(`${BASE}/`)

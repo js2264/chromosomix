@@ -77,6 +77,13 @@ import { VERSION } from '../version'
 import { TRACK_OP_LABELS, combineSamples, type TrackOp } from '../annotations/derived'
 
 /** What the workspace needs from the session around it. */
+/** The *Resolution* row's choices for one task ({@link AnalysisWorkspaceHost.resolutions}). */
+export interface TaskResolutions {
+  options: ReadonlyArray<{ binsize: number; label: string; title: string }>
+  /** The one the task reads now. */
+  value: number
+}
+
 export interface AnalysisWorkspaceHost {
   /**
    * How the analysis worker should mount the file; `null` before anything is open.
@@ -98,6 +105,17 @@ export interface AnalysisWorkspaceHost {
   memoryKey?(uri: string): string
   framing(): AnalysisFraming | null
   block(): BlockInput | null
+  /**
+   * The resolutions a task on the map may be run at, for the drawer's
+   * *Resolution* row (§18.4): every rung of the map's ladder, stored or added,
+   * and the one the task reads now — the one picked in the crumb row, else the
+   * one the file was opened at, unless this task was given another. `null`
+   * where there is nothing to choose: a task that reads no map, a file of one
+   * resolution, a map in a deck's other cells.
+   */
+  resolutions?(task: AnalysisTask): TaskResolutions | null
+  /** The reader chose `binsize` on a task's *Resolution* row. */
+  chooseResolution?(task: AnalysisTask, binsize: number): void
   /**
    * Where a synthetic lane becomes a row.
    *
@@ -297,6 +315,12 @@ export class AnalysisWorkspace {
       context: (task) => this.host.context(task),
       blocked: () => this.host.blocked?.() ?? null,
       framing: () => this.host.framing(),
+      ...(this.host.resolutions === undefined
+        ? {}
+        : { resolutions: (task: AnalysisTask) => this.host.resolutions?.(task) ?? null }),
+      ...(this.host.chooseResolution === undefined
+        ? {}
+        : { chooseResolution: (task: AnalysisTask, binsize: number) => this.host.chooseResolution?.(task, binsize) }),
       onClose: () => this.show(null),
       // Read live rather than captured, because a session's store arrives with
       // the file and this workspace is built when the *view* mounts.

@@ -89,7 +89,17 @@ import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import type { PickedFile } from '../browse/folder'
 import { resolutionLabel } from '../units'
 import { firstEntry } from '../ui/FilePicker'
-import { attachRefine, rungsOf, type BlockLadder } from '../ui/refine'
+import {
+  attachRefine,
+  pickOnLadder,
+  planFields,
+  readPlan,
+  refineEnabled,
+  rungsOf,
+  type BlockLadder,
+  type PickedResolution,
+} from '../ui/refine'
+import type { Rung } from '../metacooler/coarsen'
 import { icon, iconButton } from '../ui/icons'
 import { paintSequencePicker, sequencePicker, shownSequence } from './sequencePicker'
 import { entryLabel, fileBaseLabel, fileLabel, splitUri } from '../ui/labels'
@@ -284,6 +294,14 @@ export interface MapPanelProps {
    */
   preferBinsize(): number | undefined
   /**
+   * The resolution every map of the deck is read at (§16.2), asked live: the
+   * first map's pick, else the bin size its zoom reads at while *Refine on
+   * zoom* picks (`zoom`), else its open rung. This panel reads it in place, on
+   * its own ladder ({@link followed}); `null` where there is nothing to follow
+   * yet, and this panel reads the screen's resolution meanwhile.
+   */
+  resolution?(): { binsize: number; zoom: boolean } | null
+  /**
    * The score the **lead** resolved to, or `undefined`.
    *
    * Shared, and shared as a resolved id rather than left to each panel to work
@@ -300,7 +318,11 @@ export interface MapPanelProps {
    * first map's score moving must not move the others with it.
    */
   score(): string | undefined
-  /** Rewrite this panel's URI after it resolved a collection to one of its entries. */
+  /**
+   * Rewrite this panel's URI after it resolved a collection to one of its
+   * entries — a sample of an `.mmetacool`, never a rung of a ladder, which is
+   * where it was opened rather than what it is (§3.4, §16.6).
+   */
   onResolved(uri: string): void
   /**
    * The grip before this panel's name was taken hold of, or let go.
@@ -416,15 +438,18 @@ export class MapPanel {
   /** Kept apart from {@link note}: one is about the read, the other the lock. */
   private readonly lockNoteEl = el('p', { class: 'deck-note deck-unlocked hidden' })
   /**
-   * Why this panel did not follow the deck to another resolution.
+   * That this panel is drawn at another resolution than the deck's, its file
+   * having none of that size (§16.2): the one it is drawn at and, in the
+   * tooltip, the ladder it has.
    *
    * A third line, and a third line rather than a reuse of either of the two
    * above because it outlives both of them: {@link note} is cleared by the next
    * successful read, which is the very next thing that happens, and the lock's
-   * is rewritten whenever anything moves. This one stands until the panel is
-   * asked for a resolution it *can* reach.
+   * is rewritten whenever anything moves. This one stands until the deck is at
+   * a resolution this file has. Not in the colour of a refusal: the nearest
+   * rung is the deck working, not this map failing to follow it.
    */
-  private readonly resNoteEl = el('p', { class: 'deck-note deck-res-note deck-unlocked hidden' })
+  private readonly resNoteEl = el('p', { class: 'deck-note deck-res-note hidden' })
   /**
    * That this panel answered a name it does not itself write.
    *
@@ -668,33 +693,33 @@ export class MapPanel {
     }
   }
   /**
-   * A bin size the deck asked for **before this panel had opened**, held until
-   * it can be answered.
-   *
-   * Nothing about this file's resolution ladder is known until the first open
-   * lands: {@link entries} is empty and {@link binsize} is `undefined`, so
-   * {@link useBinsize} would read a three-rung `.mcool` as a file that "carries
-   * one resolution only" and print that under a panel whose very next act is to
-   * descend onto the rung it was said to lack — `firstEntry` lands a collection
-   * on {@link MapPanelProps.preferBinsize}, which is this same number. Held
-   * rather than refused, because the refusal is a claim about the file made out
-   * of a race, and nothing on the descent path ever clears it.
+   * The deck's resolution as this panel last read it ({@link followResolution}),
+   * so a change is acted on once: a reconsidered ladder, and the line under the
+   * heading said again.
    */
-  private wantedBinsize: number | undefined
+  private following = ''
+  /** The view state the block on screen was read for ({@link drawnFor}). */
+  private drawnState: ViewState | null = null
   /**
    * The zoom's own reader for this panel.
    *
    * Its ceiling is the block this panel read, not the file: a companion
    * follows the deck's navigation, and one that widened on its own would be
-   * showing a window the lock is about to drag it out of. Refining *in* is a
-   * different matter — the lock's currency is base pairs (§16.3), so five
-   * panels each at their own resolution stay in step by construction, which
-   * is the property that lets them refine independently.
+   * showing a window the lock is about to drag it out of. What it reads *at* is
+   * the deck's resolution while this panel follows the deck ({@link followed}):
+   * the lock's currency is base pairs (§16.3), so the maps stay in step whatever
+   * their grids, and it was each map refining on its own that put two grids
+   * side by side — one file beside itself at 5 kb and 10 kb after one zoom,
+   * each ladder keeping a block within its own factor of two.
    */
   private ladder: BlockLadder | null = null
   /** The group they live under — `resolutions` for an mcool, `entries` for an mmetacool. */
   private entryGroup = ''
-  /** The `::1000` in the heading: a picker, where there is more than one rung. */
+  /**
+   * The `::rep2` in the heading: which map of a collection this panel draws, where
+   * it holds more than one. Not for a ladder of resolutions, whose rung is the
+   * deck's ({@link followed}).
+   */
   private readonly entryPicker: HTMLSelectElement
   /**
    * The sequence this map is on, in the heading: a picker of this file's own
@@ -920,68 +945,65 @@ export class MapPanel {
   }
 
   /**
-   * Read at `bp`, if this file has that resolution — and say so if it has not.
+   * The deck's resolution as a pick on this file's ladder, or `null` to read the
+   * screen's (§16.2).
    *
-   * **Exact, and never the nearest.** The deck asks this of every panel when the
-   * first map changes rung and when the reader presses *fix all resolutions*,
-   * and the promise both of those make is that the maps are then reading the
-   * same data at the same grid. A nearest-rung fallback keeps every panel doing
-   * *something*, which is the wrong kind of helpful here: it answers "put these
-   * on one resolution" with a deck at two, and says nothing about it. A file
-   * that cannot follow says why, in its own frame, and stays where it is — a
-   * complete picture at a resolution the reader can read, which is the same
-   * answer a companion gives to every other thing it cannot do (§16.1).
-   *
-   * A plain cooler has one resolution: it follows when that is the one asked
-   * for, and otherwise says it has only the one. Published through
-   * {@link MapPanelProps.onResolved} by {@link openEntry}, so a rung reached
-   * this way is in the link exactly as one the reader picked is.
-   *
-   * **A panel that has not opened yet says nothing and follows later**, which
-   * is a different state from having one rung and is now told apart from it:
-   * see {@link wantedBinsize} and the answer {@link load} gives it.
+   * The first map's pick, its zoom's bin size, or its open rung — whichever the
+   * deck reads at — resolved by {@link pickOnLadder}: the stored rung of that
+   * size; for a pick, the coarsest stored rung that divides it, summed, as the
+   * first map itself sums one; else the stored rung nearest it, said under the
+   * heading ({@link followResolution}). **A map moving on its own** follows a
+   * pick, which is a resolution the reader asked of every map, but not the zoom
+   * of a window it is not showing: it refines on its own.
    */
-  useBinsize(bp: number): boolean {
-    if (!Number.isFinite(bp) || bp <= 0) return false
-    // **A panel that has not opened is held, not accused.** See
-    // {@link wantedBinsize}: before the first read this file has no known
-    // ladder at all, so every one of the answers below would be about
-    // `this.entries` being empty rather than about the file — and a collection
-    // is on its way to this very rung anyway. `true` because the deck's
-    // question is "will you follow", and the honest answer is yes-as-soon-as-I-
-    // can; naming it in the bar's list of files that could not follow is the
-    // same false claim in the deck's own voice.
-    if (this.opened === null) {
-      this.wantedBinsize = bp
-      return true
-    }
-    // Already there, whatever the ladder looks like — including a plain cooler
-    // that happens to be at the resolution the deck is moving to.
-    if (this.binsize() === bp) {
-      this.sayResolution(null)
-      return true
-    }
+  private followed(): { pick: PickedResolution; exact: boolean } | null {
+    const deck = this.props.resolution?.() ?? null
+    if (deck === null || this.opened === null) return null
+    if (deck.zoom && !this.props.isLocked()) return null
+    return pickOnLadder(deck.binsize, this.storedRungs(), !deck.zoom)
+  }
+
+  /** This file's stored rungs: its ladder, or its own bin size alone. */
+  private storedRungs(): Rung[] {
     const rungs = rungsOf(this.entries)
-    const match = rungs.find((rung) => rung.binsize === bp)
-    if (match === undefined) {
-      const here = this.binsize()
-      // "Staying at 0 bp" is what `?? 0` used to render for a file whose open
-      // answered no bin size at all — a measurement in a sentence about
-      // honesty, and not one this panel has. Where there is no number the
-      // sentence simply does not offer one.
+    const own = this.binsize() ?? 0
+    return rungs.length > 0 ? rungs : own > 0 ? [{ name: String(own), binsize: own }] : []
+  }
+
+  /**
+   * Read at the deck's resolution, where it has moved (§16.2): the first map's
+   * pick, the tick, or its zoom reading another rung. In place, as every pick
+   * is read — the window this panel shows is kept — and the line under the
+   * heading says where this file has not got that level and what it is drawn at
+   * instead. The deck calls this on every view and whenever the first map's
+   * zoom moves; a panel that has not opened yet reads the deck's resolution on
+   * its first read, and says nothing before it knows its own ladder.
+   */
+  followResolution(): void {
+    const followed = this.followed()
+    const deck = this.props.resolution?.() ?? null
+    const key = followed === null ? '' : `${followed.pick.rung.name}x${followed.pick.factor}`
+    if (followed === null || followed.exact || deck === null) this.sayResolution(null)
+    else {
+      // One line on the picture, and the ladder behind it in the tooltip: in a
+      // deck of mixed ladders this is said at most steps of a zoom, and the list
+      // of a micro-C file's ten rungs wrapped it onto a second line every time.
+      const rungs = this.storedRungs()
+      const here = resolutionLabel(followed.pick.binsize)
+      const asked = resolutionLabel(deck.binsize)
       this.sayResolution(
-        `${here === undefined ? 'staying where it is' : `staying at ${resolutionLabel(here)}`}: ` +
-          `this file has no ${resolutionLabel(bp)} level` +
-          (rungs.length === 0
-            ? ', and carries one resolution only.'
-            : ` — it has ${rungs.map((rung) => resolutionLabel(rung.binsize)).join(', ')}.`),
+        rungs.length <= 1
+          ? `drawn at ${here}, the one resolution this file has, not ${asked}`
+          : `drawn at ${here}, the nearest this file has to ${asked}`,
+        rungs.length <= 1
+          ? `This file stores one resolution, ${here}. Every map of the deck is read at the first map's resolution where its file has it.`
+          : `This file has no ${asked} level — it has ${rungs.map((rung) => resolutionLabel(rung.binsize)).join(', ')}. ` +
+              "Every map of the deck is read at the first map's resolution where its file has it.",
       )
-      return false
     }
-    this.sayResolution(null)
-    if (match.name === entryLabel(this.uri)) return true
-    void this.openEntry(match.name)
-    return true
+    if (key === this.following) return
+    this.following = key
+    this.ladder?.reconsider()
   }
 
   /**
@@ -1227,6 +1249,36 @@ export class MapPanel {
    */
   private levelOf(state: ViewState): ReturnType<typeof matrixLevel> {
     return this.ownPlace === null ? matrixLevel(state) : 'bin'
+  }
+
+  /**
+   * What this map's picture is of, for the framing a task runs on and a
+   * figure's title (`FigureSubject.subject`, §18.4): the sequence its block is
+   * on, as this file spells it, or the pair of them. Its heading is the map's
+   * name (§16.10), and the framing took it for the sequence. `null` for a block
+   * of several sequences, which keeps the map's name, as it always was.
+   */
+  private subjectOf(): string | null {
+    const block = this.panel?.blockSequences()
+    if (block === undefined || block.rows.length !== 1) return null
+    const [rows] = block.rows
+    if (block.cols.length === 0 || (block.cols.length === 1 && block.cols[0] === rows)) return rows
+    return block.cols.length === 1 ? `${rows} × ${block.cols[0]}` : null
+  }
+
+  /**
+   * The view state the block on screen was read for, or `null` before one.
+   *
+   * What the deck asks before it takes this map's window as the deck's (§16.3).
+   * A navigation clears the deck's window, and a map still drawing the place it
+   * has just left redraws while its new block is on its way — a busy veil, a
+   * score — and every redraw is a report. Taken as the first word about the new
+   * place, the old window was pushed onto the new block when it landed, and the
+   * map's zoom read the stretch around it: widen a deck from 400 kb to a whole
+   * chromosome and one map held the right half of it.
+   */
+  drawnFor(): ViewState | null {
+    return this.drawnState
   }
 
   /** Whether this map is reading a window of its own rather than the deck's. */
@@ -1512,27 +1564,27 @@ export class MapPanel {
   }
 
   /**
-   * Offer the other rungs of the ladder this map is on, as the `::1000` beside
-   * its name.
+   * Offer the other maps of the collection this one is drawn from, as the
+   * `::rep2` beside its name.
    *
-   * A companion's resolution is the one thing about *what it reads* that the
-   * deck cannot share, and until now it was also the one thing a reader could
-   * not change. The deck lands an `.mcool` on the lead's bin size (§3.4,
-   * {@link MapPanelProps.preferBinsize}), which is the right guess and only a
-   * guess: two files rarely have the same ladder, and the rung that makes a
-   * comparison legible is not always the one that matches a number. So the entry
-   * is a picker rather than a fact — the same control the breadcrumb gives the
-   * session's own file (`ui/Breadcrumb.ts`), in the only place a companion has
-   * for a control, which is its heading.
+   * Which sample of an `.mmetacool` a cell draws is the reader's to choose and
+   * the deck's to keep (§16.9), in the only place a companion has for a control,
+   * which is its heading. **Not a ladder's rungs**: it used to offer those too,
+   * as `::1000`, and a companion was read where it had been opened. A ladder is
+   * one map at several resolutions, and the deck reads every map at one of them
+   * (§16.2) — the first map's pick, its zoom's, or its open rung's — so the rung
+   * is the deck's, read in place on each file's own ladder ({@link followed}).
    *
    * Hidden where there is nothing to pick: a plain cooler has no siblings, and a
-   * one-rung collection offers a choice that cannot be made.
+   * one-sample collection offers a choice that cannot be made.
    */
   private paintEntries(info: OpenResult): void {
     this.entries = info.entries
     this.entryGroup = info.entryGroup === '' ? 'entries' : info.entryGroup
     const current = entryLabel(this.uri)
-    const offer = info.entries.length > 1 && current !== undefined
+    // A ladder's rung is the deck's to choose (§16.2), so only a collection of
+    // maps is offered here.
+    const offer = info.entries.length > 1 && current !== undefined && rungsOf(info.entries).length === 0
     this.entryPicker.classList.toggle('hidden', !offer)
     if (!offer) return
     // Rebuilt only when the list itself changed, which is once per file: this
@@ -1547,15 +1599,11 @@ export class MapPanel {
       )
     }
     this.entryPicker.value = current
-    this.entryPicker.title =
-      this.entryGroup === 'resolutions'
-        ? 'Which resolution this map is read at. Only this map moves — the region, the level and ' +
-          'the score stay shared, and the deck keeps navigating as one.'
-        : 'Which map of this collection is drawn here.'
+    this.entryPicker.title = 'Which map of this collection is drawn here.'
   }
 
   /**
-   * Read this panel's file at another rung, keeping everything else.
+   * Read another map of this panel's collection, keeping everything else.
    *
    * The worker is told to open a different address inside the same bytes, so a
    * local companion keeps the handle it was dropped with and a remote one keeps
@@ -1634,7 +1682,10 @@ export class MapPanel {
       // only the address inside them has moved.
       this.resolved = `${splitUri(this.uri).path}::${landing.group}/${landing.entry}`
       this.nameEl.title = this.resolved
-      this.props.onResolved(this.resolved)
+      // A sample of a collection is what this panel *is*, and goes in the link;
+      // a rung of a ladder is only where it was opened, read at the deck's
+      // resolution whatever it is (§16.2), and the link keeps the file (§16.6).
+      if (rungsOf([landing.entry]).length === 0) this.props.onResolved(this.resolved)
       return this.client.request<'open'>({
         kind: 'open',
         uri: this.resolved,
@@ -1667,6 +1718,7 @@ export class MapPanel {
       const had = this.panel !== null
       this.panel?.destroy()
       this.panel = null
+      this.drawnState = null
       if (had) this.props.onCardChange?.()
       this.say(plan.reason)
       // Cleared here and in the catch below, for the reason the selection
@@ -1686,25 +1738,11 @@ export class MapPanel {
       opened = info
       this.paintEntries(info)
       void this.askSequences()
-      // The ladder is known now, so a press this panel was too early to answer
-      // can be answered honestly: either this *is* the rung it asked for and
-      // there was never anything to say, or it is one this file has — in which
-      // case `openEntry` has moved this panel's address — or it is one this
-      // file has not, and the note it writes now has a real bin size in it.
-      // See {@link wantedBinsize}.
-      const wanted = this.wantedBinsize
-      this.wantedBinsize = undefined
-      if (wanted !== undefined && wanted !== info.binsize) {
-        // **Abandoned on a descent, and only on one.** `openEntry` clears
-        // `opening` and `read` and re-enters `load` at the new rung; carrying
-        // on here would then key *this* read against the old address, overwrite
-        // the key the new one is waiting on, and leave the panel drawing the
-        // rung the reader has just moved off. The address is what says a
-        // descent happened, and a refusal — or the rung it is already on —
-        // leaves it alone and draws the block this read was for.
-        const was = this.uri
-        if (this.useBinsize(wanted) && this.uri !== was) return
-      }
+      // The ladder is known now, so what the deck's resolution is on this file
+      // can be said — before the first read, which is read at it. A claim about
+      // a file is made from a file that has answered: before this, a remote
+      // `.mcool` was said to lack the very rung it was about to land on.
+      this.followResolution()
       // Drawn to the tab's total before anything is read from it (§6.5). The
       // worker queues the read behind the census either way; awaiting it here
       // is what lets a refusal be said once, in this panel's own frame.
@@ -1936,11 +1974,49 @@ export class MapPanel {
       rows,
       ...cols,
       ...(wrap === undefined ? {} : { wrap }),
+      ...this.firstPlan(rows, colRange === null ? rows : colRange.extent, info),
       ...balance,
       ...value,
       budgetBytes,
     })
     return wrap === undefined ? { block } : { block, wrap }
+  }
+
+  /**
+   * How this panel's first read is asked for, by the rule every map view's is
+   * ({@link readPlan}, §2): at the **deck's resolution** where there is one to
+   * follow ({@link followed}), as memory allows — its share of it (§16.7) —
+   * the way a pick is read; **screen-sized** where there is none yet, the stored
+   * rung that puts about a cell on each pixel of the panel.
+   */
+  private firstPlan(
+    rows: [number, number],
+    cols: [number, number],
+    info: OpenResult,
+  ): { rung?: string; binsPerCell?: number } {
+    const span = Math.max(rows[1] - rows[0], cols[1] - cols[0])
+    const budget = this.props.budgetBytes()
+    return planFields(
+      readPlan({
+        rungs: rungsOf(info.entries),
+        binsize: info.binsize ?? 1,
+        view: span,
+        read: span,
+        screen: this.screenWidth(),
+        pick: this.followed()?.pick ?? null,
+        refining: refineEnabled(),
+        ...(budget === undefined ? {} : { budget }),
+      }),
+    )
+  }
+
+  /**
+   * The width a screen-sized read of this panel is sized to: its map's plot,
+   * or — before the first block has built one — most of its own cell.
+   */
+  private screenWidth(): number {
+    if (this.panel !== null) return this.panel.screenWidth()
+    return Math.max(256, Math.round(this.el.clientWidth * 0.9) || 512)
   }
 
   /**
@@ -2026,7 +2102,7 @@ export class MapPanel {
         ...(context === undefined ? {} : { annotations: context }),
         detachedControls: true,
         hideTitle: true,
-        caption: { file: fileLabel(this.uri), depth: () => this.depthHeld },
+        caption: { file: fileLabel(this.uri), depth: () => this.depthHeld, subject: () => this.subjectOf() },
         // Built from **this** file's columns, not from the lead's: what a
         // companion's cells can be is a fact about its own `/pixels`, and a
         // dropdown offering a column this file has not got would refuse the one
@@ -2077,7 +2153,8 @@ export class MapPanel {
     // a circle ticked under the deck offers the baseline along its arms (§8.15).
     this.panel.offerScores(this.scoreChoicesOf(info), score.id)
     this.say('')
-    this.panel.setResolution((info.binsize ?? 1) * (result.binsPerCell ?? 1))
+    // The bin size of the map that answered: a rung's, where one was read.
+    this.panel.setResolution((result.binsize ?? info.binsize ?? 1) * (result.binsPerCell ?? 1))
     // Both on every block, not only at construction: a panel outlives a change
     // of rung, and an exported figure captioned with the entry this map *was*
     // at is wrong in the one place nobody re-checks.
@@ -2086,6 +2163,8 @@ export class MapPanel {
     // the readout, the key, and the caption on the figure this exports.
     const label = this.props.label?.() ?? fileLabel(this.uri)
     this.panel.setCaptionFile(label)
+    // Before the block is drawn, since drawing it is what reports its window.
+    this.drawnState = state
     this.panel.setData(result, label)
     this.armRefine(result, info, state)
     this.nameEl.title =
@@ -2116,14 +2195,25 @@ export class MapPanel {
     const wrap = this.wrap
     this.ladder = attachRefine({
       panel: this.panel as MatrixPanel,
-      ceiling: { rows: result.rowExtent, cols: result.colExtent },
+      // In the open map's bins: a block read from a sibling rung describes
+      // itself on that rung's grid, and `source` is the window it was asked for.
+      ceiling: {
+        rows: result.source?.rows ?? result.rowExtent,
+        cols: result.source?.cols ?? result.colExtent,
+      },
       binsize: info.binsize ?? 1,
       rungs: rungsOf(info.entries),
       budget: () => this.props.budgetBytes(),
-      read: (rows, cols, rung) => {
+      // The deck's resolution, asked live (§16.2): a pick on this file's
+      // ladder while it follows the deck, which wins over *Refine on zoom* as
+      // any pick does — so this panel never refines past what the first map is
+      // read at. `null` for a map moving on its own while the zoom picks.
+      picked: () => this.followed()?.pick ?? null,
+      read: (rows, cols, rung, binsPerCell) => {
         const own = this.client.cancellable<'matrix'>({
           kind: 'matrix',
           ...(rung === undefined ? {} : { rung }),
+          ...(binsPerCell === undefined ? {} : { binsPerCell }),
           rows,
           cols,
           ...(wrap === undefined ? {} : { wrap }),
@@ -2154,8 +2244,9 @@ export class MapPanel {
   }
 
   /** One line about a resolution this file has not got, or none. */
-  private sayResolution(message: string | null): void {
+  private sayResolution(message: string | null, title = ''): void {
     this.resNoteEl.textContent = message ?? ''
+    this.resNoteEl.title = message === null ? '' : title
     this.resNoteEl.classList.toggle('hidden', message === null)
   }
 

@@ -63,7 +63,7 @@ describe('carrying a moved stand-in onto its block', () => {
     expect(units).not.toBeNull()
     const [lo, hi] = units as [number, number]
     // Not 50.0–52.5 Mb, which is the window rounded out to the stand-in's cells
-    // (`MatrixPanel.framedEdges`): 14% wider, on a window four cells across.
+    // (`MatrixPanel.framedWindows`): 14% wider, on a window four cells across.
     expect(lo * 25_000).toBeCloseTo(50_150_000, 3)
     expect(hi * 25_000).toBeCloseTo(52_350_000, 3)
   })

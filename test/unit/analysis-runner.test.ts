@@ -470,6 +470,28 @@ describe('the file the analysis worker is asked to mount', () => {
     expect(opens(fake).map((m) => (m as { coarsen?: number }).coarsen)).toEqual([3000, 5000, undefined])
   })
 
+  it('sums a map of the deck to the deck’s resolution where its own target says so (§16.2)', async () => {
+    // The first map is at 25 kb, a rung it stores; the map beside it stores 5 kb
+    // and no 25 kb, so it is read from its 5 kb rung summed five at a time — the
+    // grid it is drawn on — and the framing, the first map's, names no sum.
+    const deck: RunTarget[] = [
+      DECK[0],
+      { ...DECK[1], uri: 'rep2.mcool::resolutions/5000', coarsen: 25_000 },
+    ]
+    const { runner, fake } = harness({ ...FRAMING, binsize: 25_000 }, null, deck)
+    runner.runAll(task('insulation'), {}, runner.targets())
+    await settle()
+    fake.finish()
+    await settle()
+    fake.finish()
+    await settle()
+    expect(opens(fake).map((m) => [(m as { uri?: string }).uri, (m as { coarsen?: number }).coarsen])).toEqual([
+      [URI, undefined],
+      ['rep2.mcool::resolutions/5000', 25_000],
+    ])
+    runner.destroy()
+  })
+
   it('mounts once when nothing about the target moved', async () => {
     const { runner, fake } = harness()
     runner.run(task('coverage'), {})

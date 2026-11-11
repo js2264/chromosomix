@@ -123,8 +123,8 @@ same: `IV:1,000,001-1,400,000`. A map's `region` in a link is cooler's 0-based, 
 ## Deck
 
 Cells side by side in one tab, panned and zoomed together, opened by the `+` down the map's right
-edge or along its bottom. Its maps need share only coordinates. `maps=` in a link. See
-[Maps side by side](/browse/deck/).
+edge or along its bottom. Its maps need share only coordinates, and are drawn at the first map's
+resolution, or the nearest each file has. `maps=` in a link. See [Maps side by side](/browse/deck/).
 
 ## Desktop app
 
@@ -267,13 +267,18 @@ as the root and goes on drawing the same picture. **About** lists the published 
 
 ## Refine on zoom
 
-A preference in the command palette, off by default: zooming past what was read reads the window
-again at a finer resolution, rather than magnifying it. See [Moving around](/browse/navigating/).
+The tick at the head of a map's resolution row, also in the command palette, on by default: a map is
+read at about the size of the screen, and zooming in reads the stretch you pause on again at a finer
+resolution, down to the finest the file stores, without the map ever stopping; the row follows,
+greyed. Off, the map is drawn at the resolution you pick, coarser only where the window is too wide
+for it; a link that names a resolution opens at it, unticked, whatever your own setting. See
+[Moving around](/browse/navigating/#resolution-and-the-zoom).
 
 ## Resolution
 
 A map's bin size, such as `5 kb`. An `.mcool` or a `.hic` stores several, named in an address by
-`::/resolutions/<bin size>`; one summed from whole bins of a stored one is marked `*`: `3 kb*`. See
+`::/resolutions/<bin size>`; one summed from whole bins of a stored one is marked `*`: `3 kb*`. The
+one picked in the row above the map is in the link as `resolution=`. See
 [Contact maps](/files/contact-maps/).
 
 ## Score

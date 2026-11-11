@@ -628,10 +628,10 @@ export function withoutSecond(state: ViewState): ViewState {
  *
  * `null` is not a failure to look it up: it is the answer that the two files
  * cannot be compared at this resolution, which is the gate's own rule seen from
- * the other side. **Exact**, on {@link Session.openAtBinsize}'s rule and for its
- * reason — the nearest rung is a different picture, and drawing it under a
- * label that says the reader's own resolution would be a lie the picture cannot
- * betray.
+ * the other side. **Exact**, because the nearest rung is a different picture,
+ * and drawing it under a label that says the reader's own resolution would be a
+ * lie the picture cannot betray: a pair is one grid (§5.7), where a deck's maps
+ * may each be read at the nearest rung they have, and say so (§16.2).
  *
  * Exported for the test: it is the one piece of arithmetic in the carry, and
  * everything around it needs a worker and two open files to reach.

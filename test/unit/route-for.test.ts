@@ -30,7 +30,10 @@ describe('what a label shows of an address', () => {
     expect(fileBaseLabel(DRIVE)).toBe('1pq7NDWoDdEJNTTOZEnhoKYYrr66zzD7')
     expect(fileBaseLabel('https://b.s3.amazonaws.com/rep1.mcool?X-Amz-Signature=abc')).toBe('rep1.mcool')
     expect(fileBaseLabel('https://h.example/raw/matrix.matrix#bins=abs.bed')).toBe('matrix.matrix')
-    expect(fileLabel('https://h.example/multi.mcool?sig=1::resolutions/1000')).toBe('multi.mcool::1000')
+    // A rung of a ladder is where the file was opened, not part of its name;
+    // a map of a collection is (`ui/labels.ts`).
+    expect(fileLabel('https://h.example/multi.mcool?sig=1::resolutions/1000')).toBe('multi.mcool')
+    expect(fileLabel('https://h.example/samples.mmetacool::/entries/rep1')).toBe('samples.mmetacool::rep1')
   })
 
   it('keeps a name that is nothing but a query', () => {

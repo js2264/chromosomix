@@ -16,18 +16,38 @@ The **Map** card, in the **Aesthetics** panel, sets how the map is drawn, from t
 
 ## Resolution
 
-**resolution**, at the far end of the bar above the map, lists the bin sizes the file stores as
-stops under a slider; <kbd>-</kbd> and <kbd>+</kbd> step one coarser or finer. A file opens a third
-of the way up from its finest resolution.
+At the far end of the bar above the map is the resolution, in one row:
 
-The `+` after the stops opens **Add a resolution**: a whole multiple of one of the file's bin sizes,
-such as 3 kb on 1 kb bins, summed from the stored bins. It shows as `3 kb*`, its `×` removes it, and
-a file takes up to twelve. Counts are exact, but balanced values are an estimate, since
-`cooler zoomify --balance` balances each resolution on its own. A task run while it is drawn reads
-the map at that resolution.
+- **refine on zoom**, ticked by default: the map is read at the resolution of the screen, and finer
+  as you zoom, down to the finest the file stores. While it is ticked the rest of the row is greyed
+  and follows the map, so it says which resolution is drawn; where the map is drawn at a size the
+  file does not store, the slider's thumb sits on the nearest slot and the box names that size.
+- a **slider** with a round slot for each bin size the file stores, coarsest on the left, the two
+  ends named; point at a slot for its size. Untick *refine on zoom*, then click a slot, drag along the
+  slider, or use the arrow keys on it; <kbd>-</kbd> and <kbd>+</kbd> step one coarser or finer.
+- a **box** naming the resolution; click it for a list of every bin size.
+- a **`+`**, which opens **Add a resolution**.
 
-A wide window may be drawn coarser, as the summary line says
-([Resolution and the zoom](/browse/navigating/#resolution-and-the-zoom)). On the whole genome,
+With *refine on zoom* unticked, the resolution you pick is what is drawn, read where you are, without
+leaving the window you zoomed to. Unticking keeps the resolution on screen as your pick, and leaves
+*refine on zoom* off for the maps you open next; ticking it gives the resolution back to the zoom.
+The link carries the pick as `resolution=`, and a link that names one opens at it, with *refine on
+zoom* unticked, whatever the recipient's own setting. It stays as you go to another chromosome, and
+goes when you open another file. A window too wide for the resolution picked (8,192 bins a side) is
+drawn from the finest stored resolution that fits, and the summary line says so:
+*10 kb is too fine for this window: zoom in*
+([Resolution and the zoom](/browse/navigating/#resolution-and-the-zoom)).
+
+**Add a resolution** takes a whole multiple of one of the file's bin sizes, such as 3 kb on 1 kb
+bins, summed from the stored bins. It shows as `3 kb*`, its slot ringed with dots, and a file takes up
+to twelve; while it is the one picked, the `×` beside the box removes it, and the map goes to the
+stored resolution it was summed from. Counts are exact, but balanced values are an estimate, since
+`cooler zoomify --balance` balances each resolution on its own. A link to it opens at it anywhere,
+added or not.
+
+A task runs at the resolution you picked, or, with none picked, at the one the file was opened at,
+whatever the screen shows; each task's own **Resolution** row, first in its form, can set another
+for that task alone ([Analyses](/analyses/#what-a-task-reads)). On the whole genome,
 **level**, at the head of the **Sequences** card (**General** panel), switches between `bin × bin`
 and `chromosome × chromosome`.
 
@@ -75,10 +95,12 @@ shows.
 
 **clip** sets where the ramp starts and where it saturates, in the transform's units, as its label
 says (**clip (log10)**); the line under it gives the range in the readout's units,
-`auto · 0.000066 – 0.089 balanced`. Type a bound to fix it; ⇅, or a change of transform, puts it
-back to automatic. The automatic range is measured on the block that was read, so the colours hold
-still as you pan and zoom inside it: from 0 to the 99th percentile of the non-zero counts, or for
-balanced values from the 1st to the 99th percentile of the cells that hold a contact.
+`auto · 0.000066 – 0.089 balanced`. Type a bound to fix it; a change of transform puts it back to
+automatic. The automatic range is measured on the block that was read, and kept as you zoom into it,
+so the colours hold still: from 0 to the 99th percentile of the non-zero counts, or for balanced
+values from the 1st to the 99th percentile of the cells that hold a contact. ⇅ is always there, and
+measures the range again on what is on screen, by the same rule — after a zoom from a whole
+chromosome into a few domains, the range of those domains.
 
 The key, in the map's top-right corner, names the score and the transform, gives one cell's size and
 shows the two bounds: click either to type it, and empty it for automatic. **legend**, under

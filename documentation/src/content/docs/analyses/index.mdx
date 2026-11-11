@@ -55,6 +55,8 @@ green if identical or equivalent, in the text's colour if not compared yet.
 - **The map**: the open one. On a [deck of maps side by side](/browse/deck/), the **starred** one, and
   the button reads **run on ★**. **run on all N maps** runs once per map and gives each map a tab; the
   **all maps** tab draws the curves on one figure and the tables as one, its first column naming the map.
+  Every map of a deck is read at the first map's resolution for the task, from its own file, as it is
+  drawn.
 - **The tracks**: a 1D task reads the loaded tracks, feature sets and sequences, never a map, and runs
   once, even on a deck.
 - **The view, as it is when you press run**, for what changes the numbers: the resolution, the score the
@@ -64,9 +66,16 @@ green if identical or equivalent, in the text's colour if not compared yet.
   **recompute here** runs it on the view as it is now.
 - **What the form names**, not the window on screen: the sequences ticked (all, unless you untick some),
   an anchor, a feature set.
-- **The map's resolution**: one the file stores or one you added (marked `*`, as in `3 kb*`), never the
-  coarser cells of a zoomed-out picture. To run at another, open the map at it. The map report is the
-  exception: its ladder counts from the file's finest resolution.
+- **The resolution on the task's Resolution row**, the first row of its form: at first the one you
+  picked in the row above the map ([Resolution](/browse/contact-maps/#resolution)) — one the file
+  stores, or one you added (marked `*`, as in `3 kb*`) — or, with none picked, the one the file was
+  opened at. Never the one *refine on zoom* happens to have drawn, nor the coarser cells of a
+  zoomed-out picture, so the same view gives the same numbers on any screen. To run one task at
+  another resolution, choose it on that task's **Resolution** row: only that task changes, on this
+  file, and choosing the starting one again puts it back. To run every task at another, untick
+  *refine on zoom* and pick it above the map. Tasks that read no map, a starred map of a deck other
+  than the first, and a `.pairs` file have no Resolution row. The map report is the exception: its
+  ladder counts from the file's finest resolution.
 - **Balanced counts**, wherever the file carries weights, however the map is drawn; `--no-balance` on the
   command line reads the raw counts. Coverage is the one task that asks, raw unless you turn its weights
   on; the map report reads its coverage and its cis and trans raw.
@@ -89,7 +98,7 @@ the price is the most the run could need.
 
 **A run that cannot happen says why, in red, and run is greyed**: *Tick at least one sequence.*, or a limit
 and the ways round it. Compartments, for instance, refuse a matrix of more than 8,192 bins a side, and say
-to untick some sequences, open a coarser resolution or read the cis contacts alone.
+to untick some sequences, pick a coarser resolution or read the cis contacts alone.
 
 ## While it runs
 

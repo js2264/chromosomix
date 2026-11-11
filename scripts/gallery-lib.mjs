@@ -33,7 +33,7 @@ export function withDev(address) {
 }
 
 /** A browser, a page at the gallery's size, and the helpers bound to it. */
-export async function gallery(out, { width = 1600, height = 1000 } = {}) {
+export async function gallery(out, { width = 1600, height = 1000, scale = 1 } = {}) {
   const { chromium } = playwright()
   const base = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
   mkdirSync(out, { recursive: true })
@@ -44,12 +44,12 @@ export async function gallery(out, { width = 1600, height = 1000 } = {}) {
     ...(executablePath === undefined ? {} : { executablePath }),
     args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
   })
-  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1, acceptDownloads: true })
+  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: scale, acceptDownloads: true })
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (e) => errors.push(String(e)))
-  const shot = async (name) => {
-    await page.screenshot({ path: join(out, `${name}.png`) })
+  const shot = async (name, options = {}) => {
+    await page.screenshot({ path: join(out, `${name}.png`), ...options })
     console.log(`wrote ${name}.png`)
   }
   const text = (selector) => page.evaluate((s) => document.querySelector(s)?.textContent ?? null, selector)

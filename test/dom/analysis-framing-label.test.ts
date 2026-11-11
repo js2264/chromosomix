@@ -31,7 +31,7 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { CoarseGrid, type DerivedGrid } from '@/metacooler/coarsen'
+import { analysisGridOf, carryExtent, offsetsOf } from '@/metacooler/coarsen'
 import { MatrixPanel } from '@/ui/MatrixPanel'
 import type { MatrixResult } from '@/worker/protocol'
 import { setUpDom, type DomTeardown } from '../support/dom'
@@ -150,10 +150,7 @@ describe('the region a framing names', () => {
 
 describe('a view at a resolution the reader added (§3.4)', () => {
   /** 3 kb*: a 1 kb file's sequence of 300 bins, summed three at a time. */
-  const derived: DerivedGrid = {
-    rung: { binsize: 3000, from: { name: '1000', binsize: 1000 }, factor: 3 },
-    grid: CoarseGrid.of([0, 300], 3),
-  }
+  const derived = analysisGridOf([300_000], { name: '1000', binsize: 1000 }, 3).grid
 
   it('is framed in its own bins, with the * the picker gives it', () => {
     const panel = panelAt(1000)
@@ -195,5 +192,59 @@ describe('a view at a resolution the reader added (§3.4)', () => {
     expect(framing.binsize).toBe(1000)
     expect(framing.coarsen).toBeUndefined()
     expect(framing.rows).toEqual([0, 300])
+  })
+})
+
+describe('a view at a rung the crumb row names (§3.4)', () => {
+  /**
+   * A 10 kb map of two sequences, 1.25 Mb and 0.8 Mb: 125 and 80 bins at 10 kb,
+   * 50 and 32 at 25 kb — so carrying a window between the two is not a division
+   * past the first sequence.
+   */
+  const LENGTHS = [1_250_000, 800_000]
+
+  it('is framed in the picked rung’s bins, read from its own entry', () => {
+    // 25 kb picked over a file open at 10 kb, and drawn at it: the block is the
+    // 25 kb rung's, and so is every number a task is framed by.
+    const { grid, nBins } = analysisGridOf(LENGTHS, { name: '25000', binsize: 25_000 })
+    expect(nBins).toBe(82)
+    const panel = panelAt(10_000)
+    panel.setData({ ...block(82), binsize: 25_000 } as MatrixResult, '16')
+    const framing = panel.analysisFraming('f.mcool::resolutions/25000', grid)!
+    expect(framing.uri).toBe('f.mcool::resolutions/25000')
+    expect(framing.binsize).toBe(25_000)
+    expect(framing.rows).toEqual([0, 82])
+    expect(framing.binsPerCell).toBe(1)
+    expect(framing.coarsen).toBeUndefined()
+    expect(framing.label.split(' · ')).toContain('25 kb bins')
+  })
+
+  it('carries a coarser block onto the pick, for a window too wide to draw at it', () => {
+    // 10 kb picked over a file open at 25 kb, and the window drawn at 25 kb: the
+    // second sequence's first 25 kb bin is the 125th 10 kb one, not the 50th
+    // times two and a half.
+    const { grid } = analysisGridOf(LENGTHS, { name: '10000', binsize: 10_000 })
+    const panel = panelAt(25_000)
+    panel.setData({ ...block(82), rowExtent: [50, 82], colExtent: [0, 82] } as MatrixResult, '16')
+    const framing = panel.analysisFraming('f.mcool::resolutions/10000', grid)!
+    expect(framing.binsize).toBe(10_000)
+    expect(framing.rows).toEqual([125, 205])
+    expect(framing.cols).toEqual([0, 205])
+    // Two and a half of its bins to a drawn cell, said as the nearest whole.
+    expect(framing.binsPerCell).toBe(3)
+  })
+
+  it('carries an extent through base pairs, one sequence at a time', () => {
+    const ten = { binsize: 10_000, offsets: offsetsOf(LENGTHS, 10_000) }
+    const quarter = { binsize: 25_000, offsets: offsetsOf(LENGTHS, 25_000) }
+    // The last 10 kb bin of the first sequence is in its last, part-filled
+    // 25 kb one; the second's first bins start a bin of their own.
+    expect(carryExtent([124, 126], ten, quarter, LENGTHS)).toEqual([49, 51])
+    // Back the other way: 1,225,000–1,250,000 of the first and 0–25,000 of the
+    // second are 10 kb bins 122–124 and 125–127.
+    expect(carryExtent([49, 51], quarter, ten, LENGTHS)).toEqual([122, 128])
+    // Clamped to the map, and empty where it is empty.
+    expect(carryExtent([0, 10_000], ten, quarter, LENGTHS)).toEqual([0, 82])
+    expect(carryExtent([7, 7], ten, quarter, LENGTHS)).toEqual([2, 2])
   })
 })

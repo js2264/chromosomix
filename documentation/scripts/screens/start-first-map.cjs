@@ -78,6 +78,9 @@ const CTCF = 'https://encode-public.s3.amazonaws.com/2020/09/26/85161a5a-d6b5-49
   await w.shot('chromosomes')
 
   // 250 kb, chr15.
+  // The resolution is the reader's to pick with *Refine on zoom* unticked (SPECS §2).
+  if (await page.locator('.crumb-res .res-refine input').first().isChecked()) await page.click('.crumb-res .res-refine input')
+  await sleep(800)
   await page.selectOption('select.res-pick', { label: '250 kb' })
   await sleep(1500)
   await page.click('.content .tviewport .tr .td[title="chr15"]')

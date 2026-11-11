@@ -142,8 +142,10 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       refusal:
         `A stratum is a diagonal offset in bins, so two maps can only be compared on one grid. ` +
         `This one is at ${context.binsize.toLocaleString()} bp and ` +
-        `${peers === 1 ? 'the other is' : 'the others are'} not. Open them at the same ` +
-        'resolution — an .mcool descends to any rung it carries.',
+        `${peers === 1 ? 'the other is' : 'the others are'} not: ` +
+        `${peers === 1 ? 'its file has' : 'their files have'} no rung of that size, nor one that ` +
+        'adds up to it. Every map of a deck is read at the resolution picked on the first map, so ' +
+        'pick one there that every file carries.',
     }
   }
   // Nothing ticked is nothing to compare over, and refused in the sentence

@@ -173,6 +173,7 @@ export function blockSummary(
   binsize: number,
   result: MatrixResult,
   noun = 'sequence',
+  picked?: number,
 ): Array<string | HTMLElement> {
   // What the cells *are*. At bin level they are bins of the effective
   // resolution, which is the pairing that multiplies out to what is on screen.
@@ -194,6 +195,17 @@ export function blockSummary(
     // *means*: the same map at 200 bp and at 3 kb are different figures, and a
     // reader scanning the line is looking for that.
     parts.push(el('strong', { text: resolution }))
+  }
+  // **The resolution picked, where it is not what is drawn** (§3.4). With
+  // *Refine on zoom* off the picked resolution is the picture, unless the window
+  // is too wide for a block at it: then it is drawn coarser, and the
+  // line says which resolution it is not, and how to get it.
+  const drawn = (result.binsize ?? binsize) * (result.binsPerCell ?? 1)
+  if (picked !== undefined && picked > 0 && (result.level ?? 'bin') === 'bin' && drawn > picked * 1.001) {
+    parts.push(
+      ' · ',
+      el('span', { class: 'res-too-fine', text: `${resolutionLabel(picked)} is too fine for this window: zoom in` }),
+    )
   }
   return parts
 }

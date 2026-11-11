@@ -22,10 +22,13 @@ its switch holds for the map, the 1D browser and the deck at once.
 
 From anywhere, <kbd>S</kbd> saves the figure as the card is set, and <kbd>Ctrl</kbd>+<kbd>C</kbd>
 (<kbd>⌘</kbd><kbd>C</kbd> on a Mac) copies it as a PNG at the card's resolution, unless text is
-selected or the caret is in a box. The copy button always copies a PNG. While a map is still shown
-from a coarser resolution as its own is read
-([Resolution and the zoom](/browse/navigating/#resolution-and-the-zoom)), both buttons and both keys
-wait for it, and the card says so.
+selected or the caret is in a box. The copy button always copies a PNG.
+
+The figure is the map exactly as it is on screen: the resolution it is drawn at and its colour range.
+For a finer figure, zoom in, or untick **refine on zoom** and pick the resolution, which is then what
+the map draws ([Resolution and the zoom](/browse/navigating/#resolution-and-the-zoom)). While a map
+is still shown from a coarser resolution as its own is read, both buttons and both keys wait for it,
+and the card says so.
 
 ![The Export card at the top of the Aesthetics panel, with PDF (vector) chosen, no resolution beside it, the save and copy buttons, and the caption switch on.](../../../assets/screens/browse/figures-export-card.webp)
 

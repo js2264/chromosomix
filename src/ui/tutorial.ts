@@ -72,14 +72,24 @@ import type { TaskResult } from '../analysis/types'
 import type { ViewState } from '../types'
 import { isMac } from './commands'
 import { BALANCED_SCORE, CORRELATION_SCORE } from './scores'
+import { refineEnabled } from './refine'
 import type { TourSpot, TourStep, TourText } from './Tour'
 
 /** What the steps read from the window. */
 export interface TutorialHost {
   /** The view of the tab in front, or `null` while it holds nothing. */
   view(): ViewState | null
-  /** The bin size of the map in front, or `null`. */
+  /**
+   * The resolution the map in front was asked for — the rung picked, else the
+   * one the file was opened at — or `null`.
+   */
   binsize(): number | null
+  /**
+   * Whether the zoom picks the resolution of the map in front: *Refine on zoom*
+   * ticked and nothing picked in its link (§3.4). Absent is the preference
+   * alone.
+   */
+  refining?(): boolean
   /**
    * The score its cells are drawn from, by the picker's id, with the file's
    * default applied — a balanced cooler opens balanced and says so nowhere in
@@ -204,9 +214,9 @@ function taskGroup(heading: string): HTMLElement | null {
   return null
 }
 
-/** The resolution control: a dropdown on a long ladder, a row of stops on a short one. */
+/** The resolution row: its slider and its box, either of which picks a rung. */
 function resolutionControl(): HTMLElement | null {
-  return first('select.res-pick, [role="radiogroup"][aria-label="resolution"]')
+  return first('.crumb-res')
 }
 
 /** The Map card, wherever it has been carried, while it is laid out. */
@@ -427,6 +437,8 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
   const onMap = (): boolean =>
     host.view()?.uri.includes(MAP_FILE) === true || host.file()?.includes(MAP_FILE) === true
   const onSequence = (): boolean => sequenceOf(host.view()) === TUTORIAL_SEQUENCE
+  /** The zoom picks the resolution of the map in front: the row's tick, as it is drawn. */
+  const refining = (): boolean => host.refining?.() ?? refineEnabled()
   const ranOn = (task: string): boolean =>
     host.runs(task).some((run) => sameNames(namesIn(run.provenance.params.sequences), [TUTORIAL_SEQUENCE]))
   /** A track loaded from 4DN's set, by the accession in its address. */
@@ -737,16 +749,26 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       target: () => columnCards('general'),
     },
     {
+      id: 'refine-off',
+      chapter: 'The map',
+      title: 'Untick Refine on zoom',
+      text:
+        'A map is stored at several resolutions, the size of one bin. Ticked, the map is read at the ' +
+        'resolution of the screen, and finer as you zoom; unticked, you pick it.',
+      target: () => first('.crumb-res .res-refine'),
+      done: () => !refining(),
+      needs: { holds: onMap, back: 'open-set' },
+      missing: 'Waiting for the map to open.',
+    },
+    {
       id: 'resolution-250',
       chapter: 'The map',
       title: 'Pick 250 kb',
-      text:
-        'A map is stored at several resolutions, the size of one bin. 250 kb is coarse enough to show a whole ' +
-        'chromosome’s compartments.',
+      text: '250 kb is coarse enough to show a whole chromosome’s compartments.',
       action: 'choose',
       target: resolutionControl,
-      done: () => host.binsize() === 250_000,
-      needs: { holds: onMap, back: 'open-set' },
+      done: () => !refining() && host.binsize() === 250_000,
+      needs: { holds: () => onMap() && !refining(), back: 'refine-off' },
       missing: 'Waiting for the map to open.',
     },
     {
@@ -891,8 +913,8 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       text: 'At 5 kb the domains along the diagonal come into view, and the loops at their corners.',
       action: 'choose',
       target: resolutionControl,
-      done: () => host.binsize() === FINE,
-      needs: { holds: onMap, back: 'open-set' },
+      done: () => !refining() && host.binsize() === FINE,
+      needs: { holds: () => onMap() && !refining(), back: 'refine-off' },
     },
     {
       id: 'zoom-domains',

@@ -146,7 +146,7 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     title: 'Selection too large to draw',
     advice: [
       'The requested block would need more memory than a browser tab can be asked for.',
-      'Switch to contig level, narrow the range, or open a coarser resolution.',
+      'Switch to contig level, narrow the range, or pick a coarser resolution in the crumb row.',
     ],
   },
   'unknown-label': {

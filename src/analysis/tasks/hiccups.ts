@@ -272,7 +272,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
     return refused(
       skipped > 0
         ? 'Every chosen sequence would need a band bigger than a scan can hold. Bring “furthest ' +
-            'from the diagonal” down, or open the file at a coarser resolution.'
+            'from the diagonal” down, or pick a coarser resolution on the task’s Resolution row.'
         : 'Tick at least one sequence.',
     )
   }

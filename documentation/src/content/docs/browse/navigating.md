@@ -3,21 +3,24 @@ title: "Moving around"
 description: "Pan and zoom a map, type a locus, go to a sequence or a gene, and step back to where you were."
 ---
 
-Dragging and scrolling move the **picture** of the block already read, and leave the address alone.
+Dragging and scrolling move the **picture**, and leave the address alone; the map reads what they
+bring into view as you go, without stopping ([Resolution and the zoom](#resolution-and-the-zoom)).
 The locus box, the zoom steps, the crumbs and the sequence keys change the **range**: they read a
 new block, the address follows, and the back button undoes them.
 
 ## Pan and zoom
 
 - **Drag**, or one finger on a touch screen, to pan; a tap opens what it lands on.
-- **Scroll** up or down, or pinch, to zoom about the pointer.
+- **Scroll** up or down, or pinch, to zoom about the pointer. With the pointer on the diagonal, or
+  within four pixels of it, the zoom is about the diagonal, so the view stays on it.
 - **Scroll sideways** to slide along the map's columns. On a Mac, hold <kbd>⌘</kbd> and two fingers
   move it in any direction.
 - **Double-click** (a double tap), <kbd>0</kbd>, or the first button of the **picture** row on the
   **Map** card (in the **Aesthetics** panel) undoes every pan and zoom.
 
-Panning and zooming stop at the edges of the block that was read; to see past them, change the
-range.
+Panning and zooming reach as far as the sequence the range is on, or the genome on the whole
+genome: near the edge of what was read, the map reads on ahead of you. To see another sequence,
+change the range.
 
 ## Zoom into a region
 
@@ -95,30 +98,52 @@ greyed.
 
 ## Resolution and the zoom
 
-Scrolling does not change the resolution chosen in the bar
-([Resolution](/browse/contact-maps/#resolution)): zooming in magnifies the cells of the block
-already read. A wide window may be read coarser, its bins summed, and the line under the heading
-says what one cell is worth: `4,033 × 4,033 bins · effective resolution: 3 kb`.
+With **refine on zoom** ticked, at the head of the resolution row
+([Resolution](/browse/contact-maps/#resolution)), and no resolution picked, a map opens at about the
+size of the screen: a
+whole chromosome is read from a coarser resolution the file stores, a cell or so to each pixel, which
+is what puts it on screen in a fraction of a second. It is always one the file stores, the nearest to
+a pixel: the slider's thumb sits on a slot. The whole genome (<kbd>W</kbd>) opens the same way,
+whichever resolution the link opened the file at. As you zoom in, the finer data is read for the
+stretch you are looking at, down to the finest resolution the file stores, whichever it was opened
+at: while you go on zooming in, nothing is read, and the moment you pause, the stretch you paused on
+is. The map never stops following the scroll or the drag while it reads: for a moment its cells are
+larger and a small spinner turns in its top right corner, then it sharpens where you are. The
+slider follows, greyed, its thumb moving from slot to slot. The line under the heading says what one
+cell is worth at any moment, `785 × 785 bins · effective resolution: 250 kb` on a whole chromosome.
+As you pan, the stretch ahead of the edge of what was read is read before you reach it.
 
-A block of several million cells — a whole chromosome at a fine resolution — is first drawn at the
-size of the screen, which is what makes it appear quickly. Its finer detail is drawn when you first
-zoom in: for a moment after that zoom the picture is softer, then it sharpens. Nothing is read again,
-since the block is already in hand, and a saved figure is always drawn at full detail.
+Untick it to pick the resolution yourself — a slot, the box, <kbd>-</kbd> or <kbd>+</kbd> — and the
+map is drawn at it wherever you zoom; unticking keeps the resolution on screen as your pick, so
+nothing jumps. A pick is read where you are, keeping the window you zoomed to, and goes in the link,
+so a link opens at it, with *refine on zoom* unticked. A window too wide for that resolution, 8,192
+bins a side, is drawn coarser, and the line under the heading says so — *10 kb is too fine for this
+window: zoom in* — until you zoom in far enough for it. Inside what was read, panning and zooming
+read nothing more; past its edge, the map reads on. Tick *refine on zoom* to hand the resolution back
+to the zoom; maps you open while it is unticked are drawn at the resolution they were opened at until
+you pick another. **Refine on zoom** is also in the command palette (<kbd>⌘ P</kbd> or
+<kbd>Ctrl P</kbd>), where it does what the tick does; it applies to every map, and this browser
+remembers it.
 
-Before that, while such a block is still being read, the window is shown from a coarser resolution
-the file stores, when it has one: clicking a whole chromosome puts a coarse map on screen in a
-fraction of a second, with a spinner in its corner, and the map at the resolution you chose replaces
-it when it arrives. The coarse map's key says its own resolution. Its cells are sums of many finer
-ones, so its compartments look stronger than they will in the finer map. You can scroll, drag and
-hover it straight away: the finer map lands on the stretch you have moved to, or fills the panel if
-you have not moved. Saving or copying the figure, and running an analysis, wait for the finer map,
-and the Export card says so. A window that is already about as coarse as that is read once, as
-before.
+A figure is the map as it is on screen, at the resolution it is drawn at
+([Figures](/browse/figures/#saving-a-view)): zoom in, or pick a resolution, for a finer one. An
+analysis runs at the resolution you picked, or at the one the file was opened at, never at the
+screen's ([Analyses](/analyses/#what-a-task-reads)).
 
-To see finer data, narrow the window, down to the resolution chosen. Or turn on **Refine on zoom**
-in the command palette (<kbd>⌘ P</kbd> or <kbd>Ctrl P</kbd>): zooming in past what the block can
-show then reads it again, finer; <kbd>Esc</kbd> calls it off. It applies to every map, and this
-browser remembers it.
+A block of several million cells — a whole chromosome at a fine resolution picked — is first drawn
+at the size of the screen, which is what makes it appear quickly. Its finer detail is drawn when you
+first zoom in: for a moment after that zoom the picture is softer, then it sharpens. Nothing is read
+again, since the block is already in hand.
+
+And with *refine on zoom* off and no resolution picked, while such a block is still being read, the
+window is shown from a coarser resolution the file stores, when it has one: clicking a whole
+chromosome puts a coarse map on screen in a fraction of a second, with a spinner in its corner, and
+the map at the file's resolution replaces it when it arrives. The coarse map's key says its own
+resolution. Its cells are sums of many finer ones, so its compartments look stronger than they will
+in the finer map. You can scroll, drag and hover it straight away: the finer map lands on the stretch
+you have moved to, or fills the panel if you have not moved. Saving or copying the figure, and
+running an analysis, wait for the finer map, and the Export card says so. A window that is already
+about as coarse as that is read once, as before.
 
 ## Crumbs, back and forward
 
@@ -136,7 +161,8 @@ genome browser, the address (`locus=`) follows every move without adding steps.
 
 ## From the keyboard
 
-Besides the keys above, <kbd>-</kbd> and <kbd>+</kbd> step one resolution coarser or finer,
+Besides the keys above, <kbd>-</kbd> and <kbd>+</kbd> step one resolution coarser or finer (with
+*refine on zoom* unticked),
 <kbd>b</kbd> bookmarks the view, and <kbd>?</kbd> lists every shortcut. Once you have clicked the
 map, the arrow keys pan, <kbd>Page Up</kbd> and <kbd>Page Down</kbd> zoom about the centre, and
 <kbd>Home</kbd> refits. Once you have clicked the genome browser's tracks, the arrow keys pan,

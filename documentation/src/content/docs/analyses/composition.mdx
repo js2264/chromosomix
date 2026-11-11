@@ -14,7 +14,7 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 ## Running it
 
-Load the reference as a FASTA or a `.2bit` ([Reference sequences](/files/sequences/)), open **Base composition** on the **1D tasks** card of the **Analysis** panel, and choose it under **reference**. No map is needed: the bins are the open map's, or 10 kb with no map open.
+Load the reference as a FASTA or a `.2bit` ([Reference sequences](/files/sequences/)), open **Base composition** on the **1D tasks** card of the **Analysis** panel, and choose it under **reference**. No map is needed: the bins are the map's resolution, or 10 kb with no map open.
 
 Each track ticked is a row of the **Tracks** card, marked `*`, named after the reference and any window: `GC content · ref`, `GC skew · ref · 50,000 bp window`.
 
@@ -26,7 +26,7 @@ The same run from a shell:
 
 ## Parameters
 
-**bin size** follows the open map's resolution until you type another. **window** smooths a noisy skew without changing its grid; it is rounded to an odd number of bins, and wraps round the junction of a circular sequence.
+**bin size** follows the map's resolution, the one picked above it or else the one the file was opened at, until you type another. **window** smooths a noisy skew without changing its grid; it is rounded to an odd number of bins, and wraps round the junction of a circular sequence.
 
 <TaskParameters id="composition" />
 

@@ -51,7 +51,9 @@ cells and its non-zero pixels are a bounded, contiguous slice of `/pixels`.
 Therefore, within a genome:
 
 - the entire matrix is loaded in one bounded read and held in memory;
-- pan and zoom are pure canvas operations with **zero** further I/O;
+- pan and zoom are pure canvas operations with **zero** further I/O — with *Refine on zoom* off. On,
+  which is the default, a genome of more bins than the plot has room for is first read at the
+  screen's size and its own bins read once a zoom can show them: the bounded exception below;
 - no tiling, no LRU tile cache, no resolution pyramid.
 
 This is the central architectural difference from HiGlass, which must stream a 3 Gb genome. None of
@@ -60,34 +62,120 @@ nothing is composited, and no picture is ever assembled from parts.
 
 **The fourth clause used to be "no progressive refinement", and it is now bounded rather than
 absent.** What the app grew into is what changed it: §9 made whole-genome coolers a first-class view
-and §7.2 made a block larger than the picture arrive already coarsened, so a whole chromosome now
-opens at a grid the reader can see is coarse — and, until this, could do nothing about but leave.
-Zooming past what the block in hand can show therefore reads the window again, at the grid the
-picture could show, **the moment that edge is crossed**. The properties that keep this inside §2
-rather than beside it:
+and §7.2 made a block larger than the picture arrive already coarsened, so a whole chromosome opens
+at a grid the reader can see is coarse — and, until this, could do nothing about but leave. Zooming
+past what the block in hand can show therefore reads the window again, at the grid the picture could
+show. The properties that keep this inside §2 rather than beside it:
 
-- **a gesture still costs nothing**, and cannot continue into one. Crossing the edge of what the
-  block in hand can show *freezes* the map — pan, zoom and refit refused, a spinner in the corner of
-  the plot, clear of the axis labels drawn inside it — until the new grid lands. One crossing is one read, by construction rather than by
-  timing, and the reader is shown the moment their resolution changes instead of having it happen
-  under them. Escape calls the read off and gives the gestures back, because a picture that is
-  already complete is never worth locking the map for;
-- **one block, never tiles.** The picture is always exactly one bounded read, drawn whole. Two or
-  three are *retained* so that zooming back out is a swap rather than a request, which is a small
-  bounded cache of blocks and not a tile cache: nothing is evicted mid-picture and nothing is
-  stitched;
-- **it terminates.** There is no grid below the file's own bins, so the staircase from the widest
-  view to the finest data is `⌈log₂ k⌉` reads — one for a whole yeast genome at 1 kb, three for a
-  human chromosome at 5 kb, **none at all for a MAG**, whose block already is the finest data in the
-  file. §2's own case is untouched;
+- **a gesture never waits for a read.** The map never holds still: the block in hand takes every
+  pan and zoom while a sharper one is read, a small spinner turns in the map's top right corner, left
+  of its legend where one is shown (`MatrixPanel.setWaiting`; only for a read longer than 140 ms, so a
+  quick refine shows nothing), and the sharper block lands on wherever the
+  gesture has got to, its window carried in base pairs (`MatrixPanel.regrid`). A read in flight is the
+  read every frame of the gesture wants while it still covers the view on a grid within a factor of
+  two of the view's own, and is called off at once when the zoom outruns it. It used to *freeze* the
+  map instead, refusing every gesture until the block came: one crossing was one read by
+  construction, and the map stopped following the hand at every crossing, for seconds at a time;
+- **a zoom inward reads where it pauses**, so a fast zoom reads its last window rather than every
+  step on the way. While the view keeps shrinking — a wheel's notches come tens of milliseconds apart
+  and a trackpad's frames sixteen — no read starts: the ladder starts one once the view has not
+  shrunk for 150 ms (`ZOOM_PAUSE_MS`), for the window the zoom paused on. The block on screen covers
+  the view throughout, since a zoom inward only ever shows less of it, so nothing goes missing
+  meanwhile; it is only coarser for longer. A pan, a zoom outward and a narrower view after a still
+  moment of more than 400 ms (`INWARD_MS`) — a bookmark, a typed window, a jump rather than a zoom —
+  read at once. The pause is there because a read called off is not free. The worker reads one
+  request at a time, synchronously, and a cancel is a message it sees only between the windows a
+  read walks, so a read the zoom has outrun holds up the one it wants until it stops — and a dense
+  read, which is every read at a rung the file stores and so nearly every read a zoom makes, did not
+  look for the cancel at all: only a pooled read did. On the 4DN map of K562 from S3, a wheel zoom
+  from the whole of chr5 to 20 Mb fired the 100 kb rung's read a fifth of a second in and called it
+  off half a second later, and that read went on for 28 MB and about 7 s more, the read the zoom
+  ended on queued behind it. A dense read now polls the cancel between its windows and stops there
+  with an `AbortError` (`readDenseMatrix`) — so a read under way when chr5 is opened, and called off
+  by it, stops too, and the same picture of chr5 comes in 5.3 s and 25 MB where it took 5.5 s and
+  34 MB — and a window is 250,000 pixels (`DENSE_WINDOW`), a quarter of the million it walked
+  before, the scan's (`PIXEL_CHUNK`), because a window is as long as a cancel waits; the requests
+  are the same whatever the window, the byte source fetching HDF5 chunk by chunk and reading ahead
+  by bytes. But no cancel shortens the first window, which walks the rung's chunk index from cold:
+  with the cancel working and no pause, that 100 kb read still held the worker 3.4 s and 13
+  requests, the read the zoom ended on waiting behind it. The pause does away with that read
+  altogether. In medians of three runs, from a fresh session in a 1600 × 1000 window with wheel
+  notches 50 ms apart, the zoom from chr5 opened at 250 kb to a 20 Mb window, landing on the 25 kb
+  rung, takes 5.8 s, 20.7 MB and 16 requests where it took 11.7 s, 65 MB and 52 — its block 1,612
+  bins, read for the window the zoom paused on, where it was 1,968, read for one the zoom passed at
+  24.6 Mb — and on to a 1 Mb window, landing on the 2 kb rung, 4.6 s, 7.6 MB and 17 requests where it
+  took 8.0 s, 26.7 MB and 42 (§12);
+- **a read is the size of the screen, at a resolution the file stores.** It asks for about a cell to
+  each CSS pixel of the view, from the stored rung **nearest** that cell on a log scale (`screenPlan`,
+  `ui/refine.ts`) — cells between about two thirds of a pixel and one and a half on a `zoomify` or
+  4DN ladder — and never more than 3.2 screens of cells across whatever window it is for. It is
+  never pooled out of a finer rung into a grid the file does not store: it was the coarsest rung no
+  bigger than a pixel, summed within it to the pixel, so chr6 of a 4DN `.mcool`, 248 kb a pixel, was
+  its 100 kb rung summed two by two into 200 kb cells — every 100 kb pixel downloaded, 56 MB, where
+  the 250 kb rung's own picture is 35 MB, and balanced values that were sums of the finer rung's.
+  Only a file with one resolution, a map beside a second file (whose ladder need not match, so only
+  the open rung is read, §5.7), and a read too wide for even the coarsest rung within the 3.2 screens
+  are pooled — and a pooled read is never more than the reader's 4,096 cells a side
+  (`POOLED_CELL_CAP`), which on a plot wider than about 1,280 pixels the 3.2 screens would have
+  passed, and the reader then pooled the block coarser than it was asked for. Every read used to be
+  as large as memory allowed — the reader's own plan fills the device's
+  budget (§7.2), so a window of 16,384 bins was read a bin to a cell — and it was that, not the
+  network, that made a refine slow: chicken chr1 at 10 kb read a 15,027-bin square (226 M cells,
+  0.9 GB of values) at the second wheel notch, held the map 3.1 s and stalled the page 1.2 s putting
+  it on screen. Screen-sized, the same zoom reads a block about the screen's size at each step — the
+  100 kb rung, the 50 kb, the 25 kb, the 10 kb and on down the ladder — and the page's longest stall
+  is under a fifth of a second (§12);
+- **it reads ahead.** A zoom still going inward reads at a factor of 1.4 rather than of two — judged
+  where it pauses (above), which is well within the 400 ms a zoom still counts as going inward — so
+  the block for the next step is usually in before its cells would have been big enough to see; a pan
+  reads around the view once it comes within a quarter of a view of an edge of its block, so the edge
+  is gone before the view reaches it; and the last step, onto the finest rung, is taken whenever
+  the view can show it, factor of two or not. A view showing its whole block reads nothing for the
+  block's edges — it is pressed against every one of them because it shows all of it — until the
+  reader pulls back past them;
+- **one block, never tiles.** The picture is always exactly one bounded read, drawn whole. Up to eight
+  are *retained*, within 160 MB, so that zooming back out is a swap rather than a request, which is a
+  small bounded cache of blocks and not a tile cache: nothing is evicted mid-picture and nothing is
+  stitched. The one drawn is the finest retained block good enough to stay on screen, and the block on
+  screen gives way only to a finer one while it is still a whole picture of the view. A block a zoom
+  left behind is finer than the screen needs, and handing it back whenever it covered the view — near
+  its edge, where the view reads ahead — read around it, handed it back again for being finer than
+  that read, and read again, for as long as the reader stood still;
+- **it terminates.** There is no grid below the finest rung the file stores — whichever rung it was
+  opened at, so a zoom into chicken chr1 opened at 10 kb walks on through its 5 and 2 kb rungs to its
+  1 kb — and the staircase from the widest view to the finest data is about a read each time the
+  zoom doubles, ending on those bins. It used to end on the rung the file was opened at, which made
+  the finest data a reader could zoom to depend on which entry a link happened to name. A MAG of no
+  more bins than the plot can show is the finest data in its file from the first read, so §2's own
+  case reads nothing more; a larger one reads its own bins once a zoom can show them;
 - **it is bounded by the view.** A zoom can never widen past the domain the view was entered on, so
   it cannot become the full pixel scan §7.3 gates;
-- **it is a preference, and it is off.** The default is the behaviour that keeps this clause
-  absolute: a block read once, and a zoom that magnifies it. Refinement is a palette command — *Refine
-  on zoom* — rather than a switch on a map's picture row, which holds the turn and the baseline: the
-  preference is one setting for the whole window, and a control on one map of a deck would claim it
-  was that map's. A zoom that reads is a zoom that can wait, and a wait nobody asked for is a surprise
-  rather than a feature.
+- **it is a preference, and it is on.** A view's first read is screen-sized too (§7.2), so a map opens
+  at the screen's resolution — a chromosome of a remote file in well under a second, whatever rung it
+  was opened at — and sharpens as the reader zooms. It is the tick at the head of the crumb bar's
+  resolution row (§5.5), and *Refine on zoom* in the palette, which does exactly what the tick does:
+  one setting for the whole window, kept by the browser rather than the link, and never a switch on
+  a map's picture row, which holds the turn and the baseline — a control on one map of a deck would
+  claim it was that map's. Ticked, the row's slider, its box and its `+` are greyed and follow the
+  map, saying which resolution is drawn, and the `−` and `+` keys do nothing. **Unticked, the reader
+  picks the resolution**, and the pick goes in the link. **A pick in the link wins** (§3.4): a map
+  whose link names a resolution is drawn at it whatever the preference says, and its row shows the
+  tick off and is live. In a deck every map is read at the first map's resolution — its pick, else
+  the one its zoom is reading at, else its open rung — each on its own ladder (§16.2). **The pick is
+  the picture**, read in place where the reader stands and as memory allows: around the view, and
+  as much of it as a block at that resolution holds (8,192 bins a side for a rung the file stores,
+  4,096 cells for one the reader added, §7.2), so a window that fits is drawn at the pick whatever
+  its width, and every pan and zoom inside what was read is free of
+  reads. A window too wide for a block at the pick is drawn from the finest stored rung no finer
+  than it that fits (`memoryPlan`, `chooseRung`), or from the coarsest pooled to fit where none does;
+  a resolution the reader added, from its own cells summed by a whole number more — never the pick
+  summed into a grid the file does not store, nor an added one read from another rung. The line
+  under the map says which resolution it is not, and that zooming in reads it (`blockSummary`), and
+  zooming in reads it as soon as the window fits. With the preference off and nothing picked, the
+  rung the file was opened at is read by the same rule, as though picked. **Ticking** takes the pick
+  out of the link and turns the preference on; **unticking** picks the stored rung nearest the
+  resolution on screen, so the picture does not jump, and turns it off. A figure is never a read of
+  its own: it is the picture on screen (§7.2).
 
 **And a place already seen is not read again.** A navigation builds its view afresh, and a view used
 to ask for its block whatever had been asked before — so chr1, then chr2, then chr1 read chr1 twice,
@@ -230,7 +318,9 @@ cases.
 An mmetacool is a container of complete metacool entries and is **not** itself a valid cooler.
 Opening one at its root is an error listing available entries, mirroring the Python `KeyError`;
 the app answers it by opening one — a ladder's landing rung (§9), a collection's first entry — and
-offering the rest in the picker.
+offering the rest in the picker. A rung opened that way is where the file was opened rather than
+what is on screen, and neither the file's name nor the address bar carries it (§3.5, §16.10); a
+sample of a collection is another map, and both do.
 
 Entry naming distinguishes two uses, and the app infers which:
 
@@ -252,7 +342,7 @@ bins added up**. This viewer has summed consecutive bins into one cell since its
 was written (§7.2); what was missing was a way to *ask* for a particular grid rather than have one
 fitted to the screen.
 
-A `+` past the coarse end of the resolution picker asks for one. What can be given is exactly what
+A `+` at the end of the resolution row (§5.5) asks for one. What can be given is exactly what
 is **a whole number of some stored rung's bins**: on a `1 / 2 / 5 / 10 kb` ladder, 3 kb is three 1 kb
 bins — perfectly ordinary, and not a rung anybody would have written, which is why it is worth
 offering — while 2.5 kb is two and a half, and there is no such thing. A contact is recorded in a
@@ -274,36 +364,42 @@ Three properties make it a resolution rather than a rendering:
   (`snapToGrid`), so the same base pair lands in the same cell holding the same sum at every zoom
   and every pan — which is what a cooler at that resolution would also give, and what a grid
   anchored to the request would not.
-- **It holds.** The zoom-to-refine ladder takes it as a floor and never reads past it; the
-  whole-genome view takes it as a floor too, and its own plan still wins where the picture cannot
-  hold that many cells, with the summary saying which.
-- **It is in the link.** `coarsen=` beside `balance=` and `level=`, because a 10 kb map and a 1 kb
-  map of one window are different pictures. Which resolutions a reader has *added* is a different
-  question — a fact about the file, like which sequences they declared circular — and travels with
-  the tracks they loaded (§8.15's argument, restated).
+- **It holds, while it is picked**, and a pick wins over *Refine on zoom* (§2). The ladder takes it
+  as a floor and never reads past it, and draws it — its stored rung's bins summed to it, up to
+  4,096 cells a side, and summed by a whole number more of its own cells only where the window is too
+  wide for that, with the line under the map saying so; never read from another stored rung, which
+  would be a different sum. The whole-genome view's own plan, for a selection or a second file,
+  takes it as a floor too, and still wins where the picture cannot hold that many cells, with the
+  summary saying which. Not picked — while the zoom picks — it is a slot on the slider like the
+  others, and the zoom does not stop at it.
+- **It is in the link**, as any pick is: `resolution=` beside `balance=` and `level=`, because a
+  10 kb map and a 1 kb map of one window are different pictures. The key names the resolution and
+  not how it is reached, and the recipient's file resolves it — the stored rung of that size, else
+  the coarsest stored rung that divides it, summed — so a link naming one its sender added draws it
+  on a machine that never added it, the slider showing it as an added slot so the row can stand on
+  it; a value no rung reaches, or past 100 Mb (`MAX_DERIVED_BP`), is ignored, as every unreadable
+  value in the hash is. It had a key of its own, `coarsen=`, beside `resolution=` for a stored rung,
+  and an old link's, a stored tab's or session's and a widget's `coarsen` is read as `resolution`.
+  Which resolutions a reader has *added* is a different question — a fact about the file, like which
+  sequences they declared circular — and travels with the tracks they loaded (§8.15's argument,
+  restated).
 
-A derived rung wears a **`*`** in the picker, in the label rather than beside it, because the number
-is what somebody quotes in a methods section and `3 kb` would be a resolution this file does not
-contain. It sorts where its number says — 3 kb before 5 kb — since a ladder whose order is not its
-resolutions' order is a lie about which of two pictures is coarser, and it carries a `×`, which the
-file's own rungs do not: they are not the reader's to remove, and that asymmetry is the second thing
-the `*` is saying.
+A derived rung wears a **`*`** in its name — under its slot, in the box and in the box's list — in
+the label rather than beside it, because the number is what somebody quotes in a methods section and
+`3 kb` would be a resolution this file does not contain. It sorts where its number says — its slot
+between 5 kb's and 2 kb's — since a ladder whose order is not its resolutions' order is a lie about
+which of two pictures is coarser, and it can be taken back off, which the file's own rungs cannot:
+they are not the reader's to remove, and that asymmetry is the second thing the `*` is saying.
 
-**Otherwise it is drawn exactly as a stored rung is**, and the `×` takes no room until it is wanted.
-A derived rung used to carry a dashed border whether or not it was the one being read, so a row of
-four added rungs was four outlined chips beside one stored rung with no outline at all — the thing
-the file *does* contain being the quiet one — and each of them reserved fourteen pixels for a `×`
-that only appeared under the pointer, which made the row look padded for no reason a reader could
-see. So: no border when it is not current, a **dotted** border where a stored rung's is solid, and a
-`×` at zero width that the hovered rung grows to hold, pushing the rungs after it along. It keeps its
-width rather than being undisplayed, because a button that is not displayed cannot be tabbed to and
-this one is the only way back off a rung.
-
-**Past nine rungs the row is a dropdown** beside the word, listing every rung in the ladder's own
-order. It was a slider and one chip: between them they said how many rungs there were and which one
-was being read, and named the rest only to a reader who hovered the slider's own tooltip — so the
-control that was there to save room was also the one that hid the ladder. A `<select>` cannot hold a
-button, so where the rung being read is the reader's own the `×` follows the picker.
+**Otherwise it is drawn exactly as a stored rung is**: a slot like the others, its ring **dotted**
+where a stored rung's is solid, quietly, as its `*` says. A derived rung used to carry a dashed
+border whether or not it was the one being read, so a row of four added rungs was four outlined
+chips beside one stored rung with no outline at all — the thing the file *does* contain being the
+quiet one. The **`×`** that takes it off sits beside the box while it is the rung picked, and is put
+away while *Refine on zoom* picks, when the box names another resolution and the `×` beside it would
+offer to remove what is not on screen. Pressed, it picks the stored rung the resolution was summed
+from, the nearest picture the file does contain — not the rung the file was opened at, which may be
+another rung of the ladder altogether, and was where it used to drop the reader.
 
 **One caveat, always printed.** Counts coarsen *exactly*: a contact is in one fine bin and therefore
 in one coarse bin, so the sum is the count. Balanced values do not. `cooler zoomify --balance` sums
@@ -315,8 +411,10 @@ also why a stored rung always wins: a derived resolution that duplicates one is 
 quietly shadowing it, and `chooseRung` still prefers a real rung for every read that is not held to
 a declared grid (§9).
 
-**Every task measures it too** (§18.4). A task run while the map is drawn at a derived rung reads the
-map at that rung, not at the stored one underneath — it used to read the stored one, so a reader
+**Every task measures it too** (§18.4). A task run with a derived rung picked — in the crumb row, or
+on the task's own *Resolution* row — reads the map at that rung, summed from the stored one it is
+made of — read from that rung's own entry where the file is open at another — not at the stored one
+underneath — it used to read the stored one, so a reader
 looking at 3 kb\* got an insulation track at 1 kb under a picture at 3. The analysis worker's mount
 is the stored rung summed on the same grid (`metacooler/coarseMap.ts`), behind the two seams an
 ordinary map is read through — its pixels and its handle — so every task, whatever it reads (a
@@ -349,6 +447,24 @@ f.mmetacool::              → { path: "f.mmetacool", group: "/" }
 ```
 
 Used in the file picker, in error messages, and in the URL hash so views are shareable.
+
+**The address bar leaves out the rung a ladder lands on** (`state/landing.ts`). A laddered file
+addressed at its root is opened at its landing rung (§9), and the session's own address then names
+it — `4DNFI18UHVRO.mcool::resolutions/25000` for 4DN's map of K562 — which is where the file was
+opened: the grid every window is counted in, the rung a task reads with nothing picked (§18.4), and
+the picture with *Refine on zoom* off and nothing picked (§2). It is not the resolution on screen,
+which the zoom or a pick decides, and in the link it read as one, beside a map drawn at 500 kb. So
+the hash writes a file open at its landing rung as the file alone —
+`uri=…/4DNFI18UHVRO.mcool&view=region&region=chr5` — which opens there anyway; and it reads the
+file alone back as the entry already open, spelled as the tab spells it, so a step back or forward
+is a step within the file rather than an open of it again: across the table, chr5 and back, the file
+is opened once. The session notes each laddered file's landing entry as it opens it
+(`noteLanding`), so this is true only of a file this window has opened, and a link to any other is
+written and read exactly as it is. A rung a file was opened at that is not its landing rung — an
+older link's `::resolutions/1000` — is honoured as it always was and written as it came. An address
+naming a rung works wherever it did, on the command line (§23.1) and in the widgets (§21.5) as in a
+link; and a tab's snapshot kept by the browser (§5.6), a share link's `#session=` and a workspace
+keep the full address, the address bar alone leaving the rung out.
 
 ---
 
@@ -425,10 +541,10 @@ plan of its own, read one at a time, since a pair is decoded whole.
   others, in that order, that has. A bin the balancer dropped becomes `NaN`, which is what a
   balanced cooler writes for one.
 - **The resolution ladder becomes entries**, spelled `file.hic::/resolutions/5000` exactly as an
-  mcool's is. That is what wires it into the entry picker, the URL hash, §3.4's refine ladder and a
-  deck descending to its lead's rung, with no code in any of them learning the format exists. A
-  `.hic` named with no resolution opens at the rung an `.mcool` addressed at its root lands on — a
-  third of the way up from the finest (§9) — and not at its finest.
+  mcool's is. That is what wires it into the resolution row, the URL hash, §3.4's refine ladder and
+  the one resolution a deck's maps are read at (§16.2), with no code in any of them learning the
+  format exists. A `.hic` named with no resolution opens at the rung an `.mcool` addressed at its
+  root lands on — a third of the way up from the finest (§9) — and not at its finest.
 
 **What is not read**, and each is a §13-style decision rather than a gap: fragment-resolution
 matrices (`unit = "FRAG"`), because a fragment grid is variable bins under another name and §3.3
@@ -942,9 +1058,13 @@ from `/bins/chrom` transitions. Contig names labelled when ≤ 50 are in view, m
 threshold — and past that, at bin level, every contig of 50 kb or more (`LABEL_MIN_SPAN_BP`), since
 the few long contigs of a MAG are the ones a reader is looking for.
 
-Zoom and pan operate on the in-memory matrix — no I/O. A zoom that settles past what the block can
-show reads the window again (§2), which for a MAG never happens: its block is already the file's own
-bins. Level toggle between bin and contig aggregation, both computed locally from the loaded data —
+Zoom and pan operate on the in-memory matrix — no I/O with *Refine on zoom* off, when the block is
+the whole genome at the file's own bins. With it on, the default, the first read is the screen's
+size (§2): a genome of more than about one and a half times as many bins as the plot has pixels is
+read at about a cell a pixel — its bins pooled, or a coarser rung where the file has a ladder — and
+a zoom reads the window at the file's own bins once it can show them; a smaller genome is its own
+bins from the first read and reads nothing more. Level toggle between bin and contig aggregation,
+both computed locally from the loaded data —
 in the General column's Contigs card (§5.8), which also lists this genome's contigs.
 
 **Its locus box is every other locus box** (§26.1, §26.6): `locusPlaceholder`'s offer —
@@ -1202,22 +1322,68 @@ pressed, and the assembly a reader was looking at was named only on a tab and in
 locus box below it print the same place, and a row ending `› IV › IV:1,000,001-1,400,000` above two
 more copies of that string is three readings of one fact in three typefaces.
 
-**And a `+` at the coarse end of it**, which asks for a resolution the file does not store: any
-whole number of one of its own bins, added up as it is read. §3.4 is where that lives — what the
-bar contributes is the stop, starred, in bin-size order, with a `×` to take it back off.
+**The resolution row: a tick, a slider, a box and a `+`** (`ui/ResolutionRow.ts`), in that order,
+all on one line and one height:
 
-**Nine rungs are chipped; past that the row is a dropdown of every rung.** A `zoomify` ladder that
-doubles from 1 kb reaches a megabase in ten rungs and one that walks the 1–2–5 series reaches it in
-nine, so nine covers most of the files in the wild — about three hundred pixels of short numbers,
-right-aligned into whatever the trail leaves. The cap was six, on the grounds that more would push
-the place the reader is looking at off the left of a laptop screen; what it actually cost was the
-aim-and-click on the files with the most rungs to aim at, and on the files somebody is most likely
-to *add* a rung to, since a ninth stop used to collapse an eight-rung row to a bare slider. Past
-nine — a 4DN `.mcool` has eleven — the word `resolution` is followed by a `<select>` holding every
-rung in the ladder's own order, each wearing the `*` and the tooltip its chip would have, with the
-`×` of an added rung after it while that rung is the one being read. It was the slider and one chip,
-which between them said how many rungs there were and which was being read, and named the rest
-only to a reader who hovered the slider.
+- **the tick is *Refine on zoom*** (§2), ticked by default. Ticked, and nothing picked, the zoom
+  picks the resolution — the screen's, down to the finest rung the file stores — and the slider, the
+  box and the `+` are greyed and follow the map, a reading rather than a control: the thumb, grey
+  with them, glides from slot to slot as a zoom sharpens the picture, and the box names what is
+  drawn. That is a stored rung (§2), so the thumb is on its slot; where a read pools a grid no rung
+  stores — a file with one resolution, a map beside a second file, a read too wide for the coarsest
+  rung — the thumb sits on the nearest slot and the box names that grid, so the row always says which
+  resolution is drawn. It follows the map in front: a view put in front says what its panel holds,
+  nothing on a table, rather than the row going on naming the map before it. While the zoom picks,
+  the slider takes no press, drag or arrow key, the box cannot be changed, and the `×` of a resolution
+  the reader added is put away (§3.4). **Unticked, the reader picks** — a slot, a drag, the box, an
+  arrow key on the track, `−` and `+` — and the pick, written into the link, is what is drawn (§2,
+  §3.4). **A pick in the link wins**: a map whose link names a resolution is drawn at it whatever the
+  preference stored in the browser says, and its row shows the tick off and is live, not greyed; a
+  pick never changes the preference. **Ticking** takes the pick out of the link and turns the
+  preference on. **Unticking** picks the stored rung nearest the resolution on screen, on a log
+  scale, so nothing jumps, and turns the preference off. The palette's *Refine on zoom* does exactly
+  what the tick does, where it used to turn the preference over and skip keeping what was on screen;
+- **the slider is a row of round, unlabelled slots on a track of fixed width** (168 px, whatever the
+  number of rungs), one per rung, evenly spaced and **coarsest on the left**, with a thumb on the one
+  picked. Only the two ends are written out, the coarsest left of the track and the finest right of
+  it; a slot says its resolution under the pointer, in a tip on the page rather than in the bar,
+  which scrolls sideways and would clip it. A ladder is an *ordered* thing with a fixed number of
+  rungs, which is what slots show — how many there are, which one is on screen, which way is finer —
+  and a continuous track would suggest somewhere between two of them to stop. A press on a slot
+  picks it; a drag — from anywhere on the track, the thumb included, where a drag that started on
+  the thumb used to start nowhere — walks the thumb from slot to slot, naming each, and picks the one
+  under it when the button comes up — one read, not one per slot passed; the arrow keys on the
+  focused track walk it a rung at a time (left and down coarser), `Home` and `End` to the ends, from
+  the rung picked, or the one the file was opened at where none is. All of it is the reader's with
+  the tick off: while the zoom picks the track is greyed, out of the tab order and `aria-disabled`,
+  and takes none of it. The track keeps the keyboard across the picks, where the row redrawn under
+  it used to drop it after one rung, and its ARIA value counts up to the right, towards finer, as a
+  slider's is read. It replaces a slider over labelled radio stops, nine of which were about three
+  hundred pixels of short numbers and past which the row became a dropdown of every rung;
+- **the box names the resolution** — `1 kb`, `50 kb`, `1 Mb`, never `1000`, `50000`, `1000000`, which
+  a reader would have to divide — and is the same choice as a list: pressed, it is a menu of every
+  rung, finest first, each with its bin size in its tooltip. It has **no arrow**: it is a number
+  first, and a menu only when asked. While the zoom picks it is greyed and names the grid drawn,
+  which may be one no rung stores and none of its list's rows. A derived rung's `×` sits beside it
+  while that rung is picked;
+- **the `+`** asks for a resolution the file does not store: any whole number of one of its own bins,
+  added up as it is read. §3.4 is where that lives — what the row contributes is the slot, starred,
+  in bin-size order, and the box's `×` to take it back off.
+
+**A pick is read in place** (§3.4): a rung of the file's ladder, stored or added, is read where the
+reader stands, as a refine is, and the file stays open at the entry it was opened at — in the region,
+genome, pair and whole-genome views alike. A pick used to re-open the file at the rung's entry, which
+threw away the window the reader had zoomed to: every pick was a jump back to the whole sequence.
+The whole-genome view was rebuilt for one instead, and its picture, kept by a key that named an added
+resolution but not a stored one, came back as it was: a rung picked there did nothing. A view with
+no block in hand yet — behind its gate, or with its first read still going — is rebuilt at the pick
+rather than read in place. Beside a second file, a pick on another stored rung re-opens the file there (§5.7). The
+hash names the pick, `resolution=`, whether the file stores it or the reader added it, so a link
+carries it; it names one only while one is picked, the open rung included. **The pick is carried**
+across a navigation within the file — another chromosome, a table, the minimap, `<` and `>` — as the
+cell set and the total the maps are drawn to are (`SUBJECT_KEYS`), and dropped with the file, whose
+ladder the next file need not share: it used to be lost on the way to the next chromosome, which
+then went back to the zoom's resolution under a reader who had picked one.
 
 **The resolution is not a segment of that trail.** A rung of a `zoomify` ladder (§3.4) is the same
 file drawn more or less finely: it does not contain the crumbs after it and clicking it does not go
@@ -1235,25 +1401,21 @@ of the file, re-seated at the end of the row on every render rather than rebuilt
 trail is redrawn on every pan and a box rebuilt under the cursor loses what is being typed into it.
 
 **A one-rung file is drawn without the slider.** There is nothing to slide along, so the row reads
-`resolution  1 kb  +` and the `+` is the only control on it — which is §8.5's rule, not an exception
-to it: a control that cannot keep its promise is absent rather than greyed, and a plain `.cool` is
-the commonest file a lab opens. The slider arrives with the second rung, which is what the `+` makes.
+`refine on zoom  1 kb  +` — the tick, the box with its one rung, and the `+`, greyed with the box
+while the tick is on, as on any ladder, and once it is off the one way to a second rung — which is
+§8.5's rule, not an exception to it: a control that cannot keep its promise is absent rather than
+greyed, and a plain `.cool` is the commonest file a lab opens. The slider arrives with the second
+rung, which is what the `+` makes.
 
-Up to nine rungs it is a **slider over a row of labelled stops** rather than a dropdown, and the
-stops say `1 kb`, `50 kb`, `1 Mb` rather than `1000`, `50000`, `1000000`. A ladder is an *ordered*
-thing with a fixed number of rungs, which is exactly what a slider over stops shows — how many there
-are, which one you are on, and which way is finer — and a dropdown of raw bin counts shows none of
-the three and asks the reader to divide before the number means anything. Both halves write the
-same value: the stops are real radio inputs, so the arrow keys and a screen reader get the list, and
-the slider commits on release rather than per rung, since dragging across five rungs must not
-re-open the file five times.
-
-**`-` and `+` walk the same stops from the keyboard**, one rung coarser and one finer (*Coarser
-resolution*, *Finer resolution*): counted from the stop that is lit, onto a rung the reader added as
-onto one the file stores and by the road a press on its stop takes, and stopping at both ends rather
-than wrapping — the palette says which end, and at the coarse one that the `+` beside the rung adds
-a coarser one. Their hint is the rung they go to, as `<` and `>` name the sequence. They are bound by
-what they type rather than where they are, since the two marks stand in different places on QWERTY
+**`-` and `+` walk the same slots from the keyboard**, one rung coarser and one finer (*Coarser
+resolution*, *Finer resolution*): counted from the rung the row stands on — the one picked, else the
+one the file was opened at — onto a rung the reader added as onto one the file stores and by the road
+a press on its slot takes, and stopping at both ends rather than wrapping — the palette says which
+end, and at the coarse one that the `+` beside the rung adds a coarser one. They pick, as a slot does,
+so while *Refine on zoom* picks they are greyed with the slider and do nothing, and the palette says
+how to pick instead: *Refine on zoom picks the resolution — untick it in the bar to pick one.* Their
+hint is the rung they go to, as `<` and `>` name the sequence. They
+are bound by what they type rather than where they are, since the two marks stand in different places on QWERTY
 and on AZERTY: either half of each key does — `_` and `=` as well — so neither needs Shift, which
 `+` takes on both; and an AZERTY PC's minus, the bare half of its 6 key, is still the minus under
 Shift or Caps Lock, where it types a `6` (§26.6). In a deck the step is the first map's, which every
@@ -1436,6 +1598,17 @@ a ladder of its own: `rep2.mcool::/resolutions/1000` beside a 1 kb map is `…/5
 looked up in that file's own entries and refused where it has no such rung — which is the bin-size
 clause above, seen from the other side, and is said on the card rather than left to be discovered.
 The reading carries with it: the operation, and whether the second triangle was hidden.
+
+**A pick is such a change** (§3.4, §5.5), and the pair is only ever drawn on one grid. Picking a
+stored rung other than the one open re-opens the first file at it, the pick riding along, so the
+second is carried to the same rung or put down as above; a resolution summed from the open rung is
+drawn for both files where the reader stands, the one plan read from each; and a pick a link names
+on another rung is ignored while a second file is open, since the second was opened at the first's
+open rung and no other. **The zoom beside a second file reads the open rung only**, pooled to the
+screen where it must (§2): it never names another rung of the first file, which the second need not
+store. It used to name the first file's rungs to both, and a reader asked for an entry its file has
+not got answers from its open map — so the first refine drew the two files on two grids, and the
+comparison was gone from the picture with nothing said.
 
 **Turned, the pair is two bands rather than two triangles** (§17.2). Either map, here or in a deck,
 can also be given a name of its own (§16.10).
@@ -2288,7 +2461,19 @@ diverges from what a reader reproduces locally.
   numbers, and re-measuring would re-brighten the map for a reader who changed nothing but the
   magnification. The range is measured from the **widest block held** and stays there while the
   reader zooms in; zooming out past it re-measures, which is right, because that reader is looking at
-  data that was not in the picture before
+  data that was not in the picture before. So does a block **coarser** than the one the range came
+  from — its cells hold many times as much, and the finer block's range would burn it out — and the
+  block of a **resolution picked** of another grid than the one drawn, finer or coarser (§3.4): the
+  reader changed the resolution rather than the magnification, and a map opened at that rung was
+  always measured on itself; kept, a 250 kb range left a picked 25 kb map pale but for its diagonal.
+  A pick waits for a block at it to be measured, so one the window is too wide for is measured once
+  the reader zooms in far enough to draw it, not on the coarser block drawn meanwhile. Unticking
+  *Refine on zoom* — the tick or the palette's command — picks the stored rung nearest the one drawn,
+  and where that is the grid on screen keeps the range. **The clip row's *auto* is always offered, and measures
+  the view.** A range kept across a zoom is still automatic but no longer the view's own — after a
+  zoom from a whole chromosome to a domain, a range for cells many times the size of the ones on
+  screen — so *auto* is never greyed, and a press measures the stretch of the block in view, by the
+  same rule, and keeps it as the range the next refine holds (`MatrixPanel.measureInView`)
 - the **cell size** is named in the key, on its own line under the scale's name, and in the exported
   key as well — it is the one fact about a refining map that cannot be recovered from the pixels, and
   a figure that carries it needs no caption to say it
@@ -2374,8 +2559,10 @@ Space locks the map onto its diagonal (§8.9). `−` and `+` are not a zoom on a
 resolution (§5.5), and the wheel, a pinch, the paging keys and the boxes zoom. In the 1D browser `0`
 is the whole genome, as a double click is.
 
-**The wheel's two axes mean two different things.** Up and down is the zoom, about the pointer.
-Sideways **slides along the picture**, which is what two fingers mean over every genome browser there
+**The wheel's two axes mean two different things.** Up and down is the zoom, about the pointer — or,
+where the pointer is within four pixels of the diagonal, about the diagonal's nearest point, so a
+zoom aimed down the line stays on it (§8.9). Sideways **slides along the picture**, which is what
+two fingers mean over every genome browser there
 is and what they already meant over this app's own tracks — on a map, **the columns alone**, and
 **along its diagonal while the view is held on it** (the diagonal lock, §8.9): rows and columns
 together, by the same distance, so the diagonal stays where it is on the screen and the picture moves
@@ -2415,29 +2602,65 @@ because a control that appears on hover appears never where there is no hover; a
 is inert while it is invisible, so a tap or a click that lands where one is hidden reaches what is
 behind it rather than firing a button nobody saw.
 
-**One grid, and one place it is decided.** This is what a refine (§2) re-uses
-rather than works around: it asks for a narrower window and *nothing else*, and
-the reader plans the grid for it exactly as it plans every other read. A caller
-that named its own grid would bypass the widening below and anchor the cells to
-wherever the reader had panned to, so a cell's value would change as it crossed
-the screen — which is why the plan is never sent by anything driven from a
-viewport.
+**One grid, and one place it is anchored.** A read names the grid it wants or
+leaves it to the reader, and either way the reader anchors it to the *sequence*
+(below), never to the request: a grid anchored to wherever the reader had panned
+to would change a cell's value as it crossed the screen. That is what lets a view
+name its grid — a screen-sized read (§2), a resolution picked (§3.4) — and pan
+around in it. **Every view's reads are planned by one function** (`readPlan`,
+`ui/refine.ts`) — its first read and every read its zoom makes after it — and
+sent whole, the rung and how many of its bins a cell sums, so what the zoom
+expects of a block is what the block is asked for rather than a guess at what the
+reader would choose. The plan is screen-sized while *Refine on zoom* picks the
+resolution (below); otherwise it is as memory allows, which is what the next two
+paragraphs describe: at the resolution picked (§2) — the rung the file was opened
+at with nothing picked and the preference off — or from the finest stored rung no
+finer than it that fits where the window is too wide for it. It used to be a copy
+per view, and the copies had drifted: the whole-genome view read its second
+reading below the diagonal (§5.10) on a grid of its own, a block of another shape
+laid under the wrong half of the picture, and the zoom beside a second file asked
+it for rungs it need not have (§5.7).
+
+**A view's reads are screen-sized while *Refine on zoom* is on and nothing is
+picked**, which is the default (§2): about a cell to each CSS pixel of the plot,
+from the stored rung nearest that cell (`screenPlan`). The plot's size is the one
+the panel's resize observer last measured as it was laid out
+(`MatrixPanel.screenWidth`), rather than a layout forced on every frame of a
+gesture, and a panel not yet laid out is sized from the window. So a chromosome
+opened at a fine rung of a laddered file reads one of its coarse rungs first, a
+few hundred cells across — chicken chr1 opened at 10 kb is 785 cells of its
+250 kb rung, 2.1 MB in one request, on screen in 0.34 s where its first picture
+took 1.9 s — and the zoom reads the rest as it goes, down to the finest rung the
+file stores (§2). **The whole-genome view's first read is one too**, whatever entry
+the link opened the file at: it was planned from that entry, its bins pooled to
+4,096 cells and read from the coarsest rung no bigger than such a cell, so a K562
+`.mcool` was drawn at 1 Mb, 3,102 bins and 17 MB from its 1 Mb entry and at
+500 kb, 6,188 bins and 57 MB from its 25 kb one; it is now its 5 Mb rung from
+either, 631 bins, 3.9 and 5.8 MB (`WholeView.firstPlan`). A file with no ladder
+is pooled from its own bins to the same grid: the same pixels are read, but the
+block is the screen's size rather than the memory's.
 
 **A window is read at its own bins up to `denseCellCap`**: the widest square the dense guard
-(§9) passes on this machine, and never wider than `RASTER_MAX_DIM`, **16,384** — on a machine
-reporting 8 GiB it is the 16,384 that binds. That is what draws a whole yeast chromosome IV at
-100 bp, 15,320 bins a side, one bin to a pixel, so that a zoom into it reaches single bins without
-another read: 45 s and 2.9 GB in the tab, measured in headless Chromium, where the 4,096 the raster
-stopped at before drew it at 400 bp in 9 s and 235 MB. A smaller machine gets a smaller square, from
-the same budget, so the window it cannot afford is pooled rather than refused.
+(§9) passes on this machine, and never wider than `DENSE_READ_MAX_DIM`, **8,192** — on any machine
+reporting 2 GiB or more it is the 8,192 that binds. It was the raster's own 16,384, and a block
+that wide is 268 million cells, a gigabyte of values before a pixel is coloured, for a picture a
+screen shows a few million pixels of: on a zoom out from 6 Mb of chicken chr1 at a picked 1 kb, on
+the link of §12, 16,380 bins a side were read in 3.6 s and took the tab from 0.9 to 2.0 GB, where
+8,190 take 1.0 s and leave it at 1.3. What the halving costs is reach: a rung picked is drawn whole
+over 8,192 of its bins (§2). A smaller machine gets a smaller square, from the same budget. **A
+window wider than that is read from the finest stored rung no finer than the one asked for that
+fits** (`memoryPlan`, `chooseRung`) — a whole yeast genome of a 1 kb ladder is its 2 kb rung, 6,050
+bins — and pooled only where no rung fits, which a file with one resolution always is. A resolution
+the reader added is its own cells, at most 4,096 a side, and a window too wide for them is those
+cells summed by a whole number more, never another rung (§3.4).
 
 A wider block is coarsened **once, in the reader**, into cells that hold at most a capacity of bins
 and never part of one sequence beside anything else: a sequence longer than the
 capacity keeps cells of its own, cut at its own start, and only the ones too small
 to fill a cell share. The capacity is searched for against `POOLED_CELL_CAP`, **4,096**, which is
 narrower than the raster on purpose: the pooled read is the one a whole genome takes when no rung
-brings it under `denseCellCap` (a ladder's coarser rung often does — the whole yeast genome of a
-100 bp ladder is its 2 kb rung, 6,064 bins, read whole), it is not under the dense guard, and its accumulator is sized by this cap — at 16,384 it would be a gigabyte for every
+brings it under `denseCellCap` — a file with no ladder, or a window too wide for the whole of one —
+it is not under the dense guard, and its accumulator is sized by this cap — at 16,384 it would be a gigabyte for every
 whole-genome view of a large file. Narrower is never pooled twice: the grid the reader builds fits the
 raster, and the raster's own pooling is reached only by a block a caller hands it unplanned. The
 grid is anchored to the *sequence*, not to the request, so the same base pair falls
@@ -2461,8 +2684,13 @@ image put on a canvas, and the canvas halved down to the level. Everything but t
 work for a picture nobody had asked for yet, all of it on the main thread before the first frame. On
 the blocks a whole chromosome is read as (above) it was most of the wait: mouse chr1 at 20 kb, 9,774
 cells a side, spent 10 s of a 14 s first picture there, making a 382 MB image and three halvings of it
-to draw about seven hundred pixels; yeast chrIV at 100 bp spent 23 s of 27. So a block of 2,048² cells
-or more — drawn a cell to a pixel, on one scale, read against a floor — is drawn the other way round:
+to draw about seven hundred pixels; yeast chrIV at 100 bp spent 23 s of 27. Those, and the figures
+below, were measured while a block read bin for bin could be 16,384 a side: under 8,192 (above)
+neither chromosome is read whole at those rungs any more — mouse chr1 at 20 kb is read from its
+40 kb rung, yeast chrIV at 100 bp from a coarser stored rung, or pooled on a file with none — and
+with *Refine on zoom* on, a whole chromosome is the screen's size in any case; a wide window at a
+picked fine rung is still such a block. So a block of 2,048² cells or more — drawn a cell to a
+pixel, on one scale, read against a floor — is drawn the other way round:
 
 - **its first frame paints the level it draws, and only that one**, straight from the values: every
   cell coloured exactly as the image would have coloured it and averaged into the level's pixel it
@@ -2498,17 +2726,19 @@ yeast chrIV at 100 bp in 4.2 s where it took 26.6; chicken chr1 at the 25 kb a `
 and a field read about a middle keep the whole-image path, whose reductions they each have a rule of
 their own in.
 
-**A window is drawn first from a coarser rung while its own block reads** (`previewRung`,
-`ui/refine.ts`). A chromosome clicked at the rung a file lands on is the slowest first picture a reader
-is given — the whole block read, decoded and spread a cell at a time before anything is on screen — and
-the same window a few rungs up is a fraction of its reads and of its cells. So a region view's first
+**With *Refine on zoom* off and nothing picked, a window is drawn first from a coarser rung while its
+own block reads** (`previewRung`, `ui/refine.ts`). On, which is the default, there is nothing to stand
+in for: the first read is already screen-sized, the cheapest picture of the window there is (above). Off, a chromosome
+clicked at the rung a file lands on is the slowest first picture a reader is given — the whole block,
+as memory allows, read, decoded and spread a cell at a time before anything is on screen — and the
+same window a few rungs up is a fraction of its reads and of its cells. So a region view's first
 read is preceded by one from the **coarsest stored rung that still puts 256 cells across the window**,
 where the block asked for is **at least four times finer** than that along its wider axis — measured
 against the grid the reader will actually read, so a pooled first read is not "previewed" by a picture
 as coarse as itself. That preview is drawn as the block it is: its own cells, its own resolution in the
 key, its own colour range. **It is live**: the reader can pan, zoom and hover it at once, nothing is held
-still, and the spinner turning in its corner (`HeatmapView.setWaiting`) is the one sign that the block
-is on its way. The block then replaces it **on the window the reader arrived at**, carried in base pairs
+still, and the spinner turning in the map's top right corner (`MatrixPanel.setWaiting`) is the one sign
+that the block is on its way. The block then replaces it **on the window the reader arrived at**, carried in base pairs
 — to the base pair rather than rounded out to the preview's cells, and past the block's own edges where
 they zoomed out beyond it (`viewedPlaces`, `ui/blockAxes.ts`) — or refitted where nobody moved it, which
 is exactly the picture there was before there were previews. Either way its colour range is measured
@@ -2520,7 +2750,7 @@ preview or borrows it, not even when the block's read fails and the preview stay
 is, because its extents are in another rung's bins under the name of the file the view reads. The tracks,
 the census and the circularity check the session holds behind its first picture (§8.6) wait for that
 block too, not for its stand-in. None is read for a window already about as coarse as a preview would be, a file with no
-coarser rung, a grid the reader chose (`binsPerCell`), a window across a circle's origin, or a map
+coarser rung, a resolution the reader picked or added, a window across a circle's origin, or a map
 under a second file or a second reading; a preview that fails is a picture that comes later, never an
 error.
 
@@ -2636,6 +2866,13 @@ one preference, kept with the overlays' kind (`localStorage`), and shared: off b
 off in the 1D browser, and in the deck's figure, whose cells each read it (§16.5). The tracks'
 own names and ranges are the picture's and are saved as they are on screen, whatever the switch
 says.
+
+**A figure is the picture on screen.** The Export card's save and copy, and the deck's (§16.5), draw
+the block on screen as it is drawn — its grid, its colour range — and never read one of their own: a
+figure read afresh at another grid is another picture, its colour range measured on another block,
+and the one thing a reader composing a figure must be able to trust is that the file is what they
+were looking at. A reader who wants a finer figure zooms in, or picks the resolution, which wins over
+*Refine on zoom* and is then what the screen draws (§2, §3.4).
 
 **Copy this: the object under the pointer, and nothing round it.** The right-click menu on the map,
 on a lane beside it and on a lane of the 1D browser — and a right click that does not drag on a 3D
@@ -3815,10 +4052,10 @@ a step from blank starts at their middle height; the browser's was built without
 showed the last number it had applied.
 
 **A lane's limits are the colour clip's control** (§7.1, `ui/ClipRange.ts`'s idiom): two number
-boxes, the `⇅` mark every autoscale in the app wears — unavailable while there is nothing to go back
-to — and a line under them reading *auto · min – max* or *clipped · min – max*. It was a lit `auto`
-word, which made one column carry two drawings of *let the data set the range*: lit when on here,
-greyed when on beside the map. A reader who learned either learned nothing about the other.
+boxes, the `⇅` mark every autoscale in the app wears — never greyed, here as beside the map (§7.1),
+where it was unavailable while there was nothing to go back to — and a line under them reading
+*auto · min – max* or *clipped · min – max*. It was a lit `auto` word, which made one column carry
+two drawings of *let the data set the range*: lit when on here, greyed when on beside the map. A reader who learned either learned nothing about the other.
 
 Two constraints are permanent and are why this is a shared module rather than a shared file. Every
 mark must be placed through `laneRect`/`laneText`, so a right-hand lane's quarter turn is
@@ -4067,6 +4304,25 @@ without looking. It stands down wherever Space already has a job: a focused butt
 tickbox it ticks, a menu row or a tab it opens, a field it types into. It is in the shortcuts dialog
 and the palette as *Diagonal lock*, with its state, and in the toggle's own tooltip.
 
+**A zoom aimed at the diagonal stays on it, lock or no lock** (`HeatmapView.zoomAnchor`). A zoom
+keeps the point under the pointer fixed, and no hand puts a pointer on a 45° line more closely than a
+pixel: whatever it misses by, every notch carries the view's centre off the line by that fraction of
+a pixel times the zoom. On the whole of K562 chr5, 263 kb a pixel, a pointer 0.8 px off the diagonal
+ended a wheel zoom to 1 Mb about 200 kb off it — a fifth of the window, the diagonal sliding out of
+the corner of a view the reader had aimed straight down it — and the drift looked as if the sharper
+blocks landing (§2) were shifting the picture. They were not: measured, each landing keeps the window
+to the base pair (`MatrixPanel.regrid`), and the offset grew smoothly on the first block, before any
+had landed. So on a view with a diagonal, a zoom whose point is within four CSS pixels of it
+(`DIAGONAL_PULL_PX`) — the pointer, for the wheel and a pinch — is about the diagonal's nearest point,
+the perpendicular foot of the pointer that Shift's snap reads (above), and the same zoom from the
+whole of chr5 to 1 Mb stays on the diagonal to the base pair throughout. Four pixels is about how
+closely a hand aims, and at a megabase on a laptop's map under 6 kb, so nothing a reader could tell
+from the line is pulled onto it; a pointer further off is a reader aiming at something beside the
+line, and the zoom is about it exactly as before. Not on a turned map, whose diagonal is the
+picture's own bottom edge and whose gestures name stretches of the genome, nor on a block the
+diagonal does not cross; and with the lock on, every zoom is about the line's nearest point, near
+or not, as above.
+
 **The corner says how to zoom into a region**, while the pointer is over the map: under the key —
 or in its place when the legend is off — a line or two of plain text, small and in no box, in the
 reader's own modifiers: *⌥ + drag to zoom into a region* and *⇧ + ⌥ + drag to zoom along the
@@ -4115,6 +4371,15 @@ found at 1 kb is not visible at 20 kb, and giving a reader back the coordinates 
 gives them back a picture the note was never made against. What is deliberately **not** in it is the
 zoom, the colour scale and which way the map was turned — those are how the picture was drawn at the
 time, and a bookmark that restored them would be a saved screenshot rather than a saved place.
+
+**The bin size is the resolution asked for** (§3.4): the one picked, else the rung the file was opened
+at — never the one *Refine on zoom* happened to draw, which is a fact about the window's width and
+the screen's rather than about the place. **Going to one picks it**, in the link, and the map is drawn
+at it on arrival, where it used to re-open the file at that rung's entry; a bin size this file cannot
+be read at is dropped rather than approximated, and an import from BED never had one. One case is
+left alone: a bookmark at the rung the file was opened at, gone to while nothing is picked, leaves
+the zoom picking — it was most likely saved while the zoom picked, and arriving at it should not
+turn the zoom off.
 
 **Going there opens the whole sequence, standing on the location.** This is the requirement the
 feature exists for and it is not what setting `region=chrI:1200000-1260000` does: that *cuts a block*
@@ -5932,10 +6197,11 @@ Concretely:
   machine that can hold it; at their own bins both are now past the single array, and both are drawn
   coarsened to the picture instead (§7.2)
 - `.mcool` resolution levels are each fixed-bin, so §3.3's arithmetic applies unchanged; the levels
-  drive the zoom control exactly as mmetacool entries do — a refine (§2) reads from the coarsest
-  rung whose bins still fill a cell, which is fewer stored pixels for the same picture *and* the
-  only honest way to draw a balanced map at a coarse grid, since `zoomify --balance` re-balances
-  each level from raw counts and summing a fine level does not (§6.4). Bin indices are not
+  drive the zoom control exactly as mmetacool entries do — a screen-sized read (§2) takes the
+  stored rung nearest a cell to each pixel, and a read as memory allows the finest stored rung no
+  finer than the one asked for that fits (§7.2), which is fewer stored pixels for the same picture
+  *and* the only honest way to draw a balanced map at a coarse grid, since `zoomify --balance`
+  re-balances each level from raw counts and summing a fine level does not (§6.4). Bin indices are not
   comparable between levels, so windows cross through base pairs, per contig. The reader still holds
   one map *open*; the rungs a zoom touches are opened beside it over the same mounted bytes and
   released with the session. An `.mcool` addressed at its **root** is
@@ -5944,28 +6210,43 @@ Concretely:
   the second of four or five, the finest of one or two. The same rung is where a zoomify ladder of
   an `.mmetacool` lands, and where a `.hic` opened with no resolution named opens (§3.6). Not the
   finest, whose every read is the largest the file has — its index, its weights, a whole chromosome's
-  block — so that landing there made the first wait of every large file its longest. A reader who
-  wants the finest level picks it, and it is then the floor of every zoom (§16.2); a rung a comparison
-  or a deck asks for by bin size is still opened as asked
-- **the whole genome of a laddered file is read at a coarse rung**, not pooled from the open one:
-  the coarsest rung whose bins still fit one drawn cell draws the same cells from a fraction of the
-  pixels, balanced at its own resolution. On a 5 GB `.mcool` opened at 25 kb that is the 500 kb
-  rung's few million pixels in seconds, where the open rung was a gate asking to download the whole
-  file; the open rung is left as it is, and a zoom inside the picture still refines to it. A file
-  with no rung that fits, a selection and a second file in the square keep the pooled read and its
-  gate
-- **so is the first picture of a region wider than the reader draws at the open rung** — a whole
-  chromosome, most often. A window wider than the reader reads at its own bins (`denseCellCap`, §7.2)
-  is pooled into cells of several bins, so mouse chr1 at 10 kb is a 50 kb picture summed from every
-  10 kb pixel; where the ladder stores a rung
-  whose bins divide that cell, the first read comes from it: the same cells, balanced at their own
-  resolution, from a fraction of the pixels (`poolingRung`). Never coarser than the pooled grid, so
-  the picture is the one it was and the refine takes it as it stands; a zoom then reads the open
-  rung as before. On a 1 GB `.hic` from S3, chr1's read took 1.3 s where it took 4.3. That chr1 was
-  at 25 kb, 7,849 bins, which is now read at its own bins: the open rung's 4.3 s, for a picture
-  twice as fine on each axis. A declared
-  resolution (§3.4) and a second file keep the open rung. A `.hic` opened with no rung named stands
-  the resolution picker on the rung it opened at, not on its finest
+  block — so that landing there made the first wait of every large file its longest. Nor the
+  coarsest, now that the rung opened is in neither the address nor the name (§3.5, §16.10): it opens
+  sooner and costs every zoom after, since every window is counted in whole bins of the rung open.
+  On the 4DN map of K562 (`4DNFI18UHVRO.mcool`) from S3, opened at its coarsest rung, 10 Mb, the open
+  was half a second sooner, 2.8 s against 3.3 — but a zoom to 20 Mb landed on 100 kb, in 8.6 s and
+  44 MB, and one to 1 Mb on 25 kb, in 5.7 s and 23 MB, a 1 Mb view asking for at least 10 Mb of rows.
+  Opened at its 25 kb landing rung, the same zooms land on 25 kb, in 5.4 s and 21 MB, and on 2 kb, in
+  4.8 s and 7.6 MB; opened at its finest, 1 kb, they land as they should, in 6.9 s and 4.5 s, but a
+  task would read 1 kb wherever nothing is picked (§18.4). So the open rung stays where it lands, and
+  only the address and the names leave it out. Where it lands no longer bounds the zoom: with
+  *Refine on zoom* on, a zoom walks on down to the finest rung the file stores, whichever was opened
+  (§2), and a reader who wants one level for the whole window
+  picks it, and it is drawn (§3.4); a rung a comparison or a deck asks for by bin size is still
+  opened as asked
+- **the whole genome of a laddered file is read at a stored rung**, never pooled from the open one,
+  by the rule every view's first read is (§2, §7.2): with *Refine on zoom* on and nothing picked,
+  the rung nearest a cell to each pixel of the panel, whichever entry was opened — a K562
+  `.mcool`'s 5 Mb rung, 631 bins and a few megabytes, from its 1 Mb entry as from its 25 kb one; a
+  resolution picked, whatever the preference, or the open map's with it off, as memory allows — or
+  the finest stored rung no finer than it that fits 8,192 bins a side. It was planned from the open
+  entry, its bins pooled to 4,096 cells and read from the coarsest rung no bigger than one: 1 Mb
+  from the 1 Mb entry and 500 kb, 6,188 bins and 57 MB, from the 25 kb one, where a 5 GB file's open
+  rung had been a gate asking to download it whole. A zoom inside the picture refines as anywhere
+  else. A stored rung coarser than the open one, read instead of the open one's every pixel, is not
+  asked about; a pick finer than the open rung is, by the open rung's pixel count, since it reads
+  more of them rather than fewer — a finer pick used to pass the question by. The question's other
+  way out, *open at* a coarser rung *instead*, picks that rung where the reader stands, as the row
+  would. A file with no ladder, a selection and a second file in the square keep the pooled read
+  and its gate
+- **so is a region read as memory allows, wherever it is wider than a block read bin for bin** — a
+  whole chromosome, most often, with a resolution picked or *Refine on zoom* off (with it on, the
+  first picture is screen-sized, above). A window wider than the reader reads at its own bins
+  (`denseCellCap`, 8,192, §7.2) is read from the finest stored rung no finer than the one asked for
+  that fits (`chooseRung`): mouse chr1 at 10 kb, 19,547 bins, is its 40 kb rung's 4,887, where the
+  reader used to sum the open map five to a cell into 50 kb, which the file does not store. A
+  resolution the reader added (§3.4) keeps its own rung, summed further, and a second file the open
+  rung, pooled
 
 The app is therefore not a HiGlass replacement for standard Hi-C. Say so in the paper rather than let
 a reviewer discover it: the claim is zero-install regional inspection of any cooler, plus a genome
@@ -6232,7 +6513,11 @@ requests and bytes in total and for the last view; these are also paper figures.
 | Pan/zoom within the block in hand | 0 requests, 60 fps |
 | First frame of a block of 2,048² cells or more | one pass over its values on the main thread — listing the cells that carry something where they are no more than one in four — the colour range and the level the frame draws read from that list, and no image at matrix resolution (§7.2) |
 | A zoom past the levels a large block has made | 0 requests and no re-colouring: the level it wants painted between frames, the nearest made drawn meanwhile |
-| First picture of a window four times finer than a stored rung with 256 cells across it | one read of that rung, drawn live while the window's own block reads after it and lands on whatever window the reader has moved it to — chicken chr1 at 25 kb on screen in 0.2 s, mouse chr1 at 80 kb in 0.7 s, from a 40 ms, 25 MiB/s link (§7.2) |
+| First picture of a chromosome, *Refine on zoom* on (the default) | one screen-sized read, from the stored rung nearest a cell to each pixel of the plot — chicken chr1 opened at 10 kb on screen in 0.34 s and 2.1 MB where it took 1.9 s and 14.7 MB, at 25 kb in 0.33 s where it took 2.4; mouse chr1 opened at 10 kb in 1.7 s and 9.4 MB where it took 4.8 s and 42 MB, at 80 kb in 1.2 s where it took 2.9; from a 40 ms, 25 MiB/s link (§2, §7.2) |
+| Whole genome of a laddered map, *Refine on zoom* on | one screen-sized read of the stored rung nearest a cell to each pixel, whichever entry the link opened — a K562 `.mcool`'s 5 Mb rung, 631 bins: 3.9 MB from its 1 Mb entry and 5.8 MB from its 25 kb one, where it was 17 MB at 1 Mb and 57 MB at 500 kb, 6,188 bins a side (§7.2) |
+| A zoom from a whole chromosome to its file's own bins, *Refine on zoom* on | never a frozen frame; each step a screen-sized read landing on the window the gesture has reached; the page's longest stall under 0.2 s — sixteen wheel notches into chicken chr1 at 10 kb read four blocks, down to the 10 kb bins, with stalls of 0.4 s in all and 0.18 s at most, where the map used to be frozen 2.0 s and the page stalled 4.6 s in all and 1.9 s at once, every notch while frozen dropped — measured before a read was held to the rungs the file stores and a zoom went on past the rung opened, so some of those blocks were grids no rung stores, and before a zoom inward waited for its pause to read (§2) |
+| A wheel zoom into a chromosome of a remote laddered map, *Refine on zoom* on | no read while the view goes on shrinking, one for the window it pauses on 150 ms after its last notch, and a read it outran called off between two of its 250,000-pixel windows — K562 chr5 of the 4DN map from S3, opened at 250 kb, zoomed to a 20 Mb window and its 25 kb rung in 5.8 s, 20.7 MB and 16 requests where it took 11.7 s, 65 MB and 52, and on to a 1 Mb window and its 2 kb rung in 4.6 s, 7.6 MB and 17 requests where it took 8.0 s, 26.7 MB and 42; medians of three runs from a fresh session in a 1600 × 1000 window, wheel notches 50 ms apart (§2) |
+| First picture of a window four times finer than a stored rung with 256 cells across it, *Refine on zoom* off | one read of that rung, drawn live while the window's own block reads after it and lands on whatever window the reader has moved it to — chicken chr1 at 25 kb on screen in 0.2 s, mouse chr1 at 80 kb in 0.7 s, from a 40 ms, 25 MiB/s link (§7.2) |
 | Refine, on crossing the block's grid (§2) | ≤ 5 range requests, one bounded read |
 | Pan to the edge of the block in hand | one read, **at the same resolution** |
 | Zoom out to a block already read | 0 requests |
@@ -6410,10 +6695,10 @@ whole-genome read waiting for its button (§7.3), or `error` for a refusal on sc
 picture, with the refusal as `note`; `state`, the view state as the address bar carries it; `maps`,
 one per map on screen, every cell of a deck, each with its title, the bin size of the rung its block
 was read from, the bins pooled into one cell, and their product as `resolution`; and `lanes`, the
-track lanes drawn. **It says what was drawn, not what was asked for.** A whole-genome view reads the
-coarsest rung that fits (§7.3) and a wide window may pool its cells (§7.2), so a link naming 5 kb can
-be on screen at 25 kb, and a script holding viewers to one resolution has to be told so rather than
-time a different picture.
+track lanes drawn. **It says what was drawn, not what was asked for.** While *Refine on zoom* picks,
+a view reads the screen's resolution (§2), and a window too wide for the resolution picked is read
+from a coarser stored rung or pooled (§7.2), so a link naming 5 kb can be on screen at 25 kb, and a
+script holding viewers to one resolution has to be told so rather than time a different picture.
 
 **A repaint alone is not a new picture.** Pointing at the map repaints it once a frame, and a report
 per frame would bury the one a script is waiting for: a paint keeps a picture unfinished but never
@@ -6631,7 +6916,8 @@ companions.
 | Aggregation level (`bin` / `contig`) | yes | |
 | The 45° turn (§17) | yes | |
 | Pan and zoom | yes (§16.3) | opt out |
-| Which rung of a collection (§3.4) | seeded from the lead, then the zoom's | yes |
+| Resolution (§3.4) | the first map's (below) | its nearest rung, where its file has not got that one |
+| Which sample of a collection (§3.4) | | yes |
 | Score column and balancing | seeded from the lead | yes |
 | Derived values — O/E, the smoothing and the arms (§7.5, §8.15) | seeded from the lead | yes |
 | Transform and colormap | seeded from the lead | yes |
@@ -6641,30 +6927,78 @@ The rule is: **what is being looked at** is shared, **how it is drawn** is not �
 the second kind is set on the *Map* card of the **starred** map, or on every map at once while none
 is starred (§16.5).
 
-A rung is now *also* what a zoom reads from (§2), which does not change the row above but sharpens
-it: the picker still names the map a panel is **addressed** as, the link still carries it, and a
-reader who touches it has said something the zoom does not overrule. Concretely, **the rung that is
-open is the finest one a zoom may use.** Somebody who opened the 2 kb level of a
-`100/200/500/1000/2000/5000` file has said *2 kb*; a zoom that fetched the 100 bp level would be
-overruling them with their own file. Coarser rungs are still the zoom's to choose, that being the
-direction the picker did not rule on. What the zoom chooses is which level
-answers one bounded read, and that is a fact about a picture rather than about an address.
+A rung is *also* what a zoom reads from (§2), which is why the row above is the resolution rather
+than the entry. The rung a file is opened at is where it was opened — the grid its windows are
+counted in, and the one a task reads with nothing picked (§18.4) — and not what it is drawn at:
+which level answers one bounded read is the zoom's while *Refine on zoom* picks — any rung the file
+stores, down to its finest, whichever was opened — and that is a fact about a picture rather than
+about an address. So a rung of a ladder is no part of a map's name (§16.10) or of a companion's
+address (§16.6), where it read as the resolution on screen; a sample of a collection is both, being
+another map. What the zoom does not overrule is a **pick** (§3.4): somebody who picked the 2 kb
+level of a `100/200/500/1000/2000/5000` file has said *2 kb*, and a zoom that fetched the 100 bp
+level would be overruling them with their own file, so the map draws the pick and never finer,
+coarser only where the window is too wide for it. The rung that is open used to be the finest a zoom
+could reach, which made it depend on which entry a link happened to name; a pick says it in the link
+itself.
 
-**Resolution is the one thing on the shared side of that line that cannot be shared**, and it is why
-the lock's currency is base pairs (§16.3). That is also what lets panels refine independently: five
-maps each reading their own window at their own grid stay in step, because the lock was never
-counting cells. Two files rarely have the same ladder, so a deck lands an `.mcool` on the lead's
-bin size where that rung exists and otherwise on the rung a collection opened at its root lands on, a
-third of the way up from its finest (§9) — the right guess, and only a guess: the rung that makes a
-comparison legible is not always the one that matches a number. So the entry is a picker, as the
-`::1000` beside the companion's name, and the choice is written into that panel's own address rather
-than held beside it. That is what makes it stick: the map reopens at the rung the reader chose after
-every navigation, every change of chromosome, and through the link.
+**Every map of a deck is read at one resolution, the deck's** (`Session.deckResolution`): the first
+map's pick where there is one; else, while *Refine on zoom* picks, the bin size the first map's zoom
+is reading at — its read in flight, else the block it draws; else the rung the first map was opened
+at. While the zoom picks and the first map has no block yet, there is nothing to follow, and the
+others read the screen's resolution meanwhile (§2). The first map's ladder says which bin size it is
+reading at whenever one of its reads goes out, lands or is called off (`onTarget`), so the other
+maps' reads go out **beside** its read rather than after it has landed.
+Each companion follows **in place**, on its own ladder, as a pick is read, keeping the window it
+shows (`pickOnLadder`): at its own stored rung of that bin size; where it has none and the resolution
+is a pick, summed out of the coarsest stored rung that divides it, as the first map sums a pick it
+has not got (§3.4); and otherwise at its nearest stored rung on a log scale, the coarser of two as
+near, with a line under its heading saying so — *drawn at 10 kb, the nearest this file has to 5 kb*,
+or *drawn at 1 kb, the one resolution this file has, not 5 kb* — and the rungs the file has in that
+line's tooltip (*This file has no 5 kb level — it has 1 kb, 2 kb, 10 kb.*). One line, because in a
+deck of mixed ladders it is said at most steps of a zoom, and a micro-C file's ten rungs listed in it
+wrapped it every time; and in the faint italic of a renamed sequence (§5.9) rather than the red of a
+map that is not following, for that note's reason: the nearest rung is the deck working, and the
+commonest case of it. The zoom's own choice is never summed, a screen-sized read being a stored rung
+(§2), and nothing is said about a file before it has answered, its ladder being unknown until then.
 
-A change of the **first map's** rung is the deck's, though — from the breadcrumb's picker, a link or
-*match all resolutions* — and every companion follows it there, exactly or not at all: a file without
-that level stays where it is and says so in a line under its own heading, rather than being moved to
-the nearest rung and leaving the deck at two resolutions with nothing said.
+**Resolution is shared as far as each file's ladder allows**, and that is still why the lock's
+currency is base pairs (§16.3): two files rarely have the same ladder, and a lock counting cells
+would have to be gated on one. A file without the level used to stay where it was and say so, on the
+argument that the nearest rung would leave the deck at two resolutions with nothing said. With every
+map read at the deck's resolution there is nowhere of its own for it to stay — its own zoom's choice
+is what put two grids side by side — and its nearest rung, said under its heading, is as near one
+resolution as that file can come.
+
+Each map used to refine on its own ladder, which was argued to be what let panels refine
+independently, the lock never counting cells; but each ladder keeps a block within its own factor of
+two of the view, and the deck stood at two grids wherever the two factors fell differently. On the
+4DN map of K562 (`4DNFI18UHVRO.mcool`) from S3, in a deck of the file beside itself with nothing
+picked and *Refine on zoom* on, one wheel zoom ended with the first map at 5 kb and the companion at
+10 kb. A pick fared no better. With `resolution=100000` in the link the first map drew 100 kb, and
+the companion 500 kb on chr5 and 5 kb after a zoom: a companion's reads took no pick, only the
+preference, so *a pick in the link wins* (§2) held for the first map alone. A change of the first
+map's rung — from the crumb bar's resolution row, a link or *match all resolutions* — reached the
+companions by reopening each at the stored rung the first map read, exactly or not at all; and
+reopening changed the companion's address, threw away the window it showed and, with *Refine on
+zoom* on, never reached the picture anyway — the companion kept the `::25000` it had been opened at
+and never reopened at the first map's rung. Both maps now draw 100 kb with the pick, and without it
+500 kb on chr5 and then 5 kb after the zoom.
+
+**A map moving on its own** (its chain open, §16.3) follows a pick, which is a resolution the reader
+asked of every map, but not the zoom, which is about a window it is not showing: it refines on its
+own screen-sized reads. Opening or closing its chain re-follows at once.
+
+A companion handed a whole `.mcool` still opens one rung of it, its worker holding one map open (§9):
+the stored rung the first map reads where its file has that rung — the rung picked, the one a
+resolution the reader added is summed from, or with neither the one the first map was opened at —
+and its own landing rung where not (§16.9). That rung is where it was opened rather than what it is
+drawn at, so it is **not written** into its slot or into `maps` (§16.6). The `::1000` beside a
+companion's name was a picker of its rungs, the choice written into the panel's own address so that
+it stuck through every navigation and the link; it is offered for a collection's samples now and
+never for a ladder of resolutions, whose rung is the deck's — a rung picked there could only be one
+the picture was not drawn at. *Match all resolutions*, the press that read every map at the starred
+map's bin size, is gone from the deck's bar for the same reason (§16.5): every map is read at one
+resolution already.
 
 **The turn sits on the shared side, and it is the one setting of the Map card that does.** A lead
 drawn as a band along its diagonal beside four squares is five pictures in two coordinate systems
@@ -6724,7 +7058,8 @@ panel's own again, which is the stronger claim made only where it is true.
 
 ### 16.3 The navigation lock
 
-The currency is **base pairs**, measured from each block's own start, and not matrix cells.
+The currency is **base pairs of the sequence** — a place — and not matrix cells, nor an offset into
+a block.
 
 That is the whole of why panels can be honestly locked where triangles cannot. A 1 kb file and a 5 kb
 file both answer `chrI:20,000-80,000`; the answers are 60 cells and 12. A lock in cells moves the
@@ -6732,11 +7067,24 @@ coarse panel five times too far, and would have to be gated on a matching bin si
 §5.7's refusal, reintroduced for no reason. A lock in base pairs is one division and one
 multiplication per axis at each end.
 
+**Each map tells the lock where its block begins** (`MatrixPanel.lockOrigin`, a member's `origin`):
+where the first cell of the block on screen sits in its sequence, per axis, read off the axes the
+picture is labelled with — so it is right for a block read from a sibling rung and for a pooled one,
+whose cells are not the file's bins. A report adds it, a push takes it off, and the first window,
+taken from the first map while the lock has none, carries the first map's. A block read whole begins
+its sequence and answers zero, which is the lock as it always was; up the side of a turned map a row
+is separation from the diagonal (below), and has none. The currency used to be counted from each
+block's own first cell, which was the same thing for as long as every block was read whole and
+stopped being once a zoom read a window inside the region (§2): two maps whose zooms read different
+windows held blocks beginning at different places — one at 87.7 Mb, the other at 88.0 — and the
+same offset into each was two places 300 kb apart.
+
 **Above bin level the currency is the cell index** (`panels/lock.ts`'s `LockUnit`). A cell there is a
 whole sequence and has no width in base pairs — the number a panel answers for it is the file's bin
 size — and a window converted through it put chromosomes 10–14 of a 1 kb roll-up on chromosomes 2–3
 of the 5 kb roll-up beside it. Cell `i` is sequence `i` in both, so the index is what the two grids
-share and what a contig-level deck navigates by, while the two roll-ups have the same cells (§16.4).
+share and what a contig-level deck navigates by, with no origin to add, while the two roll-ups have
+the same cells (§16.4).
 A panel still drawing the other level is moved to no window at all, and the pointer's echoes say
 *nothing here* between two maps at two levels, as they do off the end of a shorter block.
 
@@ -6760,7 +7108,7 @@ There is one owner. Panels never speak to each other: each reports where it is a
 With N panels each echoing to N−1 others there are N² conversations and no frame in which the deck is
 in one state.
 
-The feedback loop is real and is guarded three ways, because an echo has three shapes. A panel moved
+The feedback loop is real and is guarded four ways, because an echo has four shapes. A panel moved
 programmatically redraws, and redrawing is how a panel reports — so every push returns as a report
 one frame later, quantised to the receiving panel's grid and possibly slid inside its block.
 
@@ -6773,31 +7121,48 @@ one frame later, quantised to the receiving panel's grid and possibly slid insid
 3. Anything arriving later at what is, to within **half a cell of the reporting panel**, the window
    already broadcast is swallowed as the same window seen through that panel's quantisation — a
    resize, a re-fit, a second frame of one gesture.
+4. A report of the window a push would give that panel **now** — the deck's window clamped or slid
+   into its block, in its own cells, to within half a cell — is swallowed however late it comes. (2)
+   forgives a slide once, and a panel redraws more often than that: a zoom landing a sharper block on
+   it is a redraw, and one that slid because its block held less than the deck's window reported the
+   slide again and became the driver, dragging every other map onto the stretch it happened to hold.
 
 Without (3) a two-resolution deck drifts one coarse cell per frame until it hits a wall.
+
+**A navigation clears the deck's window, and only a map drawing the new place speaks for it.** A
+different region is a different window, so the window is put down when the deck is handed one, and
+the first report after it is taken up. A companion still drawing the place just left redraws while
+its new block is on its way — a busy veil, a score — and every redraw is a report: taken as the first
+word about the new place, its old window was pushed onto its new block when that landed, and its zoom
+read the stretch around it. Widening the yeast deck from IV:1.0–1.4 Mb to the whole of IV from the
+trail left the Hi-C map reading 0.8–1.53 Mb, and then — by the slide (4) now forgives — the micro-C
+map dragged onto that stretch after it. So a companion's report counts only once the block it draws
+was read for the deck's place (`MapPanel.drawnFor`); the first map's view is rebuilt for a new place,
+and has no old block to redraw.
 
 Any panel may be taken off the lead individually, the lead included.
 
 **A companion off the lead reads its own window.** A box drawn on it with Option held (§5.4's
 marquee, Option+Shift to hold it square on the diagonal) is a read of **that window, for that map**,
-as finely as the rung it is open at (§16.2) and its share of the budget (§16.7) allow — not a
-magnification of the block it already held. The same file open in three cells can then be a whole
-196 Mb chromosome at 640 kb, a 35 Mb stretch of it at 80 kb and 6 Mb at 10 kb — before, the third
-cell's box only enlarged a block read over the whole chromosome, which that budget capped at 50 kb,
-and scrolling out gave back the chromosome it had never stopped holding. The window is shown as a
-pill in the cell's heading, the locus it read, with **widen 3×** — the zoom step's own factor —
-and **×**, which gives the map back to the deck's window. It is held by name, like the deck's own
+at the resolution a map off the chain is read at (§16.2) and as its share of the budget (§16.7)
+allows — not a magnification of the block it already held. The same file open in three cells can
+then be a whole 196 Mb chromosome at 640 kb, a 35 Mb stretch of it at 80 kb and 6 Mb at 10 kb —
+before, the third cell's box only enlarged a block read over the whole chromosome, which that budget
+capped at 50 kb, and scrolling out gave back the chromosome it had never stopped holding. The window
+is shown as a pill in the cell's heading, the locus it read, with **widen 3×** — the zoom step's own
+factor — and **×**, which gives the map back to the deck's window. It is held by name, like the deck's own
 selection (§16.2), resolved through the map's own reader, and remembered with its looks
 (`deck:looks`); relinking the chain drops it, since a chained map shows the lead's window by
 definition.
 
 **Every map cell's heading names the sequence its map is on**, and is the road to another one. A
-quiet picker beside the name — the rung's own idiom (`::1000`) — lists the cell's **own** file's
-sequences in its order and in its names, and stands on the one the block it read is of; a block between
-two says `IV × V`, one over several says how many, neither of which is a place to go. On a companion a
-pick is a window of its own, the **whole** of that sequence: the map leaves the chain where it was on
-it (a chained map shows the lead's window by definition), reads it at its own rung, and the others stay
-where they are — so micro-C can stay on IV while Hi-C beside it shows V. It is the box's window in
+quiet picker beside the name — the idiom of a collection's own (`::rep2`) — lists the cell's **own**
+file's sequences in its order and in its names, and stands on the one the block it read is of; a
+block between two says `IV × V`, one over several says how many, neither of which is a place to go.
+On a companion a pick is a window of its own, the **whole** of that sequence: the map leaves the
+chain where it was on it (a chained map shows the lead's window by definition), reads it as a map off
+the chain is read (§16.2), and the others stay where they are — so micro-C can stay on IV while Hi-C
+beside it shows V. It is the box's window in
 every other respect: the pill says the map reads its own window (without repeating the name the picker
 beside it says), its `×` gives it back to the deck's, and it is remembered with the map's looks. On the
 first map a pick is the session's own navigation — the locus box's, the view as it is on another
@@ -6809,7 +7174,12 @@ On a companion **still on the lead**, the same box navigates the deck — it is 
 map's own marquee, so every chained map moves to it, which is what drawing a box on one of several
 maps locked together can only mean. The pointer's echo between two maps that are not showing the
 same window goes through the locus under it rather than through their cells, and the lanes'
-echo is not drawn at all there: a lane position on one map is a different place on the other.
+echo is not drawn at all there: a lane position on one map is a different place on the other. **At
+bin level the pointer goes through the locus between any two maps**, on one window or not — the
+contact it is over, found again in the other block (`contactAt`, `cellOfContact`) — since a cell
+index counts from where each block begins, and two maps of one place whose zooms read different
+windows begin their blocks at two places: the raw index it used to carry marked another place on the
+other map. Above bin level a cell is a sequence in both, and its index is what is carried.
 
 ### 16.4 The compatibility gate, and why it is weaker
 
@@ -6819,12 +7189,23 @@ evaporate: two grids may be two resolutions, and each panel indexes its own list
 third stands, and more strongly: a file with a genome layer holds no deck at all (§16.8).
 
 What is left is the one claim panels actually make — *these two pictures are of the same place* — and
-it is checked against the **blocks that came back**, not against the files. Two panels that resolved
-one name to spans of different length resolved it against different sequences, whatever the name
-says, and a shared window between them would be two places. The tolerance is one cell of the coarser
-panel **per sequence on the axis**, because the last bin of a contig may be short (§3.3) and a
-stricter test would refuse every honest pair whose bin size does not divide the contig — and a cell
-never straddles two sequences, so an axis of sixteen chromosomes rounds sixteen last cells, not one.
+it is checked against the **region each view first drew** (`MatrixPanel.frameSpan`): the span of its
+first block, read whole and kept through every refine — not against the files, and not against the
+block on screen. Two panels that resolved one name to spans of different length resolved it against
+different sequences, whatever the name says, and a shared window between them would be two places.
+The tolerance is one cell of the coarser panel **per sequence on the axis**, because the last bin of
+a contig may be short (§3.3) and a stricter test would refuse every honest pair whose bin size does
+not divide the contig — and a cell never straddles two sequences, so an axis of sixteen chromosomes
+rounds sixteen last cells, not one.
+
+It used to compare the blocks on screen, and a block a zoom has refined is a window read inside the
+region (§2), as wide as that map's zoom made it. Two maps whose refines read different windows were
+told *not following: this block spans 5.00 Mb × 5.00 Mb where the first map spans 4.08 Mb × 4.08 Mb.
+The same name resolved against different sequences, so one window would be two places* — and let
+off the lock for it: on a deck of the K562 map after a zoom, the companion stood still at
+89.5–92.0 Mb while the first map went on to 90.0–91.5. The question is again only whether one name
+resolved to the same length of sequence in two files, and after the same zoom both maps show
+89.5–92.0 Mb at 5 kb, both chains lit, with no line under either.
 
 Above bin level, where the window is carried as a cell index (§16.3), two axes that agree about how
 much sequence they hold must also roll up into the same number of cells, or cell `i` is not the same
@@ -6916,10 +7297,12 @@ application: lit while the cell is following, plain while it is not, and dimmed 
 
 The deck's bar holds what is shared, in the order the work is done: **add a cell…**, which opens the
 row that takes a file, a published URL, the session's 3D structure or a stack of tracks (§16.11);
-**match all scales** and **match all resolutions**, two presses that each copy the starred map's
-clip or bin size onto every panel once — greyed, with that reason on them, while no map is starred,
-there being nothing to match *to*; how many across; and the whole deck as one figure — saved, or
-copied to the clipboard, which is what `⌘C` reaches while a deck is on.
+**match all scales**, a press that copies the starred map's clip onto every panel once — greyed,
+with that reason on it, while no map is starred, there being nothing to match *to*; how many across;
+and the whole deck as one figure — saved, or copied to the clipboard, which is what `⌘C` reaches
+while a deck is on. *Match all resolutions* stood beside it, reading every panel at the starred map's
+bin size, until every map came to be read at the deck's one resolution (§16.2): there was nothing
+left for it to match.
 
 The deck's figure is **one arrangement written two ways**: a PNG at a resolution — the bar's 300
 dpi, or the Export card's — and a PDF that is a vector page, each cell drawn on it as its own PDF
@@ -7046,6 +7429,15 @@ the order, and the recipient gets a drop rectangle where the sender's file was. 
 drew empty (§16.9) is the same `~` and travels the same way, so an arrangement nobody has filled yet
 is a link like any other.
 
+**A companion is written as the reader gave it.** Handed a whole `.mcool`, it opens one rung of it
+(§16.9) and writes that rung nowhere: it is where the file was opened rather than what the map is
+drawn at, which is the deck's resolution (§16.2), and in `maps` it read as the resolution on screen —
+`::25000` over a picture the zoom had drawn at 500 kb. A recipient's deck draws the map at the first
+map's resolution whatever entry the address names, and opens it as the sender's did, at the first
+map's rung where its file has one. A sample of an `.mmetacool` collection is written, since another
+sample is another map; and an address that names a rung, an older link's included, is kept as it
+came.
+
 `maps` **survives a navigation within one file**, and so does `uri2`. A navigation builds a fresh
 state — `{ uri, view: 'contigs' }` and nothing else — which is right for the region, the genome, the
 level and the pair, and wrong for the two keys that name what is on screen *beside* the view.
@@ -7088,8 +7480,9 @@ than the single map it replaced, and **every map added shrinks every panel's sha
 over-large deck is refused by arithmetic rather than by a limit somebody had to guess. The refusal is
 `checkBrowserDenseSize`'s own, with its own numbers in it, printed beside the panel it is about. The share
 also sets how wide a window the panel reads bin for bin (`denseCellCap`, §7.2) — a deck of four reads
-a whole chromosome a panel cannot afford pooled rather than refused — and the panel's zoom judges its
-blocks against that same share, so it never waits for a finer block its reads will not return.
+a whole chromosome a panel cannot afford at its own bins from a coarser stored rung that fits, pooled
+only where none does, rather than refused — and the panel's plans and its zoom judge its blocks
+against that same share, so it never waits for a finer block its reads will not return.
 
 The answers kept so that a place visited again costs nothing (§12) are not divided: they are one
 budget for the page however many panels it holds, so a deck of eight keeps fewer places per panel
@@ -7203,11 +7596,14 @@ empty a moment ago is a small lie about their own deck.
 
 A **collection** dropped into a cell opens one of its maps rather than refusing. An `.mcool` is a
 ladder of complete coolers and is not a map at its root (§3.4), so opening one by name is an error
-about `::` syntax the reader never typed, standing where their picture should be. The rung to land
-on is the **lead's bin size**: two files with the same ladder are comparable at any of them, and the
-finest-regardless rule would put a 1 kb map beside a 16 kb one and call it a comparison. What was
-opened is written back into `maps`, so the link names the map rather than the collection — resolved
-against a recipient's own lead it could otherwise be a different rung.
+about `::` syntax the reader never typed, standing where their picture should be. The rung opened is
+the **lead's bin size** where the file stores it, and its own landing rung (§9) where not: the grid
+its windows are counted in and the one a task on it reads (§18.4), since what it is *drawn* at is the
+deck's resolution, whichever rung it opened (§16.2). So that rung is **not** written back into
+`maps`, and the link names the file as it was given (§16.6). It used to be, so that the link named
+the map rather than the collection — resolved against a recipient's own lead it could otherwise be a
+different rung — and it then read as the resolution on screen, beside a map drawn at another. A
+sample of an `.mmetacool` collection, its first entry, is written back, being the map that cell is.
 
 A file **dropped on an edge** opens the cell that edge names and fills it in one movement, which is
 the gesture a reader tries first. It goes into the cell that press opened **nearest the edge** — the
@@ -7319,16 +7715,16 @@ it used to put the map down for the browser there too, which re-read the state w
 and a deck of maps cannot stand beside a browser (§25.3): the companions went with it.
 
 **A cell's heading stays in its cell.** It is one line — a grip, the name, and then the cell's
-controls: its sequence, its rung, its own window, its star, its chain and its × — while the name can
-keep 6rem beside them. Where it cannot, the controls go **together** to a line of their own under
-the name, at the cell's right, and the name takes the whole first line; a cell too narrow even for
-the controls alone wraps them again, to the right, inside the cell. Every kind of cell does this, the
-first map's, a structure's, a tracks cell's and an empty one's among them. It used to be one line at
-any width: four maps across a column with two side panels open are cells of 154 pixels, under a
-heading that could not be less than 196, so the name went to a floor that showed one letter and the
-controls ran on past the cell's edge — the chain of one cell drawn over the grip and the name of the
-next. Wrapped one by one, the controls would leave a star above and a chain and a × below, which
-reads as two headings.
+controls: its sequence, its sample of a collection, its own window, its star, its chain and its × —
+while the name can keep 6rem beside them. Where it cannot, the controls go **together** to a line of
+their own under the name, at the cell's right, and the name takes the whole first line; a cell too
+narrow even for the controls alone wraps them again, to the right, inside the cell. Every kind of
+cell does this, the first map's, a structure's, a tracks cell's and an empty one's among them. It
+used to be one line at any width: four maps across a column with two side panels open are cells of
+154 pixels, under a heading that could not be less than 196, so the name went to a floor that showed
+one letter and the controls ran on past the cell's edge — the chain of one cell drawn over the grip
+and the name of the next. Wrapped one by one, the controls would leave a star above and a chain and a
+× below, which reads as two headings.
 
 **The first cell closes like any other.** Its × is on its heading, after its star and chain, while
 another cell is beside it — a × on the one cell of a deck would leave nothing on screen. What it does
@@ -7376,9 +7772,9 @@ and the analysis — a batch's runs, the drawer's tabs, and the all-maps overlay
 
 A map is labelled by its file, which is the right default and a poor name for the work: four
 replicates of one experiment are four labels differing in a digit, and two conditions being compared
-are `mat_G1.mcool::1000` and `mat_G2M.mcool::1000`, whose two informative characters are the last
-thing anybody reads. So **any map a session is holding can be called something** — the one it is of,
-the one it is compared against (§5.7), and every companion of a deck. The control is the Tracks
+are `mat_G1.mcool` and `mat_G2M.mcool`, whose two informative characters are the last thing anybody
+reads. So **any map a session is holding can be called something** — the one it is of, the one it
+is compared against (§5.7), and every companion of a deck. The control is the Tracks
 card's own, in both places it appears: an `<input>` that looks like text until it has the caret, on
 the **Contact maps** card and on a deck cell's heading. Enter commits, Escape abandons, and an empty
 box hands the map back to its file name, which is what makes a rename undoable. Tab commits and puts
@@ -7390,6 +7786,14 @@ heading over its cell, the two bands of a turned comparison (§17.2), the readou
 under the pointer, the derived label on a ratio, and the caption on an exported figure. A rename is
 not a rebuild — it changes what the picture is called and nothing about what is in it, and rebuilding
 the view would put a gated whole-genome scan (§7.3) back behind its button.
+
+**The file's name is the file, and not the rung it was opened at** (`fileLabel`). A rung of a ladder
+— an `.mcool`'s `::25000`, a zoomify `.mmetacool`'s `::1000`, any entry that is a bin size — is where
+the file was opened, which the zoom and a pick read past in place (§2, §3.4): so the tab, the
+breadcrumb's root, a companion's heading, the Contact maps card and a figure's caption read
+`4DNFI18UHVRO.mcool`, where they read `4DNFI18UHVRO.mcool::25000` over a map the zoom had drawn at
+500 kb, or at 2 kb — a resolution that was not on screen. A sample of a collection is another map,
+and is still named: `samples.mmetacool::rep1`. A run says the rung it read in words instead (§18.4).
 
 **What a task makes of a map is named by it too** (§18). A run names the map it measured — the
 drawer's tab for it, its line in the all-maps overlay and its rows in the all-maps tables (§18.7),
@@ -7925,11 +8329,11 @@ on ★* (below) — and greying it under a sentence about a map was the exceptio
 every task back.
 
 **The column is asked again whenever the deck's maps change** — a companion's file opening, a cell
-moving to another rung, a cell closing — as it is when the star moves: which tasks apply is a question
-about what is on screen, and a task that compares two files is waiting on exactly this. It was asked
-when the column was built and when a companion's tables arrived, and nothing asked it when a cell
-closed, so *Reproducibility* could stand ready beside a map that had gone. Asked per change and not
-per read: a pan re-reads every companion and changes nothing here.
+moving to another sample of its collection, a cell closing — as it is when the star moves: which
+tasks apply is a question about what is on screen, and a task that compares two files is waiting on
+exactly this. It was asked when the column was built and when a companion's tables arrived, and
+nothing asked it when a cell closed, so *Reproducibility* could stand ready beside a map that had
+gone. Asked per change and not per read: a pan re-reads every companion and changes nothing here.
 
 **The panel exists without a contact map.** The 1D tasks — a motif search and a peak call as much as
 metaplot, track correlation and interval overlap — read only the loaded tracks and sequences, and a 1D
@@ -8225,11 +8629,68 @@ which would neuter the array the heatmap is drawing from.
 **What a task runs on is the map's current framing**, captured at the instant **Run** is pressed: the
 row and column bin extents, the bin size, any pooling in force, the score column, whether balancing
 is on, the total the map is drawn to (§6.5), the sequences declared circular and their origins
-(§8.15), the edit of the reference it is drawn through (§27.7), and the resolution the reader added
-that it is drawn at (§3.4) — which is then the bin size, its bins the ones the extents count. **A
+(§8.15), the edit of the reference it is drawn through (§27.7), and **the resolution the task reads**
+(below) — which is then the bin size, its bins the ones the extents count. **A
 preview has no framing** (§7.2): while a coarser rung stands in for the block being read, or stays on
 screen after that read failed, a press of **Run** is refused as on a view with no map, and no task
 borrows the block, because its extents count another rung's bins under the file the view reads.
+
+**The resolution a task reads is one somebody chose** (`Session.analysisAt`): the one given on the
+task's own *Resolution* row (below), else the one picked in the crumb row (§3.4, §5.5), else the rung
+the file was opened at — **never the one the zoom happened to draw**. A rung the file stores is read
+from **its own entry** of the ladder — the task's file is `sample.mcool::resolutions/25000` where the
+file is open at 10 kb, and so are the provenance line and the command it writes; the run's label
+says it in words, the file and the rung, `sample.mcool · 25 kb`, unless the reader named the map
+(§16.10), a rung being no part of a file's name and `::25000` only the address's way of saying it —
+and one the reader added is summed from the stored rung it is made of (§3.4). While *Refine on zoom*
+picks, the block on screen is whichever rung the window and the width of the plot came to, and a
+task framed on it — as one was, for a while — gave other numbers for the same link and the same
+**Run** after a zoom or on a wider screen; the rung opened is the one the link names, or the one the
+file lands on where it names none (§3.5, §9), the same on any screen. A pick is read in place
+and leaves the file open at the entry it was opened at, so a task framed on that entry alone measured
+a map nobody had picked. Where the task reads the open map's own bins, nothing changes. An import is
+the exception (§3.7): its rungs are binned by the worker that opened it rather than stored, and a
+task reads its open map. The drawer's heading follows a pick as it happens, since a pick read in
+place mounts no view, which is what tells it otherwise.
+
+**Every task that reads a map has a *Resolution* row**, the first of its form, before every other
+setting — each of which that counts in bins counts in its bins. It lists every rung of the lead's
+ladder a task can be framed at, stored and added (an added one with its `*`), each with its bin size,
+and an added one's arithmetic, in its tooltip, and it starts on the rung the crumb row picks or, with
+none picked, the one the file was opened at. A choice there is **that task's alone, on this file**:
+the task is framed, priced and read at that rung — its entry, `::resolutions/N` — and the crumb row
+and every other task are left as they were, so a reader can run compartments at 250 kb and insulation
+at 10 kb without moving the map. Choosing the rung it would read anyway clears the choice, and the
+task follows the crumb row again; another file forgets every choice, since another file's rungs are
+another ladder. It is absent from a task that reads no map, on a starred companion of a deck, on an
+import, and where the ladder offers nothing to choose.
+
+**In a deck, a task reads every map at the first map's resolution for it** — its *Resolution* row's,
+else the pick, else the rung it was opened at — each map on its own ladder by the rule its picture
+follows (§16.2, `onLadder`): its stored rung of that bin size, that rung's entry opened for the task;
+else the coarsest stored rung that divides it, summed to it — a run target's own `coarsen`, mounted,
+written into its command line (`--coarsen`) and handed to Reproducibility as that map's grid; else
+its nearest stored rung, at its own size. That holds for *run on all maps*, for the maps a
+comparison reads beside the one it is about, and for a starred companion, which is framed, priced
+and read on that grid as the first map is on its own. A companion used to be read at the rung it
+happened to open at: after a pick of 100 kb on a deck of two K562 files, a batch read the first at
+100 kb and the second at 25 kb, and Reproducibility refused the pair as two grids — advising a rung
+change no control could make, since a companion's ladder has no picker. Where a map's file has no
+rung of that size and none that divides it, it is still read at its nearest, and the comparison
+refuses it in those words: pick, on the first map, a resolution every file carries.
+
+**The block on screen is framed in those bins**: its extents, on the grid of the rung it was read
+from, carried onto the rung the task reads through the base pairs they cover, one sequence at a time
+— every rung lays a sequence out from its own first bin and ends it on a part-bin, so bin `i` of a
+10 kb rung is not bin `i / 2.5` of a 25 kb one past the first sequence (`carryExtent`). A block read
+from another rung than the task's — a window too wide for the pick, drawn coarser, or a screen-sized
+block from whichever rung the zoom came to — is never lent to it, and the task reads for itself:
+the block's bin size is part of the match, where a task queued before a refine could be lent the
+block of another rung; nor is one at a resolution the reader added, which is another sum of the map
+than the task's. The bin size the framing names is the task's, whatever the picture is pooled to:
+`20 kb bins · 4 per drawn cell`, where it used to print the cell, `80 kb bins`, in every provenance
+line written from a pooled view; a block coarser than the task's grid counts how many of
+its bins a drawn cell sums, to the nearest whole.
 
 **The framing line is one string in one grammar.** The window it names is the display form (§26.1),
 written by `formatLocus` — so the drawer's *will run on*, the figure's caption and the cell's
@@ -8239,6 +8700,15 @@ named **once**: the balance flag and the score picker's label are both the word 
 commonest file, and pushing both wrote `1 kb bins · balanced · balanced` into every provenance line
 and every TSV header, which reads as two normalisations having been applied. Where the two differ,
 both are said — `balanced · correlation` says what neither half says alone.
+
+**The window is named by its sequence, on every map.** The line takes the map's heading for what the
+picture is of, which on every view is the region — and on a deck's companion is the map's name
+(§16.10): starred and asked for a task, the second map of a K562 deck said *will run on
+4DNFI18UHVRO.mcool:1-127,100,000*, and a figure saved from it was titled the same. A companion now
+says what its picture is of from its own block (`FigureSubject.subject`): the sequence it is on, as
+its file spells it — `chrIV:200,001-600,000` beside a first map that says `IV` (§5.9) — or the pair
+of them, the sequence alone where the whole of it is on screen; a block of several sequences keeps
+the map's name. The heading and the name a figure is saved under stay the map's.
 
 It is a **snapshot**, and the result is a record rather than a live view. Panning afterwards does not
 change a finished pileup; the drawer states the framing the result belongs to and offers to recompute
@@ -10575,9 +11045,11 @@ transcription start (chr8:127,730,001-127,740,000), over the whole genome as § 
 script does, six commands, the pileup reading the loops the first wrote. chromosomix **in Chromium**
 runs them as a reader does, in one page (`notebooks/scripts/laptop.mjs`, given `steps`): the map opened
 once at 10 kb, balanced, whole genome, with the GC content beside it as a track, each task opened from
-the Analysis panel, its form set as the command's flags set it, and run in turn, the pileup over the
-loops the first called in the same page, the map moved to 250 kb in the crumb row's resolution for the
-compartments and back; it is left out where `LAPTOP_BROWSERS` leaves Chromium out. The reference is
+the Analysis panel, its form set as the command's flags set it, and run in turn — at the rung opened
+or the one picked, whatever the screen draws (§18.4) — the pileup over the loops the first called in
+the same page, the map moved to 250 kb in the crumb row's resolution, *Refine on zoom* unticked first
+as a reader must (§5.5), for the compartments and back; it is left out where `LAPTOP_BROWSERS` leaves
+Chromium out. The reference is
 **one Python script**, `notebooks/scripts/cooltools_pipeline.py`, running `cooltools.expected_cis` and
 `dots`, `insulation`, `eigs_cis`, coolpuppy's pileup over `dots`' loops, `expected_cis` again over every
 diagonal for the P(s), and `virtual4c`, in one process — run twice, **on one process**, as chromosomix
@@ -10999,9 +11471,9 @@ they fall, so a loop spectrum fitted from 10.9 kb lost its 20 kb tick, and the g
 end's label is left bare only where the first or the last tick is that end.
 
 **A legend down the right is beside the plot, never over it.** Its room was a fixed 132 pixels, and
-a series named after its file — `T4dNDD-infection.10min.mcool::5000`, as a map in a deck is — ran
-the legend out over the curves. The names are measured in the figure's type, the room is the
-longest one plus the swatch, the padding and a gap, and the plot is drawn in what is left. Past
+a series named after its file — `T4dNDD-infection.10min.mcool · 5 kb`, as a run on a map nobody has
+named is — ran the legend out over the curves. The names are measured in the figure's type, the room
+is the longest one plus the swatch, the padding and a gap, and the plot is drawn in what is left. Past
 about a third of the figure's width a name goes onto more lines rather than taking the plot's room
 (`option.wrapName`), broken after its own dots, dashes, underscores and colons: the library breaks
 only at a space and a few marks, and cut a file name, which has none, at whichever letter filled the
@@ -13976,8 +14448,8 @@ cell where it used to leave a gap — and the browser reports every
 move of its window, a link's included. Its Export card saves and copies the deck's figure while a cell
 beside it has a picture, as the map's does (§16.5). A map may not join such a deck: the bar refuses
 it in words, the add row puts its map roads away, a map a link names is held as the cell it would
-have been, under its name, and the two presses that match maps' scales and resolutions are not
-offered, having nothing to act on. The deck's count of maps says nothing of a deck with none.
+have been, under its name, and the press that matches maps' scales is not offered, having nothing
+to act on. The deck's count of maps says nothing of a deck with none.
 
 ### 25.4 Hover, both ways
 
@@ -16118,7 +16590,7 @@ an offer to play the tutorial is one more thing to read.
 **In *About*, straight after what the viewer is**, on its first tab — the answer to the question a
 reader who has just read that asks next, and the one way in a newcomer finds without being told where
 to look. One sentence, and one filled button that says what it will do: *play the tutorial* for a
-reader who has not begun it, *resume at step 32 of 58* for one who left it, with a quiet *start over*
+reader who has not begun it, *resume at step 32 of 59* for one who left it, with a quiet *start over*
 beside it, and *play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
 Help, its hint saying which of the three a press will do.
 
@@ -16173,7 +16645,7 @@ match 4DN's upside down, at −1.
 
 ### 30.3 The steps
 
-Fifty-eight, in twelve parts, each part's name printed over its steps' titles. The welcome and the end
+Fifty-nine, in twelve parts, each part's name printed over its steps' titles. The welcome and the end
 are a card each in the middle of the window, and between them every step lights one thing:
 
 - **Welcome** — what the tutorial is, in two sentences, with its parts listed under them and *let's
@@ -16183,7 +16655,8 @@ are a card each in the middle of the window, and between them every step lights 
   beside it that copies it, and *type it for me* beside the step for a reader who would rather not
   type twelve characters at all; open the set with its tracks, one press.
 - **The map** — a step that is only read, lighting the General column: the file, its sequences, its
-  metadata; pick 250 kb; open chr15 from the Chromosomes table, scrolled to its row when the table has
+  metadata; untick *Refine on zoom*, which the step says reads the map at the screen's resolution and
+  finer as the reader zooms, so that a resolution is the reader's to pick; pick 250 kb; open chr15 from the Chromosomes table, scrolled to its row when the table has
   not drawn it; a step that is only read, about the map, and how to scroll, drag and double-click on
   it; and one lighting the Aesthetics column, which a map brings — the Map card, the Tracks card and
   Export.
@@ -16270,7 +16743,7 @@ grey and keeps nothing from the app, so the window can be used to get back to wh
 tail pointing into the hole from that side; in the bottom-right corner, with no tail, when the hole is
 the whole picture; at the bottom, centred, when nothing is lit. It glides from one control to the next
 rather than jumping, and its words come in rather than being swapped, so the eye follows the card to
-the next thing to press. Along its top it says the part, *step n of 58*, and *skip tutorial*, over a
+the next thing to press. Along its top it says the part, *step n of 59*, and *skip tutorial*, over a
 bar cut into the tour's parts, each filled as far as the reader has got through it. Then an icon for
 what the step asks — press, type, choose, drag, or only look — beside its title; one or two sentences;
 and *back* and *next* (*skip step* while the step waits, *finish* on the last, and no *back* on the

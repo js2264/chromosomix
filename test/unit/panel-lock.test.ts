@@ -259,6 +259,30 @@ describe('ViewportLock', () => {
     expect(short.state.rows).toEqual([260, 300])
   })
 
+  it('is not dragged back by a clamped panel redrawing a sharper block', () => {
+    // The deck widened to a whole chromosome; one map holds only its right half,
+    // from 800 kb, and shows the deck's window clamped to that. Its zoom then
+    // lands a sharper block over the same half: a redraw at a new grid, which
+    // reported the clamp again and used to drag the first map onto the half.
+    const lock = new ViewportLock()
+    const lead = panel('lead', 2_000, 766)
+    const half = panel('half', 1_000, 732)
+    half.member.origin = () => ({ rows: 800_000, cols: 800_000 })
+    lock.join(lead.member)
+    lock.join(half.member)
+    lock.report('lead', [0, 766], [0, 766])
+    expect(half.state.rows).toEqual([0, 732])
+    frame(lock, half)
+    // The sharper block: 2 kb cells over the same 732 kb.
+    half.member.bpPerCell = () => 2_000
+    half.member.cells = () => ({ rows: 366, cols: 366 })
+    lock.report('half', [0, 365.97], [0, 365.97])
+    expect(lead.state.shown).toBe(0)
+    // …while a gesture on it is still a gesture.
+    drag(lock, half, [100, 200], [100, 200])
+    expect(lead.state.rows).toEqual([500, 600])
+  })
+
   it('takes a genuine gesture from a panel that was clamped a frame earlier', () => {
     const lock = new ViewportLock()
     const long = panel('long', 1000, 400)
@@ -572,5 +596,51 @@ describe('a deck above bin level', () => {
     lock.report('map', [0, 16], [0, 16])
     expect(lock.window?.unit).toBe('cell')
     expect(lock.window?.rows).toEqual({ lo: 0, hi: 16 })
+  })
+})
+
+/**
+ * Two blocks of one place that begin in different places (§2, §16.3).
+ *
+ * A zoom reads a window inside the region, and two maps whose zooms read
+ * different windows hold blocks starting at different positions. Counted from
+ * each block's own first cell, the lock put the same offset into each — two
+ * places 300 kb apart; counted from where each block sits in its sequence, it
+ * puts them on one place.
+ */
+describe('a window counted from where each block sits', () => {
+  it('puts two blocks that begin in different places on one place', () => {
+    const lock = new ViewportLock()
+    const lead = panel('lead', 5_000, 800)
+    const other = panel('other', 5_000, 800)
+    lead.member.origin = () => ({ rows: 87_700_000, cols: 87_700_000 })
+    other.member.origin = () => ({ rows: 88_000_000, cols: 88_000_000 })
+    lock.join(lead.member)
+    lock.join(other.member)
+    // The lead shows 89.70–91.70 Mb: cells 400–800 of a block from 87.7 Mb.
+    lock.report('lead', [400, 800], [400, 800])
+    // The other block begins 300 kb later, so the same place is 60 cells earlier.
+    expect(other.state.rows).toEqual([340, 740])
+    expect(other.state.cols).toEqual([340, 740])
+  })
+
+  it('is the lock as it was for blocks read whole, which begin their sequence', () => {
+    const lock = new ViewportLock()
+    const lead = panel('lead', 1_000, 400)
+    const other = panel('other', 5_000, 100)
+    lock.join(lead.member)
+    lock.join(other.member)
+    lock.report('lead', [10, 70], [10, 70])
+    expect(other.state.rows).toEqual([2, 14])
+  })
+
+  it('is seeded at the place the lead is looking', () => {
+    const lock = new ViewportLock()
+    const other = panel('other', 5_000, 800)
+    other.member.origin = () => ({ rows: 88_000_000, cols: 88_000_000 })
+    lock.join(other.member)
+    lock.seed([400, 800], [400, 800], 5_000, 'bp', { rows: 87_700_000, cols: 87_700_000 })
+    lock.catchUp('other')
+    expect(other.state.rows).toEqual([340, 740])
   })
 })
