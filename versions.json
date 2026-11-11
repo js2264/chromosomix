@@ -256,13 +256,6 @@
   ],
   "pulls": [
     {
-      "number": 170,
-      "commit": "d82a4da",
-      "title": "Open a map at the screen's resolution, sharpen it as you zoom, and give the resolution a row of its own",
-      "branch": "js/adaptive-resolution",
-      "date": "2026-11-11T17:50:53Z"
-    },
-    {
       "number": 168,
       "commit": "bf0eeff",
       "title": "Draw a metagenome's map as a circle or as two lines, a dev feature (§7.6)",
