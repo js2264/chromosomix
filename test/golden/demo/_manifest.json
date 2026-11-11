@@ -9,7 +9,7 @@
    "golden": "Mock_microbial_community_metacool.json",
    "md5": "6532ac85ad13ad6b9b6ca507320ebd5f",
    "path": "demo/metagenomics/mock-community/Mock_microbial_community.metacool",
-   "url": "https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/metagenomics/mock-community/Mock_microbial_community.metacool"
+   "url": null
   },
   {
    "bytes": 34620120,
@@ -17,7 +17,7 @@
    "golden": "Mock_microbial_community_mmetacool.json",
    "md5": "59d1a598f2bedf205909e978aeec8a3f",
    "path": "demo/metagenomics/mock-community/Mock_microbial_community.mmetacool",
-   "url": "https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/metagenomics/mock-community/Mock_microbial_community.mmetacool"
+   "url": null
   },
   {
    "bytes": 18985732,
@@ -33,7 +33,7 @@
    "golden": "Ecoli_mcool.json",
    "md5": "16b54d938829caa845f3a0b9f0db7017",
    "path": "demo/ecoli/Ecoli.mcool",
-   "url": "https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/ecoli/Ecoli.mcool"
+   "url": null
   }
  ]
 }

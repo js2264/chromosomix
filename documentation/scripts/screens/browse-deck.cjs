@@ -18,8 +18,8 @@ const { BASE, BUCKET, sleep, start } = require('./browse-lib.cjs')
 
 const MICROC = `${BUCKET}/yeast/Yeast_microC_G2M_1kb.cool`
 const COSTANTINO = `${BUCKET}/yeast/GSE151553_A364_merged.mcool::/resolutions/1600`
-const HIC_G1 = `${BUCKET}/meneu/HiC/HiC_Mpneumo_G1.mcool::/resolutions/2000`
-const HIC_G2M = `${BUCKET}/meneu/HiC/HiC_Mpneumo_G2M.mcool::/resolutions/2000`
+const HIC_G1 = `${BUCKET}/store/meneu2025/HiC/HiC_Mpneumo_G1.mcool::/resolutions/2000`
+const HIC_G2M = `${BUCKET}/store/meneu2025/HiC/HiC_Mpneumo_G2M.mcool::/resolutions/2000`
 const ATAC = `${BUCKET}/yeast/Yeast_ATAC.bw`
 const BOTTOM = { top: false, bottom: true, left: false, right: false }
 

@@ -2,8 +2,8 @@
 /**
  * Put the published demo maps where `test/unit/demo-maps.test.ts` reads them.
  *
- * The maps are the lab's own, on a public bucket that any runner can read with
- * no credential at all — which is the point: the reader suites built over
+ * The maps are the lab's own, in this repository's `demo/`, and one of them on a
+ * public bucket that any runner can read with no credential at all — which is the point: the reader suites built over
  * `make_fixtures.py`'s output need metacooler, whose repository is private, so a
  * runner without it compared the reader against nothing. These four files are
  * maps metacooler and cooler really wrote, and `scripts/make_demo_golden.py`
@@ -15,7 +15,9 @@
  * in this checkout it is copied rather than downloaded, so a contributor's
  * machine and the always-on CI job spend no network on it; `--from s3` refuses
  * that shortcut, which is what the golden job runs so that it proves the bucket,
- * not the repository, still serves what the goldens were made from.
+ * not the repository, still serves what the goldens were made from. A map whose
+ * golden has no `url` is not on the bucket (its copy there was deleted, and
+ * `publish-demo.sh` leaves its folder out): it comes from `demo/` either way.
  *
  * Usage: `node scripts/fetch-demo-maps.mjs [--from s3]` (`npm run fixtures:demo`).
  */
@@ -88,11 +90,12 @@ for (const map of manifest.maps) {
       continue
     }
     const local = join(REPO, map.path)
-    if (!fromS3 && (await matches(local, map))) {
+    if ((!fromS3 || map.url === null) && (await matches(local, map))) {
       await copyFile(local, target)
       console.log(`  copied      ${map.file}  (from ${map.path})`)
       continue
     }
+    if (map.url === null) throw new Error(`${map.path} is not on the bucket, and the copy here is not the one the golden was built from`)
     await download(map, target)
     console.log(`  downloaded  ${map.file}  (${map.url})`)
   } catch (error) {

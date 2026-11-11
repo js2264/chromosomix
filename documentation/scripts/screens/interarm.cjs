@@ -17,7 +17,7 @@
 const { BUCKET, serveFiles, sleep, start } = require('./analyses-2d-lib.cjs')
 
 const OUT = process.argv[2] ?? 'screens/analyses'
-const MAP = `${BUCKET}subtilis/Bsubtilis_WT%5Emapped_PY79%5EFKEBR7.mcool::/resolutions/10000`
+const MAP = `${BUCKET}store/chromosomix_paper/B_subtilis/Bsubtilis_WT.mcool::/resolutions/10000`
 const SEQUENCE = 'NC_022898.1'
 
 ;(async () => {

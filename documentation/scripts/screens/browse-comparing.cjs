@@ -16,8 +16,8 @@
 
 const { BUCKET, sleep, start } = require('./browse-lib.cjs')
 
-const G1 = `${BUCKET}/meneu/HiC/HiC_Mpneumo_G1.mcool`
-const G2M = `${BUCKET}/meneu/HiC/HiC_Mpneumo_G2M.mcool`
+const G1 = `${BUCKET}/store/meneu2025/HiC/HiC_Mpneumo_G1.mcool`
+const G2M = `${BUCKET}/store/meneu2025/HiC/HiC_Mpneumo_G2M.mcool`
 const MICROC = `${BUCKET}/yeast/Yeast_microC_G2M_1kb.cool`
 const at = (file, bin) => `${file}::/resolutions/${bin}`
 

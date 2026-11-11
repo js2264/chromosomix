@@ -19,7 +19,7 @@ const OUT = process.argv[2] ?? 'screens/analyses'
 ;(async () => {
   const s = await start(OUT, { height: 1800 })
   try {
-    await s.open(`#uri=${BUCKET}chicken/G2_4DNFIT479GDR.mcool::/resolutions/1000000&view=region&region=chr7`)
+    await s.open(`#uri=${BUCKET}store/gibcus2018/G2_4DNFIT479GDR.mcool::/resolutions/1000000&view=region&region=chr7`)
     await s.fold('Fold the General panel')
     await s.openTask('Cis and trans per sequence')
     console.log('price:', await s.price())

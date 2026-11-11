@@ -344,12 +344,9 @@ export function builtinStores(): StoreFront[] {
     {
       id: 'rsg',
       label: 'RSG lab data',
-      // The metagenome's figure is a dev feature (§29), so the blurb names it
-      // only while the switch is on: it is the drawer's header and the tile's
-      // tooltip, the first sentence about the store a reader sees.
-      blurb: devFeature('metacool')
-        ? 'Demos of the viewer and the figures of the lab’s papers, over yeast, human, chicken, mouse, bacterial and metagenome data, one click each.'
-        : 'Demos of the viewer and the figures of the lab’s papers, over yeast, human, chicken, mouse and bacterial data, one click each.',
+      // The drawer's header and the tile's tooltip: the first sentence about the
+      // store a reader sees.
+      blurb: 'Demos of the viewer and the figures of the lab’s papers, over yeast, human, chicken, mouse and bacterial data, one click each.',
       tagline: 'Demos, and the lab’s papers, one click each.',
       kind: 'gallery',
       mark: { text: 'RSG', colour: COLOURS.rsg, image: RSG_MARK_IMAGE },

@@ -55,7 +55,7 @@ import { blockSummary } from './mapSummary'
 import { icon, iconButton } from './icons'
 import { presentationOf, secondBlock, type CompareRead, type LowerRead } from './compare'
 import type { LowerPresentation } from './LowerReading'
-import { attachRefine, poolingRung, rungsOf, type BlockLadder } from './refine'
+import { attachRefine, poolingRung, previewRung, rungsOf, type BlockLadder } from './refine'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import { SearchBox, featureSuggestions, locusPlaceholder } from './SearchBox'
 import { stepper } from './Stepper'
@@ -1007,6 +1007,62 @@ export class RegionView {
   }
 
   /**
+   * Draw the window from a coarser rung while the asked block reads, where
+   * that is worth a read of its own (§7.2, {@link previewRung}): the block of a
+   * whole chromosome at the rung a file lands on is the slowest first picture a
+   * reader is given, and the same window a few rungs up is a fraction of its
+   * reads and of its cells.
+   *
+   * Only for one map read whole: not under a second file or a second reading
+   * below the diagonal, which would each want a stand-in of their own; not on a
+   * grid the reader chose (`binsPerCell`), which is a resolution they have
+   * committed to; and not across a circle's origin, whose read is planned
+   * against the rung it is asked at. A stand-in that fails is a picture that
+   * comes later, never an error: the asked read follows it either way.
+   *
+   * The stand-in takes gestures (`MatrixPanel.setPreview`), but the zoom ladder
+   * is armed only once the block is in ({@link load}), so nothing refines a
+   * picture that is about to be replaced.
+   *
+   * Returns the stand-in on screen, or `null`, for the caller to describe and
+   * to let go if the asked read fails in its turn.
+   */
+  private async preview(
+    rows: [number, number],
+    cols: [number, number] | undefined,
+    title: string,
+    wrap: [number, number] | undefined,
+  ): Promise<MatrixResult | null> {
+    if (
+      wrap !== undefined ||
+      this.props.compare !== undefined ||
+      this.props.lowerRead !== undefined ||
+      (this.props.binsPerCell ?? 1) > 1
+    ) {
+      return null
+    }
+    const rung = previewRung(rungsOf(this.props.rungs ?? []), rows, cols ?? rows, this.props.binsize)
+    if (rung === undefined) return null
+    try {
+      const coarse: MatrixResult = await this.props.client.request<'matrix'>({
+        kind: 'matrix',
+        rows,
+        ...(cols === undefined ? {} : { cols }),
+        rung,
+        preview: true,
+        balance: this.props.balance,
+        ...(this.props.value === undefined ? {} : { value: this.props.value }),
+      })
+      if (this.disposed) return null
+      this.panel.setResolution((coarse.binsize ?? this.props.binsize) * (coarse.binsPerCell ?? 1))
+      this.panel.setPreview(coarse, title)
+      return coarse
+    } catch {
+      return null
+    }
+  }
+
+  /**
    * Open `region` framed, inside a block {@link SEARCH_CONTEXT_BINS} bins wider
    * each side, clipped to its sequence.
    *
@@ -1113,10 +1169,22 @@ export class RegionView {
           balance: this.props.balance,
           ...(this.props.value === undefined ? {} : { value: this.props.value }),
         }
-        const result: MatrixResult = await this.props.client.request<'matrix'>(ask)
-        const second = await secondBlock(this.props.compare ?? this.props.lowerRead, (client) =>
-          client.request<'matrix'>(ask),
-        )
+        const standIn = await this.preview([lo, hi], undefined, regionLabel(this.props.region), wrap)
+        if (standIn !== null) {
+          this.title.textContent = regionLabel(this.props.region)
+          // The line under the box is about the picture on screen: the
+          // stand-in's grid, and the window the reader moves it to, until the
+          // block's own replaces it.
+          this.describeMatch(parsed, standIn)
+        }
+        if (this.disposed) return
+        // Both maps' blocks at once (§11, §12): two readers, two walks, and the
+        // second has never needed the first's answer. `secondBlock` settles
+        // either way, so a second file that cannot answer costs the first nothing.
+        const [result, second]: [MatrixResult, MatrixResult | undefined] = await Promise.all([
+          this.props.client.request<'matrix'>(ask),
+          secondBlock(this.props.compare ?? this.props.lowerRead, (client) => client.request<'matrix'>(ask)),
+        ])
         if (this.disposed) return
         this.title.textContent = regionLabel(this.props.region)
         this.describeMatch(parsed, result)
@@ -1125,6 +1193,10 @@ export class RegionView {
         // every coordinate on screen is the bin size times a cell offset, so the
         // panel is told before it is given the block.
         this.panel.setResolution((result.binsize ?? this.props.binsize) * (result.binsPerCell ?? 1))
+        // Asked before the block replaces the stand-in, which is what it is
+        // about: a reader who moved the preview has gone somewhere, and the
+        // block lands there (§7.2) rather than on the bookmark they left.
+        const moved = this.panel.previewMoved
         // The panel names its figure after this (`exportBaseName`), so it is
         // given the window as the heading prints it, 1-based, rather than the
         // state's 0-based string — a saved PDF was otherwise named one base off
@@ -1135,7 +1207,7 @@ export class RegionView {
         // reads the window that is on screen, so focusing first means the finer
         // block that arrives is a finer block of the bookmark rather than of the
         // fitted chromosome nobody is looking at any more.
-        this.applyFocus()
+        if (!moved) this.applyFocus()
         await this.armRefine(parsed, result, undefined, ceiling)
         return
       }
@@ -1154,10 +1226,17 @@ export class RegionView {
         balance: this.props.balance,
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
       }
-      const result: MatrixResult = await this.props.client.request<'matrix'>(pair)
-      const second = await secondBlock(this.props.compare ?? this.props.lowerRead, (client) =>
-        client.request<'matrix'>(pair),
-      )
+      const standIn = await this.preview([lo, hi], [lo2, hi2], pairLabel(this.props.region, this.props.region2), undefined)
+      if (standIn !== null) {
+        this.title.textContent = pairLabel(this.props.region, this.props.region2)
+        this.describePair(standIn)
+      }
+      if (this.disposed) return
+      // Both maps' blocks at once, as above.
+      const [result, second]: [MatrixResult, MatrixResult | undefined] = await Promise.all([
+        this.props.client.request<'matrix'>(pair),
+        secondBlock(this.props.compare ?? this.props.lowerRead, (client) => client.request<'matrix'>(pair)),
+      ])
       if (this.disposed) return
       this.title.textContent =
         pairLabel(this.props.region, this.props.region2)
@@ -1176,6 +1255,9 @@ export class RegionView {
       // view's place would replace it with an error screen about a worker
       // nobody is waiting for.
       if (this.disposed) return
+      // A stand-in waiting for this read is not waiting any more: what is on
+      // screen is the picture there is, and it takes gestures again.
+      this.panel.endPreview()
       // A bad range is a normal, recoverable typing mistake: keep the view and
       // its input, and report the reader's own wording inline. Anything else is
       // a real failure and belongs on the error screen.

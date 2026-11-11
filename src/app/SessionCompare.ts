@@ -32,6 +32,7 @@ import { rungsOf } from '../ui/refine'
 import { ReaderClient } from '../worker/client'
 import type { OpenResult, SourceSpec } from '../worker/protocol'
 import { contigPairs } from './contigTable'
+import { planned, windowOf } from './readPlan'
 import { inferSource, resolveSource } from './resolve'
 import type { Session } from './Session'
 
@@ -102,6 +103,12 @@ export class SessionCompare {
   /** The URI a compare open is in flight for, so a re-render does not restart it. */
   private opening: string | null = null
   /**
+   * The second file's open, started beside the first file's (§11, §12) and
+   * waiting for {@link open} to take it over once the first has landed.
+   */
+  private early: { uri: string; client: ReaderClient; opened: Promise<OpenResult>; window: string | undefined } | null =
+    null
+  /**
    * The second file, waiting out a change of resolution — see {@link CompareCarry}.
    *
    * Set the moment an open is known to be a re-open of the file already here,
@@ -132,9 +139,16 @@ export class SessionCompare {
     if (file === null || this.opening === uri) return
     this.opening = uri
     this.session.compareCard?.set({ kind: 'loading', label: fileLabel(uri) })
-    const client = new ReaderClient()
+    // The open {@link prefetch} started for this file, where it did; any other
+    // it started is for a file no longer wanted.
+    const early = this.early?.uri === uri ? this.early : null
+    if (early === null) this.early?.client.terminate()
+    this.early = null
+    const window = early?.window ?? windowOf(this.session.store.state, uri)
+    const client = early?.client ?? new ReaderClient()
     try {
-      const info = await client.request<'open'>({ kind: 'open', uri, source })
+      const info = await (early?.opened ??
+        client.request<'open'>({ kind: 'open', uri, source: planned(source, uri, window) }))
       const contigs = await client.request<'contigs'>({ kind: 'contigs' })
       // The primary file may have been replaced while this one was opening — a
       // resolution picked from the breadcrumb is enough. The gate is about *two*
@@ -178,6 +192,17 @@ export class SessionCompare {
       // as it was; what changes is that this browser can put the comparison
       // back on a reload, the way it now puts the first file back.
       else remember(this.session.memoryKey(this.session.store.state?.uri ?? uri), 'compare:local', uri)
+      // The first map drawn first: its view went on screen with it, and the
+      // remount that brings this one in waits for that view's first block — a
+      // second map opened beside the first is ready about when the first is,
+      // and remounting then threw the first one's picture away to draw both
+      // together, later (§11).
+      await this.session.shownPicture()
+      if (this.session.destroyed || this.session.file !== file || this.second?.client !== client) return
+      // What this open read, and the comparison's first view of it, kept for
+      // the next open as the first file's is (§6.1). Asked for before the
+      // remount, so the view it waits for is the one that draws this file.
+      if (source.kind === 'remote') this.session.keepReadPlan(client, [uri], window)
       this.session.remount()
     } catch (err) {
       client.terminate()
@@ -344,6 +369,45 @@ export class SessionCompare {
     await this.open(uri, source)
   }
 
+  /**
+   * Start opening the comparison's second file now, beside the first file's
+   * open, rather than once that has finished (§11, §12): the comparison is one
+   * picture, and the second file's open is a walk of its own — with a read plan
+   * of its own (§6.1) — that has nothing to wait for. {@link open} takes it
+   * over; the gate is asked there, once both are open, as it always was.
+   */
+  prefetch(uri: string, window: string | undefined): void {
+    if (this.second !== null || this.carried !== null || this.opening !== null) return
+    if (this.early !== null) {
+      if (this.early.uri === uri) return
+      this.early.client.terminate()
+      this.early = null
+    }
+    const source = inferSource(uri)
+    if (source === null || source.kind !== 'remote') return
+    const client = new ReaderClient()
+    const opened = client.request<'open'>({ kind: 'open', uri, source: planned(source, uri, window) })
+    // Settled by {@link open}, which awaits it; a prefetch nothing takes over is
+    // put down with its worker and has no one to tell.
+    opened.catch(() => undefined)
+    this.early = { uri, client, opened, window }
+  }
+
+  /**
+   * Put down the second file's early open, where nothing is going to take it
+   * over: the state stopped naming it, or the session turned to something else.
+   */
+  cancelEarly(): void {
+    this.early?.client.terminate()
+    this.early = null
+  }
+
+  /**
+   * Put the comparison down — with the file it belonged to, or at the reader's
+   * word. Not an early open ({@link prefetch}): that one is the comparison of
+   * the file being opened *now*, started before this file's open landed and
+   * this drop with it, and it is what {@link open} is about to take over.
+   */
   drop(): void {
     const local = this.second !== null && this.second.source.kind === 'local'
     this.second?.client.terminate()
@@ -475,6 +539,7 @@ export class SessionCompare {
    */
   reconcile(state: ViewState): boolean {
     const wanted = state.uri2 ?? null
+    if (this.early !== null && this.early.uri !== wanted) this.cancelEarly()
     // Only a *remote* second file is in the state, because only a remote one
     // can be re-opened from a link (§11) — so a local comparison is invisible
     // here, and reading its absence as "put it down" is exactly what happened:
@@ -536,6 +601,8 @@ export class SessionCompare {
   release(): void {
     this.second?.client.terminate()
     this.second = null
+    this.early?.client.terminate()
+    this.early = null
   }
 }
 

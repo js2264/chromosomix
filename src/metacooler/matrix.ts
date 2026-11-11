@@ -812,14 +812,56 @@ function applyWeights(
     cols[0] === rows[0] && cols[1] === rows[1]
       ? rowWeights
       : handle.readNumeric(path, cols[0], cols[1])
+  weighBlock(values, rowWeights, colWeights)
+}
 
-  const nCols = cols[1] - cols[0]
-  for (let r = 0; r < rows[1] - rows[0]; r++) {
+/**
+ * Multiply a block, in place, by its row and column weights: every cell
+ * `v · w_r · w_c`, the expression the balancing has always been.
+ *
+ * A cell is left as it is only where that expression gives it back unchanged:
+ * a zero — of either sign — under a row and a column weight that are both finite
+ * and not negative, which is a zero again, the same zero. At a fine bin size
+ * that is most of a block — nine cells in ten of mouse chr1 at 20 kb — and
+ * reading, multiplying and writing them back was a third of the read. A row
+ * whose weight is anything else (NaN, the unbalanced bin; infinite; negative)
+ * is multiplied whole, and so is every column, cell by cell, so an unbalanced
+ * bin's row and column are NaN through and through, as they always were.
+ */
+export function weighBlock(
+  values: Float32Array,
+  rowWeights: ArrayLike<number>,
+  colWeights: ArrayLike<number>,
+): void {
+  const nRows = rowWeights.length
+  const nCols = colWeights.length
+  const plain = (w: number): boolean => w >= 0 && w < Number.POSITIVE_INFINITY
+  // The columns whose zeros the weight can change, and the runs between them.
+  const odd: number[] = []
+  const runs: number[] = []
+  let from = 0
+  for (let c = 0; c < nCols; c++) {
+    if (plain(colWeights[c])) continue
+    odd.push(c)
+    if (c > from) runs.push(from, c)
+    from = c + 1
+  }
+  if (from < nCols) runs.push(from, nCols)
+  for (let r = 0; r < nRows; r++) {
     const wr = rowWeights[r]
     const base = r * nCols
-    for (let c = 0; c < nCols; c++) {
-      values[base + c] = values[base + c] * wr * colWeights[c]
+    if (!plain(wr)) {
+      for (let c = 0; c < nCols; c++) values[base + c] = values[base + c] * wr * colWeights[c]
+      continue
     }
+    for (let k = 0; k < runs.length; k += 2) {
+      const end = base + runs[k + 1]
+      for (let i = base + runs[k]; i < end; i++) {
+        const v = values[i]
+        if (v !== 0) values[i] = v * wr * colWeights[i - base]
+      }
+    }
+    for (const c of odd) values[base + c] = values[base + c] * wr * colWeights[c]
   }
 }
 

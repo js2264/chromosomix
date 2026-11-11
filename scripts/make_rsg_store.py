@@ -13,8 +13,8 @@ The store is a folder on the lab's bucket, `s3://rsglab-data/demo/store/`, one d
 dataset, and every workspace in it names its files relatively, as every published workspace does
 (`ui/examples.ts`). `demo/store/MANIFEST.tsv` is the list of what is in that folder and where each
 file comes from — a copy inside the bucket, a copy from 4DN's open-data bucket, a file of this
-repository, or a file `derive` wrote — and `scripts/publish-store.sh` is what makes the bucket match
-it. The test that checks the store (`test/unit/demo-examples.test.ts`) reads the same file: a name a
+repository, a file `derive` wrote, or the store's own copy where the file it was copied from is gone
+(`kept`) — and `scripts/publish-store.sh` is what makes the bucket match it. The test that checks the store (`test/unit/demo-examples.test.ts`) reads the same file: a name a
 workspace uses must be in it.
 
 Nothing here invents data. `derive` reshapes six files, calls loops on one map and compartments on
@@ -124,6 +124,49 @@ FIG1A_MARKS = [
 FIG1A_4C = f"{GM}_5000.4c-chr14-89150001-89180000.bw"
 #: CTCF's core motif in IUPAC, read with one mismatch: about the density of the bound sites.
 CTCF_MOTIF, CTCF_MOTIFS = "RCCASYAGRKGGCRS", "hg38.CTCF-motifs.bed"
+# K562 at MYC, the landing page's *Human Hi-C data* example (`ui/exampleSessions.ts`): 4DN's in situ
+# Hi-C of Rao et al. 2014, its replicates merged (4DNESI7DEJTM), 4DN's tracks of it, ENCODE's of the
+# same cells, IGV's hg38 genes and bands and 1000 Genomes' GRCh38 — byte for byte, so the read plan
+# the example ships with holds for the copy. Four buckets in Virginia and Oregon, copied to one in
+# Paris: from Europe a round trip to them is 85 to 150 ms, and to it about 10.
+#: 4DN's files: (uuid, name, what).
+K562_FOURDN = [
+    ("230ad652-0232-47f2-97ef-296c7a040bd9", "4DNFI18UHVRO.mcool",
+     "In situ Hi-C, K562, its replicates merged (Rao et al. 2014; 4DN 4DNESI7DEJTM)"),
+    ("e6af9802-c6b9-4db7-bb1f-7a8070c931a0", "4DNFIXU7QLG6.bw", "Insulation score of the map (4DN)"),
+    ("76dc2907-2bdc-4e78-87aa-dc0fcd0ab993", "4DNFI4EFYN3Q.bed.gz", "Boundaries called on the map (4DN)"),
+    ("1643fcdf-1258-4684-a835-89eb19ad5654", "4DNFIWUAO2QI.bw", "Compartments (E1) of the map (4DN)"),
+]
+#: ENCODE's files of K562, GRCh38: (key under encode-public, what). The signal is fold change over
+#: control, the DNase's read-depth normalised.
+K562_ENCODE = [
+    ("2022/10/10/f84d155e-5cce-4ad6-a8cb-990de539a929/ENCFF955KEB.bed.gz", "Subcompartments (ENCODE)"),
+    ("2020/08/16/fd75d5ae-d6d3-459d-a2ef-9b7e14483957/ENCFF118PBQ.bedpe.gz",
+     "CTCF ChIA-PET loops, Ruan lab, JAX (ENCODE ENCSR597AKG)"),
+    ("2020/09/26/85161a5a-d6b5-49d2-bc0a-db0b217ff0d5/ENCFF979PWH.bigWig",
+     "CTCF ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKO)"),
+    ("2020/12/12/5dd3b2bc-d063-45a9-a1a2-d72d954abc8d/ENCFF320RTQ.bigWig",
+     "RAD21 ChIP-seq, Weissman lab, Yale (ENCODE ENCSR000FAD)"),
+    ("2020/09/30/127536f7-16c3-4f65-b621-134645ea90d3/ENCFF660WUG.bigWig",
+     "H3K4me3 ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKU)"),
+    ("2022/06/14/a3a5887a-bfe4-4c51-856e-986d8d40cfe2/ENCFF381NDD.bigWig",
+     "H3K27ac ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKP)"),
+    ("2020/12/27/1d26d5d9-f56e-48d8-9ea8-eb31fae4f2cd/ENCFF937ZPS.bigWig",
+     "Pol II ChIP-seq, Snyder lab, Stanford (ENCODE ENCSR000EHL)"),
+    ("2022/06/14/9727529c-4692-4a48-b004-440358d2a5a8/ENCFF317VHO.bigWig",
+     "H3K36me3 ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKR)"),
+    ("2022/06/16/c9e15712-7cb9-453e-8b49-80e70709b234/ENCFF242ENK.bigWig",
+     "H3K27me3 ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000AKQ)"),
+    ("2020/10/29/c38d5ac9-2cb8-4d12-b0d9-843fadfafe92/ENCFF601JGK.bigWig",
+     "H3K9me3 ChIP-seq, Bernstein lab, Broad (ENCODE ENCSR000APE)"),
+    ("2021/03/16/b790ea43-824d-4934-840b-cb3612634cfd/ENCFF102ARJ.bigWig",
+     "ATAC-seq, Snyder lab, Stanford (ENCODE ENCSR868FGK)"),
+    ("2025/08/14/a5f81aa9-187f-4c0b-8018-fcf749307768/ENCFF957ZCO.bigWig",
+     "DNase-seq, Stamatoyannopoulos lab, UW (ENCODE ENCSR000EOT)"),
+]
+#: 1000 Genomes' GRCh38, the FASTA of IGV's `hg38_1kg`, read by range through the index beside it.
+K562_FASTA = "technical/reference/GRCh38_reference_genome/GRCh38_full_analysis_set_plus_decoy_hla.fa"
+
 HG38_AUTOSOMES_X = ",".join([*(f"chr{n}" for n in range(1, 23)), "chrX"])
 HG38_PRIMARY = HG38_AUTOSOMES_X + ",chrY"
 
@@ -316,9 +359,11 @@ def write_e1_arms(work: Path) -> str:
         raise SystemExit("npm run build:cli first: E1 is computed with the chromosomix command")
     out = STORE / PAPER / "P_aeruginosa"
     out.mkdir(parents=True, exist_ok=True)
-    fasta = fetch(BUCKET + PAK + "PAO1_v3.fa", work / "PAO1_v3.fa")
+    # The store's own copies: the lab's folder they were copied from (demo/pak/) is gone.
+    there = f"{BUCKET}demo/store/{PAPER}P_aeruginosa/"
+    fasta = fetch(there + "PAO1_v3.fa", work / "PAO1_v3.fa")
     for sample, _ in PAO1_STRAINS:
-        mcool = fetch(BUCKET + PAK + f"{sample}.mcool", work / f"{sample}.mcool")
+        mcool = fetch(there + f"{sample}.mcool", work / f"{sample}.mcool")
         dest = work / "e1-arms" / sample
         shutil.rmtree(dest, ignore_errors=True)
         subprocess.run(["node", str(cli), "compartments", f"{mcool}::/resolutions/{BACTERIA_RES}",
@@ -499,6 +544,22 @@ def encode(key: str) -> str:
     return f"s3://encode-public/{key}"
 
 
+def igv(key: str) -> str:
+    """A copy from IGV's genomes bucket."""
+    return f"s3://igv.org.genomes/{key}"
+
+
+def thousand_genomes(key: str) -> str:
+    """A copy from the 1000 Genomes open-data bucket."""
+    return f"s3://1000genomes/{key}"
+
+
+def kept(path: str) -> str:
+    """The store's own copy, `demo/store/<path>`: the file it was copied from is gone from the bucket,
+    so this copy is the one there is. The publish step finds it already there, and fails if it is not."""
+    return s3(f"demo/store/{path}")
+
+
 def repo(path: str) -> str:
     """A file of this repository."""
     return f"repo:{path}"
@@ -510,15 +571,12 @@ def work(name: str) -> str:
 
 
 MENEU = "public-data/2025_Meneu_et_al/"
-CHICKEN = "demo/chicken/"
 FIG1 = "manuscript/figure1/results/"
-CNECATOR = "dbz/C_necator_N1_VJ_MM260/"
-SUBTILIS = "demo/subtilis/"
-PAK = "demo/pak/"
 #: The paper's folder under demo/store/.
 PAPER = "chromosomix_paper/"
 
-#: B. subtilis PY79, a map a condition: (the store's name, the bucket's, the condition as Fig. S3b says it).
+#: B. subtilis PY79, a map a condition: (the store's name, the lab's sample as the map was first named,
+#: the condition as Fig. S3b says it).
 SUBTILIS_COURSE = [
     ("WT", "WT^mapped_PY79^FKEBR7", "WT"),
     ("dparAB", "dparAB^mapped_PY79^NT9IOH", "ΔparAB"),
@@ -573,8 +631,9 @@ FILES: list[tuple[str, str, str]] = [
         ("Geuvadis_chrX_YRI_ERR204916.SJ.out.tab", "STAR junctions, YRI ERR204916"),
         ("Geuvadis_chrX_GBR_ERR188428.junctions.bed", "Junctions as regtools writes them"),
     ]],
-    # -- Gibcus et al. 2018: DT40 through mitosis, 4DN's files as the lab's bucket holds them
-    *[(f"gibcus2018/{name}", s3(CHICKEN + name), what) for name, what in [
+    # -- Gibcus et al. 2018: DT40 through mitosis, 4DN's files as the lab copied them (the copies they came
+    #    from, demo/chicken/, are gone, so these are the ones kept)
+    *[(f"gibcus2018/{name}", kept(f"gibcus2018/{name}"), what) for name, what in [
         ("G2_4DNFIT479GDR.mcool", "Hi-C, G2 block (4DNES9LEZXN7)"),
         ("5m_4DNFINSJ2GYV.mcool", "Hi-C, prophase 5 min (4DNESNWWIFZU)"),
         ("10m_4DNFIYOEGHHV.mcool", "Hi-C, prophase 10 min (4DNESGDXKM2I)"),
@@ -670,28 +729,42 @@ FILES: list[tuple[str, str, str]] = [
          "pastis-NB model of chr3:34.55–34.80 Mb, Sox2 and its control region, at 2 kb (Fig. 1c)"),
     ]],
     #    C. necator N-1 (Fig. S3a): the lab's map, its reference, and its origin and GC skew as the app
-    #    called them — copied from where the DNA Bacterial Zoo keeps them, which this card does not name.
-    *[(PAPER + f"C_necator/{name}", s3(CNECATOR + source), what) for name, source, what in [
-        ("C_necator_N1_VJ_MM260.mcool", "C_necator_N1_VJ_MM260.mcool", "Hi-C, C. necator N-1 (MM260)"),
-        ("C_necator_N1_VJ.fa", "C_necator_N1_VJ.fa", "C. necator N-1: two chromosomes and two plasmids"),
-        ("C_necator_N1_VJ_MM260_4000.oriter-loci.bed", "oriter/C_necator_N1_VJ_MM260_4000.oriter.oriter-loci.bed",
-         "Origins and termini, called by the app"),
-        ("C_necator_N1_VJ_MM260_4000.gc-skew-cumulative.bw",
-         "composition/C_necator_N1_VJ_MM260_4000.composition.composition-cumulative.bw",
-         "Cumulative GC skew, 4 kb"),
+    #    called them. Copied from the DNA Bacterial Zoo's folder, which is gone: these are the ones kept.
+    *[(PAPER + f"C_necator/{name}", kept(PAPER + f"C_necator/{name}"), what) for name, what in [
+        ("C_necator_N1_VJ_MM260.mcool", "Hi-C, C. necator N-1 (MM260)"),
+        ("C_necator_N1_VJ.fa", "C. necator N-1: two chromosomes and two plasmids"),
+        ("C_necator_N1_VJ_MM260_4000.oriter-loci.bed", "Origins and termini, called by the app"),
+        ("C_necator_N1_VJ_MM260_4000.gc-skew-cumulative.bw", "Cumulative GC skew, 4 kb"),
     ]],
-    #    B. subtilis PY79 (Fig. S3b): wild type, ΔparAB, and the time course after ParB is induced.
-    *[(PAPER + f"B_subtilis/Bsubtilis_{name}.mcool", s3(f"{SUBTILIS}Bsubtilis_{source}.mcool"), f"Hi-C, {label}")
-      for name, source, label in SUBTILIS_COURSE],
-    (PAPER + "B_subtilis/PY79.fa", s3(SUBTILIS + "PY79.fa"), "B. subtilis PY79"),
-    (PAPER + "B_subtilis/PY79.gff3", s3(SUBTILIS + "PY79.gff3"), "Genes, B. subtilis PY79"),
-    #    P. aeruginosa (Fig. S3c): wild type and two condensin mutants, and E1 along both arms of each.
-    *[(PAPER + f"P_aeruginosa/{sample}.mcool", s3(f"{PAK}{sample}.mcool"), f"Hi-C, {label} ({sample.split('_')[-1]})")
-      for sample, label in PAO1_STRAINS],
-    (PAPER + "P_aeruginosa/PAO1_v3.fa", s3(PAK + "PAO1_v3.fa"), "P. aeruginosa, the maps' reference"),
-    (PAPER + f"P_aeruginosa/{PAK_RNA}", s3(PAK + PAK_RNA), "RNA-seq, PAK at T0, counts per million (GEO GSE76513)"),
+    #    B. subtilis PY79 (Fig. S3b): wild type, ΔparAB, and the time course after ParB is induced. The
+    #    lab's copies they came from (demo/subtilis/) are gone: these are the ones kept.
+    *[(PAPER + f"B_subtilis/Bsubtilis_{name}.mcool", kept(PAPER + f"B_subtilis/Bsubtilis_{name}.mcool"), f"Hi-C, {label}")
+      for name, _, label in SUBTILIS_COURSE],
+    (PAPER + "B_subtilis/PY79.fa", kept(PAPER + "B_subtilis/PY79.fa"), "B. subtilis PY79"),
+    (PAPER + "B_subtilis/PY79.gff3", kept(PAPER + "B_subtilis/PY79.gff3"), "Genes, B. subtilis PY79"),
+    #    P. aeruginosa (Fig. S3c): wild type and two condensin mutants, and E1 along both arms of each. The
+    #    lab's copies they came from (demo/pak/) are gone: these are the ones kept.
+    *[(PAPER + f"P_aeruginosa/{sample}.mcool", kept(PAPER + f"P_aeruginosa/{sample}.mcool"),
+       f"Hi-C, {label} ({sample.split('_')[-1]})") for sample, label in PAO1_STRAINS],
+    (PAPER + "P_aeruginosa/PAO1_v3.fa", kept(PAPER + "P_aeruginosa/PAO1_v3.fa"), "P. aeruginosa, the maps' reference"),
+    (PAPER + f"P_aeruginosa/{PAK_RNA}", kept(PAPER + f"P_aeruginosa/{PAK_RNA}"),
+     "RNA-seq, PAK at T0, counts per million (GEO GSE76513)"),
     *[(PAPER + f"P_aeruginosa/{sample}_8000.e1-arms.bw", repo(f"demo/store/{PAPER}P_aeruginosa/{sample}_8000.e1-arms.bw"),
        f"E1 along both arms at 8 kb, {label}, computed by the app") for sample, label in PAO1_STRAINS],
+    # -- K562 at MYC: every file the landing page's Human Hi-C data example reads, from the four buckets it
+    #    read them from, under their own names
+    *[(f"k562/{name}", fourdn(uuid, name), what) for uuid, name, what in K562_FOURDN],
+    *[(f"k562/{key.rsplit('/', 1)[-1]}", encode(key), what) for key, what in K562_ENCODE],
+    ("k562/ncbiRefSeq.txt.gz", igv("hg38/ncbiRefSeq.txt.gz"), "RefSeq genes, hg38 (IGV's copy of UCSC's ncbiRefSeq)"),
+    ("k562/ncbiRefSeq.txt.gz.tbi", igv("hg38/ncbiRefSeq.txt.gz.tbi"), "…and its tabix index"),
+    ("k562/cytoBandIdeo.txt.gz", igv("hg38/annotations/cytoBandIdeo.txt.gz"), "Cytogenetic bands, hg38 (IGV)"),
+    (f"k562/{K562_FASTA.rsplit('/', 1)[-1]}", thousand_genomes(K562_FASTA),
+     "GRCh38 with decoys and HLA, the 1000 Genomes analysis set"),
+    (f"k562/{K562_FASTA.rsplit('/', 1)[-1]}.fai", thousand_genomes(f"{K562_FASTA}.fai"), "…and its index"),
+    # -- E. coli K-12 MG1655: the sequence and genes the documentation's screenshots of Composition and
+    #    Origin and terminus open beside demo/ecoli/Ecoli.mcool. No card names them; kept only here.
+    ("ecoli/ecoli_k12_mg1655.fa", kept("ecoli/ecoli_k12_mg1655.fa"), "E. coli K-12 MG1655 (NC_000913.3)"),
+    ("ecoli/ecoli_k12_mg1655.gff", kept("ecoli/ecoli_k12_mg1655.gff"), "Genes, E. coli K-12 MG1655 (NCBI RefSeq, ASM584v2)"),
 ]
 
 
@@ -1324,6 +1397,11 @@ def stage(out: Path, local: str, work_dir: Path | None) -> None:
             where[dest] = "https://4dn-open-data-public.s3.amazonaws.com/" + source[len("s3://4dn-open-data-public/"):]
         elif source.startswith("s3://encode-public/"):
             where[dest] = ENCODE + source[len("s3://encode-public/"):]
+        elif source.startswith("s3://igv.org.genomes/"):
+            # Path-style: a bucket with dots in its name has no certificate as a host.
+            where[dest] = "https://s3.amazonaws.com/igv.org.genomes/" + source[len("s3://igv.org.genomes/"):]
+        elif source.startswith("s3://1000genomes/"):
+            where[dest] = "https://1000genomes.s3.amazonaws.com/" + source[len("s3://1000genomes/"):]
         elif source.startswith("repo:"):
             where[dest] = local.rstrip("/") + "/" + source[len("repo:"):]
         elif source.startswith("work:"):

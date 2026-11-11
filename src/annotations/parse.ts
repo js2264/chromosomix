@@ -14,6 +14,7 @@
  * against BED12.
  */
 
+import { yieldToEventLoop } from '../async'
 import { TEXT_INFLATE_MAX, inflateCapped, type InflationPolicy } from '../sources/untrusted'
 import { FeatureBuilder, PairBuilder } from './featureset'
 import { DETAIL_SEP, type FeatureSet, type PairSet } from './types'
@@ -111,11 +112,29 @@ export async function decodeAnnotationBytes(
  * intermediate array for a 41,566-line file is 41,566 strings the parser reads
  * once and then drops.
  */
-export function forEachRow(text: string, visit: (columns: string[], line: number) => void): void {
-  let index = 0
-  let line = 0
+export function forEachRow(text: string, visit: RowVisitor): void {
+  walkRows(text, { index: 0, line: 0 }, visit, Number.POSITIVE_INFINITY)
+}
+
+/** What a row-by-row parse is handed: a line's columns and its 1-based number. */
+export type RowVisitor = (columns: string[], line: number) => void
+
+/** Where a walk through a file's lines has got to. */
+interface RowCursor {
+  index: number
+  line: number
+}
+
+/**
+ * {@link forEachRow}'s walk, from `cursor` until the text ends or the clock
+ * passes `deadline` — looked at every 256 lines, so the clock costs nothing.
+ */
+function walkRows(text: string, cursor: RowCursor, visit: RowVisitor, deadline: number): void {
+  let { index, line } = cursor
   const length = text.length
+  const timed = deadline !== Number.POSITIVE_INFINITY
   while (index < length) {
+    if (timed && (line & 0xff) === 0 && line > cursor.line && performance.now() > deadline) break
     let end = text.indexOf('\n', index)
     if (end < 0) end = length
     let stop = end
@@ -127,6 +146,58 @@ export function forEachRow(text: string, visit: (columns: string[], line: number
     if (raw.startsWith('track ') || raw.startsWith('browser ')) continue
     visit(raw.includes('\t') ? raw.split('\t') : raw.trim().split(/\s+/), line)
   }
+  cursor.index = index
+  cursor.line = line
+}
+
+/** How long a cooperative walk keeps the thread before handing it back. */
+const ROW_SLICE_MS = 8
+
+/**
+ * {@link forEachRow}, handing the thread back every few milliseconds (§8.6).
+ *
+ * The annotations worker is one thread for every track of a tab: it opens
+ * them, and it answers each lane's request for the window it draws. A whole
+ * file parsed in one stretch held all of that — the landing page's *Human Hi-C
+ * data* parses IGV's RefSeq genes, 190,000 transcripts in 6.9 MB of gzip, for
+ * two seconds, and its ten bigWig lanes, open and asking since well before,
+ * were answered only when it had finished. Walked in slices with
+ * {@link yieldToEventLoop} between them, a lane's request is answered between
+ * two slices, and the parse that asked for nothing is the only one that waits
+ * for it. Same rows, same numbers, same order: only the thread is shared.
+ */
+export async function forEachRowCooperatively(
+  text: string,
+  visit: RowVisitor,
+  sliceMs = ROW_SLICE_MS,
+): Promise<void> {
+  const cursor: RowCursor = { index: 0, line: 0 }
+  for (;;) {
+    walkRows(text, cursor, visit, performance.now() + sliceMs)
+    if (cursor.index >= text.length) return
+    await yieldToEventLoop()
+  }
+}
+
+/**
+ * A parse fed one row at a time — what {@link forEachRow} and
+ * {@link forEachRowCooperatively} drive — and what it makes of them at the end.
+ */
+export interface RowParser<T> {
+  row: RowVisitor
+  done(): T
+}
+
+/** A whole text through `parser`, in one stretch. */
+export function parseWith<T>(text: string, parser: RowParser<T>): T {
+  forEachRow(text, parser.row)
+  return parser.done()
+}
+
+/** A whole text through `parser`, giving the thread back as it goes; see {@link forEachRowCooperatively}. */
+export async function parseCooperatively<T>(text: string, parser: RowParser<T>): Promise<T> {
+  await forEachRowCooperatively(text, parser.row)
+  return parser.done()
 }
 
 /** The first data row of a file, for the sniffer. `null` when there is none. */
@@ -138,8 +209,23 @@ function firstRow(text: string): string[] | null {
   return found
 }
 
+/**
+ * `/^[+-]?\d+$/`, a character at a time: a sign at most, then ASCII digits and
+ * nothing else. Asked of every coordinate of every row, millions of times on a
+ * gene table, where the regular expression was a fifth of the parse.
+ */
 export function isInteger(value: string | undefined): boolean {
-  return value !== undefined && /^[+-]?\d+$/.test(value)
+  if (value === undefined) return false
+  const length = value.length
+  let at = 0
+  const first = value.charCodeAt(0)
+  if (first === 43 || first === 45) at = 1 // '+' '-'
+  if (at >= length) return false
+  for (; at < length; at++) {
+    const code = value.charCodeAt(at)
+    if (code < 48 || code > 57) return false
+  }
+  return true
 }
 
 function isNumber(value: string | undefined): boolean {
@@ -238,13 +324,18 @@ function columnOf(header: string[], candidates: string[]): number {
  * the tooltip; everything else takes column 5.
  */
 export function parseBed(text: string, fileName = ''): FeatureSet {
+  return parseWith(text, bedParser(text, fileName))
+}
+
+/** {@link parseBed}, a row at a time; see {@link RowParser}. */
+export function bedParser(text: string, fileName = ''): RowParser<FeatureSet> {
   const builder = new FeatureBuilder()
   const header = readHeader(text)
   const peak = peakFlavour(text, fileName)
   let skipped = 0
   let first = true
 
-  forEachRow(text, (columns) => {
+  const row: RowVisitor = (columns) => {
     if (first && header !== null) {
       first = false
       return
@@ -274,15 +365,18 @@ export function parseBed(text: string, fileName = ''): FeatureSet {
       ...(exons === null ? {} : { exons }),
       ...(cds === null ? {} : { cds }),
     })
-  })
-
-  if (builder.length === 0 && skipped > 0) {
-    throw new Error(
-      `No usable rows: all ${skipped} lines failed the "contig, start, end" test that every ` +
-        'BED-like format begins with.',
-    )
   }
-  return builder.finish()
+
+  const done = (): FeatureSet => {
+    if (builder.length === 0 && skipped > 0) {
+      throw new Error(
+        `No usable rows: all ${skipped} lines failed the "contig, start, end" test that every ` +
+          'BED-like format begins with.',
+      )
+    }
+    return builder.finish()
+  }
+  return { row, done }
 }
 
 /** Which peak format a BED-like file is. `null` alongside it means a plain BED. */
@@ -476,6 +570,11 @@ interface Draft {
  * `id`, where the search box and the feature card both find it.
  */
 export function parseGtf(text: string): FeatureSet {
+  return parseWith(text, gtfParser(text))
+}
+
+/** {@link parseGtf}, a row at a time; see {@link RowParser}. */
+export function gtfParser(text: string): RowParser<FeatureSet> {
   const drafts = new Map<string, Draft>()
   const geneNames = new Map<string, string>()
   const geneBiotypes = new Map<string, string>()
@@ -485,7 +584,7 @@ export function parseGtf(text: string): FeatureSet {
   const singles: Draft[] = []
   const gff3 = looksLikeGff3(text)
 
-  forEachRow(text, (columns) => {
+  const row: RowVisitor = (columns) => {
     if (columns.length < 8 || !isInteger(columns[3]) || !isInteger(columns[4])) return
     const contig = columns[0]
     const source = columns[1] ?? ''
@@ -588,68 +687,71 @@ export function parseGtf(text: string): FeatureSet {
     if (feature === 'cds' || feature === 'stop_codon' || UTR_ROW.test(feature)) {
       draft.pieces.push(start, end)
     }
-  })
-
-  const assembled = [...drafts.values(), ...singles]
-  // Nothing with sub-structure: a bare gene list, or an annotation of features
-  // this parser has no hierarchy for. Draw what is there.
-  const rows = assembled.length > 0 ? assembled : genes
-  if (rows.length === 0) {
-    throw new Error(
-      'No features found. Every row either described the sequence itself rather than ' +
-        'something on it, or named a parent that the file never defines — on a GTF, that ' +
-        'means no row carried a `transcript_id`.',
-    )
   }
 
-  const builder = new FeatureBuilder()
-  for (const draft of rows) {
-    // A transcript the file spells as CDS and UTR rows alone has its exons in
-    // them: merged, they are the blocks and the gaps between them its introns.
-    // Only where that makes more than one block — a single piece inside a longer
-    // transcript row is a coding span, not the transcript's only exon, and
-    // drawing it as one would drop the rest of the feature from the picture.
-    if (draft.exons.length === 0) {
-      const merged = mergedPairs(draft.pieces)
-      if (merged.length >= 4) draft.exons = merged
+  const done = (): FeatureSet => {
+    const assembled = [...drafts.values(), ...singles]
+    // Nothing with sub-structure: a bare gene list, or an annotation of features
+    // this parser has no hierarchy for. Draw what is there.
+    const rows = assembled.length > 0 ? assembled : genes
+    if (rows.length === 0) {
+      throw new Error(
+        'No features found. Every row either described the sequence itself rather than ' +
+          'something on it, or named a parent that the file never defines — on a GTF, that ' +
+          'means no row carried a `transcript_id`.',
+      )
     }
-    // The gene's own line wins over the transcript's. Where a file names both —
-    // `Name=LipL1` on the gene, `Name=LipL1-1` on its mRNA — the gene's is the
-    // one a reader searched for, and the transcript's suffix is a fact the
-    // feature card can hold rather than one the map has to spell out.
-    const fromGene = draft.geneId === '' ? '' : (geneNames.get(draft.geneId) ?? '')
-    const geneName = fromGene !== '' ? fromGene : draft.geneName
-    // `name === id` is how a nameless gene is spelled; see `FeatureSet.id`.
-    const name = geneName !== '' ? geneName : draft.geneId
-    const biotype = draft.biotype !== '' ? draft.biotype : (geneBiotypes.get(draft.geneId) ?? '')
-    // `biotype protein_coding` rather than a bare `protein_coding`: an
-    // attribute with no key in front of it is a fact nothing can ask for. The
-    // colour picker reads these strings back to find out which columns the file
-    // writes (§8.16, `annotations/fields.ts`) and a bare value is invisible to
-    // it, while the feature card gains a label it was missing anyway.
-    const detail = [
-      biotype === '' ? '' : `biotype ${biotype}`,
-      // What a prokaryotic annotation is *for*. Without it the card on a
-      // Prokka CDS reads `source Prodigal:002006` and nothing else, while the
-      // one sentence saying what the protein does sits unread in the file.
-      draft.product === '' ? '' : `product ${draft.product}`,
-      draft.source === '' ? '' : `source ${draft.source}`,
-      draft.exons.length > 0 ? `${draft.exons.length >> 1} exons` : '',
-    ]
-      .filter((part) => part !== '')
-      .join(DETAIL_SEP)
-    builder.add(draft.contig, draft.start, draft.end, {
-      strand: draft.strand,
-      name,
-      id: draft.geneId,
-      detail,
-      ...(draft.exons.length > 0 ? { exons: draft.exons } : {}),
-      ...(draft.cdsFrom >= 0 && draft.cdsTo > draft.cdsFrom
-        ? { cds: [draft.cdsFrom, draft.cdsTo] as [number, number] }
-        : {}),
-    })
+
+    const builder = new FeatureBuilder()
+    for (const draft of rows) {
+      // A transcript the file spells as CDS and UTR rows alone has its exons in
+      // them: merged, they are the blocks and the gaps between them its introns.
+      // Only where that makes more than one block — a single piece inside a longer
+      // transcript row is a coding span, not the transcript's only exon, and
+      // drawing it as one would drop the rest of the feature from the picture.
+      if (draft.exons.length === 0) {
+        const merged = mergedPairs(draft.pieces)
+        if (merged.length >= 4) draft.exons = merged
+      }
+      // The gene's own line wins over the transcript's. Where a file names both —
+      // `Name=LipL1` on the gene, `Name=LipL1-1` on its mRNA — the gene's is the
+      // one a reader searched for, and the transcript's suffix is a fact the
+      // feature card can hold rather than one the map has to spell out.
+      const fromGene = draft.geneId === '' ? '' : (geneNames.get(draft.geneId) ?? '')
+      const geneName = fromGene !== '' ? fromGene : draft.geneName
+      // `name === id` is how a nameless gene is spelled; see `FeatureSet.id`.
+      const name = geneName !== '' ? geneName : draft.geneId
+      const biotype = draft.biotype !== '' ? draft.biotype : (geneBiotypes.get(draft.geneId) ?? '')
+      // `biotype protein_coding` rather than a bare `protein_coding`: an
+      // attribute with no key in front of it is a fact nothing can ask for. The
+      // colour picker reads these strings back to find out which columns the file
+      // writes (§8.16, `annotations/fields.ts`) and a bare value is invisible to
+      // it, while the feature card gains a label it was missing anyway.
+      const detail = [
+        biotype === '' ? '' : `biotype ${biotype}`,
+        // What a prokaryotic annotation is *for*. Without it the card on a
+        // Prokka CDS reads `source Prodigal:002006` and nothing else, while the
+        // one sentence saying what the protein does sits unread in the file.
+        draft.product === '' ? '' : `product ${draft.product}`,
+        draft.source === '' ? '' : `source ${draft.source}`,
+        draft.exons.length > 0 ? `${draft.exons.length >> 1} exons` : '',
+      ]
+        .filter((part) => part !== '')
+        .join(DETAIL_SEP)
+      builder.add(draft.contig, draft.start, draft.end, {
+        strand: draft.strand,
+        name,
+        id: draft.geneId,
+        detail,
+        ...(draft.exons.length > 0 ? { exons: draft.exons } : {}),
+        ...(draft.cdsFrom >= 0 && draft.cdsTo > draft.cdsFrom
+          ? { cds: [draft.cdsFrom, draft.cdsTo] as [number, number] }
+          : {}),
+      })
+    }
+    return builder.finish()
   }
-  return builder.finish()
+  return { row, done }
 }
 
 /** A UTR row under any of the names GTF and GFF3 give one, and nothing else. */
@@ -926,6 +1028,11 @@ function decodeGff(value: string): string {
  * loop, and at what q-value" is exactly what a reader asks of a loop.
  */
 export function parseBedpe(text: string): PairSet {
+  return parseWith(text, bedpeParser(text))
+}
+
+/** {@link parseBedpe}, a row at a time; see {@link RowParser}. */
+export function bedpeParser(text: string): RowParser<PairSet> {
   const header = readHeader(text)
   const builder = new PairBuilder()
 
@@ -966,7 +1073,7 @@ export function parseBedpe(text: string): PairSet {
 
   let first = true
   let skipped = 0
-  forEachRow(text, (columns) => {
+  const row: RowVisitor = (columns) => {
     if (first && header !== null) {
       first = false
       return
@@ -1000,14 +1107,17 @@ export function parseBedpe(text: string): PairSet {
         detail,
       },
     )
-  })
-
-  if (builder.length === 0) {
-    throw new Error(
-      skipped > 0
-        ? `No usable rows: all ${skipped} lines were missing one of the six coordinates.`
-        : 'No rows found.',
-    )
   }
-  return builder.finish()
+
+  const done = (): PairSet => {
+    if (builder.length === 0) {
+      throw new Error(
+        skipped > 0
+          ? `No usable rows: all ${skipped} lines were missing one of the six coordinates.`
+          : 'No rows found.',
+      )
+    }
+    return builder.finish()
+  }
+  return { row, done }
 }

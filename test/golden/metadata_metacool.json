@@ -56,7 +56,7 @@
    "redacted": [
     "commands"
    ],
-   "value": "{\"assembly\": {\"assembler\": \"MEGAHIT v1.2.9\", \"assembly_date\": \"2024-06-01\", \"assembly_stats\": {\"n50\": \"50000\", \"n_contigs\": \"120\", \"total_length\": \"3500000\"}, \"description\": \"metagenome assembly for the gut microbiome sample at time point 0\", \"name\": \"gut_microbiome_T0_assembly.fa\"}, \"qc\": {\"binsize\": 1000, \"distance_threshold\": 10000, \"inter_contig\": 39320, \"inter_contig_intra_genome\": 30179, \"inter_contig_intra_genome_fraction\": 0.60358, \"inter_genome\": 9141, \"inter_genome_fraction\": 0.18282, \"intra_contig\": 10680, \"intra_contig_long\": 1338, \"intra_contig_long_fraction\": 0.02676, \"intra_contig_short\": 9342, \"intra_contig_short_fraction\": 0.18684, \"intra_genome\": 40859, \"intra_genome_fraction\": 0.81718, \"n_contacts\": 50000, \"n_pairs_discarded\": 0, \"n_pairs_read\": 50000, \"source\": \"pairs\", \"trans_contig_ratio\": 0.7864, \"version\": 1}, \"sample\": {\"description\": \"This is a gut microbiome sample at time point 0\", \"enzyme\": \"HpaII\", \"enzyme_site\": \"C^CGG\", \"name\": \"gut_microbiome_T0\", \"organism\": \"human gut metagenome\"}, \"sequencing\": {\"n_read_pairs\": \"245000000\", \"n_valid_pairs\": \"180000000\", \"platform\": \"Illumina NovaSeq 6000\", \"read_length\": \"150\"}}"
+   "value": "{\"assembly\": {\"assembler\": \"MEGAHIT v1.2.9\", \"assembly_date\": \"2024-06-01\", \"assembly_stats\": {\"n50\": \"50000\", \"n_contigs\": \"120\", \"total_length\": \"3500000\"}, \"description\": \"metagenome assembly for the gut microbiome sample at time point 0\", \"name\": \"gut_microbiome_T0_assembly.fa\"}, \"qc\": {\"binsize\": 1000, \"distance_threshold\": 10000, \"inter_contig\": 39320, \"inter_contig_intra_genome\": 27082, \"inter_contig_intra_genome_fraction\": 0.54164, \"inter_genome\": 12238, \"inter_genome_fraction\": 0.24476, \"intra_contig\": 10680, \"intra_contig_long\": 1338, \"intra_contig_long_fraction\": 0.02676, \"intra_contig_short\": 9342, \"intra_contig_short_fraction\": 0.18684, \"intra_genome\": 37762, \"intra_genome_fraction\": 0.75524, \"n_contacts\": 50000, \"n_pairs_discarded\": 0, \"n_pairs_read\": 50000, \"source\": \"pairs\", \"trans_contig_ratio\": 0.7864, \"version\": 2}, \"sample\": {\"description\": \"This is a gut microbiome sample at time point 0\", \"enzyme\": \"HpaII\", \"enzyme_site\": \"C^CGG\", \"name\": \"gut_microbiome_T0\", \"organism\": \"human gut metagenome\"}, \"sequencing\": {\"n_read_pairs\": \"245000000\", \"n_valid_pairs\": \"180000000\", \"platform\": \"Illumina NovaSeq 6000\", \"read_length\": \"150\"}}"
   },
   "nbins": {
    "numpy_dtype": "<i8",
@@ -877,11 +877,11 @@
     "n_markers": null,
     "name": "__unbinned__",
     "phylum": "",
-    "qc_inter_contig_intra_genome": 3097,
-    "qc_inter_genome": 1991,
+    "qc_inter_contig_intra_genome": 0,
+    "qc_inter_genome": 8185,
     "qc_intra_contig_long": 1,
     "qc_intra_contig_short": 752,
-    "qc_intra_genome_ratio": 0.6591337099811676,
+    "qc_intra_genome_ratio": 0.08424703513090177,
     "quality": "",
     "taxonomy": ""
    },
@@ -13810,23 +13810,23 @@
    "binsize": 1000,
    "distance_threshold": 10000,
    "inter_contig": 39320,
-   "inter_contig_intra_genome": 30179,
-   "inter_contig_intra_genome_fraction": 0.60358,
-   "inter_genome": 9141,
-   "inter_genome_fraction": 0.18282,
+   "inter_contig_intra_genome": 27082,
+   "inter_contig_intra_genome_fraction": 0.54164,
+   "inter_genome": 12238,
+   "inter_genome_fraction": 0.24476,
    "intra_contig": 10680,
    "intra_contig_long": 1338,
    "intra_contig_long_fraction": 0.02676,
    "intra_contig_short": 9342,
    "intra_contig_short_fraction": 0.18684,
-   "intra_genome": 40859,
-   "intra_genome_fraction": 0.81718,
+   "intra_genome": 37762,
+   "intra_genome_fraction": 0.75524,
    "n_contacts": 50000,
    "n_pairs_discarded": 0,
    "n_pairs_read": 50000,
    "source": "pairs",
    "trans_contig_ratio": 0.7864,
-   "version": 1
+   "version": 2
   },
   "sample": {
    "description": "This is a gut microbiome sample at time point 0",

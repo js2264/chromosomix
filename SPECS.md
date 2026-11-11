@@ -68,7 +68,7 @@ rather than beside it:
 
 - **a gesture still costs nothing**, and cannot continue into one. Crossing the edge of what the
   block in hand can show *freezes* the map — pan, zoom and refit refused, a spinner in the corner of
-  the plot — until the new grid lands. One crossing is one read, by construction rather than by
+  the plot, clear of the axis labels drawn inside it — until the new grid lands. One crossing is one read, by construction rather than by
   timing, and the reader is shown the moment their resolution changes instead of having it happen
   under them. Escape calls the read off and gives the gestures back, because a picture that is
   already complete is never worth locking the map for;
@@ -178,6 +178,11 @@ Read on open (all small, all cached for the session):
 | `/contigs` (`name`, `length`, `genome_id`) | ~n_contigs rows | contig → genome mapping, lengths |
 | `/indexes/chrom_offset` | n_contigs + 1 | contig → first bin |
 | `/indexes/genome_offset` | n_genomes + 1 | genome → first contig |
+
+The counted root attributes — `bin-size`, `nbins`, `nnz`, `sum`, `ngenomes`, `ncontigs` — are read as
+metacooler's `MetaCooler.info` reads them: Python's `int()`, kept only where it equals the value, so a
+whole number or an integer literal is an integer and anything else is left as it is. A float-count
+map's `sum` is its sum, then, and not its floor (metacooler stopped flooring it in `c3d91ce`).
 
 The optional metadata columns of both tables are read when the table that shows them first opens,
 and kept: on the reference file they were 72% of the open's HDF5 bytes, for a view the reader may
@@ -1414,6 +1419,16 @@ diagonal, re-opening both rather than relabelling them, since the first file is 
 tracks and trail are on screen. `uri2` is part of the view state, so a comparison is a link — for
 two remote files, which is the same limit `uri` has always had (§11).
 
+**Opened from its address, the two files open side by side** (`SessionCompare.prefetch`). A link or
+a workspace naming both starts the second file's open beside the first's, each a walk of its own
+through its own file with its own read plan (§6.1), where it used to start once the first had landed
+and its view had rendered; the gate above is asked when both are open, as it always was. The first
+map is drawn alone as soon as it can be, and the second triangle joins it: the view is rebuilt with
+both once the first one's block is painted, not before — rebuilt on the second's arrival, it threw
+that picture away to draw both later. A view's two blocks are then read at once. *Comparing data*
+(§24.11) drew its upper triangle 3.6 s after its button was pressed and both 5.7 s after, over the real
+network; it draws them at 1.2 and 1.9 s.
+
 **The second file follows the first across a change of resolution.** A comparison belongs to the file
 it is a comparison *of*, so opening another file puts it down; changing rung is not that, and the
 reader closed nothing. What carries is the **bin size** rather than the URI, since the second file has
@@ -1966,6 +1981,37 @@ fewer bytes everywhere. A whole chromosome, which streams, is about even: chromo
 map at 50 kb is 47 requests and 92 MB where it was 35 and 102, on screen through that link in 24 s
 either way.
 
+**An open that has been made before is fetched all at once** (`ReadPlan`, `state/readPlans.ts`).
+Opening a map is a walk: each read names the place of the next, every one is a synchronous request
+the next waits for, and h5wasm offers no way to ask for several. The *Human Hi-C data* map was 27
+of them in a row before its first picture — a `HEAD`, a one-byte probe, ten reads through its
+metadata, four more to list `/bins` and eleven for the window at MYC — the line idle for nearly
+all of it, and over the real buckets each cost 0.15–0.35 s. The places do not move while the file
+does not, so the reader writes down the chunks each open touches, and the next open of the same
+map fetches them side by side the moment it starts, beside the `HEAD`; the walk then runs out of the
+cache. A plan has two halves: the open's own walk, kept under the map's address, and the first
+view's, kept under that and the window it read and fetched only for an open going to the same window.
+A session keeps the plans of the forty maps it opened last, four windows each, in `localStorage`,
+and a map reached through a collection's root — an `.mcool` named at its root and opened at its
+landing rung — is kept under both addresses, so the second visit fetches both walks at once: the
+lab's `progenitors.mcool` shows its table in 0.85 s where the first visit took 1.5 (200 ms a
+request). *Human Hi-C data* ships its plan (`HUMAN_PLAN`, §24.11, written by
+`scripts/record-plan.mjs`), and *Comparing data* one for each of its two maps, so a first visitor's
+map opens as a second visitor's does. A plan is
+checked by the size of the file it was made on, and a range is kept only where its answer is the
+range asked for — by its `Content-Range` where the page may read it, by its `Content-Length` where
+it may not, which is 4DN's bucket: its CORS exposes `ETag` alone. A plan that is wrong is never an
+error: the walk fetches what it misses, and the plan's surplus is the whole cost. Opening the
+example from the landing page, against the real buckets: **the first picture in 1.5 s, where it
+took 5.4**, the *Opening…* line gone at 1.2 s where it stood for 3.3.
+
+**The probe is the first read.** It used to ask for one byte, after a `HEAD` that had to answer
+first: two round trips before the file's first read was even asked for. It goes out beside the
+`HEAD` now, for the file's first 256 KiB — an HDF5 superblock, a `.hic` header, what the first read
+of every container wants — so where the `HEAD` states ranges and a length, the first read is already
+in hand, and where it does not, the probe's answer settles both. Its body is only read once it is
+the range asked for; a host that answers with the whole object is let go, not downloaded.
+
 **A remote read reads ahead where the reads before it say to.** Each miss of the chunk cache
 is a round trip, and HDF5 reads a cooler's pixels a dataset chunk at a time — `bin2_id` and `count`
 in turn, and `bin1_id` where it is read at all (§6.2), streams through one region of the file — so a
@@ -2066,6 +2112,12 @@ offers `balanced` (§7.5), and a balanced cell is `raw * w[i] * w[j]` — cooler
 filtered row reads as absent rather than as empty. Where there is no weight column the entry is not
 offered, a link naming it lands on counts, and a read asking for weights anyway is refused by name.
 No default weighting is invented.
+
+**A zero the weights cannot change is not visited** (`weighBlock`). Under a row and a column weight
+that are both finite and not negative, `0 · w[i] · w[j]` is the same zero, sign and all, so those cells
+are left as they are; every other cell — a contact, or a zero under a weight that is `NaN`, infinite
+or negative — is multiplied as it always was, and the block is the one the cell-by-cell product made,
+bit for bit. At a fine bin size the zeros are most of it: nine cells in ten of mouse chr1 at 20 kb.
 
 This is the **one** read of `/bins` in the reader, and it is bounded: two slices of the weight column
 for the bins actually on screen, never the whole column, never `/bins/chrom`, and never at all unless
@@ -2187,9 +2239,12 @@ contacts, so that number would have sent the up chevron to a total the file neve
 counts the contacts instead, in the background, on the coarsest rung of the file (the same contacts
 in the fewest pixels), and the box shows them when they land.
 
-**In the background means behind every other read.** The census starts on every open, on the
-thread every view reads through, so it reads nothing before a request already waiting has been
-answered — on an open, the loading screen's — and it walks the file the way §3.6 walks one across
+**In the background means behind every other read.** The census starts once the open's first map
+has its first block — on a file that lands on its Chromosomes table, the first block of the map a row
+opens, or four seconds after the open where none has drawn one (§8.6). Started beside the open, it was
+a step into its walk when the reader's first click came, and the chromosome waited for that step. It
+reads on the thread every view reads through, so it reads nothing before a request already waiting
+has been answered, and it walks the file the way §3.6 walks one across
 chromosome pairs: each pair's matrix record read only as far as the coarsest rung, which is the
 record's first few dozen bytes, and that rung's blocks, all as exact ranges planned together, four
 reads in flight. On the 5 GB 4DN map of mouse granule neurons (4DNFI916JQ1Y, thirteen rungs, 231
@@ -2309,7 +2364,9 @@ sits above the whole picture. `metacooler show` never balances, so neither depar
 ### 7.2 Technique
 
 `ImageData` + `putImageData` to an offscreen canvas at matrix resolution, then `drawImage`-scaled to
-the display canvas. Pan and zoom are canvas transforms over the in-memory matrix. A colour-vision-safe
+the display canvas — or, for a block of 2,048² cells or more, the level of it the frame draws, painted
+straight from the values (*a large block is drawn at the size it is looked at*, below). Pan and zoom
+are canvas transforms over the in-memory matrix. A colour-vision-safe
 colormap is selectable; keyboard pan and zoom are supported — on the focused map the arrows pan,
 Page Up and Page Down zoom about the centre a wheel notch at a time, and Home refits — and from
 anywhere in the window `0` refits (*Fit the view*, by its place, so AZERTY's bare `à` does) and
@@ -2395,6 +2452,89 @@ as the block is held anywhere (`pooledOf`), and a view built over a block the re
 §12) goes straight to the colouring. The colouring writes each pixel as one 32-bit word out of a 32-bit
 view of the table — the same four bytes the four byte writes it replaced put down — which took a
 3,910-cell chromosome's from 410 ms to 280 ms on the machine it was measured on.
+
+**A large block is drawn at the size it is looked at** (`render/levels.ts`). A block wider than the
+plot is drawn from a *level* — the raster averaged down by two, once and up to four times, so that a
+level pixel lands between a half and one device pixel — and the levels used to be made in one order
+for every block: every cell transformed, measured, coloured into an image at matrix resolution, that
+image put on a canvas, and the canvas halved down to the level. Everything but the last level was
+work for a picture nobody had asked for yet, all of it on the main thread before the first frame. On
+the blocks a whole chromosome is read as (above) it was most of the wait: mouse chr1 at 20 kb, 9,774
+cells a side, spent 10 s of a 14 s first picture there, making a 382 MB image and three halvings of it
+to draw about seven hundred pixels; yeast chrIV at 100 bp spent 23 s of 27. So a block of 2,048² cells
+or more — drawn a cell to a pixel, on one scale, read against a floor — is drawn the other way round:
+
+- **its first frame paints the level it draws, and only that one**, straight from the values: every
+  cell coloured exactly as the image would have coloured it and averaged into the level's pixel it
+  falls in, the colour over the cells that have one and an alpha that is the share of them that do —
+  the average the halvings meant to make. Meant to: a canvas halves an odd-sized level by a scale a
+  shade off one half, so its bilinear tap drifts from the mean of two cells to a sample of one across
+  the picture, and a map whose side is odd came out speckled at fit zoom where a level painted from
+  the values is the mean throughout. Where every halving was exact the two agree to within a level or
+  two of 255;
+- **its colour range is the same number**, to the bit — the 99th percentile §7.1 ties to numpy — read
+  as order statistics of the raw values, whose order every transform keeps, rather than of a
+  transformed copy of the block (`autoRangeOfValues`);
+- **a sparse block is read once, and its contacts after that** (`listCells`). Both rules of the range
+  keep only values above zero, and a level colours every zero alike, so one pass lists the cells that
+  carry something — each with its value, so nothing after it goes back into the block by index —
+  and sets apart the rows and columns a balancing left NaN, which are two short lists of their own:
+  the range and every level of every colouring are then read from the list. Mouse chr1 at 20 kb is
+  95 million cells, 8.4 million of them contacts and 7.4% NaN, and its first frame's main-thread work
+  went from 1.3 s to 0.6 s; yeast chrIV at 100 bp, 1.7% contacts, from 1.7 s to 0.8 s. A block in
+  which more than one cell in four carries something is read whole, as are NaNs that are not whole
+  rows and columns past that share;
+- **a finer level is painted when a zoom first needs it, between frames**, in slices that hand the
+  frame back, while the nearest level made stands in for it: the picture sharpens a moment after the
+  zoom rather than the map stopping until it has. A level is made once per colouring, and a gesture
+  still never re-colours the block. An export never draws a stand-in: it paints the level it needs
+  there and then, and a figure is the exact picture.
+
+Measured in headless Chromium against a server answering as S3 does, at 40 ms a round trip and
+25 MiB/s, from a chromosome clicked in its table to its picture: mouse chr1 at 20 kb on screen in
+4.3 s where it took 14.2, its main-thread task 1.3 s where it was 10.2;
+yeast chrIV at 100 bp in 4.2 s where it took 26.6; chicken chr1 at the 25 kb a `.hic` opens at in
+2.9 s where it took 6.3. A block under 2,048² cells, two readings either side of the diagonal (§5.10)
+and a field read about a middle keep the whole-image path, whose reductions they each have a rule of
+their own in.
+
+**A window is drawn first from a coarser rung while its own block reads** (`previewRung`,
+`ui/refine.ts`). A chromosome clicked at the rung a file lands on is the slowest first picture a reader
+is given — the whole block read, decoded and spread a cell at a time before anything is on screen — and
+the same window a few rungs up is a fraction of its reads and of its cells. So a region view's first
+read is preceded by one from the **coarsest stored rung that still puts 256 cells across the window**,
+where the block asked for is **at least four times finer** than that along its wider axis — measured
+against the grid the reader will actually read, so a pooled first read is not "previewed" by a picture
+as coarse as itself. That preview is drawn as the block it is: its own cells, its own resolution in the
+key, its own colour range. **It is live**: the reader can pan, zoom and hover it at once, nothing is held
+still, and the spinner turning in its corner (`HeatmapView.setWaiting`) is the one sign that the block
+is on its way. The block then replaces it **on the window the reader arrived at**, carried in base pairs
+— to the base pair rather than rounded out to the preview's cells, and past the block's own edges where
+they zoomed out beyond it (`viewedPlaces`, `ui/blockAxes.ts`) — or refitted where nobody moved it, which
+is exactly the picture there was before there were previews. Either way its colour range is measured
+afresh, as any new block's is. A view opened on a bookmark goes to the bookmark only if the preview was
+not moved: a reader who moved it has gone somewhere else. What has no business acting on a stand-in waits
+for the block. The zoom ladder is armed only then, so nothing refines the preview; the Export card's
+buttons, and the keys that press them, are held with a line saying why; and no analysis is framed on the
+preview or borrows it, not even when the block's read fails and the preview stays as the picture there
+is, because its extents are in another rung's bins under the name of the file the view reads. The tracks,
+the census and the circularity check the session holds behind its first picture (§8.6) wait for that
+block too, not for its stand-in. None is read for a window already about as coarse as a preview would be, a file with no
+coarser rung, a grid the reader chose (`binsPerCell`), a window across a circle's origin, or a map
+under a second file or a second reading; a preview that fails is a picture that comes later, never an
+error.
+
+It is not the finer block made smaller, and it does not look like it. Each of its cells is the sum of
+many of the block's, so a cell is never empty where the block's mostly are, and its colours fill in
+where the finer block's — whose level averages the colours of sparse cells — fade to the paper: the
+compartments of a chromosome show strongly in the preview and faintly in the block that replaces it.
+It is real data at the resolution it says, and the key says it. Measured from the click on the row, on
+the link above: chicken chr1 at 25 kb (4DNFIRKUYKP4) shows its 500 kb preview in 0.2 s where the first
+picture took 2.0, and its own block at 2.2 s; mouse chr1 at 80 kb (`progenitors.mcool`) shows 640 kb in
+0.7 s where it took 2.3, and its block at 2.9 — the preview's 4.2 MB, every contact chr1 makes with the
+rest of the genome at 640 kb, read before the block's own. One reader reads both, so the block lands
+that much later. The Human Hi-C example's window (chr8 at 10 kb, 340 bins) is already as coarse as a
+preview, and opens as it did.
 
 **What is accepted, and stated rather than fixed:** the raster is at most 16,384 px
 per axis and a plot is commonly 800–1,600 device pixels, so `drawImage` still
@@ -3333,6 +3473,18 @@ all, and a cross-convention match whose lengths disagree (§5.9).
 Parsed in full, in the annotations worker, never on the main thread — a 9.5 MB GTF is a tenth of a
 second of parsing and that is a tenth of a second of frozen UI.
 
+**Parsed a row at a time, and the thread handed back as it goes** (`forEachRowCooperatively`). The
+annotations worker is one thread for every track of a tab: it opens them, and it answers every lane's
+request for the window it draws. A whole file parsed in one stretch held all of that — *Human Hi-C
+data* (§24.11) reads IGV's RefSeq genes, 166,923 transcripts in 54 MB of text, and its ten bigWig
+lanes, open and asking long before, were answered when that parse had finished. So a gene table, a
+GTF, a BED and a BEDPE are fed to their parsers in slices of 8 ms with the thread given back between
+them, and the BGZF inflate before them is too, every 16 members: a lane's request is answered between
+two slices, and the parse — which nothing else waits for — is the one that waits. What a parser makes
+of the rows is the same, row for row, in the same order. A genePred's two exon lists are read once a
+row, not once to test the row and again to draw it, and a number a character at a time: the parse of
+those 166,923 transcripts went from 1.9 s to 0.8 s.
+
 | Format | Accepted as | Coordinates |
 |---|---|---|
 | GTF / GFF | a gene model | 1-based, inclusive; converted on parse |
@@ -3471,8 +3623,11 @@ metadata row comes back ready (§8.12).
 **The map is drawn first, and its tracks are read after it.** A file opened with tracks — a
 workspace, a `?config=` link, a reload — seats every row at once, and the Tracks card lists them
 reading; the bytes are read once the map's first block is drawn, or four seconds after the rows were
-seated, whichever comes first, and at once for a view with no map. The first-open measurement of
-which sequences are circles (§8.15) waits the same way. They used to start in the same moment as the
+seated, whichever comes first, and at once for a view whose picture has no map — the 1D browser, whose
+tracks are its picture. A landing table (§5.1) is not that: it is a stop on the way to a map, and what
+waits goes on waiting for the map a row opens (`app/pictureGate.ts`). The first-open measurement of
+which sequences are circles (§8.15) and a `.hic`'s census (§6.5) wait the same way, and a coarse
+preview drawn while a block reads (§7.2) is not the block they wait for. They used to start in the same moment as the
 map's first read, from the same host: the demo session's twelve-megabyte FASTA and ten-megabyte gene
 model shared the connection with the picture the reader had asked for, and on a 25 Mbit/s line the map
 came in 6.7 s after its view mounted, where alone it took 3.0 s; held, it takes 2.5 s. Nothing about
@@ -4061,6 +4216,13 @@ redundancy, GC content and whatever else the binner wrote; its `/contigs` carrie
 and the annotator joined on — an MGE call, a coverage, a bin id; and every cooler's `/bins` carries at
 least the weight it was balanced with. Until this section all of it was readable only as a *table*,
 one row at a time, in a view that is not the picture.
+
+**What `/bins` holds is asked once the map has its first picture.** Its columns are offered from a
+group listing and a dtype each, with no values read (§3.3) — but on a remote cooler that listing is
+four round trips through object headers, and the map used to wait for them before its view was even
+mounted: 0.85 s of the *Human Hi-C data* example's first picture over the real buckets (§6.1). The
+drop-down offers the file's weights once they land, and a row restored on a `/bins` column draws
+from its values meanwhile, which are read through the reader whether or not the list is in.
 
 **A metadata column is an annotation, and it joins the same store every other annotation joins.**
 Adding one from the drop-down produces an ordinary entry with `kind: 'metadata'` (a value profile) or
@@ -5902,13 +6064,13 @@ support. Such files are inputs to publication, never live sources.
 
 **Remote HDF5** reads through an FS node shaped like Emscripten's `FS.createLazyFile`, in a worker
 (`sources/RemoteRangeSource.ts`; h5wasm's `lazyFileLRU` demo is the reference) — not the built-in,
-which probes with a `HEAD` of its own, caches without bound and counts nothing. The open probes
-with a `HEAD` before its `GET` to test range support, and that `HEAD` is skipped for a URL carrying
-its own signature — `X-Amz-Signature`, `X-Goog-Signature`, or `sig=` beside `sv=` — since such a
+which probes with a `HEAD` of its own, caches without bound and counts nothing. The open sends a
+`HEAD` and, beside it, a `GET` of the file's first chunk to test range support (§6.1), and that
+`HEAD` is skipped for a URL carrying its own signature — `X-Amz-Signature`, `X-Goog-Signature`, or `sig=` beside `sv=` — since such a
 URL is signed for a single method. A presigned link therefore opens and goes on working until it
 expires (§24.6); a public bucket URL is still what a citation should point at, because a signature
 has a date on it. A `HEAD` answering `Content-Length: 0` is taken to have stated no length, and the
-one-byte probe follows it as it follows a `HEAD` that says nothing: jupyter-server-proxy, the way
+range probe settles it as it settles a `HEAD` that says nothing: jupyter-server-proxy, the way
 into a notebook kernel's files behind JupyterHub (§21.5), answers every `HEAD` so, and a map read
 through it was mounted as a file of no bytes and refused as "not an HDF5 file".
 
@@ -6063,8 +6225,14 @@ requests and bytes in total and for the last view; these are also paper figures.
 | Operation | Budget |
 |---|---|
 | Open + render genomes table (remote) | ≤ 20 range requests |
+| Open a remote map opened before, or an example's (§6.1, §24.11) | its plan's chunks requested side by side as the open starts, beside the `HEAD` and the probe; no chunk of the plan read again by the walk — *Human Hi-C data* on screen in 1.5 s where it took 5.4, over the real buckets |
+| Open a remote map, first visit | a `HEAD` and the file's first chunk side by side, then the walk; `/bins` listed after the first picture, not before it |
+| Open a comparison from its address (§5.7) | both files' opens started side by side, each with its plan; the first map drawn alone, the second triangle joining it — *Comparing data* upper triangle in 1.2 s and both in 1.9 s, where they took 3.6 and 5.7, over the real network |
 | Load one MAG's matrix (remote) | ≤ 5 range requests |
 | Pan/zoom within the block in hand | 0 requests, 60 fps |
+| First frame of a block of 2,048² cells or more | one pass over its values on the main thread — listing the cells that carry something where they are no more than one in four — the colour range and the level the frame draws read from that list, and no image at matrix resolution (§7.2) |
+| A zoom past the levels a large block has made | 0 requests and no re-colouring: the level it wants painted between frames, the nearest made drawn meanwhile |
+| First picture of a window four times finer than a stored rung with 256 cells across it | one read of that rung, drawn live while the window's own block reads after it and lands on whatever window the reader has moved it to — chicken chr1 at 25 kb on screen in 0.2 s, mouse chr1 at 80 kb in 0.7 s, from a 40 ms, 25 MiB/s link (§7.2) |
 | Refine, on crossing the block's grid (§2) | ≤ 5 range requests, one bounded read |
 | Pan to the edge of the block in hand | one read, **at the same resolution** |
 | Zoom out to a block already read | 0 requests |
@@ -6074,6 +6242,7 @@ requests and bytes in total and for the last view; these are also paper figures.
 | Time to interactive, cold, remote | ≤ 3 s on a typical connection |
 | A region read chunk after chunk (remote) | from the third near miss, one request a stretch, a megabyte past what it needs and doubling to 16 MiB a fetch whatever the chunk — 32 MiB read a megabyte at a time in ≤ 8 requests (§6.1) |
 | Reads scattered across a file (remote) | exactly the 256 KiB chunk each asks for — no read-ahead (§6.1) |
+| A lane's window, asked while a whole text track parses (§8.3) | answered between two 8 ms slices of the parse, not after it — *Human Hi-C data*'s ten bigWig lanes, for a reader in Paris on the lab's bucket, at 2.0 s rather than at 4.0 s, when IGV's RefSeq genes had finished |
 
 And for a `.hic` (§3.6), whose one expensive shape is a read across every chromosome pair — a
 whole-genome picture, and the census §6.5 takes on every open:
@@ -6081,7 +6250,7 @@ whole-genome picture, and the census §6.5 takes on every open:
 | Operation | Budget |
 |---|---|
 | A read across chromosome pairs (remote), at a rung inside a record's first 4 KiB | ≤ 2 exact range requests a pair — its record's head, its blocks — and one for many where they lie within 64 KiB of one another, the blocks just past a record read with its head; no chunk of the cache spent on any; six in flight for a picture, four for the census |
-| The census, started beside an open | **0** reads before a request already queued has been answered |
+| The census and the circularity check, on an open | **0** reads before the first map's first block is drawn — on a landing table, the first block of the map a row opens — or 4 s after they were asked for |
 | The census or the circularity check, while a view is reading | **0** steps started until no view request has run for 250 ms; at most the one step already in flight |
 
 **A view's reads go first.** One worker reads for everything, and over a network each of its reads
@@ -6090,12 +6259,18 @@ makes the view wait for its round trips as well as its own. The census (§6.5) a
 check (§8.15) are that work. Every other request counts itself in while it runs, and they wait until
 none has run for 250 ms, which covers the hop to the main thread between a view's `range` and its
 `matrix`. On a 1 GB `.hic` from S3 (4DNFIYUR29KO), chromosome 1 clicked from the Chromosomes table
-while both ran was on screen in 10 s; it is now under 4, of which the read is 1.3 s.
+while both ran was on screen in 10 s; it is now under 4, of which the read is 1.3 s. The one step
+already in flight was still the reader's to wait for: on the 4DN chicken map, chromosome 1 clicked a
+moment after its table showed took 2.1–2.6 s where the same click after both had finished took 2.2.
+Neither starts now until a map has drawn (§6.5, §8.6), so a reader's first click finds no step of
+either in flight.
 
 **A place already seen is answered from memory.** Every navigation builds its view afresh, and every
 view used to read its block afresh. `scripts/ui-revisit.mjs` walks the lab's 689 MB
-`demo/mouse/progenitors.mcool` at 10 kb — chr1, chr2, chr1 again, a window of chr1, chr1 again — and
-the same walk on a 940 MB chicken `.hic`, timing each step from the link to the picture. In headless
+`progenitors.mcool` at 10 kb — chr1, chr2, chr1 again, a window of chr1, chr1 again — and
+the same walk on a 940 MB chicken `.hic`, timing each step from the link to the picture (both were on
+the lab's bucket, under `demo/mouse/` and `demo/chicken/`, and are no longer: the script reads them from
+the folder `GALLERY_DATA` names). In headless
 Chromium against a server answering as S3 does, at 40 ms a round trip and 25 MiB/s, the second chr1
 took 3.6 s and the third 3.7 s with every byte already in memory: most of it the worker decompressing
 and pooling the same pixels again, the rest the page pooling, ranging and colouring the same block
@@ -6220,7 +6395,8 @@ read behind a view (§6.5, §8.15), and a screenshot taken on the first paint ha
 *fetching…*. So everything that can still change the picture says so while it can — a navigation
 being routed, a file, a workspace or a shared link being opened, a map's veil (a read, a smoothing,
 a correlation), a paint asked for and not yet made, a lane's window, residues or pile in flight, a
-track on screen still opening, a finer block being read for a frozen map — and once the last of it
+track on screen still opening, a finer block being read for a frozen map, a finer level of a large
+block being painted between frames (§7.2) — and once the last of it
 has ended and a frame has passed with nothing new begun, the window says so, once:
 
 | Where | What |
@@ -6241,7 +6417,8 @@ time a different picture.
 
 **A repaint alone is not a new picture.** Pointing at the map repaints it once a frame, and a report
 per frame would bury the one a script is waiting for: a paint keeps a picture unfinished but never
-starts one. A report follows every navigation — a colour change is one — and every read a picture
+starts one, and so does a level a zoom has a large block paint between frames — a zoom is not a new
+picture, but a report already due waits for the sharp one. A report follows every navigation — a colour change is one — and every read a picture
 waits on, a pan past the lanes' padding included. **What it does not wait for**: the side columns,
 the status bar and the console, which describe the picture rather than being it; an analysis task,
 whose result is waited for when it arrives as a track; the census and the circularity check, which
@@ -8049,7 +8226,10 @@ which would neuter the array the heatmap is drawing from.
 row and column bin extents, the bin size, any pooling in force, the score column, whether balancing
 is on, the total the map is drawn to (§6.5), the sequences declared circular and their origins
 (§8.15), the edit of the reference it is drawn through (§27.7), and the resolution the reader added
-that it is drawn at (§3.4) — which is then the bin size, its bins the ones the extents count.
+that it is drawn at (§3.4) — which is then the bin size, its bins the ones the extents count. **A
+preview has no framing** (§7.2): while a coarser rung stands in for the block being read, or stays on
+screen after that read failed, a press of **Run** is refused as on a view with no map, and no task
+borrows the block, because its extents count another rung's bins under the file the view reads.
 
 **The framing line is one string in one grammar.** The window it names is the display form (§26.1),
 written by `formatLocus` — so the drawer's *will run on*, the figure's caption and the cell's
@@ -11679,8 +11859,9 @@ nothing else: no second renderer, no kernel-side reader, no data through the ker
   — its owner made it, and a DataLad or git-annex file finds its index beside the link, not beside
   its object. A `Range` it cannot read — several ranges, a reversed one, another unit — is ignored
   and the whole file sent, as RFC 9110 says; 416 is for a range past the end. A `HEAD` that names
-  no range says no `Accept-Ranges`, so the viewer asks for one byte and takes the size from its
-  `Content-Range`. A reader that hangs up mid-read is no traceback in whichever cell ran last.
+  no range says no `Accept-Ranges`, so the viewer takes the size from the `Content-Range` of the
+  first chunk it asks for beside it (§6.1). A reader that hangs up mid-read is no traceback in
+  whichever cell ran last.
   Behind JupyterHub it is reached through jupyter-server-proxy at `<prefix>/proxy/<port>/`, which
   must be installed beside the single-user server, and which answers every `HEAD` with
   `Content-Length: 0` (§11) and holds each answer whole, refusing one over 100 MB — which touches
@@ -11747,8 +11928,9 @@ region =, tracks =, ...)` writes the same fragment in the same order; `chromosom
   index beside the link, not beside its object. A `Range` it cannot read — several ranges, a
   reversed one, another unit — is ignored and the whole file sent, as RFC 9110 says; 416 is for a
   range past the end. A file asked for whole is streamed by httpuv, never read into R; a range is
-  read. A `HEAD` that names no range says no `Accept-Ranges`, so the viewer asks for one byte and
-  takes the size from its `Content-Range` — an authenticating proxy answers `HEAD` with
+  read. A `HEAD` that names no range says no `Accept-Ranges`, so the viewer takes the size from
+  the `Content-Range` of the first chunk it asks for beside it (§6.1) — an authenticating proxy
+  answers `HEAD` with
   `Content-Length: 0` (§11). It answers on R's event loop — while R is idle, at the console, in
   RStudio and under Shiny — because httpuv's static paths, which answer from a thread of their own,
   ignore `Range` and send a file whole. **A rendered page that names local files therefore draws
@@ -12926,11 +13108,13 @@ the Stores workflow, which has nothing to do with it.
 
 **Nor is the lab's own store.** *RSG lab data* is inline (`demosStore()`, `ui/examples.ts`), and
 the files its cards open are one folder on the lab's bucket, `demo/store/`, a directory a card or a
-dataset — `yeast/`, `human/`, `gibcus2018/`, `meneu2025/`, `chromosomix_paper/` — with every name inside
-a workspace relative, so the folder opens wherever it is copied. Unlike the rest of `demo/`, it is
+dataset — `yeast/`, `human/`, `gibcus2018/`, `meneu2025/`, `chromosomix_paper/`, `k562/`, every file
+the landing page's *Human Hi-C data* reads (§24.11), and `ecoli/`, the *E. coli* K-12 sequence and genes
+the documentation's screenshots of *Composition* and *Origin and terminus* open — with every name inside a
+workspace relative, so the folder opens wherever it is copied. Unlike the rest of `demo/`, it is
 not a copy of a directory of this repository: its maps run to seven gigabytes, and they are copied
-into it **on the bucket** — from the lab's own published data and from 4DN's and ENCODE's open-data
-buckets — and never pass through git. What the repository keeps is the folder's workspaces and
+into it **on the bucket** — from the lab's own published data and from 4DN's, ENCODE's, IGV's and
+1000 Genomes' open-data buckets — and never pass through git. What the repository keeps is the folder's workspaces and
 `demo/store/MANIFEST.tsv`, one line a file naming where it comes from: a key on a bucket, a file of
 this repository, or a file `scripts/make_rsg_store.py derive` computes (the RNA-seq counts as a
 barChart, the SNPs bgzipped and indexed, the loops called on the micro-C map by this viewer's own
@@ -12944,13 +13128,18 @@ from 4DN's bucket into a `.cool` with the file's own weights, every contact with
 as the file holds it, so a task that reads contacts within a sequence, as each of these does, reads the
 same numbers there as in the whole file. Those outputs are files of this repository, under
 `demo/store/chromosomix_paper/human/`. The paper's folder holds a subfolder an organism, its
-bacterial maps and the *P. aeruginosa* RNA-seq copied there from where the lab keeps them — the zoo's
+bacterial maps and the *P. aeruginosa* RNA-seq copied there from where the lab kept them — the zoo's
 among them — so that it names
-none of those places and opens with the zoo switched off. The same script
+none of those places and opens with the zoo switched off. Those places are gone from the bucket, as are
+`demo/chicken/`, which `gibcus2018/` was copied from, and the zoo's folder: where the copy a file came
+from is gone, the store's copy is the only one, and its line names that copy itself as its source
+(`kept`), which the publish step finds already there and never copies — and fails on, saying so, if it
+is not. The same script
 writes the workspaces and the manifest from one table, so a file a card names and a file the folder
 holds cannot drift apart, and `scripts/publish-store.sh` makes the bucket match the manifest —
 server-side copies, uploads, a skip for what is already there at its size, and an anonymous check of
-every file afterwards. It deletes nothing. `demo-examples.test.ts` reads a name under `store/` on
+every file afterwards — of the whole folder, or of one directory of it (`--only k562/`), which needs no
+derived file of the others. It deletes nothing. `demo-examples.test.ts` reads a name under `store/` on
 disk **or in the manifest**, checks every line whose source is in the repository, and opens only the
 maps it can read, so a card naming a file the publish step would not put there is a red CI run.
 
@@ -13004,7 +13193,7 @@ decides, so `gs://` and `s3://` are shareable and a Dropbox page never is writte
 A presigned S3 URL, a signed GCS URL and an Azure SAS are one URL each, and §11 refused the first
 because the `HEAD` probe is not the method it was signed for. The probe now recognises a signature
 in the query — `X-Amz-Signature`, `X-Goog-Signature`, or `sig=` beside `sv=` — and goes straight to
-the one-byte `Range` `GET` it already had for hosts that say nothing about ranges. Nothing else
+the `Range` `GET` of the first chunk it sends beside every `HEAD` (§6.1). Nothing else
 changes: the link works until it expires, and expiry looks like the `403` it is, named as such. A
 SAS is not method-scoped and always worked; it is listed so the rule reads as one rule.
 
@@ -13350,13 +13539,24 @@ store. Pressed from an empty tab beside another, it fills the empty one and open
 most, with **no deck**, since the point is the three edges of one picture. The map is 4DN's in situ
 Hi-C of K562 (Rao et al. 2014, `4DNESI7DEJTM`, `4DNFI18UHVRO.mcool`), 907 million contacts, opened
 balanced at 10 kb on **chr8:126,800,001-130,200,000**: MYC, PVT1 and the blood enhancer cluster
-downstream of them, a sharp compartment edge and domains with loops at their corners. Around it:
+downstream of them, a sharp compartment edge and domains with loops at their corners. **It ships
+the read plan of that open** (§6.1): the chunks its walk through the map's metadata and its window
+read, written down by `scripts/record-plan.mjs` and fetched side by side as the button is pressed,
+so a first visitor's map is on screen in about 1.5 s where it took 5.4. **Every file it reads is
+the lab's copy**, in `demo/store/k562/` on the lab's bucket in Paris (§24.3): the map, 4DN's three
+tracks of it, ENCODE's twelve, IGV's genes and bands and 1000 Genomes' FASTA, byte for byte — which
+is what lets a plan made on 4DN's copy stand — each named in the store's manifest with the key it
+was copied from and put there by `scripts/publish-store.sh --only k562/`. They were read from four
+buckets, in Virginia and Oregon, and an open is a chain of round trips: from Europe one is 85 to
+150 ms to those, and about 10 to Paris — for a reader in Paris on a 200 Mbit/s line (a network
+modelled on those round trips), the first picture in 0.9 s where it took 1.6. Around it:
 
 - **Above**, IGV's hg38 (`hg38_1kg`, the IGV store's human genome): RefSeq genes against the map,
-  then the sequence, then the bands. The genes and the bands are read from IGV's own bucket and not
-  from the addresses IGV's genome table names, because UCSC's `ncbiRefSeq.txt.gz` carries no CORS
-  header; the sequence is the 1000 Genomes FASTA read by range through its index, because the FASTA of
-  IGV's own `hg38` is on a bucket that refuses an anonymous reader (§24.3).
+  then the sequence, then the bands. The genes and the bands are IGV's own copies and not the files
+  IGV's genome table names, because UCSC's `ncbiRefSeq.txt.gz` carries no CORS header; the sequence is
+  the 1000 Genomes FASTA read by range through its index, because the FASTA of IGV's own `hg38` is on
+  a bucket that refuses an anonymous reader (§24.3). All three are read from the lab's copies, as the
+  rest are.
 - **Down the left**, the structure computed from the same map and the same cells: 4DN's insulation
   score, the boundaries called on it and the first eigenvector at 250 kb, and ENCODE's
   subcompartments of K562 (`ENCFF955KEB`), each row coloured by the cluster it names in the file's own
@@ -13372,7 +13572,8 @@ downstream of them, a sharp compartment edge and domains with loops at their cor
   any, as the two stores read them.
 
 **Comparing data: G2 against mitosis in one square.** Chicken DT40 cells released from a G2 block into
-mitosis (Gibcus et al. 2018), from 4DN's bucket: the G2 map (`4DNES9LEZXN7`) above the diagonal and
+mitosis (Gibcus et al. 2018), 4DN's files as the lab's store holds them for its own card of the
+paper (`demo/store/gibcus2018/`): the G2 map (`4DNES9LEZXN7`) above the diagonal and
 the one 60 min on (`4DNESEQNSXSD`) — the time course's last point, which 4DN calls a prometaphase
 block, there being no sample of it called metaphase — below it, as two files in one square (§5.7): one
 colour scale, the two libraries within a percent of one depth. 40 Mb of chromosome 1 at 100 kb, wide
@@ -13380,10 +13581,13 @@ enough for G2's checkerboard of compartments and for the mitotic band that repla
 compartment eigenvector and insulation score — 4DN's own — is on the edge beside its own triangle,
 G2's along the top and the mitotic one's down the left, on **one fixed axis per kind** (E1 from −1.5
 to 1.5, insulation from −1 to 1), so the flattening of both in mitosis is read on the edges as it is
-on the map.
+on the map. **It ships the read plans of its two maps' opens** (`CHICKEN_G2_PLAN`,
+`CHICKEN_MITOSIS_PLAN`, written by `scripts/record-plan.mjs compare`), and the two open side by side
+(§5.7): the upper triangle on screen in 1.2 s, both in 1.9, where they took 3.6 and 5.7.
 
-**The two built in the bundle rather than published beside the demos**: every file they name is on
-its own consortium's bucket already, so the session is the only thing to publish, and a few
+**The two built in the bundle rather than published beside the demos**: every file they name is in
+the lab's store already, its manifest saying where each was copied from, so the session is the only
+thing to publish, and a few
 kilobytes of code is a session that cannot go missing from a bucket. Each is a `SessionConfig` like
 any a workspace file holds, and its test reads it back through `parseWorkspaceFile`, the validator
 every such file meets. Each carries the reader's own overlay preferences and no column layout, so
@@ -15831,17 +16035,17 @@ on the landing page, no store row, no format in a file picker's list, no clause 
 What is dev, and what switched off means for each:
 
 - **`metacool`** — both containers (§3.2, §3.4), the genomes table (§5.1), the genome and genome-pair
-  views (§5.2, §5.3), the genome × genome overview (§7.3), the metagenome tasks (§18.8), the mock
-  community example, the palette's *Genomes table* and the root crumb's greyed *Genomes* on a plain
+  views (§5.2, §5.3), the genome × genome overview (§7.3), the metagenome tasks (§18.8), the palette's
+  *Genomes table* and the root crumb's greyed *Genomes* on a plain
   file, the File card's `ordering` row, and every sentence that names any of them. **Switched off, a
   `.metacool` or an `.mmetacool` is refused like any file the app does not read**, in that refusal's
   words. A `.metacool` also passes cooler's own test (§3.1), so this is a refusal the detection makes,
   not a branch it skips — or it would open as a cooler of twenty thousand contigs. The refusals a
   *plain* file can meet stop naming it too: an unknown HDF5 file, a gzip, a file with no HDF5
   signature and a variable-bin cooler each say what they said, less the multi-genome container and the
-  command that makes one, and the advice under every refusal a plain file can meet names neither. The
-  lab's store drops the mock community's figure and its two files, and any store's catalogue a row of
-  either container; the rest of what the switch hides — the genomes table, the genome views, the
+  command that makes one, and the advice under every refusal a plain file can meet names neither. Any
+  store's catalogue drops a row of either container — the lab's offers none since its mock community,
+  the one metagenome it had, left the bucket; the rest of what the switch hides — the genomes table, the genome views, the
   metagenome tasks and their options — can only be reached with a multi-genome file open, and so goes
   with it. The **DNA Bacterial Zoo** (§24.3) is published with the format, and switched off it has no
   tile in *Connect to a data store*.
