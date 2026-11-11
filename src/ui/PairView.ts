@@ -50,6 +50,11 @@ export interface PairViewProps {
    * changes; a pick wins over *Refine on zoom*. Absent or `null` is no pick.
    */
   picked?: () => PickedResolution | null
+  /**
+   * Told the bin size this view's zoom is reading at, whenever it changes: what
+   * the other maps of a deck follow while the zoom picks (§16.2).
+   */
+  onZoomTarget?: (binsize: number | null) => void
   /** Selectable genomes — `__unbinned__` is not among them (§7.4). */
   genomeNames: string[]
   rowGenome: string
@@ -288,6 +293,7 @@ export class PairView {
       // The grid the reader declared (§3.4), so a zoom cannot quietly read past
       // the resolution the axis is labelled with.
       ...(this.props.picked === undefined ? {} : { picked: this.props.picked }),
+      ...(this.props.onZoomTarget === undefined ? {} : { onTarget: this.props.onZoomTarget }),
       read: (rows, cols, rung, binsPerCell) => {
         const own = this.props.client.cancellable<'matrix'>({
           kind: 'matrix',

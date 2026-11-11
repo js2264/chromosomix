@@ -60,7 +60,7 @@
  * never turn into the whole-file scan §7.3 gates.
  */
 
-import type { Rung } from '../metacooler/coarsen'
+import { coarsenTo, type Rung } from '../metacooler/coarsen'
 import { denseCellCap } from '../metacooler/matrix'
 import { POOLED_CELL_CAP } from '../metacooler/pooling'
 import type { Extent } from '../types'
@@ -305,6 +305,16 @@ export interface LadderOptions {
   onBusy?(busy: boolean): void
   /** Told when a read fails, so the view can say so once rather than per frame. */
   onError?(err: unknown): void
+  /**
+   * Told the grid this ladder is reading at — the read in flight, else the block
+   * it draws — whenever that changes, in bins of the open map; `null` before it
+   * holds anything.
+   *
+   * What a deck's other maps follow (§16.2): the resolution the zoom has chosen
+   * for the window **from the moment it chooses it**, so their reads go out
+   * beside this one rather than after it has landed.
+   */
+  onTarget?(grid: number | null): void
   /** Told when the ladder is destroyed, for whatever its wiring must let go of. */
   dispose?(): void
 }
@@ -385,6 +395,8 @@ export class BlockLadder {
   private inwardAt = Number.NEGATIVE_INFINITY
   /** Calls off the wait for a zoom's pause ({@link ZOOM_PAUSE_MS}), while one is set. */
   private paused: (() => void) | null = null
+  /** The grid last told to {@link LadderOptions.onTarget}. */
+  private reported: number | null = null
   private disposed = false
 
   constructor(options: LadderOptions) {
@@ -408,6 +420,7 @@ export class BlockLadder {
       rows ?? result.source?.rows ?? result.rowExtent,
       cols ?? result.source?.cols ?? result.colExtent,
     )
+    this.report()
     // And the window on screen now, rather than at the reader's next gesture:
     // a ladder is armed only once the view knows its sequence's extent, a
     // round trip that can come after a reader has already zoomed — and nothing
@@ -478,6 +491,7 @@ export class BlockLadder {
     if (best !== null && best.result !== this.current) {
       if (this.options.onBlock(best.result)) this.current = best.result
       else this.drop(best.result)
+      this.report()
     }
 
     if (this.satisfied(view, inward)) {
@@ -500,6 +514,7 @@ export class BlockLadder {
       flight.cancel()
       this.inflight = null
       this.options.onBusy?.(false)
+      this.report()
     }
 
     this.pending = { ...wanted, key }
@@ -739,6 +754,7 @@ export class BlockLadder {
     const { promise, cancel } = this.options.read(pending.rows, pending.cols, plan)
     this.inflight = { key: pending.key, rows: pending.rows, cols: pending.cols, grid: plan.grid, cancel }
     this.options.onBusy?.(true)
+    this.report()
     void promise
       .then((result) => {
         if (this.disposed || this.inflight?.key !== pending.key) return
@@ -750,11 +766,13 @@ export class BlockLadder {
           this.drop(result)
           this.refused.add(pending.key)
         }
+        this.report()
       })
       .catch((err: unknown) => {
         if (this.disposed || this.inflight?.key !== pending.key) return
         this.inflight = null
         this.options.onBusy?.(false)
+        this.report()
         // A cancellation is not a failure and leaves no mark: the window it was
         // for is gone, and the read that replaces it is already on its way.
         if (!isAbort(err)) {
@@ -762,6 +780,17 @@ export class BlockLadder {
           this.options.onError?.(err)
         }
       })
+  }
+
+  /**
+   * Tell {@link LadderOptions.onTarget} the grid this ladder is reading at now,
+   * where that has changed: the read in flight, else the block on screen.
+   */
+  private report(): void {
+    const grid = this.inflight?.grid ?? this.held0()?.grid ?? null
+    if (grid === this.reported) return
+    this.reported = grid
+    this.options.onTarget?.(grid)
   }
 
   /** Forget a block the panel would not take. */
@@ -1072,6 +1101,41 @@ export function planFields(plan: ReadPlan): { rung?: string; binsPerCell?: numbe
 export function openPick(binsize: number): PickedResolution {
   const open = Math.max(1, binsize)
   return { binsize: open, rung: { name: String(open), binsize: open }, factor: 1 }
+}
+
+/**
+ * Another map's resolution as a pick on this file's ladder — how a deck's
+ * companion is read at the first map's (§16.2).
+ *
+ * The stored rung of that bin size; else, where `pooled` — a resolution the
+ * reader picked, which the first map itself sums where it must (§3.4) — the
+ * coarsest stored rung that divides it, summed to it; else the stored rung
+ * nearest it on a log scale, the coarser of two as near, which is the one case
+ * where the two maps are not at one resolution and `exact` is `false` for the
+ * panel to say so. Never pooled for the zoom's own choice, which is a stored
+ * rung by the rule every screen-sized read keeps (§2). `null` for a ladder with
+ * no rung at all.
+ */
+export function pickOnLadder(
+  binsize: number,
+  rungs: ReadonlyArray<Rung>,
+  pooled: boolean,
+): { pick: PickedResolution; exact: boolean } | null {
+  if (!(binsize > 0) || rungs.length === 0) return null
+  const stored = rungs.find((rung) => rung.binsize === binsize)
+  if (stored !== undefined) return { pick: { binsize, rung: stored, factor: 1 }, exact: true }
+  if (pooled) {
+    const derived = coarsenTo(binsize, rungs)
+    if (derived !== null) return { pick: { binsize, rung: derived.from, factor: derived.factor }, exact: true }
+  }
+  const distance = (rung: Rung): number => Math.abs(Math.log(rung.binsize / binsize))
+  let nearest = rungs[0]
+  for (const rung of rungs) {
+    const d = distance(rung)
+    const best = distance(nearest)
+    if (d < best - 1e-12 || (Math.abs(d - best) <= 1e-12 && rung.binsize > nearest.binsize)) nearest = rung
+  }
+  return { pick: { binsize: nearest.binsize, rung: nearest, factor: 1 }, exact: false }
 }
 
 /**
@@ -1432,6 +1496,12 @@ export function attachRefine(options: {
    * they are looking at is exactly the reader who would believe it.
    */
   onInstalled?: (result: MatrixResult) => void
+  /**
+   * Told the bin size, in base pairs, this view's zoom is reading at — its read
+   * in flight, else the block it draws — whenever that changes. What the other
+   * maps of a deck are read at while the zoom picks (§16.2).
+   */
+  onTarget?: (binsize: number | null) => void
 }): BlockLadder {
   const seconds = new WeakMap<MatrixResult, MatrixResult>()
   const rungs = options.second === true ? [] : (options.rungs ?? [])
@@ -1500,6 +1570,11 @@ export function attachRefine(options: {
       options.onBusy?.(busy)
     },
     ...(options.onError === undefined ? {} : { onError: options.onError }),
+    // In base pairs, rounded: a grid is a fraction of one where a finer rung than
+    // the open one is read, and its product with the open bin size is that rung's.
+    ...(options.onTarget === undefined
+      ? {}
+      : { onTarget: (grid: number | null) => options.onTarget?.(grid === null ? null : Math.round(grid * open)) }),
     dispose: () => stopRefine(),
   })
   // Every frame, on or off: on, the screen's resolution down to the finest

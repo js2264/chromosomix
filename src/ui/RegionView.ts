@@ -85,6 +85,11 @@ export interface RegionViewProps {
    */
   picked?: () => PickedResolution | null
   /**
+   * Told the bin size this view's zoom is reading at, whenever it changes: what
+   * the other maps of a deck follow while the zoom picks (§16.2).
+   */
+  onZoomTarget?: (binsize: number | null) => void
+  /**
    * A control the session puts on the title line, after the box.
    *
    * The 1D/2D switch, today. An element rather than a callback because what
@@ -957,6 +962,7 @@ export class RegionView {
       // The pick, asked live (§3.4), so a zoom cannot quietly read past the
       // resolution the axis is labelled with.
       ...(this.props.picked === undefined ? {} : { picked: this.props.picked }),
+      ...(this.props.onZoomTarget === undefined ? {} : { onTarget: this.props.onZoomTarget }),
       read: (rowExtent, colExtent, rung, binsPerCell) => {
         const own = this.props.client.cancellable<'matrix'>(
           query(rowExtent, colExtent, rung, binsPerCell),

@@ -25,8 +25,9 @@ import type { BlockInput } from '../analysis/worker/protocol'
 import { LEAD_MAP } from '../annotations/placement'
 import { browsingBinsize } from '../genome/assembly'
 import type { AnalysisFacts } from '../panels/MapPanel'
-import { fileBaseLabel, fileLabel } from '../ui/labels'
-import { rungsOf } from '../ui/refine'
+import { analysisGridOf, offsetsOf, type AnalysisGrid, type Rung } from '../metacooler/coarsen'
+import { entryLabel, fileBaseLabel, fileLabel, splitUri } from '../ui/labels'
+import { pickOnLadder, rungsOf } from '../ui/refine'
 import { resolutionLabel } from '../units'
 import type { MatrixPanel } from '../ui/MatrixPanel'
 import type { OpenResult, OrientationSummary, PairsBinning } from '../worker/protocol'
@@ -85,6 +86,36 @@ function withCircularNames(
  */
 function cellsOfMap(info: OpenResult): { cells?: readonly string[] } {
   return info.cells.length === 0 ? {} : { cells: info.activeCells }
+}
+
+/**
+ * Where a map beside the first is read for a task at `binsize`, on its own
+ * ladder (§16.2) — the rule its picture follows ({@link pickOnLadder}): the
+ * stored rung of that size; else the coarsest stored rung that divides it,
+ * summed to it (`factor`); else the stored rung nearest it, read at its own
+ * size. `null` where that is the rung it is open at, and for a map binned here
+ * from a `.pairs`, whose one grid is the one it was binned at (§3.7).
+ */
+export function onLadder(
+  uri: string,
+  info: OpenResult,
+  binsize: number | undefined,
+): { uri: string; binsize: number; rung: Rung; factor: number } | null {
+  const open = info.binsize ?? 0
+  if (binsize === undefined || !(binsize > 0) || !(open > 0) || binsize === open) return null
+  if (info.pairs !== undefined) return null
+  const rungs = rungsOf(info.entries)
+  const found = pickOnLadder(binsize, rungs.length > 0 ? rungs : [{ name: String(open), binsize: open }], true)
+  if (found === null) return null
+  const { rung, factor } = found.pick
+  if (rung.binsize === open && factor === 1) return null
+  let at = uri
+  if (rung.binsize !== open) {
+    // Another rung is another entry of the ladder, which a task opens for itself.
+    if (info.entryGroup !== 'resolutions') return null
+    at = `${splitUri(uri).path}::${info.entryGroup}/${rung.name}`
+  }
+  return { uri: at, binsize: rung.binsize * factor, rung, factor }
 }
 
 /**
@@ -211,8 +242,10 @@ export class SessionAnalysis {
       source: (task) => {
         const starred = this.starredFacts(task)
         if (starred !== null) {
+          // At the deck's resolution on its own ladder, as it is drawn (§16.2).
+          const at = this.starredAt(starred, task?.id)
           return {
-            uri: starred.uri,
+            uri: at?.uri ?? starred.uri,
             source: starred.source,
             ...cellsOfMap(starred.info),
             ...binningOfMap(starred.info),
@@ -267,7 +300,10 @@ export class SessionAnalysis {
         const starred = this.session.deck.grid?.starredPanel ?? null
         if (starred !== null) {
           const facts = starred.analysisFacts()
-          const framed = facts === null ? null : (starred.map?.analysisFraming(facts.uri) ?? null)
+          // On the grid a run of the task open in the drawer reads it at (§16.2).
+          const at = facts === null ? null : this.starredAt(facts, this.workspace?.openTask ?? undefined)
+          const framed =
+            facts === null ? null : (starred.map?.analysisFraming(at?.uri ?? facts.uri, at?.grid ?? null) ?? null)
           return this.session.withEditOf(
             withCircularNames(
               framed,
@@ -442,13 +478,54 @@ export class SessionAnalysis {
         binsize: at?.grid.binsize ?? file.info.binsize ?? 0,
       })
     }
+    // Every other map at the deck's resolution, on its own ladder (§16.2).
+    const binsize = this.deckBinsize(taskId)
     for (const { panel } of this.session.deck.grid?.analysable() ?? []) {
       if (panel.analysisFacts() === null) void panel.prepareAnalysis(() => this.workspace?.refresh())
       const info = panel.openInfo ?? panel.analysisFacts()?.info ?? null
       if (info === null || panel.uri === uri) continue
-      out.push({ label: this.session.mapLabel(panel.uri), uri: panel.uri, binsize: info.binsize ?? 0 })
+      const at = onLadder(panel.uri, info, binsize)
+      out.push({
+        label: this.session.mapLabel(panel.uri),
+        uri: at?.uri ?? panel.uri,
+        binsize: at?.binsize ?? info.binsize ?? 0,
+      })
     }
     return out
+  }
+
+  /**
+   * The bin size a task reads **every map of the deck** at (§16.2, §18.4): the
+   * first map's — its *Resolution* row's, else the one picked, else the rung it
+   * is open at. A map beside it is read there on its own ladder ({@link
+   * onLadder}), as it is drawn there: it was the rung each companion happened
+   * to open at, so a batch run after a pick read the first map at the pick and
+   * the others where they had opened, and Reproducibility refused the pair.
+   */
+  private deckBinsize(taskId: string | undefined): number | undefined {
+    const file = this.session.file
+    if (file === null) return undefined
+    return this.at(taskId)?.grid.binsize ?? file.info.binsize ?? undefined
+  }
+
+  /**
+   * The grid a task on the **starred companion** reads (§16.2, §18.4): the
+   * deck's resolution on its ladder, laid out from its sequences as the first
+   * map's is ({@link Session.analysisAt}); `null` at the rung it is open at.
+   */
+  private starredAt(
+    facts: AnalysisFacts,
+    taskId: string | undefined,
+  ): { uri: string; nBins: number; grid: AnalysisGrid } | null {
+    const at = onLadder(facts.uri, facts.info, this.deckBinsize(taskId))
+    if (at === null) return null
+    const lengths = facts.contigs.table.data['length']
+    if (lengths === undefined || Array.isArray(lengths)) return null
+    const sizes = lengths as ArrayLike<number>
+    const open = facts.info.binsize ?? 0
+    const own = offsetsOf(sizes, open)
+    if (own[own.length - 1] !== facts.info.nBins) return null
+    return { uri: at.uri, ...analysisGridOf(sizes, at.rung, at.factor) }
   }
 
   /**
@@ -480,12 +557,19 @@ export class SessionAnalysis {
 
   /**
    * What a run on the lead is called: the name the reader gave the map, else
-   * the file at the entry the run reads — `sample.mcool::25000` beside "25 kb
-   * bins", not the entry the file happens to be open at.
+   * the file and the rung the run reads — `sample.mcool · 25 kb`, not the rung
+   * the file happens to be open at. Said in words: a rung is no part of a
+   * file's name any more (`fileLabel`), and `::25000` was the address's way of
+   * saying it.
    */
   private leadLabel(open: string, read: string | undefined): string {
     const named = this.session.mapLabel(open)
-    return read === undefined || named !== fileLabel(open) ? named : fileLabel(read)
+    if (named !== fileLabel(open)) return named
+    const uri = read ?? open
+    const rung = entryLabel(uri)
+    return rung !== undefined && /^\d+$/.test(rung)
+      ? `${fileLabel(uri)} · ${resolutionLabel(Number(rung))}`
+      : fileLabel(uri)
   }
 
   /** The lead's framing, on the grid task `taskId` reads ({@link at}). */
@@ -577,15 +661,20 @@ export class SessionAnalysis {
         label: this.leadLabel(file.uri, at?.uri),
       }
     }
+    // Every other map at the deck's resolution, on its own ladder (§16.2): summed
+    // to it where its file stores a rung that divides it and not the rung itself.
+    const binsize = this.deckBinsize(this.workspace?.openTask ?? undefined)
     for (const { map, panel } of this.session.deck.grid?.analysable() ?? []) {
       const facts = panel.analysisFacts()
       if (facts === null) {
         if (options.start) void panel.prepareAnalysis(() => this.workspace?.refresh())
         continue
       }
+      const at = onLadder(facts.uri, facts.info, binsize)
       out.push({
         map,
-        uri: facts.uri,
+        uri: at?.uri ?? facts.uri,
+        ...(at === null || at.factor === 1 ? {} : { coarsen: at.binsize }),
         source: facts.source,
         ...cellsOfMap(facts.info),
         ...binningOfMap(facts.info),
@@ -701,7 +790,13 @@ export class SessionAnalysis {
     // that resolution rather than at the rung underneath. Only with the map on
     // screen — a link's `resolution=` carried into the browser draws no map at
     // it, and the tracks there are binned as before.
-    const at = starred === null && panel !== undefined && panel !== null ? this.at(task?.id) : null
+    // The starred companion's at the deck's resolution on its own ladder (§16.2).
+    const at =
+      starred !== null
+        ? this.starredAt(starred, task?.id)
+        : panel !== undefined && panel !== null
+          ? this.at(task?.id)
+          : null
     const derived = at?.grid.derived ?? null
     const binsize = at?.grid.binsize ?? info.binsize
     if (binsize === null || binsize <= 0) return null

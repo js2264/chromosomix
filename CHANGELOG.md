@@ -107,6 +107,46 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   resolution picked, else the rung the file was opened at — never the one the zoom has drawn — and
   arriving at the bookmark puts it in the link, where it re-opened the file at that rung's entry. A
   bookmark at the rung opened, gone to while nothing is picked, leaves the zoom picking.
+- **A task in a deck reads every map at the first map's resolution for it (§16.2, §18.4)** — its
+  *Resolution* row's, else the pick, else the rung it was opened at — each map on its own ladder, by
+  the rule its picture follows: its rung of that size; else a rung that divides it, summed to it, the
+  run told so and its command line carrying `--coarsen`; else its nearest. That is *run on all maps*,
+  the maps a comparison reads, and a starred map beside the first. A map beside the first was read at
+  the rung it happened to open at: after a pick of 100 kb on a deck of two K562 files, a batch read
+  the first at 100 kb and the second at 25 kb, and Reproducibility refused the pair as two grids.
+- **Every map of a deck is drawn at one resolution, and they sharpen together (§2, §16.2).** The
+  deck's resolution is the first map's pick, else — while *refine on zoom* picks — the one the first
+  map's zoom is reading at, else the one it was opened at, and every other map is read at it in
+  place, on its own ladder, keeping the window it shows: at its own rung of that size; for a
+  resolution picked, summed out of the coarsest rung it stores that divides it, as the first map sums
+  one; otherwise at its nearest, with a line under its heading saying so — *drawn at 10 kb, the
+  nearest this file has to 5 kb*, in the faint italic of a renamed sequence rather than a refusal's
+  red, and the rungs it has in its tooltip. The other maps' reads go out beside the first map's,
+  as its zoom chooses a rung, rather than after its block lands. Each map used to refine on its own
+  ladder: on the 4DN map of K562 from S3, in a deck of the file beside itself, one wheel zoom ended
+  with the first map at 5 kb and the other at 10 kb. And a pick in the link held for the first map
+  only: with `resolution=100000` it drew 100 kb, and the other map 500 kb on chr5 and 5 kb after a
+  zoom. Both now draw 100 kb with the pick, and without it 500 kb on chr5 and 5 kb after the zoom. A
+  map off the chain follows a pick, and otherwise sharpens on its own as you zoom it rather than with
+  the first map's zoom; its chain re-follows at once.
+- **A map beside the first keeps the address you gave it (§16.6, §16.9).** An `.mcool` dropped into
+  a deck still opens at the first map's rung where it has it, else where it lands, but that rung is
+  no longer written into its cell or into `maps=`: it is where the file was opened rather than what
+  is drawn, and it read as the resolution on screen, `::25000` over a picture at 500 kb. A sample of
+  a collection is still written. The `::1000` beside a map's name is offered for a collection's
+  samples only, no longer for a ladder of resolutions, whose resolution is now the deck's.
+- **A file's name and its link leave out the resolution it was opened at (§3.4, §3.5, §9, §16.10).**
+  The tab, the trail, a deck cell's heading, the **Contact maps** card and a figure's caption name
+  `4DNFI18UHVRO.mcool`, where they named `4DNFI18UHVRO.mcool::25000` over a map drawn at 500 kb or
+  2 kb; a sample of a collection is still named, `samples.mmetacool::rep1`. The address bar writes a
+  multi-resolution file open where it lands — a third of the way up its ladder, 25 kb on the K562
+  map — as the file alone, `uri=…/4DNFI18UHVRO.mcool&view=region&region=chr5`, which opens there
+  anyway, and reads such a link back as the file already open, so back and forward step within it
+  rather than open it again: once across the table, chr5 and back. A file opened at another rung, as
+  an older link's `::resolutions/1000`, opens there and is written as it came, and an address naming
+  a resolution works as before everywhere, the command line and the widgets included; a tab kept by
+  the browser, a link from **Share this tab** and a workspace keep the whole address. A run on the
+  first map says the resolution it read in words (below).
 - **The spinner sits in the map's top right corner, left of its legend (§2, §7.2).** It turned on the
   canvas, in the plot's bottom-left corner over the first label of each axis — `0 bp` on a whole
   chromosome — just when a preview that spins while the reader zooms it has those labels read. It is
@@ -266,6 +306,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 - **The mock microbial community from the lab's store (a dev feature, §29).** Its files were deleted
   from the lab's bucket, so the store's *Mock microbial community* figure and its `.metacool` and
   `.mmetacool` rows went with them. The files stay in the repository, where the tests read them.
+- ***match all resolutions*, from the deck's bar (§16.2, §16.5).** Every map is read at the deck's
+  one resolution already, so the press had nothing left to do; **match all scales** stays. With it
+  goes the way a change of the first map's rung reached the other maps, reopening each at that rung:
+  it changed the map's address, threw away its window and, with *refine on zoom* on, never reached
+  the picture.
 
 ### Fixed
 
@@ -302,9 +347,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   §16.2).** A chromosome opened from the table, the minimap or `<` and `>` went back to the zoom's
   resolution; a bookmark re-opened the file at its rung's entry; the deck's companions followed the
   rung the first map was opened at, so a pick read in place on it left them where they were — they
-  follow the rung picked now, the stored one under a resolution you added; and *match all
-  resolutions* and the whole-genome view's *open at … instead* re-opened the file at another entry
-  under a pick the link still carried. Both pick now, in place.
+  are read at the pick now, in place (above); and the whole-genome view's *open at … instead*
+  re-opened the file at another entry under a pick the link still carried. It picks now, in place.
 - **The resolution row says what the map in front is drawn at (§5.5).** Put another view in front — a
   whole-genome picture kept from before, a table — and the row went on naming the last map's
   resolution until a block landed.
@@ -312,8 +356,34 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   dropped to the rung the file was opened at, which may be another rung of the ladder altogether.
 - **A task is lent the block on screen only when it was read from the rung the task reads (§18.4).**
   A task queued before a refine could be lent the block of another rung, and framed on its bins.
-- **A run's label names the entry it read (§16.10, §18.4).** It named the entry the file was open at,
-  `sample.mcool::10000` over a run of 25 kb bins; a map you named keeps its name.
+- **A run's label names the resolution it read (§16.10, §18.4)**, with the file, in words:
+  `sample.mcool · 25 kb`. It named the entry the file was open at, `sample.mcool::10000` over a run
+  of 25 kb bins; a map you named keeps its name.
+- **A deck's maps stay on one place, and on the lock, as their zooms refine (§16.3, §16.4).** The
+  lock counted a window in base pairs from the first cell of each map's block, and a zoom reads a
+  window inside the region, so two maps whose zooms read different windows held blocks beginning at
+  different places — one at 87.7 Mb, the other at 88.0 — and the same offset into each was two
+  places 300 kb apart. Each map now tells the lock where its block begins in its sequence, read off
+  its axes, so a block read from another rung or pooled is placed right; a block read whole begins
+  its sequence, as before. The check that lets a map off the lock compared the spans of the blocks on
+  screen, and told two maps whose zooms had read different windows *this block spans 5.00 Mb ×
+  5.00 Mb where the first map spans 4.08 Mb × 4.08 Mb. The same name resolved against different
+  sequences*: on a deck of the K562 map after a zoom, the second map stood still at 89.5–92.0 Mb
+  while the first went on to 90.0–91.5. It compares the regions each map first drew now, and after
+  the same zoom both show 89.5–92.0 Mb at 5 kb, both chains lit, with no line under either. The mark
+  the pointer leaves on the other maps is carried as the contact it is over, rather than as a cell
+  counted from each block's start.
+- **A deck taken to a wider place shows the whole of it in every map (§16.3).** Widening the yeast
+  deck from IV:1.0–1.4 Mb to the whole of IV from the trail left the Hi-C map reading 0.8–1.53 Mb,
+  and then dragged the micro-C map onto that stretch after it. A navigation puts the deck's window
+  down, and a map still drawing the old place redraws while its new block is on its way: its old
+  window was taken as the new place's, pushed onto its new block, and its zoom read the stretch
+  around it. A map's word counts now only once its block was read for the deck's place. And a map
+  showing the deck's window clamped to a block that holds less of it no longer becomes the one
+  every other map follows when it redraws — a sharper block landing on it is a redraw, not a move.
+- **Reproducibility's refusal of two grids says what to do (§18.4).** It advised opening the maps at
+  one resolution, *an .mcool descends to any rung it carries*, and a map beside the first has no
+  rung of its own to pick now; it says to pick, on the first map, a resolution every file carries.
 - **Closing a tab, or opening another file in it, lets go of its resolution row (§5.5).** The row
   listens for *refine on zoom*, and the last one drawn went on listening, and repainting, after the
   bar it was on had gone.

@@ -407,9 +407,12 @@ export class SessionDeck {
         return shared
       },
       // The stored rung the lead reads: the one picked, or the one opened
-      // (§3.4) — a companion follows it by opening it. A resolution added over
-      // a rung is that rung's: a companion cannot sum one.
+      // (§3.4) — the rung a companion handed a whole `.mcool` opens at. What it
+      // is *drawn* at is the deck's resolution, below.
       binsize: () => this.session.pickedResolution()?.rung.binsize ?? this.session.file?.info.binsize ?? undefined,
+      // What every map of the deck is read at (§16.2): the lead's pick, else
+      // the bin size its zoom reads at, else its open rung.
+      resolution: () => this.session.deckResolution(),
       // The two directions "fix all …" needs that the deck cannot take itself.
       //
       // A clip written straight onto the lead's panel is one the next render
@@ -417,11 +420,6 @@ export class SessionDeck {
       // its colour lives — so it goes through the store, exactly as the
       // Aesthetics column's own controls do, and travels in the link with them.
       onLeadScale: (scale) => this.session.store.patch(scale, { replace: true }),
-      // And its resolution is the breadcrumb's entry picker from the other end:
-      // changing the first map's rung means reopening the file the session *is*.
-      // Answers whether it *could*, so the deck can name it in the one line it
-      // has for a map with no frame of its own.
-      onLeadBinsize: (binsize) => this.session.openAtBinsize(binsize),
       score: () => {
         const state = this.session.store.state
         return state === null ? undefined : this.session.scoreOf(state).id

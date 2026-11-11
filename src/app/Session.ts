@@ -223,6 +223,8 @@ import {
   type MapNames,
 } from '../ui/mapNames'
 import { refineEnabled, rungsOf, setRefineEnabled, type PickedResolution } from '../ui/refine'
+import { noteLanding } from '../state/landing'
+import { landingRung } from '../metacooler/detect'
 import { accessHeaders } from '../sources/access'
 import { canonicalUrl } from '../sources/rewrite'
 import { accessHeadersFor, credentialFor } from '../s3/credentials'
@@ -1191,6 +1193,42 @@ export class Session {
    */
   get refining(): boolean {
     return refineEnabled() && this.pickedResolution() === null
+  }
+
+  /**
+   * The bin size the zoom of the map in front is reading at, while it picks:
+   * the read in flight, else the block drawn ({@link noteZoomTarget}). `null`
+   * before the map in front has a block.
+   */
+  private zoomTarget: number | null = null
+
+  /**
+   * The zoom of the map in front moved to another bin size — a read went out
+   * for it, landed, or was called off — and a deck's other maps follow it there
+   * at once (§16.2).
+   */
+  private noteZoomTarget(binsize: number | null): void {
+    if (binsize === this.zoomTarget) return
+    this.zoomTarget = binsize
+    this.deck.grid?.followResolution()
+  }
+
+  /**
+   * The resolution every map of a deck is read at (§16.2): the one picked,
+   * else — while *Refine on zoom* picks — the one the first map's zoom is
+   * reading at, else the first map's open rung. `zoom` says which, since a map
+   * moving on its own follows a pick but not the zoom of a window it is not
+   * showing. `null` where there is nothing to follow yet: the first map has no
+   * block, and the other maps read the screen's resolution meanwhile.
+   *
+   * @internal The deck hands it to its maps.
+   */
+  deckResolution(): { binsize: number; zoom: boolean } | null {
+    const pick = this.pickedResolution()
+    if (pick !== null) return { binsize: pick.binsize, zoom: false }
+    if (this.refining) return this.zoomTarget === null ? null : { binsize: this.zoomTarget, zoom: true }
+    const open = this.file?.info.binsize ?? 0
+    return open > 0 ? { binsize: open, zoom: false } : null
   }
 
   /**
@@ -2534,6 +2572,14 @@ export class Session {
         ),
         entries,
         currentEntry,
+      }
+      // Where this file lands when an address names no rung (§3.4): the address
+      // bar leaves that rung out, and reads the file alone back as it
+      // (`state/landing.ts`). Its landing rung, not the one open, so an older
+      // link's `::1000` is written as it came.
+      const ladder = rungsOf(entries)
+      if (match !== null && ladder.length > 0) {
+        noteLanding(`${splitUri(uri).path}::${group.split('/')[1]}/${landingRung(ladder.map((rung) => rung.binsize))}`)
       }
       const isMetacool = info.layout.kind === 'metacool'
       // An scool's landing table is its cells, and its Genomes entry is greyed
@@ -6134,8 +6180,8 @@ export class Session {
 
   /**
    * Stand the map on a resolution (§3.4): the row's slider and box, `−` and `+`,
-   * a bookmark, the deck's *match all resolutions*. Says whether this file can
-   * be read at it.
+   * a bookmark. Says whether this file can be read at it — and every map of a
+   * deck is read at it with this one (§16.2).
    *
    * **In place**, a patch to the link: the views read the pick where the reader
    * stands (`resolutionChanged`), keeping the window they zoomed to — re-opening
@@ -6285,8 +6331,11 @@ export class Session {
    * every map view's props so that one answer reaches the first read, the
    * refine and the summary, and a change of it is read in place (§3.4).
    */
-  private pickProps(): { picked: () => PickedResolution | null } {
-    return { picked: () => this.pickedResolution() }
+  private pickProps(): {
+    picked: () => PickedResolution | null
+    onZoomTarget: (binsize: number | null) => void
+  } {
+    return { picked: () => this.pickedResolution(), onZoomTarget: (binsize) => this.noteZoomTarget(binsize) }
   }
 
   /** The `+`: ask for a resolution, add it, and stand on it. */
@@ -6651,31 +6700,6 @@ export class Session {
             })
           },
         }
-  }
-
-  /**
-   * Stand this session's own map on `binsize`, and say whether it could.
-   *
-   * The deck's *fix all resolutions* reaching the one map it cannot move by
-   * itself: a companion changes rung inside its own worker, and the first map is
-   * the file the *session* is of, so moving it is the resolution row from the
-   * other end — a pick, read in place, so the region, the level, the score and
-   * the window all survive it (§3.4).
-   *
-   * **Exact**, on {@link MapPanel.useBinsize}'s rule and for its reason: the
-   * button has just promised one resolution across the deck, and answering with
-   * the nearest thing would leave two while saying one. `false` is a file that
-   * has not got that level, which the deck names in its own line — this map has
-   * no frame of its own to be told in.
-   *
-   * @internal SessionDeck's *fix all resolutions* moves the first map through
-   * it.
-   */
-  openAtBinsize(binsize: number): boolean {
-    if (this.file === null || !Number.isFinite(binsize) || binsize <= 0) return false
-    // A rung the file stores, never one summed: a companion cannot sum one.
-    if (!this.storedRungs().some((rung) => rung.binsize === binsize)) return false
-    return this.pickResolution(binsize)
   }
 
   /**
@@ -8713,6 +8737,9 @@ export class Session {
   ): void {
     this.current?.destroy?.()
     this.current = view ?? null
+    // A view put in front reports what its own zoom reads once it has a block;
+    // until then the deck has nothing of the old one's to follow.
+    this.zoomTarget = null
     // The row follows the map in front, and a map just put in front — a cached
     // whole-genome picture, a table with none — says what it is drawn at only
     // when its next block lands: until then, what its panel holds.

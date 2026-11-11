@@ -96,6 +96,8 @@ function ladder(
   // is what frames a few microseconds apart are.
   let clockAt = 0
   let waiting: (() => void) | null = null
+  // What the ladder said it reads at, each time that changed (`onTarget`).
+  const targets: Array<number | null> = []
 
   const it = new BlockLadder({
     ceiling: { rows: ceiling, cols: ceiling },
@@ -116,6 +118,7 @@ function ladder(
       return true
     },
     onBusy: (on) => busy.push(on),
+    onTarget: (grid) => targets.push(grid),
     now: options.now ?? (() => clockAt),
     after: (_ms, then) => {
       waiting = then
@@ -166,6 +169,7 @@ function ladder(
     asked,
     given,
     busy,
+    targets,
     get cancels() {
       return cancels
     },
@@ -933,6 +937,37 @@ describe('reading ahead', () => {
     l.it.consider(seen([20_000, 22_000], { screen: 690, fit: 25 }))
     expect(l.holding).toBe(false)
     expect(l.asked).toHaveLength(1)
+  })
+
+  it('says what it reads at from the moment it reads, and the block once it lands', async () => {
+    // What a deck's other maps follow (§16.2): the read going out, not the one
+    // that has landed, so theirs go out beside it.
+    const l = ladder()
+    l.it.adopt(block(WHOLE, 72))
+    expect(l.targets).toEqual([72])
+    l.it.consider(seen([10_000, 22_000], { screen: 690, fit: 4 }))
+    expect(l.asked).toHaveLength(1)
+    const reading = l.asked[0].plan.grid
+    expect(reading).toBeLessThan(72)
+    expect(l.targets).toEqual([72, reading])
+    // Landed on the grid it was read at: nothing new to say.
+    await l.land(block(l.asked[0].rows, reading))
+    await Promise.resolve()
+    expect(l.targets).toEqual([72, reading])
+  })
+
+  it('goes back to the block on screen when its read is called off', () => {
+    const l = ladder()
+    l.it.adopt(block(WHOLE, 72))
+    l.it.consider(seen([10_000, 22_000], { screen: 690, fit: 4 }))
+    const first = l.asked[0].plan.grid
+    // Zoomed on past it: called off, and the block drawn is what is read at
+    // until the read that replaces it goes out — after the pause.
+    l.it.consider(seen([15_000, 17_000], { screen: 690, fit: 24 }))
+    expect(l.cancels).toBe(1)
+    expect(l.targets).toEqual([72, first, 72])
+    l.pause()
+    expect(l.targets.at(-1)).toBe(l.asked[1].plan.grid)
   })
 
   it('reads nothing it held once the ladder is gone', () => {

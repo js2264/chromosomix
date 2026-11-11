@@ -3947,6 +3947,9 @@ export class MatrixPanel {
     this.locusAxes = axes.drawn
     this.squareAxes = axes.square
     this.ownAxes = axes.own
+    // The region this view names, as first drawn: what the deck's gate
+    // compares, whatever window a refine reads inside it later.
+    this.framed = this.blockSpan()
     // The presentation a derivation took over, recorded now that the block it
     // was chosen for is actually in. Announced from here rather than from
     // `syncDivergingScale` so the store is not patched — and the router not
@@ -6654,6 +6657,41 @@ export class MatrixPanel {
   bpPerCell(): number {
     return this.turned === null ? this.options.binsize : this.options.binsize * BIN_FRACTION
   }
+
+  /**
+   * Where the first cell of the block on screen sits in its sequence, in base
+   * pairs, per axis — the origin the deck's lock counts a window from
+   * (`panels/lock.ts`). Zero for a block that begins its sequence, which is
+   * every block read whole; where a refine read its window from otherwise, so
+   * two maps whose zooms read different windows are put on one place rather
+   * than at one offset into two blocks. Read off the axes the picture is
+   * labelled with, so it is right for a block read from a sibling rung and for
+   * one pooled, whose bins are not the file's.
+   */
+  lockOrigin(): { rows: number; cols: number } {
+    const at = (axis: LocusAxis | null): number => {
+      const first = axis?.segments[0]
+      return first === undefined ? 0 : first.bpStart - first.unitStart * first.bpPerUnit
+    }
+    return { rows: this.turned === null ? at(this.locusAxes.rows) : 0, cols: at(this.locusAxes.cols) }
+  }
+
+  /**
+   * The span of the block this view first drew — the region it names, read
+   * whole — in the shape {@link blockSpan} answers, or `null` before one.
+   *
+   * What the deck's gate compares (§16.4): whether one name resolved to the
+   * same length of sequence in two files is a question about the *region*. A
+   * block a zoom refined is a window read inside it, and two maps whose zooms
+   * read different windows were told the same name had resolved against
+   * different sequences, and were let off the lock for it.
+   */
+  frameSpan(): { rows: number; cols: number; sequences: { rows: number; cols: number } } | null {
+    return this.framed
+  }
+
+  /** See {@link frameSpan}: set by {@link setData}, kept through every {@link regrid}. */
+  private framed: { rows: number; cols: number; sequences: { rows: number; cols: number } } | null = null
 
   /**
    * What one cell of the drawn block *is* — a stretch of a sequence, a whole

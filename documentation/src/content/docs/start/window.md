@@ -73,16 +73,16 @@ it, and coarser than the one picked when the window holds more bins than a block
 A tab shows **a contact map**, with tracks on its edges and marks on it
 ([Reading a contact map](/browse/contact-maps/)); **the genome browser**, tracks along the genome with
 no map, which a tab opens as when its first file is a track
-([The genome browser](/browse/genome-browser/)); or **a deck** of cells, panned and zoomed together.
+([The genome browser](/browse/genome-browser/)); or **a deck** of cells, panned and zoomed together,
+its maps drawn at one resolution.
 
 The **+** down the map's right edge or along its bottom opens a column or a row of empty cells, for
 a map, a track or a 3D structure; a map dropped on an open map opens beside it too. Each cell has a
 grip to swap it, a **star** for the map the Map card sets and analyses run on, and a **chain**, lit
-while it follows the others. The deck's bar has **add a cell…**, **match all scales**,
-**match all resolutions**, the number of cells across, the deck as one figure and **close deck**
-([Maps side by side](/browse/deck/)).
+while it follows the others. The deck's bar has **add a cell…**, **match all scales**, the number of
+cells across, the deck as one figure and **close deck** ([Maps side by side](/browse/deck/)).
 
-![A deck of three cells on the whole of yeast chromosome IV: a micro-C cooler and a Hi-C .hic side by side, the first starred and with its genes and ATAC lanes, and the yeast model beside them with chromosome IV lit and the rest ghosted, under the deck's bar from add a cell… to close deck.](../../../assets/screens/start/deck.webp)
+![A deck of three cells on the whole of yeast chromosome IV: a micro-C cooler and a Hi-C .hic side by side, both at 2 kb, the first starred and with its genes and ATAC lanes, and the yeast model beside them with chromosome IV lit and the rest ghosted, under the deck's bar from add a cell… to close deck.](../../../assets/screens/start/deck.webp)
 
 The pictures keep their light colours in the dark theme, as in a figure.
 

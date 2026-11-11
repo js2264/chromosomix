@@ -26,7 +26,12 @@ in reads finer rungs, down to the finest the file stores. To hold the map at one
 **refine on zoom** and pick it in the **resolution** row at the end of the bar above the map
 ([Resolution](/browse/contact-maps/#resolution)).
 
-- Open one rung by its address: `sample.mcool::/resolutions/5000`.
+The rung a file opens at is not part of its name: the tab, the trail, the **Contact maps** card and
+a figure's caption say `sample.mcool`, and the address bar names the file alone, which opens at the
+same rung. A task run on the map is labelled with the resolution it read, as in
+`sample.mcool · 25 kb`.
+
+- Open one rung by its address: `sample.mcool::/resolutions/5000`. A link to it keeps the rung.
 - The whole genome and a chromosome's first picture are read from a coarser rung.
 - The **+** in the resolution row sums a stored rung's bins into a resolution the file does not
   store.

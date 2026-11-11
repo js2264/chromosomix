@@ -21,6 +21,7 @@
 import { ViewerError } from '../errors'
 import { begin, RENDERED, routed, type RenderedReport } from '../perf/rendered'
 import { parseViewState, serialiseViewState, viewStateEquals } from '../state/ViewState'
+import { linkState, openedState } from '../state/landing'
 import { HistoryJournal } from '../state/historyJournal'
 import { historyItems } from '../ui/historyMenu'
 import { openMenu } from '../ui/Menu'
@@ -2220,7 +2221,10 @@ export class App implements SessionHost {
   // -------------------------------------------------------------------------
 
   private writeHash(state: ViewState | null, options: { replace: boolean }): void {
-    const hash = state === null ? '' : `#${serialiseViewState(state)}`
+    // A file open at its landing rung is written as the file alone, which opens
+    // there anyway: the rung is where it was opened, not what is on screen
+    // (§3.4, `state/landing.ts`).
+    const hash = state === null ? '' : `#${serialiseViewState(linkState(state))}`
     if (window.location.hash === hash) return
     this.writingHash = true
     const url = `${window.location.pathname}${window.location.search}${hash}`
@@ -2298,7 +2302,9 @@ export class App implements SessionHost {
       void this.openSharedHash()
       return
     }
-    this.goTo(parseViewState(window.location.hash))
+    // A file named alone is the entry it landed on here, so a step back to it is
+    // a step within it rather than an open of the same file over again.
+    this.goTo(openedState(parseViewState(window.location.hash), this.current?.state?.uri))
   }
 
   /**

@@ -123,8 +123,8 @@ same: `IV:1,000,001-1,400,000`. A map's `region` in a link is cooler's 0-based, 
 ## Deck
 
 Cells side by side in one tab, panned and zoomed together, opened by the `+` down the map's right
-edge or along its bottom. Its maps need share only coordinates. `maps=` in a link. See
-[Maps side by side](/browse/deck/).
+edge or along its bottom. Its maps need share only coordinates, and are drawn at the first map's
+resolution, or the nearest each file has. `maps=` in a link. See [Maps side by side](/browse/deck/).
 
 ## Desktop app
 

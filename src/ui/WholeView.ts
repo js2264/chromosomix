@@ -77,6 +77,11 @@ export interface WholeViewProps {
    */
   picked?: () => PickedResolution | null
   /**
+   * Told the bin size this view's zoom is reading at, whenever it changes: what
+   * the other maps of a deck follow while the zoom picks (§16.2).
+   */
+  onZoomTarget?: (binsize: number | null) => void
+  /**
    * Open the file at another rung, by entry name — the gate's second button.
    *
    * A whole-genome view pools the fine rung into cells hundreds of bins wide,
@@ -1080,6 +1085,7 @@ export class WholeView {
       rungs: rungsOf(this.props.rungs ?? []),
       second: this.props.compare !== undefined,
       ...(this.props.picked === undefined ? {} : { picked: this.props.picked }),
+      ...(this.props.onZoomTarget === undefined ? {} : { onTarget: this.props.onZoomTarget }),
       budget: () => budget.budgetBytes,
       read: (rows, cols, rung, binsPerCell) => {
         const own = client.cancellable<'matrix'>({

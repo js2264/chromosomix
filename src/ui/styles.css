@@ -11567,6 +11567,14 @@ span.deck-name {
   font-style: italic;
 }
 
+/* A map drawn at its nearest rung to the deck's resolution (§16.2), for the
+   rename note's reason: in a deck of mixed ladders it is the commonest case, and
+   the deck working rather than this map refusing to follow it. */
+.deck-res-note {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
 /* Nothing here dims a chain that is off. `--text-faint` on a cell moving on its
    own — which this sheet said twice, once for a map's cell and once for the
    tracks cell — is how it draws a control a reader *cannot* press, and the one

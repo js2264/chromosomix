@@ -41,12 +41,13 @@ describe('naming a map', () => {
     for (const cleared of [null, '', '   ']) {
       const back = withMapName(named, AT_1KB, cleared)
       expect(mapNameIn(back, AT_1KB)).toBeUndefined()
-      expect(mapLabelIn(back, AT_1KB)).toBe('rep1.mcool::1000')
+      expect(mapLabelIn(back, AT_1KB)).toBe('rep1.mcool')
     }
   })
 
   it('falls back to the file label for a map nobody has named', () => {
-    expect(mapLabelIn({}, AT_1KB)).toBe('rep1.mcool::1000')
+    // The file, not the rung it was opened at, which is no part of its name.
+    expect(mapLabelIn({}, AT_1KB)).toBe('rep1.mcool')
     expect(mapLabelIn({}, 'rep2.cool')).toBe('rep2.cool')
   })
 
