@@ -278,10 +278,10 @@
     },
     {
       "number": 122,
-      "commit": "4883938",
+      "commit": "cda261b",
       "title": "Add ideogram visualization of chromosomes",
       "branch": "js/nifty-cori-oe9zx1",
-      "date": "2026-11-11T17:12:14Z"
+      "date": "2026-11-11T17:29:31Z"
     }
   ]
 }
