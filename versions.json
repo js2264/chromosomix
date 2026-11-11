@@ -1,6 +1,13 @@
 {
-  "latest": "e11baf1",
+  "latest": "4762613",
   "versions": [
+    {
+      "commit": "4762613",
+      "version": "0.21.0",
+      "date": "2026-11-11T19:19:34+01:00",
+      "subject": "Open a map at the screen's resolution, sharpen it as you zoom, and give the resolution a row of its own (#170)",
+      "tag": ""
+    },
     {
       "commit": "e11baf1",
       "version": "0.21.0",
@@ -132,13 +139,6 @@
       "version": "0.19.0",
       "date": "2026-11-04T00:21:10+01:00",
       "subject": "docs: live examples, the app itself in place of its picture (#158)",
-      "tag": ""
-    },
-    {
-      "commit": "7dcf6ec",
-      "version": "0.19.0",
-      "date": "2026-11-03T23:47:57+01:00",
-      "subject": "Documentation site (§32), its pictures, and the fixes writing it found (#157)",
       "tag": ""
     },
     {
