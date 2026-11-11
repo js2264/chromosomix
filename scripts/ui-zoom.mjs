@@ -192,7 +192,7 @@ console.log(
 )
 await shots('zm06-figure-saved-as-on-screen')
 
-// A slot of the slider, named under the pointer: it follows the map while the zoom picks.
+// A slot of the greyed slider, named under the pointer.
 const slots = await page.$$('.res-slot')
 await slots[Math.floor(slots.length / 2)].hover()
 await sleep(300)

@@ -11,7 +11,8 @@ new block, the address follows, and the back button undoes them.
 ## Pan and zoom
 
 - **Drag**, or one finger on a touch screen, to pan; a tap opens what it lands on.
-- **Scroll** up or down, or pinch, to zoom about the pointer.
+- **Scroll** up or down, or pinch, to zoom about the pointer. With the pointer on the diagonal, or
+  within four pixels of it, the zoom is about the diagonal, so the view stays on it.
 - **Scroll sideways** to slide along the map's columns. On a Mac, hold <kbd>⌘</kbd> and two fingers
   move it in any direction.
 - **Double-click** (a double tap), <kbd>0</kbd>, or the first button of the **picture** row on the
@@ -104,22 +105,23 @@ whole chromosome is read from a coarser resolution the file stores, a cell or so
 is what puts it on screen in a fraction of a second. It is always one the file stores, the nearest to
 a pixel: the slider's thumb sits on a slot. The whole genome (<kbd>W</kbd>) opens the same way,
 whichever resolution the link opened the file at. As you zoom in, the finer data is read for the
-stretch you are looking at, step by step, down to the finest resolution the file stores, whichever it
-was opened at. The map never stops following the scroll or the drag while it reads: for a moment its
-cells are larger and a small spinner turns in its top right corner, then it sharpens where you are.
-The slider follows, its thumb moving from slot to slot. The line under the heading says what one cell
-is worth at any moment, `785 × 785 bins · effective resolution: 250 kb` on a whole chromosome. As you
-pan, the stretch ahead of the edge of what was read is read before you reach it.
+stretch you are looking at, down to the finest resolution the file stores, whichever it was opened
+at: while you go on zooming in, nothing is read, and the moment you pause, the stretch you paused on
+is. The map never stops following the scroll or the drag while it reads: for a moment its cells are
+larger and a small spinner turns in its top right corner, then it sharpens where you are. The
+slider follows, greyed, its thumb moving from slot to slot. The line under the heading says what one
+cell is worth at any moment, `785 × 785 bins · effective resolution: 250 kb` on a whole chromosome.
+As you pan, the stretch ahead of the edge of what was read is read before you reach it.
 
-Pick a resolution — a slot, the box, <kbd>-</kbd> or <kbd>+</kbd> — and the map is drawn at it
-wherever you zoom: a pick takes the resolution from the zoom, and *refine on zoom* shows unticked. A
-pick is read where you are, keeping the window you zoomed to, and goes in the link, so a link opens
-at it. A window too wide for that resolution, 8,192 bins a side, is drawn coarser, and the line
-under the heading says so — *10 kb is too fine for this window: zoom in* — until you zoom in far
-enough for it. Inside what was read, panning and zooming read nothing more; past its edge, the map
-reads on. Tick *refine on zoom* to hand the resolution back to the zoom. Untick it and the resolution
-on screen becomes your pick, and maps you open after that are drawn at the resolution they were
-opened at until you pick another. **Refine on zoom** is also in the command palette (<kbd>⌘ P</kbd> or
+Untick it to pick the resolution yourself — a slot, the box, <kbd>-</kbd> or <kbd>+</kbd> — and the
+map is drawn at it wherever you zoom; unticking keeps the resolution on screen as your pick, so
+nothing jumps. A pick is read where you are, keeping the window you zoomed to, and goes in the link,
+so a link opens at it, with *refine on zoom* unticked. A window too wide for that resolution, 8,192
+bins a side, is drawn coarser, and the line under the heading says so — *10 kb is too fine for this
+window: zoom in* — until you zoom in far enough for it. Inside what was read, panning and zooming
+read nothing more; past its edge, the map reads on. Tick *refine on zoom* to hand the resolution back
+to the zoom; maps you open while it is unticked are drawn at the resolution they were opened at until
+you pick another. **Refine on zoom** is also in the command palette (<kbd>⌘ P</kbd> or
 <kbd>Ctrl P</kbd>), where it does what the tick does; it applies to every map, and this browser
 remembers it.
 
@@ -159,7 +161,8 @@ genome browser, the address (`locus=`) follows every move without adding steps.
 
 ## From the keyboard
 
-Besides the keys above, <kbd>-</kbd> and <kbd>+</kbd> step one resolution coarser or finer, a pick,
+Besides the keys above, <kbd>-</kbd> and <kbd>+</kbd> step one resolution coarser or finer (with
+*refine on zoom* unticked),
 <kbd>b</kbd> bookmarks the view, and <kbd>?</kbd> lists every shortcut. Once you have clicked the
 map, the arrow keys pan, <kbd>Page Up</kbd> and <kbd>Page Down</kbd> zoom about the centre, and
 <kbd>Home</kbd> refits. Once you have clicked the genome browser's tracks, the arrow keys pan,

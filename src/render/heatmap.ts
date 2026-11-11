@@ -763,6 +763,15 @@ const DOUBLE_CLICK_MS = 250
 const KEY_ZOOM = 1.25
 
 /**
+ * How near the diagonal, in CSS pixels, a zoom's pointer has to be for the
+ * zoom to be about the diagonal rather than about the pointer
+ * ({@link HeatmapView.zoomAnchor}): about how closely a hand aims, and at a
+ * megabase on a laptop's map under 6 kb, so nothing a reader could tell from
+ * the line is pulled onto it.
+ */
+const DIAGONAL_PULL_PX = 4
+
+/**
  * How far up from the data's bottom edge the column labels reach, which is
  * where the row labels stop ({@link HeatmapView.drawTicks}).
  */
@@ -2846,12 +2855,13 @@ export class HeatmapView {
    * Zoom about a point given in canvas CSS pixels, keeping the matrix cell
    * under it fixed. `factor > 1` zooms in.
    *
-   * Held on the diagonal, about the point of the line nearest the one given: a
-   * zoom about a point of the line keeps a view centred on it centred on it.
+   * About the point of the diagonal nearest the one given where that is the
+   * point meant ({@link zoomAnchor}): a zoom about a point of the line keeps a
+   * view centred on it centred on it.
    */
   zoomAt(x: number, y: number, factor: number): void {
     if (!(factor > 0)) throw new RangeError(`Zoom factor must be positive, got ${factor}`)
-    const [ax, ay] = this.heldOnDiagonal ? this.onDiagonal(x, y) : [x, y]
+    const [ax, ay] = this.zoomAnchor(x, y)
     const plot = this.plotRect
     const px = ax - plot.x
     const py = ay - plot.y
@@ -2864,6 +2874,29 @@ export class HeatmapView {
     this.clampView()
     this.syncScales()
     this.changed()
+  }
+
+  /**
+   * The point a zoom is about: the nearest point of the diagonal while the view
+   * is held on it ({@link setDiagonalLock}), and wherever the point given is
+   * within {@link DIAGONAL_PULL_PX} of it; the point itself otherwise.
+   *
+   * **The diagonal pulls**, because a reader cannot point at it more closely
+   * than a pixel, and a zoom multiplies whatever they miss it by. At a whole
+   * human chromosome a pixel is a quarter of a megabase: a pointer 0.8 px off
+   * the line, zoomed to a megabase, left the picture 200 kb off the diagonal —
+   * a fifth of the window, the diagonal sliding out of the corner of a view the
+   * reader had aimed straight down it. Measured, that was the whole of the drift
+   * a zoom seemed to have as it sharpened: every block a refine lands is placed
+   * on the window to the base pair (`MatrixPanel.regrid`), and the offset grew
+   * smoothly on the first block, before any landed. A pointer further off is a
+   * reader aiming at something beside the line, and the zoom is about it.
+   */
+  private zoomAnchor(x: number, y: number): [number, number] {
+    if (this.heldOnDiagonal) return this.onDiagonal(x, y)
+    if (this.spanGestures || this.diagonalOffset() === null) return [x, y]
+    const [fx, fy] = this.onDiagonal(x, y)
+    return Math.hypot(fx - x, fy - y) <= DIAGONAL_PULL_PX ? [fx, fy] : [x, y]
   }
 
   /** Current zoom, in CSS pixels per matrix cell. */

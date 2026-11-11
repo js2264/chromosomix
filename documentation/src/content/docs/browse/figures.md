@@ -25,9 +25,8 @@ From anywhere, <kbd>S</kbd> saves the figure as the card is set, and <kbd>Ctrl</
 selected or the caret is in a box. The copy button always copies a PNG.
 
 The figure is the map exactly as it is on screen: the resolution it is drawn at and its colour range.
-For a finer figure, zoom in, or pick the resolution in the row above the map, which is then what the
-map draws whatever **refine on zoom** says
-([Resolution and the zoom](/browse/navigating/#resolution-and-the-zoom)). While a map
+For a finer figure, zoom in, or untick **refine on zoom** and pick the resolution, which is then what
+the map draws ([Resolution and the zoom](/browse/navigating/#resolution-and-the-zoom)). While a map
 is still shown from a coarser resolution as its own is read, both buttons and both keys wait for it,
 and the card says so.
 

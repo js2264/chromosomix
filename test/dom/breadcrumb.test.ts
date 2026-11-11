@@ -430,18 +430,28 @@ describe('the resolution picker', () => {
     expect(built.entries).toEqual([])
   })
 
-  it('follows the map while *Refine on zoom* picks, and still takes a pick', () => {
+  it('is greyed while *Refine on zoom* picks, and follows the map', () => {
     setRefineEnabled(true)
     const built = ladder()
     built.crumb.render(REGION)
     expect(built.crumb.el.querySelector('.crumb-res')?.classList.contains('is-refining')).toBe(true)
-    // Nothing is greyed: there is never a tick to find before a slot answers.
-    expect(box(built.crumb).disabled).toBe(false)
-    expect((built.crumb.el.querySelector('.res-add') as HTMLButtonElement | null)?.disabled ?? false).toBe(false)
+    expect(box(built.crumb).disabled).toBe(true)
+    expect((built.crumb.el.querySelector('.res-track') as HTMLElement).getAttribute('aria-disabled')).toBe('true')
     built.crumb.showResolution(50_000)
     expect(shown(built.crumb)).toBe('50 kb')
-    // A slot pressed while the zoom picks is a pick, which takes the
-    // resolution from the zoom (§3.4).
+    // A slot pressed while the zoom picks is a reading, not a pick.
+    all<HTMLButtonElement>(built.crumb.el, '.res-slot')[0]?.click()
+    expect(built.entries).toEqual([])
+  })
+
+  it('takes picks again where the link names one, the tick shown off', () => {
+    // A pick in the link wins over the preference (§3.4): the row the session
+    // draws for it is not refining, whatever the preference says.
+    setRefineEnabled(true)
+    const built = ladder({ refining: () => false, standing: () => 50_000 })
+    built.crumb.render(REGION)
+    expect((built.crumb.el.querySelector('.res-refine input') as HTMLInputElement).checked).toBe(false)
+    expect(box(built.crumb).disabled).toBe(false)
     all<HTMLButtonElement>(built.crumb.el, '.res-slot')
       .find((slot) => slot.getAttribute('aria-label') === '1 Mb')
       ?.click()

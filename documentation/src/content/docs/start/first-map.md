@@ -36,10 +36,9 @@ and **Comparing data** come with their lists, so they open quickly the first tim
 
 ## Pick a resolution and open a chromosome
 
-1. At the end of the bar above the table, choose **250 kb** in the box beside the slider (or click
-   its slot). Until you pick one, a map is read at the resolution of the screen and finer as you zoom,
-   which is what the ticked **refine on zoom** beside it means; a pick takes over from it, and the
-   tick shows unticked.
+1. At the end of the bar above the table, untick **refine on zoom**, then choose **250 kb** in the
+   box beside the slider (or click its slot). Ticked, the map would be read at the resolution of the
+   screen and finer as you zoom; unticked, the resolution is yours to pick.
 2. In the Chromosomes table, press **chr15**.
 
 The blank square at the start is the short arm, with no unique sequence for reads to map to; the

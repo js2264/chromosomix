@@ -6170,11 +6170,11 @@ export class Session {
    * The rung one step coarser (`1`) or finer (`-1`) than the one the map stands
    * on, or `null` (§3.4).
    *
-   * Stepped from the rung picked — and while the zoom picks, from the stored
-   * rung nearest the resolution drawn, so a key goes one rung from what the
-   * reader is looking at and the pick it makes wins from there. `null` on a
-   * view with no row to step — the browser — at either end, and on a ladder of
-   * one.
+   * Stepped from the rung the row stands on — the one picked, else the one the
+   * file was opened at — so a key goes one rung from what the reader is looking
+   * at. `null` on a view with no row to step — the browser — at either end, on
+   * a ladder of one, and while *Refine on zoom* picks the resolution, when the
+   * row's slider is greyed and so are its keys.
    *
    * @internal SessionCommands enables the resolution keys by it.
    */
@@ -6182,10 +6182,10 @@ export class Session {
     const state = this.store.state
     const file = this.file
     if (state === null || file === null || state.view === 'browser') return null
+    if (this.refining) return null
     const rungs = this.ladderRungs()
     if (rungs.length < 2) return null
-    const pick = this.pickedResolution()
-    const from = pick?.binsize ?? this.nearestStored(this.shownBinsize ?? file.info.binsize)?.binsize
+    const from = this.pickedResolution()?.binsize ?? file.info.binsize
     const at = rungs.findIndex((rung) => rung.binsize === from)
     return at < 0 ? null : (rungs[at + direction] ?? null)
   }
@@ -6209,6 +6209,8 @@ export class Session {
     const rung = this.rungStep(direction)
     if (rung !== null) return resolutionLabel(rung.binsize) + (rung.derived === undefined ? '' : '*')
     if (this.file === null || this.store.state?.view === 'browser') return undefined
+    // Greyed with the row's slider and its `+`, on a ladder of one as on any.
+    if (this.refining) return 'Refine on zoom picks the resolution — untick it in the bar to pick one.'
     // The `+` on the bar adds only coarser rungs — bins are added up, never
     // split — so it is the way on at the coarse end and at no other.
     if (direction < 0) return 'Already the finest resolution this file stores.'

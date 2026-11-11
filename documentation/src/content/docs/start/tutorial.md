@@ -7,7 +7,7 @@ The guided tutorial is a first session in the live window, one step at a time: e
 but the control a step is about, and a card says what to do with it. You press every control
 yourself, on real data, and the tutorial moves on once you have done what it asked.
 
-![A step of the guided tutorial on 4DN's K562 map: the window greyed, the resolution control lit through the grey at 25 kb, and the card beside it, The map, step 7 of 58, asking to pick 250 kb, with back and skip step.](../../../assets/screens/start/tutorial-step.webp)
+![A step of the guided tutorial on 4DN's K562 map: the window greyed, the resolution control lit through the grey at 25 kb, and the card beside it, The map, step 8 of 59, asking to pick 250 kb, with back and skip step.](../../../assets/screens/start/tutorial-step.webp)
 
 You open a Hi-C map from the 4D Nucleome project (4DN), find its compartments, its domains and a loop,
 save what you made, and set your results against 4DN's.
@@ -48,11 +48,12 @@ correlation of −1.
 
 ## The parts
 
-Fifty-eight steps in twelve parts, each named on the card:
+Fifty-nine steps in twelve parts, each named on the card:
 
 1. **Welcome**.
 2. **The 4DN store**: open `4DNESC23ZYOF` with its tracks.
-3. **The map**: the General panel, 250 kb, chr15, moving about, the Aesthetics panel.
+3. **The map**: the General panel, *refine on zoom* unticked and 250 kb picked, chr15, moving about,
+   the Aesthetics panel.
 4. **Compartments**: the *correlation* plaid, then the task on chr15, its saddle, and your E1 against
    4DN's.
 5. **Zooming in**: a drag holding <kbd>⇧ Shift</kbd> and <kbd>⌥ Option</kbd> (<kbd>Shift</kbd> and
@@ -70,7 +71,7 @@ Some steps have a button that does them for you: *type it for me*, *set it for m
 
 ## The card, and how a step moves on
 
-The card shows the part, *step n of 58*, a bar of your progress and **skip tutorial**. At its foot,
+The card shows the part, *step n of 59*, a bar of your progress and **skip tutorial**. At its foot,
 **back** and **next**; **next** reads **skip step** while the step waits on you, and **finish** on the
 last.
 
@@ -93,7 +94,7 @@ blinks.
 ## Leaving and coming back
 
 **skip tutorial** leaves at any step. Your place is kept in this browser, and the landing page and
-About then offer **resume at step n of 58** and **start over**.
+About then offer **resume at step n of 59** and **start over**.
 
 A resume lands on the first step of the part you left, and steps whose state still holds go by on
 their own. **start over** begins again, in a tab of its own. After **finish**, both places offer

@@ -19,23 +19,22 @@ The **Map** card, in the **Aesthetics** panel, sets how the map is drawn, from t
 At the far end of the bar above the map is the resolution, in one row:
 
 - **refine on zoom**, ticked by default: the map is read at the resolution of the screen, and finer
-  as you zoom, down to the finest the file stores. While it picks, the slider and the box follow the
-  map, so the row says which resolution is drawn: the slider's thumb is hollow, and where the map is
-  drawn at a size the file does not store, it sits on the nearest slot and the box names that size.
+  as you zoom, down to the finest the file stores. While it is ticked the rest of the row is greyed
+  and follows the map, so it says which resolution is drawn; where the map is drawn at a size the
+  file does not store, the slider's thumb sits on the nearest slot and the box names that size.
 - a **slider** with a round slot for each bin size the file stores, coarsest on the left, the two
-  ends named; point at a slot for its size. Click a slot, drag along the slider, or use the arrow keys
-  on it; <kbd>-</kbd> and <kbd>+</kbd> step one coarser or finer.
+  ends named; point at a slot for its size. Untick *refine on zoom*, then click a slot, drag along the
+  slider, or use the arrow keys on it; <kbd>-</kbd> and <kbd>+</kbd> step one coarser or finer.
 - a **box** naming the resolution; click it for a list of every bin size.
 - a **`+`**, which opens **Add a resolution**.
 
-Nothing on the row is greyed. Picking a resolution, in any of those ways, takes it from the zoom:
-the map is drawn at the one you picked, read where you are, without leaving the window you zoomed
-to, and *refine on zoom* shows unticked. The link carries it as `resolution=`, and a link that names
-one opens at it, whatever the recipient's own setting. It stays as you go to another chromosome, and
-goes when you open another file. Tick *refine on zoom* to give the resolution back to the zoom.
-Unticking it keeps the resolution on screen as your pick, and leaves it off for the maps you open
-next. A window too wide for the resolution picked (8,192 bins a side) is drawn from the finest stored
-resolution that fits, and the summary line says so:
+With *refine on zoom* unticked, the resolution you pick is what is drawn, read where you are, without
+leaving the window you zoomed to. Unticking keeps the resolution on screen as your pick, and leaves
+*refine on zoom* off for the maps you open next; ticking it gives the resolution back to the zoom.
+The link carries the pick as `resolution=`, and a link that names one opens at it, with *refine on
+zoom* unticked, whatever the recipient's own setting. It stays as you go to another chromosome, and
+goes when you open another file. A window too wide for the resolution picked (8,192 bins a side) is
+drawn from the finest stored resolution that fits, and the summary line says so:
 *10 kb is too fine for this window: zoom in*
 ([Resolution and the zoom](/browse/navigating/#resolution-and-the-zoom)).
 

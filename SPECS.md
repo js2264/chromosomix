@@ -73,10 +73,38 @@ show. The properties that keep this inside §2 rather than beside it:
   quick refine shows nothing), and the sharper block lands on wherever the
   gesture has got to, its window carried in base pairs (`MatrixPanel.regrid`). A read in flight is the
   read every frame of the gesture wants while it still covers the view on a grid within a factor of
-  two of the view's own, and is called off for a finer one once the zoom outruns it — so a fast zoom
-  reads its last window rather than every step on the way. It used to *freeze* the map instead,
-  refusing every gesture until the block came: one crossing was one read by construction, and the
-  map stopped following the hand at every crossing, for seconds at a time;
+  two of the view's own, and is called off at once when the zoom outruns it. It used to *freeze* the
+  map instead, refusing every gesture until the block came: one crossing was one read by
+  construction, and the map stopped following the hand at every crossing, for seconds at a time;
+- **a zoom inward reads where it pauses**, so a fast zoom reads its last window rather than every
+  step on the way. While the view keeps shrinking — a wheel's notches come tens of milliseconds apart
+  and a trackpad's frames sixteen — no read starts: the ladder starts one once the view has not
+  shrunk for 150 ms (`ZOOM_PAUSE_MS`), for the window the zoom paused on. The block on screen covers
+  the view throughout, since a zoom inward only ever shows less of it, so nothing goes missing
+  meanwhile; it is only coarser for longer. A pan, a zoom outward and a narrower view after a still
+  moment of more than 400 ms (`INWARD_MS`) — a bookmark, a typed window, a jump rather than a zoom —
+  read at once. The pause is there because a read called off is not free. The worker reads one
+  request at a time, synchronously, and a cancel is a message it sees only between the windows a
+  read walks, so a read the zoom has outrun holds up the one it wants until it stops — and a dense
+  read, which is every read at a rung the file stores and so nearly every read a zoom makes, did not
+  look for the cancel at all: only a pooled read did. On the 4DN map of K562 from S3, a wheel zoom
+  from the whole of chr5 to 20 Mb fired the 100 kb rung's read a fifth of a second in and called it
+  off half a second later, and that read went on for 28 MB and about 7 s more, the read the zoom
+  ended on queued behind it. A dense read now polls the cancel between its windows and stops there
+  with an `AbortError` (`readDenseMatrix`) — so a read under way when chr5 is opened, and called off
+  by it, stops too, and the same picture of chr5 comes in 5.3 s and 25 MB where it took 5.5 s and
+  34 MB — and a window is 250,000 pixels (`DENSE_WINDOW`), a quarter of the million it walked
+  before, the scan's (`PIXEL_CHUNK`), because a window is as long as a cancel waits; the requests
+  are the same whatever the window, the byte source fetching HDF5 chunk by chunk and reading ahead
+  by bytes. But no cancel shortens the first window, which walks the rung's chunk index from cold:
+  with the cancel working and no pause, that 100 kb read still held the worker 3.4 s and 13
+  requests, the read the zoom ended on waiting behind it. The pause does away with that read
+  altogether. In medians of three runs, from a fresh session in a 1600 × 1000 window with wheel
+  notches 50 ms apart, the zoom from chr5 opened at 250 kb to a 20 Mb window, landing on the 25 kb
+  rung, takes 5.8 s, 20.7 MB and 16 requests where it took 11.7 s, 65 MB and 52 — its block 1,612
+  bins, read for the window the zoom paused on, where it was 1,968, read for one the zoom passed at
+  24.6 Mb — and on to a 1 Mb window, landing on the 2 kb rung, 4.6 s, 7.6 MB and 17 requests where it
+  took 8.0 s, 26.7 MB and 42 (§12);
 - **a read is the size of the screen, at a resolution the file stores.** It asks for about a cell to
   each CSS pixel of the view, from the stored rung **nearest** that cell on a log scale (`screenPlan`,
   `ui/refine.ts`) — cells between about two thirds of a pixel and one and a half on a `zoomify` or
@@ -97,8 +125,9 @@ show. The properties that keep this inside §2 rather than beside it:
   it on screen. Screen-sized, the same zoom reads a block about the screen's size at each step — the
   100 kb rung, the 50 kb, the 25 kb, the 10 kb and on down the ladder — and the page's longest stall
   is under a fifth of a second (§12);
-- **it reads ahead.** A zoom still going inward reads at a factor of 1.4 rather than of two, so the
-  block for the next step is usually in before its cells would have been big enough to see; a pan
+- **it reads ahead.** A zoom still going inward reads at a factor of 1.4 rather than of two — judged
+  where it pauses (above), which is well within the 400 ms a zoom still counts as going inward — so
+  the block for the next step is usually in before its cells would have been big enough to see; a pan
   reads around the view once it comes within a quarter of a view of an edge of its block, so the edge
   is gone before the view reaches it; and the last step, onto the finest rung, is taken whenever
   the view can show it, factor of two or not. A view showing its whole block reads nothing for the
@@ -127,12 +156,12 @@ show. The properties that keep this inside §2 rather than beside it:
   resolution row (§5.5), and *Refine on zoom* in the palette, which does exactly what the tick does:
   one setting for the whole window, kept by the browser rather than the link, and never a switch on
   a map's picture row, which holds the turn and the baseline — a control on one map of a deck would
-  claim it was that map's. Ticked, the row follows the map, saying which resolution is drawn, and
-  nothing on it is greyed. **A pick in the link wins** (§3.4): a map whose link names a resolution is
-  drawn at it whatever the preference says, and picking one on the row puts it in the link — which
-  is how a reader takes the resolution from the zoom without looking for the tick first, the tick
-  then showing off. **The pick is the picture**, read in place where the reader stands and as memory
-  allows: around the view, and as much of it as a block at that resolution holds (8,192 bins a side
+  claim it was that map's. Ticked, the row's slider, its box and its `+` are greyed and follow the
+  map, saying which resolution is drawn, and the `−` and `+` keys do nothing. **Unticked, the reader
+  picks the resolution**, and the pick goes in the link. **A pick in the link wins** (§3.4): a map
+  whose link names a resolution is drawn at it whatever the preference says, and its row shows the
+  tick off and is live. **The pick is the picture**, read in place where the reader stands and as
+  memory allows: around the view, and as much of it as a block at that resolution holds (8,192 bins a side
   for a rung the file stores, 4,096 cells for one the reader added, §7.2), so a window that fits is
   drawn at the pick whatever its width, and every pan and zoom inside what was read is free of
   reads. A window too wide for a block at the pick is drawn from the finest stored rung no finer
@@ -1275,22 +1304,23 @@ more copies of that string is three readings of one fact in three typefaces.
 all on one line and one height:
 
 - **the tick is *Refine on zoom*** (§2), ticked by default. Ticked, and nothing picked, the zoom
-  picks the resolution — the screen's, down to the finest rung the file stores — and the slider and
-  the box follow the map: the thumb, drawn hollow, glides from slot to slot as a zoom sharpens the
-  picture, and the box, quieter, names what is drawn. That is a stored rung (§2), so the thumb is on
-  its slot; where a read pools a grid no rung stores — a file with one resolution, a map beside a
-  second file, a read too wide for the coarsest rung — the thumb sits on the nearest slot and the box
-  names that grid, so the row always says which resolution is drawn. It follows the map in front: a
-  view put in front says what its panel holds, nothing on a table, rather than the row going on
-  naming the map before it. **Nothing on the row is greyed**, ticked or not. Picking anything — a
-  slot, a drag, the box, an arrow key on the track, `−` and `+` — writes the pick into the link,
-  which takes the resolution from the zoom at once (§3.4), and the tick shows off; the preference
-  stored in the browser is not changed by a pick. **Ticking** takes the pick out of the link and
-  turns the preference on. **Unticking** picks the stored rung nearest the resolution on screen, on a
-  log scale, so nothing jumps, and turns the preference off. The palette's *Refine on zoom* does
-  exactly what the tick does, where it used to turn the preference over and skip keeping what was on
-  screen. While ticked the slider, the box and the `+` used to be greyed, so a reader had to find the
-  tick before any of them would answer;
+  picks the resolution — the screen's, down to the finest rung the file stores — and the slider, the
+  box and the `+` are greyed and follow the map, a reading rather than a control: the thumb, grey
+  with them, glides from slot to slot as a zoom sharpens the picture, and the box names what is
+  drawn. That is a stored rung (§2), so the thumb is on its slot; where a read pools a grid no rung
+  stores — a file with one resolution, a map beside a second file, a read too wide for the coarsest
+  rung — the thumb sits on the nearest slot and the box names that grid, so the row always says which
+  resolution is drawn. It follows the map in front: a view put in front says what its panel holds,
+  nothing on a table, rather than the row going on naming the map before it. While the zoom picks,
+  the slider takes no press, drag or arrow key, the box cannot be changed, and the `×` of a resolution
+  the reader added is put away (§3.4). **Unticked, the reader picks** — a slot, a drag, the box, an
+  arrow key on the track, `−` and `+` — and the pick, written into the link, is what is drawn (§2,
+  §3.4). **A pick in the link wins**: a map whose link names a resolution is drawn at it whatever the
+  preference stored in the browser says, and its row shows the tick off and is live, not greyed; a
+  pick never changes the preference. **Ticking** takes the pick out of the link and turns the
+  preference on. **Unticking** picks the stored rung nearest the resolution on screen, on a log
+  scale, so nothing jumps, and turns the preference off. The palette's *Refine on zoom* does exactly
+  what the tick does, where it used to turn the preference over and skip keeping what was on screen;
 - **the slider is a row of round, unlabelled slots on a track of fixed width** (168 px, whatever the
   number of rungs), one per rung, evenly spaced and **coarsest on the left**, with a thumb on the one
   picked. Only the two ends are written out, the coarsest left of the track and the finest right of
@@ -1302,17 +1332,18 @@ all on one line and one height:
   the thumb used to start nowhere — walks the thumb from slot to slot, naming each, and picks the one
   under it when the button comes up — one read, not one per slot passed; the arrow keys on the
   focused track walk it a rung at a time (left and down coarser), `Home` and `End` to the ends, from
-  the rung picked or, while the zoom picks, from the one nearest what is drawn. The track keeps the
-  keyboard across the picks, where the row redrawn under it used to drop it after one rung, and its
-  ARIA value counts up to the right, towards finer, as a slider's is read. It replaces a slider
-  over labelled radio stops, nine of which were about three hundred pixels of short numbers and past
-  which the row became a dropdown of every rung;
+  the rung picked, or the one the file was opened at where none is. All of it is the reader's with
+  the tick off: while the zoom picks the track is greyed, out of the tab order and `aria-disabled`,
+  and takes none of it. The track keeps the keyboard across the picks, where the row redrawn under
+  it used to drop it after one rung, and its ARIA value counts up to the right, towards finer, as a
+  slider's is read. It replaces a slider over labelled radio stops, nine of which were about three
+  hundred pixels of short numbers and past which the row became a dropdown of every rung;
 - **the box names the resolution** — `1 kb`, `50 kb`, `1 Mb`, never `1000`, `50000`, `1000000`, which
   a reader would have to divide — and is the same choice as a list: pressed, it is a menu of every
   rung, finest first, each with its bin size in its tooltip. It has **no arrow**: it is a number
-  first, and a menu only when asked. While the zoom picks it names the grid drawn, which may be one
-  no rung stores and none of its list's rows. A derived rung's `×` sits beside it while that rung is
-  picked;
+  first, and a menu only when asked. While the zoom picks it is greyed and names the grid drawn,
+  which may be one no rung stores and none of its list's rows. A derived rung's `×` sits beside it
+  while that rung is picked;
 - **the `+`** asks for a resolution the file does not store: any whole number of one of its own bins,
   added up as it is read. §3.4 is where that lives — what the row contributes is the slot, starred,
   in bin-size order, and the box's `×` to take it back off.
@@ -1348,20 +1379,20 @@ of the file, re-seated at the end of the row on every render rather than rebuilt
 trail is redrawn on every pan and a box rebuilt under the cursor loses what is being typed into it.
 
 **A one-rung file is drawn without the slider.** There is nothing to slide along, so the row reads
-`refine on zoom  1 kb  +` — the tick, the box with its one rung, and the `+`, which is live whether
-the tick is on or off, and is the one way to a second rung — which is §8.5's rule, not an
-exception to it: a control that cannot keep its promise is absent rather than greyed, and a plain
-`.cool` is the commonest file a lab opens. The slider arrives with the second rung, which is what the
-`+` makes.
+`refine on zoom  1 kb  +` — the tick, the box with its one rung, and the `+`, greyed with the box
+while the tick is on, as on any ladder, and once it is off the one way to a second rung — which is
+§8.5's rule, not an exception to it: a control that cannot keep its promise is absent rather than
+greyed, and a plain `.cool` is the commonest file a lab opens. The slider arrives with the second
+rung, which is what the `+` makes.
 
 **`-` and `+` walk the same slots from the keyboard**, one rung coarser and one finer (*Coarser
-resolution*, *Finer resolution*): counted from the rung picked — or, while the zoom picks, from the
-stored rung nearest the one drawn — onto a rung the reader added as onto one the file stores and by
-the road a press on its slot takes, and stopping at both ends rather than wrapping — the palette says
-which end, and at the coarse one that the `+` beside the rung adds a coarser one. They pick, as a
-slot does, so they are offered wherever the ladder has two rungs or more, refining or not, and the
-step wins over the zoom (§3.4); they used to be greyed while *Refine on zoom* picked, the palette
-saying to untick it first. Their hint is the rung they go to, as `<` and `>` name the sequence. They
+resolution*, *Finer resolution*): counted from the rung the row stands on — the one picked, else the
+one the file was opened at — onto a rung the reader added as onto one the file stores and by the road
+a press on its slot takes, and stopping at both ends rather than wrapping — the palette says which
+end, and at the coarse one that the `+` beside the rung adds a coarser one. They pick, as a slot does,
+so while *Refine on zoom* picks they are greyed with the slider and do nothing, and the palette says
+how to pick instead: *Refine on zoom picks the resolution — untick it in the bar to pick one.* Their
+hint is the rung they go to, as `<` and `>` name the sequence. They
 are bound by what they type rather than where they are, since the two marks stand in different places on QWERTY
 and on AZERTY: either half of each key does — `_` and `=` as well — so neither needs Shift, which
 `+` takes on both; and an AZERTY PC's minus, the bare half of its 6 key, is still the minus under
@@ -2506,8 +2537,10 @@ Space locks the map onto its diagonal (§8.9). `−` and `+` are not a zoom on a
 resolution (§5.5), and the wheel, a pinch, the paging keys and the boxes zoom. In the 1D browser `0`
 is the whole genome, as a double click is.
 
-**The wheel's two axes mean two different things.** Up and down is the zoom, about the pointer.
-Sideways **slides along the picture**, which is what two fingers mean over every genome browser there
+**The wheel's two axes mean two different things.** Up and down is the zoom, about the pointer — or,
+where the pointer is within four pixels of the diagonal, about the diagonal's nearest point, so a
+zoom aimed down the line stays on it (§8.9). Sideways **slides along the picture**, which is what
+two fingers mean over every genome browser there
 is and what they already meant over this app's own tracks — on a map, **the columns alone**, and
 **along its diagonal while the view is held on it** (the diagonal lock, §8.9): rows and columns
 together, by the same distance, so the diagonal stays where it is on the screen and the picture moves
@@ -4248,6 +4281,25 @@ at the next sequence, and like *Refine on zoom* (§2) it is kept by the browser,
 without looking. It stands down wherever Space already has a job: a focused button it presses, a
 tickbox it ticks, a menu row or a tab it opens, a field it types into. It is in the shortcuts dialog
 and the palette as *Diagonal lock*, with its state, and in the toggle's own tooltip.
+
+**A zoom aimed at the diagonal stays on it, lock or no lock** (`HeatmapView.zoomAnchor`). A zoom
+keeps the point under the pointer fixed, and no hand puts a pointer on a 45° line more closely than a
+pixel: whatever it misses by, every notch carries the view's centre off the line by that fraction of
+a pixel times the zoom. On the whole of K562 chr5, 263 kb a pixel, a pointer 0.8 px off the diagonal
+ended a wheel zoom to 1 Mb about 200 kb off it — a fifth of the window, the diagonal sliding out of
+the corner of a view the reader had aimed straight down it — and the drift looked as if the sharper
+blocks landing (§2) were shifting the picture. They were not: measured, each landing keeps the window
+to the base pair (`MatrixPanel.regrid`), and the offset grew smoothly on the first block, before any
+had landed. So on a view with a diagonal, a zoom whose point is within four CSS pixels of it
+(`DIAGONAL_PULL_PX`) — the pointer, for the wheel and a pinch — is about the diagonal's nearest point,
+the perpendicular foot of the pointer that Shift's snap reads (above), and the same zoom from the
+whole of chr5 to 1 Mb stays on the diagonal to the base pair throughout. Four pixels is about how
+closely a hand aims, and at a megabase on a laptop's map under 6 kb, so nothing a reader could tell
+from the line is pulled onto it; a pointer further off is a reader aiming at something beside the
+line, and the zoom is about it exactly as before. Not on a turned map, whose diagonal is the
+picture's own bottom edge and whose gestures name stretches of the genome, nor on a block the
+diagonal does not cross; and with the lock on, every zoom is about the line's nearest point, near
+or not, as above.
 
 **The corner says how to zoom into a region**, while the pointer is over the map: under the key —
 or in its place when the legend is off — a line or two of plain text, small and in no box, in the
@@ -6432,7 +6484,8 @@ requests and bytes in total and for the last view; these are also paper figures.
 | A zoom past the levels a large block has made | 0 requests and no re-colouring: the level it wants painted between frames, the nearest made drawn meanwhile |
 | First picture of a chromosome, *Refine on zoom* on (the default) | one screen-sized read, from the stored rung nearest a cell to each pixel of the plot — chicken chr1 opened at 10 kb on screen in 0.34 s and 2.1 MB where it took 1.9 s and 14.7 MB, at 25 kb in 0.33 s where it took 2.4; mouse chr1 opened at 10 kb in 1.7 s and 9.4 MB where it took 4.8 s and 42 MB, at 80 kb in 1.2 s where it took 2.9; from a 40 ms, 25 MiB/s link (§2, §7.2) |
 | Whole genome of a laddered map, *Refine on zoom* on | one screen-sized read of the stored rung nearest a cell to each pixel, whichever entry the link opened — a K562 `.mcool`'s 5 Mb rung, 631 bins: 3.9 MB from its 1 Mb entry and 5.8 MB from its 25 kb one, where it was 17 MB at 1 Mb and 57 MB at 500 kb, 6,188 bins a side (§7.2) |
-| A zoom from a whole chromosome to its file's own bins, *Refine on zoom* on | never a frozen frame; each step a screen-sized read landing on the window the gesture has reached; the page's longest stall under 0.2 s — sixteen wheel notches into chicken chr1 at 10 kb read four blocks, down to the 10 kb bins, with stalls of 0.4 s in all and 0.18 s at most, where the map used to be frozen 2.0 s and the page stalled 4.6 s in all and 1.9 s at once, every notch while frozen dropped — measured before a read was held to the rungs the file stores and a zoom went on past the rung opened, so some of those blocks were grids no rung stores (§2) |
+| A zoom from a whole chromosome to its file's own bins, *Refine on zoom* on | never a frozen frame; each step a screen-sized read landing on the window the gesture has reached; the page's longest stall under 0.2 s — sixteen wheel notches into chicken chr1 at 10 kb read four blocks, down to the 10 kb bins, with stalls of 0.4 s in all and 0.18 s at most, where the map used to be frozen 2.0 s and the page stalled 4.6 s in all and 1.9 s at once, every notch while frozen dropped — measured before a read was held to the rungs the file stores and a zoom went on past the rung opened, so some of those blocks were grids no rung stores, and before a zoom inward waited for its pause to read (§2) |
+| A wheel zoom into a chromosome of a remote laddered map, *Refine on zoom* on | no read while the view goes on shrinking, one for the window it pauses on 150 ms after its last notch, and a read it outran called off between two of its 250,000-pixel windows — K562 chr5 of the 4DN map from S3, opened at 250 kb, zoomed to a 20 Mb window and its 25 kb rung in 5.8 s, 20.7 MB and 16 requests where it took 11.7 s, 65 MB and 52, and on to a 1 Mb window and its 2 kb rung in 4.6 s, 7.6 MB and 17 requests where it took 8.0 s, 26.7 MB and 42; medians of three runs from a fresh session in a 1600 × 1000 window, wheel notches 50 ms apart (§2) |
 | First picture of a window four times finer than a stored rung with 256 cells across it, *Refine on zoom* off | one read of that rung, drawn live while the window's own block reads after it and lands on whatever window the reader has moved it to — chicken chr1 at 25 kb on screen in 0.2 s, mouse chr1 at 80 kb in 0.7 s, from a 40 ms, 25 MiB/s link (§7.2) |
 | Refine, on crossing the block's grid (§2) | ≤ 5 range requests, one bounded read |
 | Pan to the edge of the block in hand | one read, **at the same resolution** |
@@ -10829,8 +10882,9 @@ runs them as a reader does, in one page (`notebooks/scripts/laptop.mjs`, given `
 once at 10 kb, balanced, whole genome, with the GC content beside it as a track, each task opened from
 the Analysis panel, its form set as the command's flags set it, and run in turn — at the rung opened
 or the one picked, whatever the screen draws (§18.4) — the pileup over the loops the first called in
-the same page, the map moved to 250 kb in the crumb row's resolution for the compartments and back;
-it is left out where `LAPTOP_BROWSERS` leaves Chromium out. The reference is
+the same page, the map moved to 250 kb in the crumb row's resolution, *Refine on zoom* unticked first
+as a reader must (§5.5), for the compartments and back; it is left out where `LAPTOP_BROWSERS` leaves
+Chromium out. The reference is
 **one Python script**, `notebooks/scripts/cooltools_pipeline.py`, running `cooltools.expected_cis` and
 `dots`, `insulation`, `eigs_cis`, coolpuppy's pileup over `dots`' loops, `expected_cis` again over every
 diagonal for the P(s), and `virtual4c`, in one process — run twice, **on one process**, as chromosomix
@@ -16371,7 +16425,7 @@ an offer to play the tutorial is one more thing to read.
 **In *About*, straight after what the viewer is**, on its first tab — the answer to the question a
 reader who has just read that asks next, and the one way in a newcomer finds without being told where
 to look. One sentence, and one filled button that says what it will do: *play the tutorial* for a
-reader who has not begun it, *resume at step 32 of 58* for one who left it, with a quiet *start over*
+reader who has not begun it, *resume at step 32 of 59* for one who left it, with a quiet *start over*
 beside it, and *play the tutorial again* for one who finished it. The palette has it too, as *Guided tutorial* under
 Help, its hint saying which of the three a press will do.
 
@@ -16426,7 +16480,7 @@ match 4DN's upside down, at −1.
 
 ### 30.3 The steps
 
-Fifty-eight, in twelve parts, each part's name printed over its steps' titles. The welcome and the end
+Fifty-nine, in twelve parts, each part's name printed over its steps' titles. The welcome and the end
 are a card each in the middle of the window, and between them every step lights one thing:
 
 - **Welcome** — what the tutorial is, in two sentences, with its parts listed under them and *let's
@@ -16436,10 +16490,9 @@ are a card each in the middle of the window, and between them every step lights 
   beside it that copies it, and *type it for me* beside the step for a reader who would rather not
   type twelve characters at all; open the set with its tracks, one press.
 - **The map** — a step that is only read, lighting the General column: the file, its sequences, its
-  metadata; pick 250 kb, a step that says a map is stored at several resolutions and read at the
-  screen's until the reader picks one — a pick wins over *Refine on zoom* (§3.4), so there is no tick
-  to find first, where a step of its own used to untick it; open chr15 from the Chromosomes table,
-  scrolled to its row when the table has not drawn it; a step that is only read, about the map, and how to scroll, drag and double-click on
+  metadata; untick *Refine on zoom*, which the step says reads the map at the screen's resolution and
+  finer as the reader zooms, so that a resolution is the reader's to pick; pick 250 kb; open chr15 from the Chromosomes table, scrolled to its row when the table has
+  not drawn it; a step that is only read, about the map, and how to scroll, drag and double-click on
   it; and one lighting the Aesthetics column, which a map brings — the Map card, the Tracks card and
   Export.
 - **Compartments** — set the map's score to *correlation*, so the plaid the task decomposes is on
@@ -16525,7 +16578,7 @@ grey and keeps nothing from the app, so the window can be used to get back to wh
 tail pointing into the hole from that side; in the bottom-right corner, with no tail, when the hole is
 the whole picture; at the bottom, centred, when nothing is lit. It glides from one control to the next
 rather than jumping, and its words come in rather than being swapped, so the eye follows the card to
-the next thing to press. Along its top it says the part, *step n of 58*, and *skip tutorial*, over a
+the next thing to press. Along its top it says the part, *step n of 59*, and *skip tutorial*, over a
 bar cut into the tour's parts, each filled as far as the reader has got through it. Then an icon for
 what the step asks — press, type, choose, drag, or only look — beside its title; one or two sentences;
 and *back* and *next* (*skip step* while the step waits, *finish* on the last, and no *back* on the

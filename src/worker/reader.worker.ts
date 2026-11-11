@@ -1333,6 +1333,9 @@ async function readMatrix(
       ...(request.budgetBytes === undefined ? {} : { budgetBytes: request.budgetBytes }),
     },
     hintFor(rows, cols),
+    // Called off between windows, as the pooled read always was: the zoom
+    // cancels the read it has outrun, and the one it fires next waits for this.
+    () => cancelled.has(request.id),
   )
   return atRung(mc, open, asked_, binLevelResult(mc, dense, request.genomes === true))
 }

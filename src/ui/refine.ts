@@ -117,7 +117,8 @@ export const REFINE_FACTOR = 2
  * it starts here, at about the square root of two, and is usually in by the time
  * the cells would have been big enough to see (§2). Standing still, or zooming
  * out, keeps the factor of two: a reader who stopped half way has nothing more
- * to read.
+ * to read. It is judged where the zoom pauses ({@link ZOOM_PAUSE_MS}): a read
+ * started between two notches of a spin is one the next ones outrun.
  */
 export const READ_AHEAD_FACTOR = 1.4
 
@@ -227,6 +228,12 @@ export interface LadderOptions {
   /** The clock read-ahead times a zoom by; `performance.now` when absent. */
   now?(): number
   /**
+   * Run `then` in `ms`, for a read held until the zoom pauses
+   * ({@link ZOOM_PAUSE_MS}), and return what calls it off; `setTimeout` when
+   * absent. Injected beside {@link now} so a test can say when the pause came.
+   */
+  after?(ms: number, then: () => void): () => void
+  /**
    * The widest this ladder may ever ask for, per axis: the view's own domain.
    *
    * A region view's contig, a genome view's genome, a whole view's file. It is
@@ -329,6 +336,24 @@ interface Held {
 export const INWARD_MS = 400
 
 /**
+ * How long a zoom going inward must stop shrinking before the ladder starts a
+ * read for it.
+ *
+ * A read is synchronous in the worker, and a cancel lands only between its
+ * windows (`DENSE_WINDOW`), so a read the zoom outruns is not free: its first
+ * window walks the rung's chunk index from cold. A wheel spun from the whole of
+ * K562 chr5 to 20 Mb fired the 100 kb rung's read a fifth of a second into the
+ * gesture and called it off half a second later, and the 25 kb read the zoom
+ * ended on queued behind its first window: thirteen requests, three seconds
+ * from S3. The notches of one spin come tens of milliseconds apart and a
+ * trackpad's frames sixteen, so this is a gap no gesture has inside it and
+ * every reader who stops to look does. The block on screen covers the view
+ * throughout — a zoom inward only ever shows less of it — so nothing goes
+ * missing while it waits; it is only coarser for longer.
+ */
+export const ZOOM_PAUSE_MS = 150
+
+/**
  * How far from `1` a view's {@link RefineView.fit} may be and still be fitted:
  * the zoom is a float, and a fit recomputed after a resize lands a hair off it.
  */
@@ -358,6 +383,8 @@ export class BlockLadder {
   private lastAt = Number.NEGATIVE_INFINITY
   /** When the view last shrank between two frames of one gesture; see {@link INWARD_MS}. */
   private inwardAt = Number.NEGATIVE_INFINITY
+  /** Calls off the wait for a zoom's pause ({@link ZOOM_PAUSE_MS}), while one is set. */
+  private paused: (() => void) | null = null
   private disposed = false
 
   constructor(options: LadderOptions) {
@@ -476,7 +503,33 @@ export class BlockLadder {
     }
 
     this.pending = { ...wanted, key }
+    // **Read when the zoom pauses** (§2). The block on screen covers the view,
+    // so the reader loses nothing but sharpness while a spin goes on — and the
+    // read it would have started is one the next notches outrun.
+    const since = (this.options.now?.() ?? clock()) - this.inwardAt
+    const shown = this.held0()
+    const covered = shown !== null && covers(shown.rows, view.rows) && covers(shown.cols, view.cols)
+    if (inward && since < ZOOM_PAUSE_MS && covered) {
+      this.holdFor(ZOOM_PAUSE_MS - since)
+      return
+    }
     this.fire(view)
+  }
+
+  /** Consider the last view again once the zoom has paused, in `ms`. */
+  private holdFor(ms: number): void {
+    this.paused?.()
+    const then = (): void => {
+      this.paused = null
+      this.reconsider()
+    }
+    const wait = Math.max(1, Math.ceil(ms))
+    if (this.options.after !== undefined) {
+      this.paused = this.options.after(wait, then)
+      return
+    }
+    const timer = setTimeout(then, wait)
+    this.paused = () => clearTimeout(timer)
   }
 
   /** {@link consider} the last window seen again — the rules changed under it. */
@@ -738,6 +791,8 @@ export class BlockLadder {
   destroy(): void {
     this.disposed = true
     this.pending = null
+    this.paused?.()
+    this.paused = null
     // The spinner belongs to the read, so it has to be given back with it. It
     // matters only when the panel outlives the ladder, because a panel torn
     // down in the same breath clears its own wait in `detach`; but that is

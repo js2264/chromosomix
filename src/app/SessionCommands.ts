@@ -381,9 +381,10 @@ export class SessionCommands {
         run: () => this.session.current?.panel?.toggleExpected(),
       },
       // The resolution row's slots, one at a time (§3.4): the lead's rung, which
-      // in a deck every map follows, exactly as a press on a slot would — a
-      // pick, which wins over *Refine on zoom*. The hint names the rung it goes
-      // to, as `<` and `>` name the sequence.
+      // in a deck every map follows, exactly as a press on a slot would. Greyed
+      // with the slots while *Refine on zoom* picks, the hint saying to untick
+      // it; otherwise the hint names the rung it goes to, as `<` and `>` name
+      // the sequence.
       {
         id: 'resolution-coarser',
         group: 'View',

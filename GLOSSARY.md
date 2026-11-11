@@ -744,15 +744,16 @@ quietly by any view whose block has no diagonal to measure from.
 ### refine
 
 Reading finer data as you zoom: passing what the block in hand can show reads the window again at a
-finer grid — one bounded, screen-sized read from the stored rung nearest a cell to each pixel, the
-map going on taking every gesture while it happens and the block landing where the gesture has got
-to, never below the finest rung the file stores, whichever was opened (`src/ui/refine.ts`, §2). **On
-by default**: *Refine on zoom* is the tick at the head of the resolution row and a command in the
-palette, a preference kept by the browser. A resolution **picked** wins over it — a map whose link
-names one is drawn at it, as memory allows — and off with nothing picked, the rung opened is read
-that way: the window read once, and a zoom inside it that magnifies it. On the editing stage the
-same idea places a point: a suggestion's cut is placed again at the map's finer rungs, *refined at
-1 kb* (§27.5).
+finer grid — one bounded, screen-sized read from the stored rung nearest a cell to each pixel, made
+where a zoom inward pauses, the map going on taking every gesture while it happens and the block
+landing where the gesture has got to, never below the finest rung the file stores, whichever was
+opened (`src/ui/refine.ts`, §2). **On by default**: *Refine on zoom* is the tick at the head of the
+resolution row and a command in the palette, a preference kept by the browser; ticked, the rest of
+the row is greyed and follows the map, and unticked, the reader picks. A resolution **picked** wins
+over it — a map whose link names one is drawn at it, as memory allows — and off with nothing
+picked, the rung opened is read that way: the window read once, and a zoom inside it that magnifies
+it. On the editing stage the same idea places a point: a suggestion's cut is placed again at the
+map's finer rungs, *refined at 1 kb* (§27.5).
 
 ---
 

@@ -2838,6 +2838,7 @@ export class App implements SessionHost {
     return {
       view: () => this.current?.state ?? null,
       binsize: () => this.current?.resolution ?? null,
+      refining: () => this.current?.refining ?? refineEnabled(),
       score: () => this.current?.scoreInForce ?? null,
       file: () => this.current?.fileUri ?? null,
       sequences: () => this.current?.contigNames() ?? null,

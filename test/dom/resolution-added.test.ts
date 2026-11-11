@@ -330,14 +330,13 @@ describe('the + past the box', () => {
     expect(built.adds).toBe(1)
   })
 
-  it('is offered while the zoom picks too: adding one stands on it, a pick', () => {
+  it('is greyed with the rest of the row while the zoom picks', () => {
+    // An added resolution is one to pick, and while the zoom picks there is
+    // nothing a new rung would change on screen.
     setRefineEnabled(true)
     const built = withThreeKb()
     built.crumb.render(REGION)
-    const add = built.crumb.el.querySelector('.res-add') as HTMLButtonElement
-    expect(add.disabled).toBe(false)
-    add.click()
-    expect(built.adds).toBe(1)
+    expect((built.crumb.el.querySelector('.res-add') as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('is the whole control on a plain .cool, which has one resolution', () => {

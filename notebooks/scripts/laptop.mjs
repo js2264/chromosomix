@@ -648,11 +648,17 @@ async function drawnAt(page, binsize, after) {
 }
 
 /**
- * The rung of `binsize` picked in the crumb row's resolution, as a reader picks it: in the box beside
- * the slider, which lists every rung the file has. A pick wins over *Refine on zoom*, and is the
- * resolution every task reads (SPECS §3.4, §18.4).
+ * The rung of `binsize` picked in the crumb row's resolution, as a reader picks it: *Refine on zoom*
+ * unticked, which is what makes the resolution the reader's to pick (the row is greyed while the zoom
+ * picks it), then the rung chosen in the box beside the slider, which lists every rung the file has.
+ * The pick is the resolution every task reads (SPECS §3.4, §18.4).
  */
 async function pickRung(page, binsize) {
+  const refine = page.locator('.crumb-res .res-refine input').first()
+  if (await refine.isChecked().catch(() => false)) {
+    await refine.click()
+    await sleep(500)
+  }
   const picked = await page.evaluate((binsize) => {
     const size = (text) => {
       const found = text.trim().match(/^([\d.]+)\s*(bp|kb|Mb)\b/)

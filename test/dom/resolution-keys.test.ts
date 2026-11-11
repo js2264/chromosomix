@@ -217,15 +217,24 @@ describe('the two resolution keys', () => {
     expect(step(session, 'resolution-finer').enabled).toBe(false)
   })
 
-  it('step from what is drawn while *Refine on zoom* picks, and the step is a pick', () => {
+  it('are greyed while *Refine on zoom* picks, and say how to pick', () => {
     setRefineEnabled(true)
     const { session, opened } = standingOn('2000')
-    // Nothing drawn yet: from the rung the file was opened at.
-    expect(step(session, 'resolution-coarser').hint).toBe('5 kb')
+    for (const id of ['resolution-coarser', 'resolution-finer'] as const) {
+      expect(step(session, id).enabled).toBe(false)
+      expect(step(session, id).hint).toBe('Refine on zoom picks the resolution — untick it in the bar to pick one.')
+    }
     step(session, 'resolution-coarser').run()
-    expect(session.store.state?.resolution).toBe(5_000)
-    expect(session.refining).toBe(false)
+    expect(session.store.state?.resolution).toBeUndefined()
     expect(opened).toEqual([])
+  })
+
+  it('step from a pick in the link whatever the preference, which it wins over', () => {
+    setRefineEnabled(true)
+    const { session } = standingOn('2000', { coarsen: 5_000 })
+    expect(step(session, 'resolution-coarser').hint).toBe('10 kb')
+    step(session, 'resolution-coarser').run()
+    expect(session.store.state?.resolution).toBe(10_000)
   })
 
   it('have nothing to step with the map put away for its tracks', () => {

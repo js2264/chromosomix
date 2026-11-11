@@ -267,8 +267,11 @@ try {
   await sleep(6000)
   await shot('b09-oe-arms')
 
-  // The correlation, at the rung the map can draw one at: picked, which takes
-  // the resolution from the zoom (§3.4).
+  // The correlation, at the rung the map can draw one at: picked, which is the
+  // reader's with *Refine on zoom* unticked (§2).
+  const refine = page.locator('.res-refine input').first()
+  if (await refine.isChecked()) await refine.click()
+  await sleep(1500)
   await page.locator('.res-slot[aria-label="8 kb"]').first().click()
   await sleep(8000)
   const score = page.locator('select').filter({ has: page.locator('option', { hasText: /^correlation$/ }) }).first()

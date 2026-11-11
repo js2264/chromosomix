@@ -258,10 +258,12 @@ describe('the resolution picked, and the tick (§3.4)', () => {
     expect(session.refining).toBe(true)
   })
 
-  it('steps the keys from the rung drawn while the zoom picks, and the step is a pick', () => {
+  it('greys the keys while the zoom picks, and steps from a pick in the link', () => {
     setRefineEnabled(true)
     const { session } = openAt('1000')
     shows(session, 10_000)
+    expect(session.rungStep(1)).toBeNull()
+    session.store.patch({ resolution: 10_000 })
     expect(session.rungStep(1)?.binsize).toBe(25_000)
     expect(session.rungStep(-1)?.binsize).toBe(5_000)
     session.stepRung(1)

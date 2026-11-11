@@ -43,16 +43,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   §5.5).** At the far end of the crumb bar: the *refine on zoom* tick, ticked by default; a slider of
   fixed width with a round slot for each rung the file stores, coarsest on the left, written out only
   at its two ends and naming a slot under the pointer; a box naming the resolution, a menu of every
-  rung when pressed, with no arrow; and the `+` that adds one. While the zoom picks, the slider and
-  the box follow the map, the thumb, drawn hollow, gliding from slot to slot as a zoom sharpens it,
-  and sitting on the nearest slot where the grid drawn is one no rung stores, which the box then
-  names. **Nothing on the row is greyed**: a slot, a drag along the slider from anywhere on it, the
-  thumb included, the box, the arrow keys on the slider, which keep the keyboard from one rung to the
-  next, and `−` and `+` all pick, ticked or not, and a pick takes the resolution from the zoom.
-  Ticking hands it back; unticking keeps the resolution on screen as the pick, and so does the
-  palette's *Refine on zoom*, which does exactly what the tick does. It replaces the row of labelled
-  stops and the dropdown a ladder past nine rungs became; a resolution you added is a dotted slot,
-  and its `×` sits beside the box while it is picked.
+  rung when pressed, with no arrow; and the `+` that adds one. Ticked, the slider, the box and the
+  `+` are greyed and follow the map, the thumb gliding from slot to slot as a zoom sharpens it, and
+  sitting on the nearest slot where the grid drawn is one no rung stores, which the box then names.
+  Unticked, you pick: a slot, a drag along the slider from anywhere on it, the thumb included, the
+  box, the arrow keys on the slider, which keep the keyboard from one rung to the next, or `−` and
+  `+`, which are greyed while the zoom picks. Unticking keeps the resolution on screen as the pick,
+  and so does the palette's *Refine on zoom*, which does exactly what the tick does; ticking hands the
+  resolution back to the zoom. It replaces the row of labelled stops and the dropdown a ladder past
+  nine rungs became; a resolution you added is a dotted slot, and its `×` sits beside the box while
+  it is picked.
 - **A resolution picked is one key in the link, `resolution=`, and it wins over *Refine on zoom* (§2,
   §3.4, §5.5).** A rung the file stores and one you added are both `resolution=`, in bp, and the
   recipient's file resolves it — the stored rung of that size, else the coarsest stored rung that
@@ -60,9 +60,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   it; a value no rung reaches, or past 100 Mb, is ignored. `coarsen=`, the key an added resolution
   had, is no longer written, and is read as `resolution=` in an old link, a stored tab or session and
   a widget's arguments. A map whose link names a resolution is drawn at it whatever the preference
-  says, and its row shows the tick off; a pick changes the link, never the preference. It goes with
-  you to another chromosome, a table, the minimap and `<` and `>`, as the cells and the contacts total
-  do, and is dropped with the file.
+  says, and its row shows the tick off, live rather than greyed; a pick changes the link, never the
+  preference. It goes with you to another chromosome, a table, the minimap and `<` and `>`, as the
+  cells and the contacts total do, and is dropped with the file.
 - **The resolution you pick is the picture, read where you are (§2, §3.4, §7.2).** A pick is drawn
   at every zoom, read around the view as far as a block at it holds: 8,192 bins a side for a rung the
   file stores, 4,096 cells for one you added. A window too wide for that is drawn from the finest
@@ -75,9 +75,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   own, as a map opened at it was. With *refine on zoom* off and nothing picked, the rung the file was
   opened at is read the same way. Either way a pan to the edge of what was read, or a zoom out past
   it, reads on, where it used to stop there.
-- **`−` and `+` step the resolution wherever there is a rung to step to (§5.5).** They pick, as a slot
-  does, from the rung picked or, while the zoom picks, from the stored rung nearest the one drawn;
-  they were greyed while *refine on zoom* was ticked, and the palette said to untick it.
 - **A map is only ever drawn at a resolution the file stores (§2, §7.2).** A screen-sized read takes
   the stored rung nearest a cell to each pixel, where it took the coarsest rung no bigger than a
   pixel and summed it to the pixel: chr6 of the K562 `.mcool` opened at 1 Mb was its 100 kb rung
@@ -121,17 +118,37 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   in view, and the next refine keeps that. A block coarser than the one the range came from is
   measured again, as a wider one was. A lane's limits, which share the control, no longer grey it
   either.
-- **The tutorial's *Pick 250 kb* says what a pick does (§30.3)**: a map is stored at several
-  resolutions and read at the screen's until you pick one. A pick wins over *refine on zoom*, so there
-  is no tick to find first, and the tutorial keeps its fifty-eight steps.
+- **The tutorial unticks *refine on zoom* before it picks 250 kb (§30.3)**, in a step of its own:
+  fifty-nine steps, where it was fifty-eight.
 - **Zooming never freezes the map (§2).** A refine read used to hold the map still, refusing every
   gesture for the seconds it took; now the block on screen keeps every pan and zoom while the next one
   is read, a spinner turns in its corner, and the sharper block lands wherever you have got to. A zoom
-  that outruns its read calls it off for the window it ends on; a zoom still going inward reads its
-  next step early, a pan reads ahead of the edge of its block, and the last step onto the finest rung
-  is always taken. Sixteen wheel notches into chicken chr1 at 10 kb froze the map for 2.0 s and
+  that outruns its read calls it off, and a zoom going inward reads where it pauses (below), its next
+  step early; a pan reads ahead of the edge of its block, and the last step onto the finest rung is
+  always taken. Sixteen wheel notches into chicken chr1 at 10 kb froze the map for 2.0 s and
   stalled the page 1.9 s at once; they now stall it 0.18 s at most. The freeze and the Escape that
   ended it are gone, and a frame of a gesture no longer forces a layout to measure the plot.
+- **A zoom going inward reads where it pauses, and a read called off stops (§2, §12).** While the
+  view keeps shrinking — a wheel's notches come tens of milliseconds apart, a trackpad's frames
+  sixteen — nothing is read; once it has not shrunk for 150 ms, the window it paused on is. The block
+  on screen covers the view throughout, so nothing goes missing meanwhile: it is only coarser for
+  longer. A pan, a zoom outward and a jump to a bookmark or a typed window read at once. The zoom
+  called off a read it had outrun, but only a pooled read looked for the cancel: a dense read — every
+  read at a rung the file stores, so nearly every read a zoom makes — ran to its last window, and the
+  read the zoom was waiting for queued behind it, the worker reading one request at a time. On the
+  4DN map of K562 from S3, a wheel zoom from the whole of chr5 to 20 Mb fired the 100 kb rung's read a
+  fifth of a second in and called it off half a second later, and that read went on for 28 MB and
+  about 7 s more. A dense read now stops at the end of the window it is in, and a window is 250,000
+  pixels where it was a million, since a window is as long as a cancel waits; a read that opening a
+  chromosome calls off stops too, and the same picture of chr5 comes in 5.3 s and 25 MB where it took
+  5.5 s and 34 MB. But a read stopped at once has still walked its rung's chunk index from cold — that
+  100 kb read held the worker 3.4 s and 13 requests — and the read the pause never starts costs
+  nothing. In medians of three runs, from a fresh session in a 1600 × 1000 window with wheel notches
+  50 ms apart, the zoom from chr5 opened at 250 kb to a 20 Mb window, landing on the 25 kb rung, takes
+  5.8 s, 20.7 MB and 16 requests where it took 11.7 s, 65 MB and 52, its block 1,612 bins read for the
+  window the zoom paused on rather than 1,968 for one it passed at 24.6 Mb; on to a 1 Mb window,
+  landing on the 2 kb rung, it takes 4.6 s, 7.6 MB and 17 requests where it took 8.0 s, 26.7 MB
+  and 42.
 - **The lab's bucket holds only `demo/yeast/`, `demo/store/` and `demo/reassemblies/`, and everything
   that read the rest reads the store (§24.3).** The lab deleted the bucket's other demo folders and
   the DNA Bacterial Zoo's. The store's files copied from them — the Gibcus et al. maps from
@@ -252,6 +269,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A wheel or pinch zoom aimed at the diagonal stays on it (§7.2, §8.9).** A zoom keeps the point
+  under the pointer fixed, and a pointer a fraction of a pixel off the diagonal carried the view's
+  centre off it by that fraction times the zoom, notch after notch: on the whole of K562 chr5, 263 kb
+  a pixel, a pointer 0.8 px off the line ended a wheel zoom to 1 Mb about 200 kb off the diagonal. It
+  looked as if the sharper blocks landing were shifting the picture, and they were not: measured, each
+  landing keeps the window to the base pair. A zoom whose pointer is within four pixels of the
+  diagonal is now about the diagonal's nearest point, and the same zoom stays on it to the base pair
+  from the whole chromosome to 1 Mb; a pointer further off is zoomed about exactly as before. The
+  diagonal lock still holds every zoom to the line, near or not, and a turned map and a block the
+  diagonal does not cross are left as they were.
 - **The whole-genome view's second reading below the diagonal is read on the grid of the block above
   it (§5.10, §7.2).** It was read on a grid of its own, a block of another shape, its cells laid under
   the wrong half of the picture. Every view's first read and every read its zoom makes are now planned

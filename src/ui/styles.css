@@ -2939,20 +2939,32 @@ p {
   align-items: center;
 }
 
-/* **Refining: following.** The slider and the box say what the zoom has
-   drawn, so the thumb is hollow and the box quieter — but nothing is greyed:
-   a slot pressed picks, and the pick takes the resolution from the zoom
-   (§3.4). */
+/* **Refining: greyed, and following.** The slider and the box say what the
+   zoom has picked rather than taking a pick, so they are drawn as readings —
+   dimmed, no pointer — and the thumb goes grey with them. */
+.crumb-res.is-refining .res-track,
+.crumb-res.is-refining .res-slot {
+  cursor: default;
+}
+
+.crumb-res.is-refining .res-scale,
+.crumb-res.is-refining .res-pick,
+.crumb-res.is-refining .res-add {
+  opacity: 0.55;
+}
+
 .crumb-res.is-refining .res-thumb {
-  background: var(--bg);
-  box-shadow:
-    0 0 0 2px var(--accent),
-    0 1px 3px rgb(0 0 0 / 0.25);
+  background: var(--text-dim);
+}
+
+.crumb-res.is-refining .res-slot:hover {
+  transform: none;
+  border-color: var(--text-faint);
+  background: var(--bg-sunken);
 }
 
 .crumb-res.is-refining .res-pick {
-  color: var(--text-dim);
-  font-weight: 500;
+  cursor: default;
 }
 
 /* The × beside the box, on a rung the reader added and has picked: the way

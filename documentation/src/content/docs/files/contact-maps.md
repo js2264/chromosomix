@@ -22,8 +22,8 @@ Only maps whose bins are one fixed size are read ([What is not opened](#what-is-
 
 An `.mcool` opens a third of the way up its ladder from the finest. That rung does not limit what you
 see: with **refine on zoom** ticked, a map is read at the resolution nearest the screen's, and zooming
-in reads finer rungs, down to the finest the file stores. To hold the map at one resolution, pick it
-in the **resolution** row at the end of the bar above the map
+in reads finer rungs, down to the finest the file stores. To hold the map at one resolution, untick
+**refine on zoom** and pick it in the **resolution** row at the end of the bar above the map
 ([Resolution](/browse/contact-maps/#resolution)).
 
 - Open one rung by its address: `sample.mcool::/resolutions/5000`.

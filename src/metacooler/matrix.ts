@@ -372,6 +372,24 @@ export const PIXEL_CHUNK = 1_000_000
 export const PIXEL_CHUNK_BYTES = PIXEL_CHUNK * 36
 
 /**
+ * Pixels per window of a dense read ({@link readDenseMatrix}): a quarter of
+ * {@link PIXEL_CHUNK}, because a window is as long as a cancel waits.
+ *
+ * Each window is read synchronously, and the cancel is a message the worker
+ * only sees between windows. A zoom calls off the reads it outruns
+ * (`ui/refine.ts`), and the one it fires next waits in the worker's queue for
+ * the window in progress. On the 4DN map of K562 from S3, a read of chr5 at
+ * 100 kb called off half a second in held the worker 4.0 s more at a million
+ * pixels (16 requests, 9 MB in all), and 3.4 s at this size (13 requests).
+ * Most of that is the first window walking the rung's chunk index from cold,
+ * which no window shortens; a zoom therefore also waits for its pause before
+ * it reads (`ZOOM_PAUSE_MS`). The requests are the same whatever the window,
+ * since the source fetches HDF5 chunk by chunk and reads ahead by bytes, and a
+ * yield costs microseconds (`../async`).
+ */
+export const DENSE_WINDOW = 250_000
+
+/**
  * Read the pixels whose **row** bin falls in `[lo, hi)`, in bounded windows.
  *
  * One `bin1_offset` slice gives the pixel range; `bin2_id` and the value column
@@ -718,11 +736,17 @@ export function scatterDense(
  * @param q Row range, optional column range (defaults to the rows), balancing.
  * @param hint Sentence appended to a size refusal — pick one of
  *   {@link DENSE_HINTS} so the wording matches the CLI's for that situation.
+ * @param cancelled Polled between windows; `true` abandons the read with an
+ *   `AbortError`. The worker passes its own cancel here. Without it a read the
+ *   zoom had already given up on went on downloading to its last window: one
+ *   cancelled read of chr5 at 100 kb was 28 MB, and the read that replaced it
+ *   waited in the queue behind it.
  */
 export async function readDenseMatrix(
   src: MatrixSource,
   q: MatrixQuery,
   hint: string,
+  cancelled?: () => boolean,
 ): Promise<DenseMatrix> {
   const rows = checkExtent(q.rows, src.nBins, 'rows')
   const cols = checkExtent(q.cols ?? q.rows, src.nBins, 'cols')
@@ -743,9 +767,18 @@ export async function readDenseMatrix(
     // Asynchronous because one of the two containers has to decompress a block
     // to answer, and there is no synchronous inflate in a browser that does not
     // cost a bundle. Every caller was already inside an `async` method.
-    await src.store.forEachWindow(rows, cols, plan, (chunk) => {
+    const whole = await src.store.forEachWindow(rows, cols, plan, (chunk) => {
       scatterDense(chunk, rows, cols, plan, values)
-    }, { chunkSize: PIXEL_CHUNK, value: q.value ?? DEFAULT_COUNT_COLUMN })
+    }, {
+      chunkSize: DENSE_WINDOW,
+      value: q.value ?? DEFAULT_COUNT_COLUMN,
+      ...(cancelled === undefined ? {} : { cancelled }),
+    })
+    if (!whole) {
+      const err = new Error('cancelled')
+      err.name = 'AbortError'
+      throw err
+    }
     if (q.balance === true) applyWeights(src.handle, rows, cols, values)
   }
   return { nrows: nRows, ncols: nCols, values, rowExtent: rows, colExtent: cols }

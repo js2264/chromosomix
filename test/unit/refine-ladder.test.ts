@@ -27,6 +27,7 @@ import {
   BlockLadder,
   INWARD_MS,
   READ_AHEAD_EDGE,
+  ZOOM_PAUSE_MS,
   REFINE_DEFAULT,
   SCREEN_READ_CAP,
   chooseRung,
@@ -91,6 +92,10 @@ function ladder(
   let settle: ((result: MatrixResult) => void) | null = null
   let refuse: ((err: unknown) => void) | null = null
   let cancels = 0
+  // The clock where the test brings none: still unless a pause moves it, which
+  // is what frames a few microseconds apart are.
+  let clockAt = 0
+  let waiting: (() => void) | null = null
 
   const it = new BlockLadder({
     ceiling: { rows: ceiling, cols: ceiling },
@@ -111,7 +116,13 @@ function ladder(
       return true
     },
     onBusy: (on) => busy.push(on),
-    ...(options.now === undefined ? {} : { now: options.now }),
+    now: options.now ?? (() => clockAt),
+    after: (_ms, then) => {
+      waiting = then
+      return () => {
+        if (waiting === then) waiting = null
+      }
+    },
     ...(options.floor === undefined ? {} : { floor: () => options.floor as number }),
     ...(options.screenSized === undefined ? {} : { screenSized: () => options.screenSized as boolean }),
     ...(options.view === undefined ? {} : { view: options.view }),
@@ -168,6 +179,21 @@ function ladder(
       refuse?.(err)
       refuse = null
       return Promise.resolve().then(() => undefined)
+    },
+    /** Whether a read is held for the zoom to pause. */
+    get holding() {
+      return waiting !== null
+    },
+    /**
+     * The zoom pauses: {@link ZOOM_PAUSE_MS} pass on the harness's clock, and
+     * the read held for it is considered. A test with a clock of its own moves
+     * that one first.
+     */
+    pause(): void {
+      clockAt += ZOOM_PAUSE_MS
+      const then = waiting
+      waiting = null
+      then?.()
     },
   }
 }
@@ -377,18 +403,22 @@ describe('when the ladder reads', () => {
   it('issues one read for a gesture, however many frames it lasts', () => {
     const l = ladder()
     l.it.adopt(block(WHOLE, 13))
-    // A wheel spin, which goes on while its read is in flight: nothing holds
-    // the view still. The frames keep coming and must not turn a gesture into
-    // a burst of reads — the read in flight still covers each window, on a grid
-    // the zoom has not outrun, so it is the read every one of them wants.
-    for (let i = 0; i < 8; i++) {
+    // A wheel spin: nothing holds the view still, and the frames keep coming.
+    // None of them reads while the zoom goes on — the next notches would outrun
+    // the read (`ZOOM_PAUSE_MS`) — and the pause reads the window it came on.
+    const spin = (i: number): { rows: Extent; cols: Extent } => {
       const half = 20_000 - i * 2_000
-      l.it.consider({
-        rows: [25_000 - half, 25_000 + half],
-        cols: [25_000 - half, 25_000 + half],
-      })
+      return { rows: [25_000 - half, 25_000 + half], cols: [25_000 - half, 25_000 + half] }
     }
-    expect(l.asked, 'the in-flight guard, not the timing').toHaveLength(1)
+    for (let i = 0; i < 8; i++) l.it.consider(spin(i))
+    expect(l.asked, 'nothing while the spin goes on').toHaveLength(0)
+    l.pause()
+    expect(l.asked).toHaveLength(1)
+    expect(covers(l.asked[0].rows, spin(7).rows)).toBe(true)
+    // Frames after it, inside the read in flight on a grid they have not
+    // outrun, want that read and add none: the in-flight guard.
+    for (let i = 0; i < 3; i++) l.it.consider(spin(7))
+    expect(l.asked).toHaveLength(1)
     expect(l.busy).toEqual([true])
   })
 
@@ -817,9 +847,12 @@ describe('a gesture that outruns its read', () => {
     l.it.consider(seen([12_000, 20_000], { screen: 690, fit: 6 }))
     expect(l.cancels).toBe(0)
     // Zoomed on, to a window the read in flight would land three times too
-    // coarse for: the latest window wins.
+    // coarse for: called off at once, and the latest window read once the zoom
+    // pauses on it.
     l.it.consider(seen([15_000, 17_000], { screen: 690, fit: 24 }))
     expect(l.cancels).toBe(1)
+    expect(l.asked).toHaveLength(1)
+    l.pause()
     expect(l.asked).toHaveLength(2)
     expect(l.asked[1].plan?.grid).toBeLessThan(l.asked[0].plan!.grid / 2)
   })
@@ -851,7 +884,70 @@ describe('reading ahead', () => {
     expect(l.asked).toHaveLength(0)
     now += 30
     l.it.consider(seen([6_000, 18_000], { screen: 460, fit: 2 }))
+    expect(l.holding, 'held for the pause').toBe(true)
+    now += ZOOM_PAUSE_MS
+    l.pause()
     expect(l.asked, 'read before the factor of two').toHaveLength(1)
+  })
+
+  it('holds a zoom’s read until the zoom pauses, and reads where it paused', () => {
+    // A spin from the whole of a chromosome inward fired a read a fifth of a
+    // second in, which the next notches outran: a read is synchronous in the
+    // worker, so the one the zoom ended on queued behind its first window.
+    let now = 0
+    const l = ladder({ now: () => now })
+    l.it.adopt(block(WHOLE, 72))
+    const views: Array<ReturnType<typeof seen>> = []
+    // From a view the block on screen is good for, inward to one it is six
+    // times too coarse for.
+    for (let i = 0; i < 10; i++) {
+      const half = 20_000 - i * 1_800
+      views.push(seen([25_000 - half, 25_000 + half], { screen: 690, fit: WHOLE[1] / (2 * half) }))
+    }
+    for (const view of views) {
+      l.it.consider(view)
+      now += 30
+    }
+    expect(l.asked, 'nothing read while the notches come').toHaveLength(0)
+    expect(l.busy).toEqual([])
+    // A pause short of the threshold is a gap between notches.
+    now += ZOOM_PAUSE_MS - 60
+    l.it.consider(views[9])
+    expect(l.asked).toHaveLength(0)
+    now += 60
+    l.pause()
+    expect(l.asked).toHaveLength(1)
+    expect(covers(l.asked[0].rows, views[9].rows)).toBe(true)
+    // For the window the zoom stopped on: no wider than the view padded by
+    // half a view each side.
+    const span = views[9].rows[1] - views[9].rows[0]
+    expect(l.asked[0].rows[1] - l.asked[0].rows[0]).toBeLessThanOrEqual(2 * span + 2)
+  })
+
+  it('reads at once for a narrower view after a still moment: a jump, not a zoom', () => {
+    let now = 0
+    const l = ladder({ now: () => now })
+    l.it.adopt(block(WHOLE, 72))
+    l.it.consider(seen([10_000, 40_000], { screen: 690, fit: 50 / 30 }))
+    now += INWARD_MS + 1
+    l.it.consider(seen([20_000, 22_000], { screen: 690, fit: 25 }))
+    expect(l.holding).toBe(false)
+    expect(l.asked).toHaveLength(1)
+  })
+
+  it('reads nothing it held once the ladder is gone', () => {
+    let now = 0
+    const l = ladder({ now: () => now })
+    l.it.adopt(block(WHOLE, 72))
+    l.it.consider(seen([5_000, 45_000], { screen: 690, fit: 1.25 }))
+    now += 30
+    l.it.consider(seen([20_000, 22_000], { screen: 690, fit: 25 }))
+    expect(l.holding).toBe(true)
+    l.it.destroy()
+    expect(l.holding, 'the wait is called off with it').toBe(false)
+    now += ZOOM_PAUSE_MS
+    l.pause()
+    expect(l.asked).toHaveLength(0)
   })
 
   it('takes a narrower view after a pause for a jump, not a zoom', () => {
@@ -949,9 +1045,11 @@ describe('reads in flight', () => {
     expect(l.asked).toHaveLength(1)
     expect(l.cancels).toBe(0)
 
-    // Somewhere else entirely, and still nothing has landed.
+    // Somewhere else entirely, and still nothing has landed: called off at
+    // once, and the new window read when the gesture that went there pauses.
     l.it.consider({ rows: [40_000, 44_000], cols: [40_000, 44_000] })
     expect(l.cancels, 'the stale read is called off').toBe(1)
+    l.pause()
     expect(l.asked).toHaveLength(2)
   })
 

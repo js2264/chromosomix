@@ -606,8 +606,8 @@ export class Breadcrumb {
 
   /**
    * The resolution the map on screen is drawn at, in base pairs (§2): what the
-   * row's slider and box follow while *Refine on zoom* picks it — the thumb
-   * hollow and the box quieter, nothing greyed.
+   * row's slider and box follow while *Refine on zoom* picks it, greyed — a
+   * reading, not a control.
    */
   showResolution(binsize: number | null): void {
     this.shownBinsize = binsize
