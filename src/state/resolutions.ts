@@ -13,10 +13,11 @@
  * file's own ladder already draws. *Which rungs exist* is the ladder; *which one
  * you are standing on* is the picture. The stored ladder rides in the URI
  * (`file.mcool::resolutions/2000`) and a reader's addition rides here; which rung
- * is on screen rides in the hash either way — `ViewState.coarsen` for a derived
- * one, the URI's own entry for a stored one. So a link opens on the resolution
- * it was made at whether or not its recipient has ever added one, and the
- * recipient's own ladder is not rewritten by somebody else's link.
+ * is picked rides in the hash either way — `ViewState.resolution`, for a derived
+ * one as for a stored one, resolved against the recipient's ladder. So a link
+ * opens on the resolution it was made at whether or not its recipient has ever
+ * added one, and the recipient's own ladder is not rewritten by somebody else's
+ * link.
  *
  * **Bin sizes rather than names**, unlike the entry names the stored ladder uses.
  * A derived rung has no entry: there is nothing in the file called `3000` and

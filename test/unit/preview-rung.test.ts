@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { POOLED_CELL_CAP } from '@/metacooler/pooling'
-import { PREVIEW_FACTOR, PREVIEW_MIN_CELLS, gridFor, previewRung, rungsOf } from '@/ui/refine'
+import { PREVIEW_FACTOR, PREVIEW_MIN_CELLS, memoryPlan, openPick, previewRung, rungsOf } from '@/ui/refine'
 import type { Extent } from '@/types'
 
 /** The 4DN chicken map's ladder (4DNFIRKUYKP4), a `.hic` opened at 25 kb. */
@@ -57,20 +57,23 @@ describe('the rung a block is previewed from', () => {
     expect(previewRung(rungsOf(['1000', '4000']), short, short, 1000)).toBeUndefined()
   })
 
-  it('is measured against the grid the reader will pool to, not the file’s bins', () => {
-    // Mouse chr1 at 10 kb, 19,547 bins: past what is read bin for bin, so the
-    // first read is pooled to a grid of five bins a cell — 3,910 cells, a 50 kb
-    // picture. The preview must be a quarter of *that*: 640 kb is 306 cells.
+  it('is measured against the grid the block is asked at, not the file’s bins', () => {
+    // Mouse chr1 at 10 kb, 19,547 bins: past what is read bin for bin, so with
+    // no ladder the first read is pooled to a grid of five bins a cell — 3,910
+    // cells, a 50 kb picture. The preview must be a quarter of *that*: 640 kb
+    // is 306 cells.
     const chr1 = whole(195_471_971, 10_000)
-    expect(gridFor(chr1, chr1)).toBe(5)
-    expect(previewRung(MOUSE, chr1, chr1, 10_000)).toBe('640000')
+    const asked = memoryPlan(openPick(10_000), [], 10_000, chr1[1]).grid
+    expect(asked).toBe(5)
+    expect(previewRung(MOUSE, chr1, chr1, 10_000, asked)).toBe('640000')
     // A window wider than any raster is pooled on every device: 81,920 bins of
     // 1 kb into twenty a cell, 4,096 cells. A 40 kb rung is 2,048 cells — half
     // the asked grid, not a quarter — so it is no preview; 160 kb's 512 is.
     const pooled: Extent = [0, 20 * POOLED_CELL_CAP]
-    expect(gridFor(pooled, pooled)).toBe(20)
-    expect(previewRung(rungsOf(['1000', '20000', '40000']), pooled, pooled, 1000)).toBeUndefined()
-    expect(previewRung(rungsOf(['1000', '40000', '160000']), pooled, pooled, 1000)).toBe('160000')
+    const wide = memoryPlan(openPick(1_000), [], 1_000, pooled[1]).grid
+    expect(wide).toBe(20)
+    expect(previewRung(rungsOf(['1000', '20000', '40000']), pooled, pooled, 1000, wide)).toBeUndefined()
+    expect(previewRung(rungsOf(['1000', '40000', '160000']), pooled, pooled, 1000, wide)).toBe('160000')
   })
 
   it('takes the wider axis of a block between two windows', () => {

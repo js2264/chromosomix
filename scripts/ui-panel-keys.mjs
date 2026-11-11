@@ -69,22 +69,19 @@ const browser = await chromium.launch({
 })
 const errors = []
 
-async function scene(name, run, { azerty = false, scale = 1, pick = false } = {}) {
+async function scene(name, run, { azerty = false, scale = 1 } = {}) {
   console.log(`\n== ${name}`)
   const context = await browser.newContext({ viewport: { width: 1920, height: 1100 }, deviceScaleFactor: scale })
   await context.addInitScript(
-    ({ azerty, map, pick }) => {
+    ({ azerty, map }) => {
       // A browser with no directory picker connects a folder as a snapshot,
       // which an input — and so Playwright — can answer.
       delete window.showDirectoryPicker
-      // The resolution keys and the bar's `+` pick a resolution, and a pick is
-      // the reader's with *Refine on zoom* off (§2): greyed while it is on.
-      if (pick) window.localStorage.setItem('chromosomix:refine', 'off')
       if (!azerty) return
       const keyboard = { getLayoutMap: () => Promise.resolve(new Map(Object.entries(map))), lock: () => Promise.resolve(), unlock: () => {} }
       Object.defineProperty(Navigator.prototype, 'keyboard', { configurable: true, get: () => keyboard })
     },
-    { azerty, map: AZERTY, pick },
+    { azerty, map: AZERTY },
   )
   const page = await context.newPage()
   page.on('pageerror', (e) => errors.push(`${name}: ${String(e)}`))
@@ -314,7 +311,7 @@ try {
     console.log('palette:', await page.evaluate(() =>
       [...document.querySelectorAll('.palette-row, .cmd-row, [role="option"]')].map((row) => row.textContent?.replace(/\s+/g, ' ').trim()).slice(0, 6).join(' | ')))
     await shot('pk10-ecoli-palette')
-  }, { pick: true })
+  })
 
   await scene('QWERTY: − and + over rungs the reader added', async ({ page, shot, shotOf }) => {
     // The yeast cooler stores one resolution, so the two keys start greyed;
@@ -348,7 +345,7 @@ try {
     await steppedFrom(page, was)
     console.log('+         ', await litStop(page))
     await shotOf('pk21-yeast-dropdown-bar', '.crumb-res')
-  }, { pick: true })
+  })
 
   // ------------------------------------------------------------ AZERTY
   await scene('AZERTY: the row and the key left of 1', async ({ page, shot, shotOf }) => {
@@ -417,7 +414,7 @@ try {
     await azerty(page, { key: '+', code: 'Equal', shiftKey: true })
     await steppedFrom(page, was)
     console.log('+ ⇧       ', await where(page))
-  }, { azerty: true, pick: true })
+  }, { azerty: true })
   // ------------------------------------------------------------ close-ups
   // The badges at three times their size, where a superscript `²` can be told
   // from the `2` of the column beside it: the Files and General headings, and

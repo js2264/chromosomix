@@ -2515,12 +2515,17 @@ export class App implements SessionHost {
         title: 'Refine on zoom',
         // The same switch as the tick at the head of the resolution row: one
         // preference across a whole deck rather than a property of one map, so
-        // it is not in any map's picture row (`MatrixPanel`'s `OFFER_REFINE`).
+        // it is not in any map's picture row, where a button for it, never
+        // shown, has gone.
         hint:
           'On, a map is read at the resolution of the screen and zooming reads it finer, down to ' +
-          'the finest the file stores. Off, it is drawn at the resolution picked in the bar.',
-        state: chipOf(refineEnabled()),
-        run: () => void toggleRefine(),
+          'the finest the file stores. A resolution picked in the bar wins over it; off, a map ' +
+          'with none picked is drawn at the resolution it was opened at.',
+        // The map in front's own answer — a pick in its link wins (§3.4) — and
+        // the session's own toggle, so unticking here keeps what is on screen
+        // as the tick does.
+        state: chipOf(this.current?.refining ?? refineEnabled()),
+        run: () => (this.current == null ? void toggleRefine() : this.current.toggleRefining()),
       },
       {
         id: 'fold-sidebar',

@@ -20,13 +20,16 @@ Only maps whose bins are one fixed size are read ([What is not opened](#what-is-
 
 ## Multi-resolution files (.mcool, .hic)
 
-An `.mcool` opens a third of the way up its ladder from the finest, and zooming in never goes finer
-than the rung you are on: pick the finest in the breadcrumb's **resolution** picker when you want
-it.
+An `.mcool` opens a third of the way up its ladder from the finest. That rung does not limit what you
+see: with **refine on zoom** ticked, a map is read at the resolution nearest the screen's, and zooming
+in reads finer rungs, down to the finest the file stores. To hold the map at one resolution, pick it
+in the **resolution** row at the end of the bar above the map
+([Resolution](/browse/contact-maps/#resolution)).
 
 - Open one rung by its address: `sample.mcool::/resolutions/5000`.
 - The whole genome and a chromosome's first picture are read from a coarser rung.
-- The **+** beside the picker sums a stored rung's bins into a resolution the file does not store.
+- The **+** in the resolution row sums a stored rung's bins into a resolution the file does not
+  store.
 
 A `.hic` of version 7, 8 or 9 opens the same way (`sample.hic::/resolutions/5000`); its own
 expected-value vectors and `All` chromosome are not read. An older `.hic` is refused: convert it

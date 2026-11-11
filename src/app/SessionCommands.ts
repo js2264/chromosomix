@@ -380,9 +380,10 @@ export class SessionCommands {
         enabled: this.session.current?.panel?.canToggleExpected === true,
         run: () => this.session.current?.panel?.toggleExpected(),
       },
-      // The resolution bar's stops, one at a time (§3.4): the lead's rung, which
-      // in a deck every map follows, exactly as a press on a stop would. The
-      // hint names the rung it goes to, as `<` and `>` name the sequence.
+      // The resolution row's slots, one at a time (§3.4): the lead's rung, which
+      // in a deck every map follows, exactly as a press on a slot would — a
+      // pick, which wins over *Refine on zoom*. The hint names the rung it goes
+      // to, as `<` and `>` name the sequence.
       {
         id: 'resolution-coarser',
         group: 'View',

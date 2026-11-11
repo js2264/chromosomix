@@ -4,22 +4,24 @@
  * `+` that adds one.
  *
  * **Two modes, one row.** With *Refine on zoom* ticked — the default — the zoom
- * picks the resolution: the screen's, down to the finest rung the file stores.
- * The slider and the box are greyed, and follow the map as it sharpens, so the
- * row says which resolution is actually drawn rather than one nobody asked for.
- * Unticked, the reader picks it, by sliding, by a slot, or in the box, and the
- * pick is what the map draws, coarser only where the window is too wide for a
- * block at it (the line under the map says so). Unticking keeps the resolution
- * on screen as the pick, so nothing jumps.
+ * picks the resolution: the screen's, down to the finest rung the file stores,
+ * and the slider and the box follow the map as it sharpens, so the row says
+ * which resolution is actually drawn rather than one nobody asked for. Picking
+ * one — a slot, a drag, the box, the arrow keys on the track, `−` and `+` —
+ * takes it out of the zoom's hands at once: the pick goes in the link and wins
+ * (§3.4), the tick shows off, and the map draws the pick, coarser only where
+ * the window is too wide for a block at it (the line under the map says so).
+ * Nothing is greyed, so there is never a tick to find before a slot answers.
+ * Unticking picks the resolution on screen, so nothing jumps; ticking hands it
+ * back to the zoom. Both are the session's ({@link ResolutionRowProps.onRefine}).
  *
  * **The slider is a row of slots, evenly spaced, coarsest on the left.** A
  * ladder is ordered and has a fixed number of rungs, which is what slots show;
  * a continuous track would suggest there is somewhere between two of them to
  * stop. Only the two ends are labelled, so the row stays a row on a laptop
  * with eleven rungs; a slot says its resolution under the pointer. What is
- * drawn is a stored rung (§2), so the thumb sits on a slot; it stands past the
- * coarse end, where a log scale puts it, only for a read too wide for the
- * coarsest rung, which the reader pools.
+ * drawn is a stored rung (§2), so the thumb sits on a slot — the nearest one
+ * where the reader pooled a read no rung stores, which the box then names.
  *
  * The box is the same choice as a list, for the reader who would rather read
  * it than slide to it, and it has no arrow: it is a number first, and a menu
@@ -30,7 +32,7 @@ import type { DerivedRung, Rung } from '../metacooler/coarsen'
 import { resolutionLabel } from '../units'
 import { el } from './dom'
 import { icon } from './icons'
-import { refineEnabled, setRefineEnabled, subscribeRefine } from './refine'
+import { subscribeRefine } from './refine'
 
 /** A rung of the row: one the file stores, or one the reader added. */
 export type RowRung = Rung & { derived?: DerivedRung }
@@ -38,10 +40,20 @@ export type RowRung = Rung & { derived?: DerivedRung }
 export interface ResolutionRowProps {
   /** Every rung, finest first — the ladder's own order. */
   rungs: ReadonlyArray<RowRung>
-  /** The rung picked, by index into {@link rungs}; -1 for none. */
+  /** The rung picked, by index into {@link rungs}; -1 for none — the zoom picks. */
   at: number
   /** The resolution on screen, in base pairs, where it is known. */
   shown: number | null
+  /**
+   * The rung the file was opened at, by index: what the row names where nothing
+   * is picked and nothing is drawn — a table in front, a map still reading.
+   * Shown, never picked. -1 or absent for none.
+   */
+  resting?: number
+  /** Whether the zoom picks the resolution: the preference ticked and nothing picked (§3.4). */
+  refining(): boolean
+  /** The tick was changed: the session hands the resolution to the zoom, or takes it back. */
+  onRefine(on: boolean): void
   /** What a rung is, in a sentence — the slot's and the option's tooltip. */
   why(rung: RowRung): string
   /** A rung was picked. */
@@ -84,14 +96,14 @@ export class ResolutionRow {
       type: 'checkbox',
       attrs: { 'aria-label': 'Refine on zoom' },
     }) as HTMLInputElement
-    this.tick.addEventListener('change', () => this.toggle(this.tick.checked))
+    this.tick.addEventListener('change', () => props.onRefine(this.tick.checked))
     const refine = el(
       'label',
       {
         class: 'res-refine',
         title:
           'Refine on zoom: the map is read at the resolution of the screen, and finer as you zoom, ' +
-          'down to the finest the file stores. Untick to pick a resolution yourself.',
+          'down to the finest the file stores. Picking a resolution unticks it.',
       },
       this.tick,
       el('span', { text: 'refine on zoom' }),
@@ -123,7 +135,6 @@ export class ResolutionRow {
         slot.addEventListener('pointerleave', () => this.hideTip())
         slot.addEventListener('click', (event) => {
           event.stopPropagation()
-          if (this.refining()) return
           this.pickAt(index)
         })
         this.slots.push(slot)
@@ -151,10 +162,9 @@ export class ResolutionRow {
     this.between = el('option', { value: 'shown', attrs: { hidden: '' } }) as HTMLOptionElement
     this.box.append(this.between)
     this.box.addEventListener('change', () => {
-      // Greyed while the zoom picks; a change that reaches it anyway is put back.
-      if (this.refining()) return this.paint()
       const index = Number(this.box.value)
       if (Number.isInteger(index)) this.pickAt(index)
+      else this.paint()
     })
 
     this.add =
@@ -223,7 +233,17 @@ export class ResolutionRow {
   }
 
   private refining(): boolean {
-    return refineEnabled()
+    return this.props.refining()
+  }
+
+  /** Whether the slider has the keyboard — kept across a redraw of the row. */
+  hasFocus(): boolean {
+    return this.track !== null && document.activeElement === this.track
+  }
+
+  /** Give the slider the keyboard: a redrawn row's, after an arrow key picked. */
+  focusTrack(): void {
+    this.track?.focus()
   }
 
   /** Where rung `index` sits along the track, as a percentage: coarsest at 0. */
@@ -232,23 +252,17 @@ export class ResolutionRow {
     return n < 2 ? 50 : ((n - 1 - index) / (n - 1)) * 100
   }
 
-  /**
-   * Where a resolution sits along the track: on its rung's slot, or between two
-   * at the place a log scale puts it; clamped to the ends.
-   */
-  private placeOf(binsize: number): number {
+  /** The rung nearest `binsize` on a log scale, by index; -1 for none. */
+  private nearest(binsize: number | null): number {
+    if (binsize === null || !(binsize > 0)) return -1
     const { rungs } = this.props
-    if (rungs.length < 2) return 50
-    if (binsize >= rungs[rungs.length - 1].binsize) return this.place(rungs.length - 1)
-    if (binsize <= rungs[0].binsize) return this.place(0)
-    for (let i = 0; i < rungs.length - 1; i++) {
-      const fine = rungs[i].binsize
-      const coarse = rungs[i + 1].binsize
-      if (binsize < fine || binsize > coarse) continue
-      const t = Math.log(coarse / binsize) / Math.log(coarse / fine)
-      return this.place(i + 1) + t * (this.place(i) - this.place(i + 1))
+    let best = -1
+    for (const [i, rung] of rungs.entries()) {
+      if (best < 0 || Math.abs(Math.log(rung.binsize / binsize)) < Math.abs(Math.log(rungs[best].binsize / binsize))) {
+        best = i
+      }
     }
-    return this.place(0)
+    return best
   }
 
   /** Repaint every part from the preference, the pick and what is shown. */
@@ -257,15 +271,9 @@ export class ResolutionRow {
     const { rungs, at } = this.props
     this.tick.checked = refining
     this.el.classList.toggle('is-refining', refining)
-    this.box.disabled = refining
-    if (this.add !== null) this.add.disabled = refining
     // The × names the rung picked, and while the zoom picks the box names
     // another: beside it, it would offer to remove what is not on screen.
     if (this.drop !== null) this.drop.hidden = refining
-    if (this.track !== null) {
-      this.track.setAttribute('aria-disabled', String(refining))
-      this.track.tabIndex = refining ? -1 : 0
-    }
     // While refining: what is drawn, which may be no rung at all. Off: the pick.
     const shown = this.shown
     let value: number | null = null
@@ -274,6 +282,7 @@ export class ResolutionRow {
       value = shown
       index = rungs.findIndex((rung) => Math.abs(rung.binsize - shown) < 1e-6 * shown)
     }
+    if (index < 0 && value === null) index = this.props.resting ?? -1
     if (index >= 0) {
       this.box.value = String(index)
     } else if (value !== null) {
@@ -282,42 +291,15 @@ export class ResolutionRow {
     }
     const label = index >= 0 ? labelOf(rungs[index]) : value === null ? '' : resolutionLabel(value)
     if (this.track !== null && this.thumb !== null) {
-      const left = index >= 0 ? this.place(index) : value === null ? null : this.placeOf(value)
-      this.thumb.hidden = left === null
-      if (left !== null) this.thumb.style.left = `${left}%`
-      this.track.setAttribute('aria-valuenow', String(Math.max(0, index)))
+      // On a slot: the rung's own, or the nearest to a resolution no rung stores.
+      const near = index >= 0 ? index : this.nearest(value)
+      this.thumb.hidden = near < 0
+      if (near >= 0) this.thumb.style.left = `${this.place(near)}%`
+      // Finer to the right, as the value grows: ARIA's slider counts up rightward.
+      this.track.setAttribute('aria-valuenow', String(near < 0 ? 0 : rungs.length - 1 - near))
       this.track.setAttribute('aria-valuetext', label)
       for (const [i, slot] of this.slots.entries()) slot.classList.toggle('is-current', i === index)
     }
-  }
-
-  /** The tick: refining, or the pick — which unticking takes from the screen. */
-  private toggle(on: boolean): void {
-    if (on) {
-      setRefineEnabled(true)
-      return
-    }
-    // **Unticking keeps what is on screen.** The rung nearest the resolution
-    // drawn, on a log scale, becomes the pick, so the picture does not jump to
-    // whichever rung was picked last. Picked first, so the first read the
-    // preference asks for is already at it.
-    const nearest = this.nearestShown()
-    if (nearest >= 0 && nearest !== this.props.at) this.props.onPick(this.props.rungs[nearest])
-    setRefineEnabled(false)
-  }
-
-  /** The stored rung nearest the resolution on screen, on a log scale; -1 for none. */
-  private nearestShown(): number {
-    const shown = this.shown
-    if (shown === null || !(shown > 0)) return -1
-    const { rungs } = this.props
-    let nearest = -1
-    for (const [i, rung] of rungs.entries()) {
-      if (rung.derived !== undefined) continue
-      const off = Math.abs(Math.log(rung.binsize / shown))
-      if (nearest < 0 || off < Math.abs(Math.log(rungs[nearest].binsize / shown))) nearest = i
-    }
-    return nearest
   }
 
   private pickAt(index: number): void {
@@ -346,15 +328,21 @@ export class ResolutionRow {
    */
   private dragFrom(event: PointerEvent): void {
     const track = this.track
-    if (track === null || this.refining() || event.button !== 0) return
-    if ((event.target as Element | null)?.classList.contains('res-slot')) return
+    if (track === null || event.button !== 0) return
+    // From anywhere on the track, the thumb included: it sits over a slot, and
+    // a drag that started on the thumb used to start nowhere. A press that
+    // never leaves its slot picks that slot when the button comes up — the
+    // track holds the pointer, so the click lands on the track, not the slot.
     event.preventDefault()
     track.focus()
     track.setPointerCapture?.(event.pointerId)
     const follow = (clientX: number): void => {
       const index = this.slotAt(clientX)
       this.dragging = index
-      if (this.thumb !== null) this.thumb.style.left = `${this.place(index)}%`
+      if (this.thumb !== null) {
+        this.thumb.hidden = false
+        this.thumb.style.left = `${this.place(index)}%`
+      }
       const slot = this.slots[index]
       if (slot !== undefined) this.showTip(slot, labelOf(this.props.rungs[index]))
     }
@@ -375,11 +363,14 @@ export class ResolutionRow {
     track.addEventListener('pointercancel', up)
   }
 
-  /** The arrow keys walk the rungs: left and down coarser, right and up finer. */
+  /**
+   * The arrow keys walk the rungs: left and down coarser, right and up finer —
+   * from the rung picked, or while the zoom picks from the one nearest what is
+   * drawn.
+   */
   private key(event: KeyboardEvent): void {
-    if (this.refining()) return
     const last = this.props.rungs.length - 1
-    const at = Math.max(0, this.props.at)
+    const at = Math.max(0, this.props.at >= 0 ? this.props.at : this.nearest(this.shown))
     const next =
       event.key === 'ArrowLeft' || event.key === 'ArrowDown'
         ? Math.min(last, at + 1)

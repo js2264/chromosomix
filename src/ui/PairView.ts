@@ -30,12 +30,10 @@ import { blockSummary } from './mapSummary'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import {
   attachRefine,
-  finestFloor,
-  openPick,
-  pickedRead,
+  planFields,
+  readPlan,
   refineEnabled,
   rungsOf,
-  screenPlan,
   type BlockLadder,
   type PickedResolution,
 } from './refine'
@@ -48,23 +46,8 @@ export interface PairViewProps {
   /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
   rungs?: readonly string[]
   /**
-   * Bins of this map summed into one drawn cell, because the reader asked for a
-   * resolution the file does not store (§3.4).
-   *
-   * The factor, not the bin size: a 10 kb rung derived from a 2 kb map is `5`,
-   * and the effective resolution on screen is this map's bin size times it. The
-   * base rung is the map that is *open* — picking a derived resolution navigates
-   * to it — so every read here is an ordinary one carrying an explicit plan,
-   * and the worker snaps that plan to each sequence's own grid so the cells hold
-   * the same sums wherever the reader pans (`worker/reader.worker.ts`).
-   *
-   * Absent, or 1, is every view of every file until somebody adds one.
-   */
-  binsPerCell?: number
-  /**
-   * The resolution picked (§3.4), asked live: what *Refine on zoom* off draws,
-   * read in place when it changes. Absent or `null` is the open map, at
-   * {@link binsPerCell}.
+   * The resolution picked (§3.4), asked live, and read in place when it
+   * changes; a pick wins over *Refine on zoom*. Absent or `null` is no pick.
    */
   picked?: () => PickedResolution | null
   /** Selectable genomes — `__unbinned__` is not among them (§7.4). */
@@ -304,7 +287,6 @@ export class PairView {
       rungs: rungsOf(this.props.rungs ?? []),
       // The grid the reader declared (§3.4), so a zoom cannot quietly read past
       // the resolution the axis is labelled with.
-      floor: () => this.props.binsPerCell ?? 1,
       ...(this.props.picked === undefined ? {} : { picked: this.props.picked }),
       read: (rows, cols, rung, binsPerCell) => {
         const own = this.props.client.cancellable<'matrix'>({
@@ -336,35 +318,21 @@ export class PairView {
         balance: this.props.balance,
         ...(this.props.value === undefined ? {} : { value: this.props.value }),
       }
-      // The declared grid on the bin-level read alone: a contig-level roll-up's
-      // cells *are* sequences, and there is no bin size to hold it to. While
-      // *Refine on zoom* is on the read is screen-sized (`screenPlan`, §2),
-      // down to the finest rung the file stores.
+      // The plan on the bin-level read alone: a contig-level roll-up's cells
+      // *are* sequences, and there is no bin size to hold it to. By the rule
+      // every map view's first read is ({@link readPlan}, §2, §3.4).
       const span = Math.max(rows.extent[1] - rows.extent[0], cols.extent[1] - cols.extent[0])
-      const rungs = rungsOf(this.props.rungs ?? [])
-      const screen = refineEnabled()
-        ? screenPlan({
-            rungs,
-            binsize: this.props.binsize,
-            view: span,
-            read: span,
-            screen: this.panel.screenWidth(),
-            floor: finestFloor(rungs, this.props.binsize),
-          })
-        : null
-      const pooled =
-        screen !== null
-          ? {
-              ...(screen.rung === undefined ? {} : { rung: screen.rung }),
-              ...(screen.binsPerCell === undefined ? {} : { binsPerCell: screen.binsPerCell }),
-            }
-          : (this.props.picked?.() ?? null) !== null
-            ? // The resolution picked, as memory allows (§3.4).
-              pickedRead(this.props.picked?.() as PickedResolution, rungs, this.props.binsize, span)
-            : (this.props.binsPerCell ?? 1) > 1
-              ? { binsPerCell: this.props.binsPerCell }
-              : // The open map, by the rule a pick is read by.
-                pickedRead(openPick(this.props.binsize), rungs, this.props.binsize, span)
+      const pooled = planFields(
+        readPlan({
+          rungs: rungsOf(this.props.rungs ?? []),
+          binsize: this.props.binsize,
+          view: span,
+          read: span,
+          screen: this.panel.screenWidth(),
+          pick: this.props.picked?.() ?? null,
+          refining: refineEnabled(),
+        }),
+      )
       const result: MatrixResult =
         this.level === 'bin'
           ? await this.props.client.request<'matrix'>({ kind: 'matrix', ...query, ...pooled })
@@ -390,6 +358,31 @@ export class PairView {
     }
   }
 
+  /**
+   * The resolution asked for (§3.4): the pick, or the open map's with *Refine on
+   * zoom* off and nothing picked; `undefined` while the zoom picks it.
+   */
+  private picked(): number | undefined {
+    const pick = this.props.picked?.() ?? null
+    if (pick !== null) return pick.binsize
+    return refineEnabled() ? undefined : this.props.binsize
+  }
+
+  /**
+   * The resolution picked changed (§3.4): read it where the reader stands, as a
+   * refine is read. `false` with no block and ladder in hand, and the view is
+   * rebuilt instead.
+   */
+  resolutionChanged(): boolean {
+    const shown = this.panel.block
+    if (this.ladder === null || shown === null) return false
+    this.renderSummary(shown)
+    const pick = this.picked()
+    const drawn = (shown.binsize ?? this.props.binsize) * Math.max(1, shown.binsPerCell ?? 1)
+    this.panel.refineNow(pick !== undefined && Math.abs(pick - drawn) > 1e-6 * drawn ? { measureAt: pick } : {})
+    return true
+  }
+
   private renderSummary(result: MatrixResult): void {
     let nonZero = 0
     for (let i = 0; i < result.values.length; i++) {
@@ -402,7 +395,7 @@ export class PairView {
     // can say that they cannot: that the two never touch in this file. An empty
     // square is otherwise indistinguishable from one that failed to load.
     this.summary.replaceChildren(
-      ...blockSummary(this.props.binsize, result, 'contig', refineEnabled() ? undefined : (this.props.picked?.()?.binsize ?? this.props.binsize * (this.props.binsPerCell ?? 1))),
+      ...blockSummary(this.props.binsize, result, 'contig', this.picked()),
       ' · ',
       this.panel.viewNote,
       ...(nonZero === 0 ? [' — these two genomes share no contacts in this file.'] : []),

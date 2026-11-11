@@ -121,7 +121,7 @@ function standingOn(
     uri,
     view: options.view ?? 'region',
     region: 'I',
-    ...(options.coarsen === undefined ? {} : { coarsen: options.coarsen }),
+    ...(options.coarsen === undefined ? {} : { resolution: options.coarsen }),
   } as ViewState)
   return { session, inside, opened }
 }
@@ -133,8 +133,8 @@ const step = (session: Session, id: 'resolution-coarser' | 'resolution-finer'): 
 }
 
 describe('the two resolution keys', () => {
-  // They pick, and a pick is the reader's with *Refine on zoom* off; while it
-  // is on the bar's slider is greyed, and so are they (the last test).
+  // They pick, and a pick wins over *Refine on zoom* (§3.4); off here, so the
+  // rung stood on is the one the file was opened at until they move it.
   beforeEach(() => setRefineEnabled(false))
   afterEach(() => setRefineEnabled(REFINE_DEFAULT))
 
@@ -161,9 +161,9 @@ describe('the two resolution keys', () => {
     step(session, 'resolution-finer').run()
     step(session, 'resolution-finer').run()
     expect(session.store.state?.resolution).toBe(1_000)
-    // Back on the rung the file was opened at, the hash names none.
+    // Back on the rung the file was opened at, it is a pick like any other.
     step(session, 'resolution-coarser').run()
-    expect(session.store.state?.resolution).toBeUndefined()
+    expect(session.store.state?.resolution).toBe(2_000)
     expect(opened).toEqual([])
   })
 
@@ -189,14 +189,15 @@ describe('the two resolution keys', () => {
     expect([coarser.enabled, coarser.hint]).toEqual([true, '20 kb*'])
     coarser.run()
     // Pooled from the rung that is open: the hash, not a re-open.
-    expect(session.store.state?.coarsen).toBe(20_000)
+    expect(session.store.state?.resolution).toBe(20_000)
     expect(opened).toEqual([])
     // Standing on it, the key counts from it — the lit stop — and not from the
     // 10 kb entry the file is open at underneath.
     expect(step(session, 'resolution-coarser').enabled).toBe(false)
     expect(step(session, 'resolution-finer').hint).toBe('10 kb')
     step(session, 'resolution-finer').run()
-    expect(session.store.state?.coarsen).toBeUndefined()
+    // A pick of the rung the file is open at: in the link, and it wins (§3.4).
+    expect(session.store.state?.resolution).toBe(10_000)
     expect(opened).toEqual([])
   })
 
@@ -216,15 +217,14 @@ describe('the two resolution keys', () => {
     expect(step(session, 'resolution-finer').enabled).toBe(false)
   })
 
-  it('are greyed while *Refine on zoom* picks, and say how to pick', () => {
+  it('step from what is drawn while *Refine on zoom* picks, and the step is a pick', () => {
     setRefineEnabled(true)
     const { session, opened } = standingOn('2000')
-    for (const id of ['resolution-coarser', 'resolution-finer'] as const) {
-      expect(step(session, id).enabled).toBe(false)
-      expect(step(session, id).hint).toBe('Refine on zoom picks the resolution — untick it in the bar to pick one.')
-    }
+    // Nothing drawn yet: from the rung the file was opened at.
+    expect(step(session, 'resolution-coarser').hint).toBe('5 kb')
     step(session, 'resolution-coarser').run()
-    expect(session.store.state?.resolution).toBeUndefined()
+    expect(session.store.state?.resolution).toBe(5_000)
+    expect(session.refining).toBe(false)
     expect(opened).toEqual([])
   })
 

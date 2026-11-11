@@ -64,8 +64,9 @@ bar, greyed while no map is starred, put the maps on one footing:
 - **match all resolutions** reads every map at the starred map's bin size, where its file has it.
 
 Changing the first map's resolution in the bar changes the deck's: every map follows, or says why it
-cannot. For one depth, use the chevrons after the **contacts** box
-([Drawing maps to one total](/browse/contact-maps/#drawing-maps-to-one-total)).
+cannot. A map follows the resolution picked on the first map, or the one it was opened at with none
+picked; for a resolution you added, the stored one it is summed from. For one depth, use the chevrons
+after the **contacts** box ([Drawing maps to one total](/browse/contact-maps/#drawing-maps-to-one-total)).
 
 ## When a map cannot follow
 

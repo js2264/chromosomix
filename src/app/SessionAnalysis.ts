@@ -20,13 +20,14 @@
 import { buildAnalysisContext } from '../analysis/context'
 import type { RunTarget } from '../analysis/runner'
 import { readsMap, type AnalysisContext, type AnalysisFraming, type AnalysisTask } from '../analysis/types'
-import type { AnalysisWorkspace, AnalysisWorkspaceHost } from '../analysis/workspace'
+import type { AnalysisWorkspace, AnalysisWorkspaceHost, TaskResolutions } from '../analysis/workspace'
 import type { BlockInput } from '../analysis/worker/protocol'
 import { LEAD_MAP } from '../annotations/placement'
 import { browsingBinsize } from '../genome/assembly'
 import type { AnalysisFacts } from '../panels/MapPanel'
-import { fileBaseLabel } from '../ui/labels'
+import { fileBaseLabel, fileLabel } from '../ui/labels'
 import { rungsOf } from '../ui/refine'
+import { resolutionLabel } from '../units'
 import type { MatrixPanel } from '../ui/MatrixPanel'
 import type { OpenResult, OrientationSummary, PairsBinning } from '../worker/protocol'
 import type { PairStats } from '../pairs/stats'
@@ -227,16 +228,17 @@ export class SessionAnalysis {
           // than the pseudo-bulk of every cell in the file (§3.8). The analysis
           // worker mounts the file for itself and would otherwise have no way to
           // know a selection exists.
+          // At the resolution the task reads (§18.4), which may be another
+          // entry of the ladder than the one open.
+          const at = this.at(task?.id)
           return {
-            // At the rung the crumb row names, which may be another entry of
-            // the ladder than the one open (§3.4).
-            uri: this.leadUri(file.uri),
+            uri: at?.uri ?? file.uri,
             source: file.source,
             ...cellsOfMap(file.info),
             ...binningOfMap(file.info),
             ...this.session.resampleOf(this.session.reader),
             ...(this.session.lens === null ? {} : { edit: this.session.lens.edit }),
-            label: this.session.mapLabel(file.uri),
+            label: this.leadLabel(file.uri, at?.uri),
           }
         }
         // **The genome, where there is no map.** Three tasks run entirely on
@@ -280,9 +282,9 @@ export class SessionAnalysis {
           ? null
           : this.session.withEditOf(
               withCircularNames(
-                // At the resolution the crumb row names (§3.4): the framing
-                // every task on it is run at.
-                this.leadFraming(panel, file.uri),
+                // At the resolution the task open in the drawer reads (§18.4):
+                // the framing a run of it is a record of.
+                this.leadFraming(panel, file.uri, this.workspace?.openTask ?? undefined),
                 this.session.circularStore()?.list() ?? [],
                 this.session.originStore()?.record() ?? {},
               ),
@@ -291,8 +293,10 @@ export class SessionAnalysis {
       block: () => {
         const starred = this.session.deck.grid?.starredPanel ?? null
         if (starred !== null) return starred.map?.analysisBlock() ?? null
-        return this.leadBlock(this.session.current?.panel)
+        return this.leadBlock(this.session.current?.panel, this.at(this.workspace?.openTask ?? undefined))
       },
+      resolutions: (task) => this.resolutions(task),
+      chooseResolution: (task, binsize) => this.chooseResolution(task, binsize),
       store: () => this.session.annotations?.store ?? null,
       // The same object both surfaces draw groups from, so a suggestion a task
       // makes about its own set (§18.11) means the same thing beside the map and
@@ -426,12 +430,12 @@ export class SessionAnalysis {
    * screen like the others, and the runner already compares it. Each is named
    * what the reader calls it (§16.10).
    */
-  private peersOf(uri: string): Array<{ label: string; uri: string; binsize: number }> {
+  private peersOf(uri: string, taskId?: string): Array<{ label: string; uri: string; binsize: number }> {
     const out: Array<{ label: string; uri: string; binsize: number }> = []
     const file = this.session.file
     if (file !== null && file.uri !== uri) {
-      // At the rung the crumb row names, as a task on the lead itself reads it.
-      const at = this.session.analysisAt()
+      // At the resolution the task reads, as a task on the lead itself reads it.
+      const at = this.at(taskId)
       out.push({
         label: this.session.mapLabel(file.uri),
         uri: at?.uri ?? file.uri,
@@ -448,32 +452,99 @@ export class SessionAnalysis {
   }
 
   /**
-   * The address a task on the lead reads (§3.4): the entry of the rung the
-   * crumb row names, which may be another entry of the ladder than the one the
-   * file is open at — the reader's picks are read in place, and the file stays
-   * open where it was.
+   * The resolution each task was given on its *Resolution* row (§18.4), by task
+   * id, for the file `held` names: another file's rungs are another ladder, so
+   * a choice is put down with the file it was made on.
    */
-  private leadUri(open: string): string {
-    return this.session.analysisAt()?.uri ?? open
+  private readonly chosen = new Map<string, number>()
+  private chosenOn = ''
+
+  /** The resolution task `taskId` was given, where it was given one. */
+  private chosenFor(taskId: string | undefined): number | undefined {
+    const uri = this.session.file?.uri ?? ''
+    if (uri !== this.chosenOn) {
+      this.chosen.clear()
+      this.chosenOn = uri
+    }
+    return taskId === undefined ? undefined : this.chosen.get(taskId)
   }
 
-  /** The lead's framing, on the grid the crumb row names ({@link Session.analysisAt}). */
-  private leadFraming(panel: MatrixPanel, open: string): AnalysisFraming | null {
-    const at = this.session.analysisAt()
+  /**
+   * The grid a task on the lead reads ({@link Session.analysisAt}): the one its
+   * *Resolution* row was given, else the one picked in the crumb row, else —
+   * `null` — the open map's own bins.
+   */
+  private at(taskId: string | undefined): ReturnType<Session['analysisAt']> {
+    return this.session.analysisAt(this.chosenFor(taskId))
+  }
+
+  /**
+   * What a run on the lead is called: the name the reader gave the map, else
+   * the file at the entry the run reads — `sample.mcool::25000` beside "25 kb
+   * bins", not the entry the file happens to be open at.
+   */
+  private leadLabel(open: string, read: string | undefined): string {
+    const named = this.session.mapLabel(open)
+    return read === undefined || named !== fileLabel(open) ? named : fileLabel(read)
+  }
+
+  /** The lead's framing, on the grid task `taskId` reads ({@link at}). */
+  private leadFraming(panel: MatrixPanel, open: string, taskId: string | undefined): AnalysisFraming | null {
+    const at = this.at(taskId)
     return panel.analysisFraming(at?.uri ?? open, at?.grid ?? null)
   }
 
   /**
    * The block on screen, lent to a task on the lead where it is on the grid
-   * the task reads: from the rung the crumb row names, and never at a
-   * resolution the reader added — the runner reads the map summed (§3.4), and
-   * the block drawn is another sum of it.
+   * the task reads: from that rung, and never at a resolution the reader added
+   * — the runner reads the map summed (§3.4), and the block drawn is another
+   * sum of it.
    */
-  private leadBlock(panel: MatrixPanel | null | undefined): BlockInput | null {
+  private leadBlock(panel: MatrixPanel | null | undefined, at: ReturnType<Session['analysisAt']>): BlockInput | null {
     if (panel === undefined || panel === null) return null
-    const at = this.session.analysisAt()
     if (at !== null && at.grid.derived !== null) return null
     return at === null ? panel.analysisBlock() : panel.analysisBlock(at.grid.rung)
+  }
+
+  /**
+   * A task's *Resolution* row (§18.4): every rung of the lead's ladder a task
+   * can be framed at, and the one it reads now. Only on the lead — a deck's
+   * other maps are read at their own rung — and only where there is a choice.
+   */
+  private resolutions(task: AnalysisTask): TaskResolutions | null {
+    if (!readsMap(task)) return null
+    if ((this.session.deck.grid?.starredPanel ?? null) !== null) return null
+    const file = this.session.file
+    const open = file?.info.binsize ?? 0
+    if (file === null || file.info.pairs !== undefined || !(open > 0)) return null
+    const options = this.session
+      .analysisLadder()
+      .filter((rung) => rung.binsize === open || this.session.analysisAt(rung.binsize) !== null)
+      .map((rung) => ({
+        binsize: rung.binsize,
+        label: resolutionLabel(rung.binsize) + (rung.derived === undefined ? '' : '*'),
+        title:
+          rung.derived === undefined
+            ? `${rung.binsize.toLocaleString('en-US')} bp per bin`
+            : `${rung.binsize.toLocaleString('en-US')} bp per bin — ${rung.derived.factor} of the ` +
+              `${rung.derived.from.binsize.toLocaleString('en-US')} bp bins added up`,
+      }))
+    if (options.length < 2) return null
+    const value = this.chosenFor(task.id) ?? this.session.pickedResolution()?.binsize ?? open
+    return { options, value: options.some((option) => option.binsize === value) ? value : open }
+  }
+
+  /**
+   * The reader chose `binsize` on a task's *Resolution* row: that task is read
+   * at it from now on, on this file; the one it would have read anyway is no
+   * choice, and is forgotten so the task follows the crumb row again.
+   */
+  private chooseResolution(task: AnalysisTask, binsize: number): void {
+    this.chosenFor(task.id)
+    const standing = this.session.pickedResolution()?.binsize ?? this.session.file?.info.binsize
+    if (binsize === standing) this.chosen.delete(task.id)
+    else this.chosen.set(task.id, binsize)
+    this.workspace?.refresh()
   }
 
   /**
@@ -490,9 +561,11 @@ export class SessionAnalysis {
     const file = this.session.file
     let lead: RunTarget | null = null
     if (file !== null) {
+      // At the resolution the task in the drawer reads (§18.4).
+      const at = this.at(this.workspace?.openTask ?? undefined)
       lead = {
         map: LEAD_MAP,
-        uri: this.leadUri(file.uri),
+        uri: at?.uri ?? file.uri,
         source: file.source,
         ...cellsOfMap(file.info),
         ...binningOfMap(file.info),
@@ -501,7 +574,7 @@ export class SessionAnalysis {
         // What the reader calls it (§16.10), which is what every tab, legend,
         // lane and table a task makes of it is named by — not the file's name,
         // which is only the default a map starts with.
-        label: this.session.mapLabel(file.uri),
+        label: this.leadLabel(file.uri, at?.uri),
       }
     }
     for (const { map, panel } of this.session.deck.grid?.analysable() ?? []) {
@@ -623,12 +696,12 @@ export class SessionAnalysis {
     const info = starred?.info ?? file.info
     const uri = starred?.uri ?? file.uri
     const panel = starred === null ? this.session.current?.panel : (starredPanel?.map ?? undefined)
-    // **At the resolution the reader added**, where the lead's map is drawn at
-    // one (§3.4): every task on it reads the map summed to it, so it is priced,
-    // and its bins counted, at that resolution rather than at the rung
-    // underneath. Only with the map on screen — a link's `coarsen=` carried into
-    // the browser draws no map at it, and the tracks there are binned as before.
-    const at = starred === null && panel !== undefined && panel !== null ? this.session.analysisAt() : null
+    // **At the resolution the task reads** (§3.4, §18.4) — its *Resolution*
+    // row's, else the one picked — so it is priced, and its bins counted, at
+    // that resolution rather than at the rung underneath. Only with the map on
+    // screen — a link's `resolution=` carried into the browser draws no map at
+    // it, and the tracks there are binned as before.
+    const at = starred === null && panel !== undefined && panel !== null ? this.at(task?.id) : null
     const derived = at?.grid.derived ?? null
     const binsize = at?.grid.binsize ?? info.binsize
     if (binsize === null || binsize <= 0) return null
@@ -643,7 +716,7 @@ export class SessionAnalysis {
         declared.origins,
       ),
     )
-    const block = starred === null ? this.leadBlock(panel) : (panel?.analysisBlock() ?? null)
+    const block = starred === null ? this.leadBlock(panel, at) : (panel?.analysisBlock() ?? null)
     return buildAnalysisContext({
       uri: at?.uri ?? uri,
       memoryKey: this.session.memoryKey(uri),
@@ -674,7 +747,7 @@ export class SessionAnalysis {
       resolutions: rungsOf(info.entries).map((rung) => rung.binsize),
       // Each at the resolution a run reads it at: on the lead at a resolution the
       // reader added, every map whose bins divide it is summed to it too (§3.4).
-      peers: this.peersOf(uri).map((peer) =>
+      peers: this.peersOf(uri, task?.id).map((peer) =>
         derived !== null && peer.binsize > 0 && derived.rung.binsize % peer.binsize === 0
           ? { ...peer, binsize: derived.rung.binsize }
           : peer,

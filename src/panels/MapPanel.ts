@@ -89,7 +89,7 @@ import { dragHasFileRow, readFileDrag } from '../ui/fileDrag'
 import type { PickedFile } from '../browse/folder'
 import { resolutionLabel } from '../units'
 import { firstEntry } from '../ui/FilePicker'
-import { attachRefine, finestFloor, refineEnabled, rungsOf, screenPlan, type BlockLadder } from '../ui/refine'
+import { attachRefine, planFields, readPlan, refineEnabled, rungsOf, type BlockLadder } from '../ui/refine'
 import { icon, iconButton } from '../ui/icons'
 import { paintSequencePicker, sequencePicker, shownSequence } from './sequencePicker'
 import { entryLabel, fileBaseLabel, fileLabel, splitUri } from '../ui/labels'
@@ -1945,31 +1945,32 @@ export class MapPanel {
   }
 
   /**
-   * How this panel's first read is asked for: **screen-sized** while *Refine
-   * on zoom* is on, the stored rung and pooling that put about a cell on each
-   * pixel of the panel (`screenPlan`, §2), and as memory allows when it is off.
+   * How this panel's first read is asked for, by the rule every map view's is
+   * ({@link readPlan}, §2): **screen-sized** while *Refine on zoom* is on, the
+   * stored rung that puts about a cell on each pixel of the panel; as memory
+   * allows when it is off — its share of it (§16.7) — from the finest stored
+   * rung that fits. A companion has no pick of its own: it follows the lead's
+   * rung by opening it (`useBinsize`).
    */
   private firstPlan(
     rows: [number, number],
     cols: [number, number],
     info: OpenResult,
   ): { rung?: string; binsPerCell?: number } {
-    if (!refineEnabled()) return {}
     const span = Math.max(rows[1] - rows[0], cols[1] - cols[0])
-    const rungs = rungsOf(info.entries)
-    const plan = screenPlan({
-      rungs,
-      binsize: info.binsize ?? 1,
-      view: span,
-      read: span,
-      screen: this.screenWidth(),
-      // Down to the finest rung, as the zoom after it goes (§2).
-      floor: finestFloor(rungs, info.binsize ?? 1),
-    })
-    return {
-      ...(plan.rung === undefined ? {} : { rung: plan.rung }),
-      ...(plan.binsPerCell === undefined ? {} : { binsPerCell: plan.binsPerCell }),
-    }
+    const budget = this.props.budgetBytes()
+    return planFields(
+      readPlan({
+        rungs: rungsOf(info.entries),
+        binsize: info.binsize ?? 1,
+        view: span,
+        read: span,
+        screen: this.screenWidth(),
+        pick: null,
+        refining: refineEnabled(),
+        ...(budget === undefined ? {} : { budget }),
+      }),
+    )
   }
 
   /**

@@ -112,7 +112,7 @@ export const runHiccups: TaskRunner = async (job) => {
     job.note(
       `${skipped.length} sequence${skipped.length === 1 ? '' : 's'} would need a band bigger than a ` +
         `scan can hold, and ${skipped.length === 1 ? 'was' : 'were'} skipped: ${namesOf(skipped)}. ` +
-        'Bring “furthest from the diagonal” down, or open the file at a coarser resolution.',
+        'Bring “furthest from the diagonal” down, or run it at a coarser resolution.',
     )
   }
   if (units.length === 0) {

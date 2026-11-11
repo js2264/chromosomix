@@ -102,8 +102,8 @@ In the dialog's order and wording. ⌘ is for a Mac, Ctrl for everything else.
 | <kbd>Space</kbd> | **Diagonal lock** | Every drag, scroll and box runs along the diagonal until pressed again. On a map |
 | <kbd>0</kbd> | **Fit the view** | On a map, every pan and zoom undone, as a double click does. In the 1D browser, the whole genome |
 | <kbd>E</kbd> | **Observed over expected** | Each cell over what its distance from the diagonal predicts: the Map card's O/E toggle. On a map |
-| <kbd>−</kbd> | **Coarser resolution** | One rung on the resolution row. On a map, with *refine on zoom* unticked |
-| <kbd>+</kbd> | **Finer resolution** | One rung on the resolution row. On a map, with *refine on zoom* unticked |
+| <kbd>−</kbd> | **Coarser resolution** | One rung on the resolution row, picked: from the one picked, or from the one drawn while *refine on zoom* picks. On a map |
+| <kbd>+</kbd> | **Finer resolution** | One rung on the resolution row, picked: from the one picked, or from the one drawn while *refine on zoom* picks. On a map |
 | <kbd>A</kbd> | **Manual annotations** | Your hand-drawn marks, on every map, track and model; on brings back the ones it hid |
 | <kbd>N</kbd> | **Track text** | Track names, value ranges and feature names |
 | <kbd>R</kbd> | **Track floor** | A rule along the bottom of every track lane |

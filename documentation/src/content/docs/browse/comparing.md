@@ -23,8 +23,11 @@ file's.
 - **swap sides** puts the other file above the diagonal.
 - A name typed on a row is used wherever the map is named.
 - Hovering a cell gives both files' counts.
-- The link carries the second file as `uri2`. On a change of resolution it follows at the same bin
-  size, or the card says it has none.
+- The link carries the second file as `uri2`. Pick another resolution the file stores and the first
+  file is opened at it, with the second following at the same bin size, or the card says it has none;
+  a resolution you added on the open one is drawn for both. While *refine on zoom* picks, both files
+  are read at the resolution they were opened at, their bins summed to the size of the screen until
+  you zoom in far enough for their own.
 - A link or a workspace that names both opens them at once: the upper triangle is drawn as soon as
   the first file has its block, and the lower one joins it when the second file has its own.
 
@@ -85,7 +88,7 @@ To draw, say, balanced counts above the diagonal and their O/E below:
 While it is on, a dot marks the **◣ lower** tab. Switched off, the triangle mirrors again and keeps
 its settings for next time.
 
-![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb at 2 kb, balanced in log10 above the diagonal and its O/E in log2 on RdBu_r below, each with its own key in the corner, marked ◥ and ◣, beside the Map card open on its lower tab with own reading on.](../../../assets/screens/browse/comparing-lower-reading.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&coarsen=2000&balance=true&transform=log10&lower=true&oe2=true&transform2=log2&colormap2=RdBu_r")
+![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb at 2 kb, balanced in log10 above the diagonal and its O/E in log2 on RdBu_r below, each with its own key in the corner, marked ◥ and ◣, beside the Map card open on its lower tab with own reading on.](../../../assets/screens/browse/comparing-lower-reading.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&resolution=2000&balance=true&transform=log10&lower=true&oe2=true&transform2=log2&colormap2=RdBu_r")
 
 Each reading has its own colour scale and key, `◥` or `◣`. The readout names the reading under the
 pointer, and a saved figure carries both keys and a second caption line. The window, resolution,

@@ -112,6 +112,7 @@ export class SessionRouter {
       this.session.assembly = null
       this.session.assemblySource = null
       this.session.mounted = null
+      this.session.breadcrumb?.destroy()
       this.session.breadcrumb = null
       this.session.breadcrumbHost.replaceChildren()
       // The annotation worker belongs to the open file, and there is no longer
@@ -407,15 +408,16 @@ export class SessionRouter {
     // block on screen is swapped where the reader stands, as a refine swaps
     // one. Rebuilt from its named region, the view threw away the window the
     // reader had zoomed to, so every pick was a jump back to the whole sequence.
+    // A view that cannot — no block in hand yet, a gate — says so, and is
+    // rebuilt below.
     if (
       this.mounting === null &&
       this.session.mounted !== null &&
-      this.session.current?.resolutionChanged !== undefined &&
-      differsOnlyInResolution(this.session.mounted, state)
+      differsOnlyInResolution(this.session.mounted, state) &&
+      this.session.current?.resolutionChanged?.() === true
     ) {
       this.session.mounted = state
       this.session.breadcrumb?.render(state)
-      this.session.current.resolutionChanged()
       this.session.analysisResolutionMoved()
       this.session.host.activity(this.session)
       return

@@ -75,9 +75,6 @@ await shot('fx02-chromosomes-circular')
 await page.goto(`${g.base}/#uri=${COOL}&view=region&region=IV:1000000-1400000`)
 await page.waitForSelector('.heatmap-canvas', { timeout: 120000 })
 await sleep(4000)
-// The `+` picks, which is the reader's with *Refine on zoom* unticked (§2).
-if (await page.locator('.res-refine input').first().isChecked()) await page.click('.res-refine input')
-await sleep(1000)
 for (const kb of [2, 3, 4, 5, 6, 8, 10, 16, 20, 25, 32, 50]) {
   await page.click('.res-add')
   await sleep(400)

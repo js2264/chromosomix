@@ -150,6 +150,12 @@ export interface ParamFormOptions {
    * and the run is where the file is read back (`AnalysisRunner.holdFile`).
    */
   files?: FileShelf
+  /**
+   * A row the host draws first in the top group, before every parameter: the
+   * drawer's *Resolution* (§18.4), which decides what a bin is for every other
+   * row that counts in bins, and so comes before all of them.
+   */
+  lead?: HTMLElement
 }
 
 /** Somewhere a {@link FileParam}'s file outlives the form it was handed to. */
@@ -658,7 +664,10 @@ export class ParamForm {
     this.forgetUnheld()
 
     this.el = el('div', { class: 'param-form' })
-    for (const section of this.sections()) this.el.appendChild(this.group(section))
+    const sections = this.sections()
+    if (options.lead !== undefined && !sections.includes('')) sections.unshift('')
+    for (const section of sections) this.el.appendChild(this.group(section))
+    if (options.lead !== undefined) this.groups.get('')?.appendChild(options.lead)
     for (const spec of this.specs) {
       // A derived parameter has no control at all — not a disabled one and not a
       // hidden one. It is the file's answer rather than a question, and a

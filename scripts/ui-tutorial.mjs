@@ -312,7 +312,6 @@ const ACT = {
     await box.fill(copied)
   },
   'open-set': () => page.click('.store-drawer .portal-session'),
-  'refine-off': () => page.click('.crumb-res .res-refine input'),
   'resolution-250': () => page.selectOption('select.res-pick', { label: '250 kb' }),
   chromosome: () => page.click('.content .tviewport .tr .td[title="chr15"]'),
   'look-general': next,

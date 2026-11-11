@@ -27,6 +27,7 @@ import type { ViewState } from '../types'
 import { el } from './dom'
 import { resolutionLabel } from '../units'
 import { ResolutionRow } from './ResolutionRow'
+import { refineEnabled, setRefineEnabled } from './refine'
 
 /** Re-exported: the label moved to `src/units.ts`, and this is where callers found it. */
 export { resolutionLabel }
@@ -140,26 +141,23 @@ export interface BreadcrumbProps {
    */
   ladder?(): ReadonlyArray<Rung & { derived?: DerivedRung }>
   /**
-   * The bin size on screen, when it is one the reader added rather than a rung.
-   *
-   * A function for {@link ladder}'s reason and for a second: under a derived
-   * rung the file is open at its *base*, so `currentEntry` says `1000` while the
-   * axis says 10 kb, and which it is changes on every patch of the hash.
+   * The bin size the map stands on — the resolution picked (§3.4), a rung the
+   * file stores or one the reader added — or `undefined` where none is and the
+   * zoom picks it. A function for {@link ladder}'s reason: it changes on every
+   * patch of the hash. Absent, the open entry is the rung stood on, which is
+   * every caller that has no picks of its own.
    */
-  coarsen?(): number | undefined
+  standing?(): number | undefined
+  /** Whether the zoom picks the resolution (§2): the tick at the head of the row. */
+  refining?(): boolean
+  /** The tick was changed (§3.4). */
+  onRefine?(on: boolean): void
   /**
-   * A rung of the **file's own** ladder was picked, by entry name.
-   *
-   * Separate from {@link onSelectEntry}, which is the plain entry picker a
-   * collection of replicates gets, because the two do different things where a
-   * derived resolution is showing: picking a stored rung there has to *stop*
-   * coarsening as well as move, and on a plain `.cool` — one rung, no entries —
-   * it has nothing to open at all and stopping is the whole of it. Falls back to
-   * {@link onSelectEntry} when a caller offers no such distinction.
+   * A rung of the ladder was picked, stored or added, by its bin size in bp.
+   * Falls back to {@link onSelectEntry}, by entry name, for a caller with no
+   * picks of its own.
    */
-  onSelectRung?(entry: string): void
-  /** A resolution the reader added was picked — its bin size, in bp. */
-  onSelectDerived?(binsize: number): void
+  onPickResolution?(binsize: number): void
   /** The `+` was pressed: offer to add a resolution the file does not store. */
   onAddResolution?(): void
   /** The × on an added resolution was pressed — take it back off the ladder. */
@@ -218,35 +216,6 @@ export function rootTable(
   return state.genome === undefined ? fallback : 'genomes'
 }
 
-/**
- * Which rung of a ladder is on screen, by its index.
- *
- * The reader's declared bin size where they are on one, and the open entry's
- * name otherwise — two questions with one answer, because a derived rung has no
- * entry and the entry that is open under one is its *base*. Reading
- * `currentEntry` alone would put the highlight on the 1 kb stop while the axis
- * said 3 kb.
- *
- * Out here rather than on the bar because the bar is not the only thing that
- * walks the ladder: `-` and `+` step it from the keyboard (`KEYS.coarser`,
- * `KEYS.finer`), and a key that counted from a different rung than the stop
- * that is lit would step from somewhere the reader is not.
- */
-export function rungStandingAt(
-  rungs: ReadonlyArray<Rung & { derived?: DerivedRung }>,
-  coarsen: number | undefined,
-  currentEntry: string | undefined,
-): number {
-  if (coarsen !== undefined) {
-    const at = rungs.findIndex((rung) => rung.binsize === coarsen)
-    if (at >= 0) return at
-  }
-  return Math.max(
-    0,
-    rungs.findIndex((rung) => rung.derived === undefined && rung.name === currentEntry),
-  )
-}
-
 export class Breadcrumb {
   readonly el: HTMLElement
   /** The resolution row as last drawn; see {@link pushResolution}. */
@@ -260,6 +229,9 @@ export class Breadcrumb {
 
   /** Re-render for a state. Safe to call on every state change. */
   render(state: ViewState | null): void {
+    // An arrow key on the slider picks, and the pick redraws the row: the new
+    // slider takes the keyboard back, or the walk stops after one rung.
+    const focused = this.resRow?.hasFocus() === true
     this.resRow?.destroy()
     this.resRow = null
     // Everything but the contacts box goes, and the trail is built in front of
@@ -293,6 +265,7 @@ export class Breadcrumb {
       this.props.reference.sync()
     }
     this.pushResolution()
+    if (focused) (this.resRow as ResolutionRow | null)?.focusTrack()
     // …and after it, the total the maps are drawn to (§6.5): another answer to
     // *how the picture is drawn*, at the end of the bar where those live.
     if (this.props.contacts !== undefined) {
@@ -515,9 +488,35 @@ export class Breadcrumb {
       .sort((a, b) => a.binsize - b.binsize)
   }
 
-  /** Which rung of {@link ladder} is on screen — see {@link rungStandingAt}. */
+  /**
+   * Which rung of {@link ladder} the map stands on, by its index: the one
+   * picked, or -1 while the zoom picks — the session's word for it where it has
+   * one, the open entry's name for a caller with none.
+   */
   private standingAt(rungs: ReadonlyArray<Rung & { derived?: DerivedRung }>): number {
-    return rungStandingAt(rungs, this.props.coarsen?.(), this.props.currentEntry)
+    if (this.props.standing === undefined) {
+      return Math.max(0, rungs.findIndex((rung) => rung.derived === undefined && rung.name === this.props.currentEntry))
+    }
+    const binsize = this.props.standing()
+    return binsize === undefined ? -1 : rungs.findIndex((rung) => rung.binsize === binsize)
+  }
+
+  /**
+   * The rung the file was opened at, by index — the open entry by name, or the
+   * one stored rung of a file with no ladder — for the row to name where nothing
+   * is picked and nothing is drawn.
+   */
+  private restingAt(rungs: ReadonlyArray<Rung & { derived?: DerivedRung }>): number {
+    const named = rungs.findIndex((rung) => rung.derived === undefined && rung.name === this.props.currentEntry)
+    if (named >= 0) return named
+    const stored = rungs.filter((rung) => rung.derived === undefined)
+    return stored.length === 1 ? rungs.indexOf(stored[0]) : -1
+  }
+
+  /** Take the row out of the page, letting go of what it subscribed to. */
+  destroy(): void {
+    this.resRow?.destroy()
+    this.resRow = null
   }
 
   /**
@@ -552,12 +551,12 @@ export class Breadcrumb {
    * Pick a rung, whichever kind it is.
    *
    * One callback out of the row rather than two paths through it: a rung is a
-   * rung, and which of the two roads it takes — the file's own entry, or the
-   * open one pooled — is the session's business and not the bar's.
+   * rung, stored or added, and how it is read is the session's business and
+   * not the bar's.
    */
   private pick(rung: Rung & { derived?: DerivedRung }): void {
-    if (rung.derived !== undefined) this.props.onSelectDerived?.(rung.binsize)
-    else (this.props.onSelectRung ?? this.props.onSelectEntry)?.(rung.name)
+    if (this.props.onPickResolution !== undefined) this.props.onPickResolution(rung.binsize)
+    else if (rung.derived === undefined) this.props.onSelectEntry?.(rung.name)
   }
 
   /** What a rung is, in bins — the sentence its option in the box carries. */
@@ -594,6 +593,9 @@ export class Breadcrumb {
       rungs,
       at: this.standingAt(rungs),
       shown: this.shownBinsize,
+      resting: this.restingAt(rungs),
+      refining: () => this.props.refining?.() ?? refineEnabled(),
+      onRefine: (on) => (this.props.onRefine === undefined ? setRefineEnabled(on) : this.props.onRefine(on)),
       why: (rung) => this.rungWhy(rung),
       onPick: (rung) => this.pick(rung),
       ...(onAdd === undefined ? {} : { onAdd }),
@@ -604,7 +606,8 @@ export class Breadcrumb {
 
   /**
    * The resolution the map on screen is drawn at, in base pairs (§2): what the
-   * row's greyed slider and box follow while *Refine on zoom* picks it.
+   * row's slider and box follow while *Refine on zoom* picks it — the thumb
+   * hollow and the box quieter, nothing greyed.
    */
   showResolution(binsize: number | null): void {
     this.shownBinsize = binsize

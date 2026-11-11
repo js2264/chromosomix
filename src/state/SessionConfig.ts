@@ -227,8 +227,8 @@ export interface SessionConfig {
    * Beside `circular` and for its reason: the file's own rungs are in the file,
    * and this is what somebody asked to be able to look at as well — *give me a
    * 10 kb picture of a 4 kb file* — which travels with the tracks they loaded
-   * rather than in the view state. Which rung is *on screen* is a different
-   * question and rides in the hash (`ViewState.coarsen`).
+   * rather than in the view state. Which rung is *picked* is a different
+   * question and rides in the hash (`ViewState.resolution`).
    *
    * Optional, so a workspace written before this existed imports as what it was:
    * the file's own ladder and nothing else. See `state/resolutions.ts`.

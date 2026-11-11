@@ -72,7 +72,6 @@ import type { TaskResult } from '../analysis/types'
 import type { ViewState } from '../types'
 import { isMac } from './commands'
 import { BALANCED_SCORE, CORRELATION_SCORE } from './scores'
-import { refineEnabled } from './refine'
 import type { TourSpot, TourStep, TourText } from './Tour'
 
 /** What the steps read from the window. */
@@ -80,8 +79,8 @@ export interface TutorialHost {
   /** The view of the tab in front, or `null` while it holds nothing. */
   view(): ViewState | null
   /**
-   * The resolution the map in front is drawn at, as the reader asked for it —
-   * the rung picked with *Refine on zoom* off — or `null`.
+   * The resolution the map in front was asked for — the rung picked, else the
+   * one the file was opened at — or `null`.
    */
   binsize(): number | null
   /**
@@ -208,7 +207,6 @@ function taskGroup(heading: string): HTMLElement | null {
   return null
 }
 
-/** The resolution control: a dropdown on a long ladder, a row of stops on a short one. */
 /** The resolution row: its slider and its box, either of which picks a rung. */
 function resolutionControl(): HTMLElement | null {
   return first('.crumb-res')
@@ -742,26 +740,16 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       target: () => columnCards('general'),
     },
     {
-      id: 'refine-off',
-      chapter: 'The map',
-      title: 'Untick Refine on zoom',
-      text:
-        'A map is stored at several resolutions, the size of one bin. Ticked, the map is read at the ' +
-        'resolution of the screen, and finer as you zoom; unticked, you pick it.',
-      target: () => first('.crumb-res .res-refine'),
-      done: () => !refineEnabled(),
-      needs: { holds: onMap, back: 'open-set' },
-      missing: 'Waiting for the map to open.',
-    },
-    {
       id: 'resolution-250',
       chapter: 'The map',
       title: 'Pick 250 kb',
-      text: '250 kb is coarse enough to show a whole chromosome’s compartments.',
+      text:
+        'A map is stored at several resolutions, the size of one bin, and is read at the screen’s until ' +
+        'you pick one. 250 kb is coarse enough to show a whole chromosome’s compartments.',
       action: 'choose',
       target: resolutionControl,
-      done: () => !refineEnabled() && host.binsize() === 250_000,
-      needs: { holds: () => onMap() && !refineEnabled(), back: 'refine-off' },
+      done: () => host.binsize() === 250_000,
+      needs: { holds: onMap, back: 'open-set' },
       missing: 'Waiting for the map to open.',
     },
     {
@@ -906,8 +894,8 @@ export function tutorialSteps(host: TutorialHost): TourStep[] {
       text: 'At 5 kb the domains along the diagonal come into view, and the loops at their corners.',
       action: 'choose',
       target: resolutionControl,
-      done: () => !refineEnabled() && host.binsize() === FINE,
-      needs: { holds: () => onMap() && !refineEnabled(), back: 'refine-off' },
+      done: () => host.binsize() === FINE,
+      needs: { holds: onMap, back: 'open-set' },
     },
     {
       id: 'zoom-domains',

@@ -249,16 +249,9 @@ await scene('map', async ({ page, shot, fold, opened }) => {
   const read = page.locator('.status-item', { hasText: 'read' }).first()
   if (await read.count()) { await read.hover(); await sleep(500); await shot('18-status-read-pop', { clip: { x: 1200, y: 800, width: 720, height: 300 } }) }
   await page.mouse.move(10, 10)
-  // The resolution dialog from the `+` on the bar, which picks — so with
-  // *Refine on zoom* unticked first (§2), and ticked again after.
+  // The resolution dialog from the `+` on the bar.
   const add = await page.$('.res-add')
-  if (add) {
-    const refine = page.locator('.res-refine input').first()
-    const was = await refine.isChecked()
-    if (was) { await refine.click(); await sleep(1500) }
-    await page.click('.res-add'); await sleep(700); await shot('19-resolution-dialog'); await page.keyboard.press('Escape'); await sleep(300)
-    if (was) { await refine.click(); await sleep(1500) }
-  }
+  if (add) { await add.click(); await sleep(700); await shot('19-resolution-dialog'); await page.keyboard.press('Escape'); await sleep(300) }
   // Zoom buttons and the locus box.
   await shot('20-crumb-bar', { clip: { x: 280, y: 90, width: 1360, height: 120 } })
   // **The other presentation, and it is the turned one.** `ViewState.flip` is

@@ -123,7 +123,7 @@ describe('the colour range across a refine', () => {
     const it = panel()
     it.setData(block(785, 250_000, 100), 'chr1')
     const seen = gauges(it)
-    it.refineNow({ measure: true })
+    it.refineNow({ measureAt: 25_000 })
     it.setResolution(25_000)
     expect(it.regrid(block(7_850, 25_000, 1), 25_000)).toBe(true)
     expect(seen[0]).toBe('measured')

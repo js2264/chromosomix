@@ -1742,7 +1742,8 @@ function blockMatches(block: BlockInput, framing: AnalysisFraming): boolean {
     block.rowExtent[1] === framing.rows[1] &&
     block.colExtent[0] === framing.cols[0] &&
     block.colExtent[1] === framing.cols[1] &&
-    block.binsPerCell === framing.binsPerCell
+    block.binsPerCell === framing.binsPerCell &&
+    (block.binsize === undefined || block.binsize === framing.binsize)
   )
 }
 

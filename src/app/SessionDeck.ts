@@ -406,7 +406,10 @@ export class SessionDeck {
         const { onAvailable: _grey, ...shared } = this.session.turnPresentation(state)
         return shared
       },
-      binsize: () => this.session.file?.info.binsize ?? undefined,
+      // The stored rung the lead reads: the one picked, or the one opened
+      // (§3.4) — a companion follows it by opening it. A resolution added over
+      // a rung is that rung's: a companion cannot sum one.
+      binsize: () => this.session.pickedResolution()?.rung.binsize ?? this.session.file?.info.binsize ?? undefined,
       // The two directions "fix all …" needs that the deck cannot take itself.
       //
       // A clip written straight onto the lead's panel is one the next render

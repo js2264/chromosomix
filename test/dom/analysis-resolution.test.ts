@@ -1,16 +1,17 @@
 // @vitest-environment jsdom
 /**
  * The resolution an analysis of the lead map is run at (§3.4, §18.4): the one
- * the crumb row names.
+ * picked in the crumb row, else the one the file was opened at — never the one
+ * the zoom happens to have drawn — unless the task's own *Resolution* row says
+ * otherwise.
  *
  * A pick is read in place — the file stays open at the entry it was opened at,
- * and the views read the picked rung beside it — so the open entry stopped
- * being the resolution a reader is looking at, and a task framed on it measured
- * a map nobody had asked for. What is pinned is the address and the grid a task
- * is handed: the picked rung's own entry and bins with *Refine on zoom* off, a
- * resolution the reader added summed from the rung it is made of, the rung the
- * block on screen was read from while the zoom picks — and the open map, as
- * before, wherever the row names it.
+ * and the views read the picked rung beside it — so a task framed on the open
+ * entry would measure a map nobody had asked for. What is pinned is the address
+ * and the grid a task is handed: the picked rung's own entry and bins, a
+ * resolution the reader added summed from the rung it is made of, the open map
+ * while the zoom picks whatever it has drawn, and a task's own choice over all
+ * of them.
  *
  * The session is real; the file is a stand-in with only what the grid reads.
  */
@@ -124,8 +125,9 @@ function drawing(inside: Innards, block: { binsize?: number } | null): void {
 }
 
 describe('the resolution an analysis is run at', () => {
-  describe('with *Refine on zoom* off', () => {
-    beforeEach(() => setRefineEnabled(false))
+  describe('with a resolution picked', () => {
+    // A pick wins over the preference, whichever way it is set (§3.4).
+    beforeEach(() => setRefineEnabled(true))
 
     it('is the rung picked, read from its own entry, the file open where it was', () => {
       const { session } = openAt('1000', { resolution: 25_000 })
@@ -146,7 +148,7 @@ describe('the resolution an analysis is run at', () => {
       const { session, inside } = openAt('10000')
       // 2 kb is two of the 1 kb rung's bins — not the 10 kb rung the file is open at.
       inside.resolutionStore()?.add(2_000)
-      session.store.patch({ coarsen: 2_000 })
+      session.store.patch({ resolution: 2_000 })
       const at = session.analysisAt()
       expect(at?.uri).toBe('sample.mcool::resolutions/1000')
       expect(at?.grid.binsize).toBe(2_000)
@@ -167,14 +169,12 @@ describe('the resolution an analysis is run at', () => {
   describe('while the zoom picks', () => {
     beforeEach(() => setRefineEnabled(true))
 
-    it('is the rung the block on screen was read from', () => {
-      const { session, inside } = openAt('1000', { resolution: 25_000 })
+    it('is the open map, whatever rung the block on screen was read from', () => {
+      // The same link and the same Run give the same numbers on any screen:
+      // the rung a screen-sized read lands on depends on the window's width.
+      const { session, inside } = openAt('1000')
       drawing(inside, { binsize: 10_000 })
-      const at = session.analysisAt()
-      // The pick is the reader's with the tick off; on, the zoom's rung wins.
-      expect(at?.uri).toBe('sample.mcool::resolutions/10000')
-      expect(at?.grid.binsize).toBe(10_000)
-      expect(at?.nBins).toBe(125 + 80)
+      expect(session.analysisAt()).toBeNull()
     })
 
     it('is the open map where the block is at its bins, or there is none', () => {
@@ -188,9 +188,96 @@ describe('the resolution an analysis is run at', () => {
     })
   })
 
+  it('is the one a task asks for on its own Resolution row, over the pick', () => {
+    const { session } = openAt('1000', { resolution: 25_000 })
+    const at = session.analysisAt(10_000)
+    expect(at?.uri).toBe('sample.mcool::resolutions/10000')
+    expect(at?.nBins).toBe(125 + 80)
+    // …and the open map, where that is what it asks for.
+    expect(session.analysisAt(1_000)).toBeNull()
+  })
+
+  it('reads a resolution a link names that this reader never added', () => {
+    // 2 kb is not stored and not in this reader's own list: it is two of the
+    // 1 kb rung's bins, from the file's ladder alone.
+    const { session } = openAt('10000', { resolution: 2_000 })
+    const at = session.analysisAt()
+    expect(at?.uri).toBe('sample.mcool::resolutions/1000')
+    expect(at?.grid.binsize).toBe(2_000)
+  })
+
   it('stays on the open map of an import, whose rungs are binned rather than stored', () => {
     setRefineEnabled(false)
     const { session } = openAt('1000', { resolution: 25_000 }, { pairs: true })
     expect(session.analysisAt()).toBeNull()
+  })
+})
+
+describe('the resolution picked, and the tick (§3.4)', () => {
+  /** What the row would say is drawn, as the lead's panel announces it. */
+  function shows(session: Session, binsize: number): void {
+    ;(session as unknown as { noteShown(binsize: number | null): void }).noteShown(binsize)
+  }
+
+  it('wins over Refine on zoom: a map whose link names one is drawn at it', () => {
+    setRefineEnabled(true)
+    const { session } = openAt('10000', { resolution: 25_000 })
+    expect(session.pickedResolution()?.binsize).toBe(25_000)
+    expect(session.refining).toBe(false)
+  })
+
+  it('is read from the ladder alone, so a link naming an added resolution works anywhere', () => {
+    // 2 kb is not stored and this reader never added it: two of the 1 kb bins.
+    const { session } = openAt('10000', { resolution: 2_000 })
+    expect(session.pickedResolution()).toEqual({ binsize: 2_000, rung: { name: '1000', binsize: 1_000 }, factor: 2 })
+    // A value no rung reaches is ignored, and the zoom picks.
+    session.store.patch({ resolution: 2_500 })
+    expect(session.pickedResolution()).toBeNull()
+    expect(session.refining).toBe(true)
+  })
+
+  it('reads an old link’s `coarsen=` as the pick', async () => {
+    const { parseViewState } = await import('@/state/ViewState')
+    expect(parseViewState('uri=a.mcool&view=region&region=I&coarsen=3000')?.resolution).toBe(3_000)
+  })
+
+  it('takes the stored rung nearest the screen’s when the tick is taken off, so nothing jumps', () => {
+    setRefineEnabled(true)
+    const { session } = openAt('1000')
+    shows(session, 23_000)
+    session.setRefining(false)
+    expect(session.store.state?.resolution).toBe(25_000)
+    expect(session.refining).toBe(false)
+  })
+
+  it('hands the resolution back to the zoom when the tick is put on, the pick out of the link', () => {
+    setRefineEnabled(false)
+    const { session } = openAt('1000', { resolution: 5_000 })
+    session.setRefining(true)
+    expect(session.store.state?.resolution).toBeUndefined()
+    expect(session.refining).toBe(true)
+  })
+
+  it('steps the keys from the rung drawn while the zoom picks, and the step is a pick', () => {
+    setRefineEnabled(true)
+    const { session } = openAt('1000')
+    shows(session, 10_000)
+    expect(session.rungStep(1)?.binsize).toBe(25_000)
+    expect(session.rungStep(-1)?.binsize).toBe(5_000)
+    session.stepRung(1)
+    expect(session.store.state?.resolution).toBe(25_000)
+  })
+
+  it('keeps the pick across a move to another sequence of the same file', () => {
+    const { session } = openAt('1000', { resolution: 25_000 })
+    session.navigate({ uri: 'sample.mcool::resolutions/1000', view: 'region', region: 'chrB' })
+    expect(session.store.state?.resolution).toBe(25_000)
+  })
+
+  it('is honoured beside a second file only on the rung that is open', () => {
+    const { session } = openAt('1000', { resolution: 25_000, uri2: 'other.mcool::resolutions/1000' })
+    expect(session.pickedResolution()).toBeNull()
+    session.store.patch({ resolution: 3_000 })
+    expect(session.pickedResolution()?.rung.binsize).toBe(1_000)
   })
 })

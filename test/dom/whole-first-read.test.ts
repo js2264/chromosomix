@@ -133,3 +133,53 @@ describe('the whole-genome view’s first read', () => {
     expect((await firstRead(25_000, 1_000_000)).rung).toBe('1000000')
   })
 })
+
+describe('the whole-genome view’s second reading below the diagonal (§5.10)', () => {
+  /** The genome opened at 25 kb with a lower reading; both triangles' first reads. */
+  async function bothReads(rungs: string[]): Promise<{ upper: Asked; lower: Asked }> {
+    const asked: Asked[] = []
+    const lowerAsked: Asked[] = []
+    const binsize = 25_000
+    const nBins = Math.ceil(GENOME_BP / binsize)
+    const view = new WholeView({
+      client: reader(asked, binsize),
+      binsize,
+      rungs,
+      nBins,
+      displayExtent: [0, nBins],
+      // A file small enough not to be asked about first (§7.3).
+      nnz: 1_000,
+      nContigs: 24,
+      level: 'bin',
+      scale: {},
+      balance: true,
+      hasWeights: true,
+      noun: 'chromosome',
+      namesGenomes: false,
+      lowerRead: { client: reader(lowerAsked, binsize), onFailure: () => {} },
+      onScoreChange: () => {},
+      onScaleChange: () => {},
+      onOpenRegion: () => {},
+      onError: () => {},
+    })
+    views.push(view)
+    document.body.append(view.el)
+    for (let tick = 0; tick < 40 && !lowerAsked.some((one) => one.kind === 'matrix'); tick++) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    const upper = asked.find((one) => one.kind === 'matrix')
+    const lower = lowerAsked.find((one) => one.kind === 'matrix')
+    if (upper === undefined || lower === undefined) throw new Error('a triangle was not read')
+    return { upper, lower }
+  }
+
+  it('is read by the same plan as the block above it, on a ladder or not', async () => {
+    setRefineEnabled(true)
+    for (const rungs of [[], RUNGS]) {
+      const { upper, lower } = await bothReads(rungs)
+      // Read on a grid of its own, it was a block of another shape, its cells
+      // laid under the wrong half of the picture.
+      expect([lower.rung, lower.binsPerCell]).toEqual([upper.rung, upper.binsPerCell])
+    }
+  })
+})

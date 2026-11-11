@@ -648,16 +648,11 @@ async function drawnAt(page, binsize, after) {
 }
 
 /**
- * The rung of `binsize` picked in the crumb row's resolution, as a reader picks it: *Refine on zoom*
- * unticked, which is what makes the resolution the reader's to pick (and the one a task reads), then
- * the rung chosen in the box beside the slider, which lists every rung the file has.
+ * The rung of `binsize` picked in the crumb row's resolution, as a reader picks it: in the box beside
+ * the slider, which lists every rung the file has. A pick wins over *Refine on zoom*, and is the
+ * resolution every task reads (SPECS §3.4, §18.4).
  */
 async function pickRung(page, binsize) {
-  const refine = page.locator('.crumb-res .res-refine input').first()
-  if (await refine.isChecked().catch(() => false)) {
-    await refine.click()
-    await sleep(500)
-  }
   const picked = await page.evaluate((binsize) => {
     const size = (text) => {
       const found = text.trim().match(/^([\d.]+)\s*(bp|kb|Mb)\b/)
@@ -838,10 +833,6 @@ try {
   // No service worker: a reader's is installed once and then idle, where a first visit's would be
   // fetching the whole build for its cache in the middle of the measurement.
   const context = await browser.newContext({ viewport: { width: 1600, height: 1000 }, serviceWorkers: 'block' })
-  // A pipeline's tasks run at the resolution the crumb row names (SPECS §18.4), so it works as a
-  // reader who picks one does: with *Refine on zoom* off, where the row names the rung opened at, or
-  // the one picked, rather than whatever a whole genome is drawn at on screen.
-  if (PLAN.steps !== undefined) await context.addInitScript(() => localStorage.setItem('chromosomix:refine', 'off'))
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(String(error)))

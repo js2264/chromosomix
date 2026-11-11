@@ -318,11 +318,13 @@ picker (§3.4).
 ### rung
 
 One level of a resolution ladder, as a bin size (`src/ui/refine.ts`). A sibling rung is a different
-[bin space](#bin-space) entirely, which is why moving between them is a reopen rather than a
-navigation. A rung the reader adds — a whole number of a stored rung's bins, summed as it is read —
-is a **derived rung**, marked `*` (`3 kb*`) and never preferred over a stored one
-(`src/metacooler/coarsen.ts`, §3.4). A task run while the map is drawn at one reads the map summed to
-it (`src/metacooler/coarseMap.ts`; `--coarsen` in the shell).
+[bin space](#bin-space) entirely, so windows cross between rungs through base pairs; moving to one is
+a **pick** — `resolution=` in the hash, read in place where the reader stands, the file left open at
+the entry it was opened at — rather than a reopen (§3.4, §5.5). A rung the reader adds — a whole
+number of a stored rung's bins, summed as it is read — is a **derived rung**, marked `*` (`3 kb*`) and
+never preferred over a stored one (`src/metacooler/coarsen.ts`, §3.4). A task run with one picked, in
+the crumb row or on its own *Resolution* row, reads the map summed to it
+(`src/metacooler/coarseMap.ts`; `--coarsen` in the shell).
 
 ### `__unbinned__`
 
@@ -742,11 +744,15 @@ quietly by any view whose block has no diagonal to measure from.
 ### refine
 
 Reading finer data as you zoom: passing what the block in hand can show reads the window again at a
-finer grid — one bounded read, the map held still while it happens, never below the file's own bins
-(`src/ui/refine.ts`). Off by default, a preference turned on by the palette's *Refine on zoom*; the
-alternative is one read per view and a zoom that magnifies it. On the editing stage the same idea
-places a point: a suggestion's cut is placed again at the map's finer rungs, *refined at 1 kb*
-(§27.5).
+finer grid — one bounded, screen-sized read from the stored rung nearest a cell to each pixel, the
+map going on taking every gesture while it happens and the block landing where the gesture has got
+to, never below the finest rung the file stores, whichever was opened (`src/ui/refine.ts`, §2). **On
+by default**: *Refine on zoom* is the tick at the head of the resolution row and a command in the
+palette, a preference kept by the browser. A resolution **picked** wins over it — a map whose link
+names one is drawn at it, as memory allows — and off with nothing picked, the rung opened is read
+that way: the window read once, and a zoom inside it that magnifies it. On the editing stage the
+same idea places a point: a suggestion's cut is placed again at the map's finer rungs, *refined at
+1 kb* (§27.5).
 
 ---
 

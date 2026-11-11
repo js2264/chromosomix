@@ -352,9 +352,6 @@ await look('stored data', async (p) => {
 })
 await look('resolution dialog', async (p) => {
   await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000)
-  // The `+` picks, which is the reader's with *Refine on zoom* unticked (§2).
-  const refine = p.locator('.res-refine input').first()
-  if (await refine.count() && await refine.isChecked()) { await refine.click(); await sleep(1500) }
   const add = await p.$('.res-add'); if (add) { await add.click(); await sleep(900) }
 })
 await look('lane settings', async (p) => {

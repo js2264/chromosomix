@@ -25,7 +25,7 @@
  * they overlap. Nothing is composited and there is no seam.
  *
  * **And the ladder sizes it to the screen** ({@link screenPlan}): about a cell
- * to each CSS pixel of the view, from the coarsest stored rung that gives it.
+ * to each CSS pixel of the view, from the stored rung nearest that.
  * Every read used to be as large as memory allowed — the reader's own plan,
  * `fitPlan`, fills the device's budget, a window of sixteen thousand bins read a
  * bin to a cell — which made each refine a gigabyte of values and seconds of
@@ -33,9 +33,12 @@
  * all of it. A screen-sized read is a few hundred milliseconds, so the map never
  * holds still: a gesture goes on over the block in hand, the next block is read
  * a little ahead of it, and lands on wherever the gesture has got to (SPECS §2).
- * The reader's own plan is still what a read with no screen gets, and every
- * read with *Refine on zoom* off, which is the resolution the reader picked as
- * memory allows (§3.4).
+ * A read with no screen, and every read of a resolution the reader picked
+ * (§3.4) or of the open map with *Refine on zoom* off, is planned as memory
+ * allows ({@link memoryPlan}): the pick wherever a block at it holds the
+ * window, from the finest stored rung no finer than it where that does not.
+ * Both plans are made here and sent whole, so what the ladder expects of a read
+ * is what the read is asked for, never a guess at what the reader would choose.
  *
  * This module used to say it must **never** send `binsPerCell`, because a request
  * carrying an explicit plan bypassed `snapToGrid` and the cell values would then
@@ -45,10 +48,10 @@
  * a grid, and the refine has to hold it rather than quietly reading past it on
  * the next zoom.
  *
- * **It terminates.** There is no grid below the file's own bins, so the ladder
- * has a floor and reaches it: about `⌈log₂(k₀)⌉` steps, where `k₀` is what the
- * widest view was read at — a step each time the zoom doubles, and the last one
- * onto the file's own bins, which a view that can show them is always given.
+ * **It terminates.** There is no grid below the finest rung the file stores, so
+ * the ladder has a floor and reaches it: a step each time the zoom crosses a
+ * rung, and the last one onto that rung's bins, which a view that can show them
+ * is always given.
  *
  * Zooming **out** is served the same way and is usually free: the blocks already
  * read are kept, so leaving the window a fine block covers falls back to a
@@ -57,6 +60,7 @@
  * never turn into the whole-file scan §7.3 gates.
  */
 
+import type { Rung } from '../metacooler/coarsen'
 import { denseCellCap } from '../metacooler/matrix'
 import { POOLED_CELL_CAP } from '../metacooler/pooling'
 import type { Extent } from '../types'
@@ -144,19 +148,19 @@ export const SCREEN_READ_CAP = 3.2
  *
  * Eight now that a block is about the size of the screen: a zoom from a whole
  * chromosome to its own bins is about that many steps, and every one of them is
- * then a step back out that reads nothing. {@link HELD_BYTES} still bounds the
- * memory, which is what bounded it when there were three of them.
+ * then a step back out that reads nothing. {@link HELD_BYTES} bounds the memory
+ * whatever their number.
  */
 export const HELD_BLOCKS = 8
 
 /**
  * Bytes of held blocks above which the oldest are dropped.
  *
- * Two blocks at the cap is 134 MB, which is the same order as the compare path
- * already holds (`MatrixPanel.derive` keeps up to five block-sized arrays for a
- * split-diagonal map with a derivation on). The third is kept when it is small,
- * which is the common case: a block is `⌈span/k⌉²` cells, and only the widest
- * view of a large cooler is anywhere near the cap.
+ * The same order as the compare path already holds (`MatrixPanel.derive` keeps
+ * up to five block-sized arrays for a split-diagonal map with a derivation on).
+ * A screen-sized block is a few megabytes, so it is a block read as memory
+ * allows — up to 8,192 cells a side, 268 MB of values — that this bounds, and
+ * one of those is kept however large.
  */
 export const HELD_BYTES = 160 << 20
 
@@ -164,11 +168,6 @@ export const HELD_BYTES = 160 << 20
 export interface RefineView {
   rows: Extent
   cols: Extent
-  /**
-   * Bins **of the open map** in one drawn cell: the block's pooling, times how
-   * much coarser its rung is — a fraction of one for a finer rung.
-   */
-  binsPerCell: number
   /**
    * CSS pixels across the plot's wider side: what a **screen-sized** read is
    * sized to (§2). Absent is a view with no screen to measure, read as memory
@@ -189,6 +188,13 @@ export interface RefineView {
  * How a read is asked for: the rung it comes from, the bins of that rung each
  * cell sums, and the grid that comes to in bins of the open map — the unit
  * every block the ladder holds is compared in.
+ *
+ * Always sent whole ({@link readPlan}): the grid is what the ladder expects the
+ * read to come back on, and asking for it rather than leaving the reader to
+ * choose is what keeps the two the same. The reader may still coarsen a pooled
+ * read past it where a sequence's cells would not fit its accumulator, which
+ * can only make the block coarser than expected — and a block coarser than
+ * expected is one the ladder keeps rather than one it reads again for.
  */
 export interface ReadPlan {
   rung?: string
@@ -208,18 +214,16 @@ export interface LadderOptions {
    * (`worker/reader.worker.ts`), so a cancel that is never sent is a scan that
    * runs to the end for a picture nobody is waiting for.
    *
-   * `plan` is a screen-sized read's rung and grid ({@link planFor}). Absent,
-   * the read is planned as memory allows: the reader fits the finest grid the
-   * device's budget affords, which is every read of a view with no screen and
-   * every read with *Refine on zoom* off.
+   * `plan` is {@link LadderOptions.plan}'s answer for the window, sent whole.
    */
-  read(rows: Extent, cols: Extent, plan?: ReadPlan): Cancellable<MatrixResult>
+  read(rows: Extent, cols: Extent, plan: ReadPlan): Cancellable<MatrixResult>
   /**
-   * The screen-sized plan for reading `window` while `view` is on screen
-   * ({@link screenPlan}, which knows the file's rungs and the declared grid).
-   * Absent, a plan with no rungs: the open map, pooled to the view's grid.
+   * How a read of `window` is asked for while `view` is on screen: screen-sized
+   * while the zoom picks the resolution, as memory allows at the pick otherwise
+   * ({@link readPlan}, which knows the file's rungs and the pick). Its `grid` is
+   * what the ladder takes the read to come back on.
    */
-  planFor?(window: { rows: Extent; cols: Extent }, view: RefineView): ReadPlan
+  plan(window: { rows: Extent; cols: Extent }, view: RefineView): ReadPlan
   /** The clock read-ahead times a zoom by; `performance.now` when absent. */
   now?(): number
   /**
@@ -243,31 +247,19 @@ export interface LadderOptions {
    */
   onBlock(result: MatrixResult): boolean
   /**
-   * The memory budget the view's reads carry, where it is not the device's own.
-   *
-   * The reader reads a window bin for bin up to what that budget affords
-   * (`denseCellCap`), so the grid this ladder expects must be computed from the
-   * same number: a deck's panel reads with a share (§16.7), and a ladder judging
-   * its blocks against the whole device would expect one bin to a cell, be handed
-   * a pooled block every time, and read again forever. Absent or `undefined` is
-   * the device's budget, which is what the reader assumes too.
-   */
-  budget?: () => number | undefined
-  /**
    * The finest grid this ladder may refine **to**, in bins of the open map.
    *
-   * With *Refine on zoom* on, the finest rung the file stores: a fraction of one
+   * While the zoom picks, the finest rung the file stores: a fraction of one
    * where that is finer than the rung that is open, so a zoom does not stop at
-   * whichever resolution the file happened to be opened at (§2). Off, the
-   * resolution the reader picked (§3.4), as a number of the open map's bins per
-   * drawn cell: a 10 kb rung derived from a 2 kb one is `5`. Without it the
-   * ladder would read finer on the next zoom, under an axis *labelled* 10 kb —
-   * a caption that lies.
+   * whichever resolution the file happened to be opened at (§2). Otherwise the
+   * resolution picked (§3.4), as a number of the open map's bins per drawn cell
+   * — a 10 kb rung over a 2 kb map is `5`: a block finer than it is not the
+   * picture, and without it the ladder would read finer on the next zoom under
+   * an axis *labelled* 10 kb — a caption that lies.
    *
-   * A function rather than a number because both change under a mounted
-   * ladder: the reader ticks the preference or steps from 10 kb to 3 kb without
-   * the view being rebuilt, and a value captured at construction would hold
-   * the ladder at whatever was showing when the map opened.
+   * A function rather than a number because it changes under a mounted ladder:
+   * the reader ticks the preference or steps from 10 kb to 3 kb without the view
+   * being rebuilt.
    *
    * Absent, or 1, is the open map's own bins.
    */
@@ -281,9 +273,9 @@ export interface LadderOptions {
   gridOf?(result: MatrixResult): number
   /**
    * Whether reads are sized to the **screen** (*Refine on zoom*, §2) rather
-   * than read as memory allows at the {@link floor}: absent is on. Off, a
-   * read is the picked resolution over as much of the window as fits, coarser
-   * only where the window does not (§3.4).
+   * than read as memory allows at the {@link floor}: absent is on. Off, a read
+   * is the picked resolution over as much of the window as fits, coarser only
+   * where the window does not (§3.4).
    */
   screenSized?(): boolean
   /**
@@ -292,22 +284,12 @@ export interface LadderOptions {
    */
   view?(): RefineView | null
   /**
-   * The most bins of the open map a read as memory allows may span, around the
-   * view: one block's width at the {@link floor}'s grid. Absent, worked out from
-   * the floor as a whole number of the open map's bins.
+   * As memory allows: the most bins of the open map a read may span around the
+   * view — one block's width at the {@link floor}'s grid, so the pick is read
+   * as soon as the view itself fits rather than once twice the view does.
+   * Absent, a read is the padded window, however wide.
    */
-  readCap?(): number
-  /**
-   * The grid, in bins of the open map, that a read of `window` as memory allows
-   * comes back on — where the read is of another rung than the open map's: the
-   * resolution picked (§3.4). It has to be the read's own arithmetic, in that
-   * rung's bins: counted in the open map's, a read is never finer than one of
-   * them, so a block of the open map passed for as fine as a read could be, and
-   * a rung picked finer than the one the file was opened at was never read.
-   * Absent, or `undefined`, the open map's own: its bins, pooled past what
-   * fits, never finer than the {@link floor}.
-   */
-  memoryGrid?(window: { rows: Extent; cols: Extent }): number | undefined
+  reach?(): number
   /**
    * Told when a read is outstanding, for whatever the view shows meanwhile —
    * the spinner in the map's top right corner, over a view that still takes
@@ -460,7 +442,7 @@ export class BlockLadder {
     if (this.disposed) return
     this.lastView = view
     const inward = this.zoomingIn(view)
-    const wanted = this.plan(view)
+    const wanted = this.windowFor(view)
     const key = keyOf(wanted.rows, wanted.cols)
 
     // Something already in hand may be a better answer than what is drawn —
@@ -526,20 +508,18 @@ export class BlockLadder {
    * that is a reader looking around. Both are then clipped, so no request is
    * wider than the view was ever entitled to read.
    */
-  private plan(view: RefineView): { rows: Extent; cols: Extent } {
+  private windowFor(view: RefineView): { rows: Extent; cols: Extent } {
     const block = this.held0()
     const window = {
       rows: this.axisPlan(view.rows, block?.rows ?? null, this.options.ceiling.rows),
       cols: this.axisPlan(view.cols, block?.cols ?? null, this.options.ceiling.cols),
     }
-    if (this.options.screenSized?.() !== false) return window
+    const most = this.options.screenSized?.() === false ? this.options.reach?.() : undefined
+    if (most === undefined || !(most > 0)) return window
     // **As memory allows, at the picked resolution** (§3.4): no wider than one
     // block at that grid can be, around the view, so the picked resolution is
     // what is read as soon as the view itself fits — rather than once twice
     // the view does, which is what padding it by half a view each side asked.
-    const floor = this.floor()
-    const most =
-      this.options.readCap?.() ?? (floor > 1 ? POOLED_CELL_CAP : denseCellCap(this.options.budget?.())) * floor
     return { rows: around(window.rows, view.rows, most), cols: around(window.cols, view.cols, most) }
   }
 
@@ -608,8 +588,9 @@ export class BlockLadder {
   ): boolean {
     if (!covers(block.rows, view.rows) || !covers(block.cols, view.cols)) return false
     if (this.edgeWanted(view, block, ahead)) return false
-    // With *Refine on zoom* off the picked resolution is the picture (§3.4): a
-    // block finer than it is not one, however good it looks.
+    // Where the zoom does not pick — a pick in the link, or *Refine on zoom*
+    // off — the picked resolution is the picture (§3.4): a block finer than it
+    // is not one, however good it looks.
     if (this.options.screenSized?.() === false && block.grid < this.floor() * (1 - 1e-6)) return false
     // At the floor the factor is one. It is there to stop a slow zoom reading
     // for every small step, and at the file's own bins there is no step after
@@ -620,50 +601,20 @@ export class BlockLadder {
   }
 
   /**
-   * The plan for reading `window` while `view` is on screen: screen-sized where
-   * the view says how big its screen is, and `undefined` — read as memory
-   * allows — where it does not.
-   */
-  private planned(window: { rows: Extent; cols: Extent }, view: RefineView): ReadPlan | undefined {
-    if (view.screen === undefined || !(view.screen > 0)) return undefined
-    if (this.options.screenSized?.() === false) return undefined
-    if (this.options.planFor !== undefined) return this.options.planFor(window, view)
-    return screenPlan({
-      rungs: [],
-      binsize: 1,
-      view: spanOf(view),
-      read: spanOf(window),
-      screen: view.screen,
-      floor: this.floor(),
-    })
-  }
-
-  /**
-   * The grid a read of `window` would come back on, in bins of the open map.
-   *
-   * One place, so *what is good enough* and *what to ask for* cannot disagree:
-   * without the floor here a declared 10 kb view would be permanently
-   * unsatisfied — the ladder would compare a 5-bin block against a 1-bin target,
-   * read, get 5 bins back because the floor bound the reader, and ask again on
-   * the next frame forever.
+   * The grid a read of `window` would come back on, in bins of the open map:
+   * the plan's own, so *what is good enough* and *what to ask for* cannot
+   * disagree — the read is asked for exactly that plan ({@link fire}).
    */
   private gridOf(window: { rows: Extent; cols: Extent }, view: RefineView): number {
-    return this.planned(window, view)?.grid ?? this.memoryGrid(window)
+    return this.options.plan(window, view).grid
   }
 
   /** The grid the view's own next read would come back on. */
   private gridWanted(view: RefineView): number {
-    return this.gridOf(this.plan(view), view)
+    return this.gridOf(this.windowFor(view), view)
   }
 
-  /** The grid the reader fits a window to as memory allows, the floor applied. */
-  private memoryGrid(window: { rows: Extent; cols: Extent }): number {
-    const own = this.options.memoryGrid?.(window)
-    if (own !== undefined && Number.isFinite(own) && own > 0) return own
-    return Math.max(this.floor(), gridFor(window.rows, window.cols, this.options.budget?.()))
-  }
-
-  /** The declared grid, as a whole number of the open map's bins per cell. */
+  /** The finest grid a read may come back on, in bins of the open map ({@link LadderOptions.floor}). */
   private floor(): number {
     const asked = this.options.floor?.() ?? 1
     return Number.isFinite(asked) && asked > 0 ? asked : 1
@@ -705,7 +656,7 @@ export class BlockLadder {
     // when the view sits nearer its rims than the read-ahead margin, and every
     // landing would ask for the same block again, for ever.
     if (ahead) {
-      const next = this.plan(view)
+      const next = this.windowFor(view)
       if (covers(block.rows, next.rows) && covers(block.cols, next.cols)) return false
     }
     // The view's fit is to the block on screen. Another block in hand covers
@@ -731,10 +682,9 @@ export class BlockLadder {
     this.pending = null
     if (this.inflight !== null || this.refused.has(pending.key)) return
 
-    const plan = this.planned(pending, view)
-    const grid = plan?.grid ?? this.memoryGrid(pending)
+    const plan = this.options.plan(pending, view)
     const { promise, cancel } = this.options.read(pending.rows, pending.cols, plan)
-    this.inflight = { key: pending.key, rows: pending.rows, cols: pending.cols, grid, cancel }
+    this.inflight = { key: pending.key, rows: pending.rows, cols: pending.cols, grid: plan.grid, cancel }
     this.options.onBusy?.(true)
     void promise
       .then((result) => {
@@ -850,11 +800,6 @@ function gridOfSpan(span: number, cells: number): number {
   return ratio >= 1 ? Math.max(1, Math.round(ratio)) : 1 / Math.max(1, Math.round(1 / ratio))
 }
 
-/** The wider of a window's two spans, in bins. */
-function spanOf(window: { rows: Extent; cols: Extent }): number {
-  return Math.max(window.rows[1] - window.rows[0], window.cols[1] - window.cols[0])
-}
-
 /** `performance.now` where there is one. */
 function clock(): number {
   return typeof performance === 'undefined' ? Date.now() : performance.now()
@@ -881,21 +826,20 @@ function clock(): number {
  * - **Pooled only where nothing stored will do**: a file with one resolution
  *   (and a map under a second file, whose ladder need not match — the caller
  *   passes none), and a read too wide for even the coarsest rung within
- *   {@link SCREEN_READ_CAP} screens.
+ *   {@link SCREEN_READ_CAP} screens. A pooled read is never more cells than the
+ *   reader's accumulator holds ({@link POOLED_CELL_CAP}): on a plot wider than
+ *   about 1,280 pixels the cap in screens was more, and the reader then pooled
+ *   the block coarser than it had been asked for.
  * - **Down to the finest rung the file stores**, which `floor` names in bins
  *   of the open map — a fraction of one where the file stores a finer rung
  *   than the one that is open — so a zoom does not stop at whichever
  *   resolution the file happened to be opened at (§2).
- * - **On a grid the reader declared**, where `floor` is more than one (a whole
- *   number of the open map's bins, §3.4): the declared grid takes the rung
- *   choice away, for the reason {@link attachRefine} gives — a rung's bins do
- *   not divide it in general.
  *
  * `view` and `read` are the wider spans of the view and of the window to read,
  * in bins of the open map; `screen` is the plot's wider side in CSS pixels.
  */
 export function screenPlan(options: {
-  rungs: ReadonlyArray<{ name: string; binsize: number }>
+  rungs: ReadonlyArray<Rung>
   binsize: number
   view: number
   read: number
@@ -903,28 +847,26 @@ export function screenPlan(options: {
   floor?: number
 }): ReadPlan {
   const asked = options.floor ?? 1
-  const floor = Number.isFinite(asked) && asked > 0 ? asked : 1
+  const floor = Number.isFinite(asked) && asked > 0 ? Math.min(1, asked) : 1
   const screen = Math.max(1, options.screen)
-  // Two bounds on the cell, in bins of the open map: about a pixel of the view
-  // (`sharp`), and no smaller than the read cap allows (`capped`).
+  // Bounds on the cell, in bins of the open map: about a pixel of the view
+  // (`sharp`), no smaller than the read cap allows (`capped`), and for a pooled
+  // read no more cells than the reader's accumulator holds (`pooledCap`).
   const sharp = Math.max(options.view / screen, floor)
   const capped = options.read / (SCREEN_READ_CAP * screen)
-  if (floor > 1) {
-    const k = floor * Math.max(1, Math.round(sharp / floor), Math.ceil(capped / floor))
-    return k > 1 ? { binsPerCell: k, grid: k } : { grid: 1 }
-  }
+  const pooledCap = options.read / Math.min(SCREEN_READ_CAP * screen, POOLED_CELL_CAP)
   const binsize = options.binsize > 0 ? options.binsize : 1
   // The rungs a read may come from: the open map's own, and every stored rung
   // no finer than the floor — in base pairs, so a rung finer than the open one
   // is a candidate like any other.
   const finest = floor * binsize * (1 - 1e-9)
-  const candidates: Array<{ name: string; binsize: number }> = []
+  const candidates: Rung[] = []
   for (const rung of [{ name: '', binsize }, ...options.rungs]) {
     if (rung.binsize < finest || candidates.some((held) => held.binsize === rung.binsize)) continue
     candidates.push(rung)
   }
   candidates.sort((a, b) => a.binsize - b.binsize)
-  const spelled = (rung: { name: string; binsize: number }): { rung?: string } =>
+  const spelled = (rung: Rung): { rung?: string } =>
     rung.binsize === binsize || rung.name === '' ? {} : { rung: rung.name }
 
   if (candidates.length > 1) {
@@ -932,7 +874,7 @@ export function screenPlan(options: {
     // not make the read wider than the cap allows.
     const pixel = sharp * binsize
     const allowed = candidates.filter((rung) => rung.binsize >= capped * binsize * (1 - 1e-9))
-    let best: { name: string; binsize: number } | null = null
+    let best: Rung | null = null
     for (const rung of allowed) {
       if (best === null || Math.abs(Math.log(rung.binsize / pixel)) < Math.abs(Math.log(best.binsize / pixel))) {
         best = rung
@@ -942,7 +884,7 @@ export function screenPlan(options: {
     // Even the coarsest rung is too fine for a read this wide: it, pooled to
     // the cap — the one place a ladder is pooled.
     const coarsest = candidates[candidates.length - 1]
-    const k = Math.max(1, Math.ceil((capped * binsize) / coarsest.binsize))
+    const k = Math.max(1, Math.ceil((pooledCap * binsize) / coarsest.binsize))
     return { ...spelled(coarsest), ...(k > 1 ? { binsPerCell: k } : {}), grid: (k * coarsest.binsize) / binsize }
   }
 
@@ -953,52 +895,124 @@ export function screenPlan(options: {
   // screen could show) — and never fewer than the cap allows, rounded *up* so
   // the cap holds.
   const only = candidates[0] ?? { name: '', binsize }
-  const k = Math.max(1, Math.round((sharp * binsize) / only.binsize), Math.ceil((capped * binsize) / only.binsize))
+  const k = Math.max(1, Math.round((sharp * binsize) / only.binsize), Math.ceil((pooledCap * binsize) / only.binsize))
   return { ...spelled(only), ...(k > 1 ? { binsPerCell: k } : {}), grid: (k * only.binsize) / binsize }
 }
 
 /**
- * The resolution the reader picked (§3.4): what a map draws with *Refine on
- * zoom* off, wherever the window allows.
+ * The resolution the reader picked (§3.4): what a map draws wherever the window
+ * allows, whatever *Refine on zoom* says — a pick in the link wins.
  */
 export interface PickedResolution {
   /** The resolution, in base pairs. */
   binsize: number
   /** The stored rung it is read from: itself, or the rung one the reader added sums. */
-  rung: { name: string; binsize: number }
+  rung: Rung
   /** How many of that rung's bins one cell sums: 1, or the added resolution's factor. */
   factor: number
 }
 
 /**
- * How a window is read at the picked resolution, **as memory allows**: the
- * picked rung itself where the window fits a block at it, else the coarsest
- * stored rung that fits — pooled to fit by the reader where none does — so the
- * picture is never blank and never finer than was picked. One the reader added
- * is read as it was declared, its rung's bins summed `factor` to a cell.
+ * How a window is read at a picked resolution **as memory allows** (§3.4).
+ *
+ * - **A stored rung**: itself where the window fits a block read bin for bin at
+ *   it ({@link denseCellCap}, 8,192 a side), else the finest stored rung no finer
+ *   than it that fits ({@link chooseRung}) — never a resolution the file does
+ *   not store — and where even the coarsest does not, the coarsest summed to fit
+ *   the reader's pooled cap. A file with no ladder sums its own bins the same
+ *   way. So the picture is never blank and never finer than was picked.
+ * - **One the reader added**: its stored rung's bins summed `factor` to a cell,
+ *   and summed further by a whole number of those cells where the window is too
+ *   wide for them, so a cell is always a whole number of the added bins.
+ *
+ * The plan is sent whole, so the grid it names is the one the read comes back
+ * on: the ladder compares blocks with it rather than with a guess at what the
+ * reader would have chosen for itself.
  *
  * `span` is the window's wider side in bins of the open map.
  */
-export function pickedRead(
+export function memoryPlan(
   pick: PickedResolution,
-  rungs: ReadonlyArray<{ name: string; binsize: number }>,
+  rungs: ReadonlyArray<Rung>,
   binsize: number,
   span: number,
   budget?: number,
-): { rung?: string; binsPerCell?: number } {
+): ReadPlan {
   const open = Math.max(1, binsize)
-  const own = pick.rung.binsize === open ? {} : { rung: pick.rung.name }
-  if (pick.factor > 1) return { ...own, binsPerCell: pick.factor }
-  const coarser = chooseRung(rungs, (span * open) / Math.max(1, pick.rung.binsize), pick.rung.binsize, budget)
-  return coarser === undefined ? own : coarser === String(open) ? {} : { rung: coarser }
+  const spelled = (rung: Rung): { rung?: string } => (rung.binsize === open ? {} : { rung: rung.name })
+  const spanBp = Math.max(1, span) * open
+  if (pick.factor > 1) {
+    const bins = spanBp / Math.max(1, pick.rung.binsize)
+    const k = pick.factor * Math.max(1, Math.ceil(Math.ceil(bins / POOLED_CELL_CAP) / pick.factor))
+    return { ...spelled(pick.rung), binsPerCell: k, grid: (k * pick.rung.binsize) / open }
+  }
+  const ladder = rungs.some((rung) => rung.binsize === pick.rung.binsize) ? rungs : [pick.rung, ...rungs]
+  const name = chooseRung(ladder, spanBp / Math.max(1, pick.binsize), pick.binsize, budget)
+  const rung = name === undefined ? pick.rung : (ladder.find((each) => each.name === name) ?? pick.rung)
+  const bins = spanBp / Math.max(1, rung.binsize)
+  const k = bins <= denseCellCap(budget) ? 1 : Math.max(1, Math.ceil(bins / POOLED_CELL_CAP))
+  return { ...spelled(rung), ...(k > 1 ? { binsPerCell: k } : {}), grid: (k * rung.binsize) / open }
 }
 
 /**
- * The open map as a pick (§3.4): what *Refine on zoom* off draws where the
- * reader has picked nothing, read by the rule any pick is — so a window too
- * wide for it is drawn from a coarser stored rung ({@link chooseRung}) rather
- * than summed out of the open map's own bins into a grid the file does not
- * store.
+ * How a view reads a window — its first read and every read after (§2, §3.4).
+ *
+ * **Screen-sized** ({@link screenPlan}) while the zoom picks the resolution: the
+ * preference ticked and nothing picked in the link, and a screen to size it to.
+ * **As memory allows** ({@link memoryPlan}) otherwise: at the resolution picked,
+ * or at the open map's where none is.
+ *
+ * One function for every view and for the ladder each arms, so the first read
+ * and the refines after it cannot disagree about a window — they used to be
+ * five copies, one per view, and the copies had drifted: one read the second
+ * reading of a whole-genome map on a grid of its own (§5.10), and the ladders
+ * asked a second file for rungs it need not have.
+ *
+ * `rungs` is the file's ladder, and empty beside a second file (§5.7), whose
+ * ladder need not match: a map under one is read from the open rung, pooled.
+ * `view` and `read` are the wider spans of the view and of the window, in bins
+ * of the open map.
+ */
+export function readPlan(options: {
+  rungs: ReadonlyArray<Rung>
+  binsize: number
+  view: number
+  read: number
+  /** The plot's wider side in CSS pixels; absent is a view with no screen to size to. */
+  screen?: number
+  /** The resolution picked, or `null`. */
+  pick: PickedResolution | null
+  /** *Refine on zoom*, as the reader left it. */
+  refining: boolean
+  budget?: number
+}): ReadPlan {
+  const { rungs, binsize, pick } = options
+  if (pick === null && options.refining && options.screen !== undefined && options.screen > 0) {
+    return screenPlan({
+      rungs,
+      binsize,
+      view: options.view,
+      read: options.read,
+      screen: options.screen,
+      floor: finestFloor(rungs, binsize),
+    })
+  }
+  return memoryPlan(pick ?? openPick(binsize), rungs, binsize, options.read, options.budget)
+}
+
+/** A plan's rung and pooling as a request spells them, the identity left off. */
+export function planFields(plan: ReadPlan): { rung?: string; binsPerCell?: number } {
+  return {
+    ...(plan.rung === undefined ? {} : { rung: plan.rung }),
+    ...(plan.binsPerCell === undefined || plan.binsPerCell <= 1 ? {} : { binsPerCell: plan.binsPerCell }),
+  }
+}
+
+/**
+ * The open map as a pick (§3.4): what a map with *Refine on zoom* off and
+ * nothing picked is read at, by the rule any pick is — so a window too wide for
+ * it is drawn from a coarser stored rung ({@link chooseRung}) rather than summed
+ * out of the open map's own bins into a grid the file does not store.
  */
 export function openPick(binsize: number): PickedResolution {
   const open = Math.max(1, binsize)
@@ -1058,28 +1072,6 @@ export function clip(extent: Extent, bounds: Extent): Extent {
   return [lo, hi]
 }
 
-/**
- * The grid `fitPlan` would choose for these extents.
- *
- * A restatement, and deliberately a loose one: the reader's own version walks
- * the contig extents so that a cell never straddles a sequence, which can only
- * make it *coarser* than this. Used to decide whether a read is worth making,
- * never to ask for one — the plan is the reader's to choose, and a client that
- * sent its own would anchor the grid to the pan position (`reader.worker.ts`).
- */
-export function gridFor(rows: Extent, cols: Extent, budgetBytes?: number): number {
-  return gridForSpan(Math.max(rows[1] - rows[0], cols[1] - cols[0]), POOLED_CELL_CAP, budgetBytes)
-}
-
-/**
- * {@link gridFor} for the widest axis alone: `1` up to what the reader reads
- * unpooled ({@link denseCellCap}), and the pooled read's grid past it.
- */
-export function gridForSpan(widest: number, cap = POOLED_CELL_CAP, budgetBytes?: number): number {
-  if (widest <= denseCellCap(budgetBytes)) return 1
-  return Math.max(1, Math.ceil(widest / cap))
-}
-
 function keyOf(rows: Extent, cols: Extent): string {
   return `${rows[0]}:${rows[1]}|${cols[0]}:${cols[1]}`
 }
@@ -1103,8 +1095,9 @@ function isAbort(err: unknown): boolean {
  *
  * `localStorage` and not the hash, for the reason §5.5 gives: a link shares what
  * is being looked at, and whether the recipient likes their zoom to fetch is not
- * that. Two people following one link see the same data; one of them may see it
- * sharpen.
+ * that. What a link does carry is a resolution picked (`resolution=`), and a
+ * pick wins over this: a map whose link names one is drawn at it, and this
+ * decides only what a map whose link names none is read at (§3.4).
  */
 const REFINE_KEY = 'chromosomix:refine'
 
@@ -1121,10 +1114,10 @@ const REFINE_KEY = 'chromosomix:refine'
  * map opens at the screen's resolution and sharpens as the reader zooms, down to
  * the file's own bins.
  *
- * Off is still one command away — the palette's *Refine on zoom*, a palette
- * command because it is one preference across a whole deck rather than a switch
- * on one map — and it is the old promise, kept: the window read once, as finely
- * as memory allows, and every pan and zoom after it free of reads.
+ * Off is one tick away — the tick at the head of the resolution row, or the
+ * palette's *Refine on zoom* — and it is the old promise, kept: the window read
+ * once, as finely as memory allows, and every pan and zoom after it free of
+ * reads.
  */
 export const REFINE_DEFAULT = true
 
@@ -1264,21 +1257,24 @@ export const PREVIEW_FACTOR = 4
  * across the window, so the stand-in is the cheapest read that is still a
  * picture; and only where the block the reader asked for is at least
  * {@link PREVIEW_FACTOR} times finer than it. "Finer" is measured against what
- * will actually be read: a block too large to read a bin to a cell is pooled
- * to the grid {@link gridFor} gives, and a preview has to beat that grid, not
- * the file's bins. A file with no coarser rung, a window already as coarse as
- * a preview would be, and a reader who chose a coarse rung all get none.
+ * will actually be read: `grid`, in bins of the open map, is the grid of the
+ * block's own plan ({@link memoryPlan}) — a coarser stored rung, or the open
+ * map pooled, where the window is too wide to read a bin to a cell — and a
+ * preview has to beat that, not the file's bins. A file with no coarser rung, a
+ * window already as coarse as a preview would be, and a reader who chose a
+ * coarse rung all get none.
  */
 export function previewRung(
   rungs: ReadonlyArray<{ name: string; binsize: number }>,
   rows: Extent,
   cols: Extent,
   binsize: number,
+  grid = 1,
 ): string | undefined {
   if (!(binsize > 0)) return undefined
   const widest = Math.max(rows[1] - rows[0], cols[1] - cols[0])
   if (!(widest > 0)) return undefined
-  const asked = Math.ceil(widest / gridFor(rows, cols))
+  const asked = Math.ceil(widest / Math.max(1e-9, grid))
   const spanBp = widest * binsize
   let best: { name: string; binsize: number } | null = null
   for (const rung of rungs) {
@@ -1318,14 +1314,16 @@ export interface RefinablePanel {
  * failure in any of this is a map that does not sharpen rather than a map that
  * is not there. What it adds is what happens *after*: the panel reports where it
  * is looking once a frame, and a better block arrives through `regrid` when one
- * is worth reading.
+ * is worth reading. Every read, the view's first and the ladder's, is planned
+ * by {@link readPlan}, so the two cannot disagree about a window.
  *
  * The second file, where there is one, is carried beside the primary rather than
  * through the ladder, which knows about one block: both are read for the same
- * extents in one call, and the compare gate has already established that the two
- * files share a grid (§5.7). That is what lets a blended pair refine — the
- * alternative was refusing to refine whenever `uri2` is set, which is a strange
- * thing to tell somebody who opened two files precisely to look closely at them.
+ * extents and the same plan in one call, and the compare gate has already
+ * established that the two files share the open rung's grid (§5.7) — which is
+ * why the ladder is handed no rungs beside one: another rung of the first file
+ * need not be a rung of the second, and a reader asked for an entry its file
+ * has not got answers from its open map, on a grid the pair cannot be drawn on.
  */
 export function attachRefine(options: {
   panel: RefinablePanel
@@ -1343,31 +1341,30 @@ export function attachRefine(options: {
    * Sibling rungs of a laddered file, from {@link rungsOf}.
    *
    * Absent or empty is every plain file, and the zoom then reads the open map at
-   * whatever grid the reader plans for the window — which is the whole feature,
+   * whatever grid the plan names for the window — which is the whole feature,
    * working, with no ladder anywhere. A ladder makes the coarse end of it
    * cheaper and its balanced values honest; it is never what makes it work.
    */
-  rungs?: ReadonlyArray<{ name: string; binsize: number }>
+  rungs?: ReadonlyArray<Rung>
   /**
-   * The grid the reader has **declared**, in bins of the open map per cell.
-   *
-   * See {@link LadderOptions.floor}, which this is handed to. It also takes the
-   * rung choice out of the ladder's hands: a declared 3 kb grid over a 1 kb map
-   * is three of *these* bins, and a zoom that helpfully read the 2 kb rung
-   * instead would be asking for one and a half of those — which is not a bin
-   * anybody has. So while a floor is in force every read names no rung and
-   * carries the floor as its `binsPerCell`; the base rung was already chosen
-   * when the resolution was added, and it is the map that is open.
+   * A second file is read beside the first (§5.7): the ladder reads the open
+   * rung only, pooled where it must, whatever {@link rungs} says.
    */
-  floor?: () => number
+  second?: boolean
   /**
-   * The resolution the reader picked, asked for live (§3.4): a rung the file
-   * stores or one the reader added, read in place when the pick changes rather
-   * than by rebuilding the view. Where it is given it is what *Refine on zoom*
-   * off draws, and {@link floor} is not consulted; `null` is the open map.
+   * The resolution the reader picked, asked live (§3.4): a rung the file stores
+   * or one the reader added, read in place when the pick changes rather than by
+   * rebuilding the view. `null` is no pick: the screen's resolution while the
+   * preference is ticked, the open map as memory allows while it is not.
    */
   picked?: () => PickedResolution | null
-  /** The budget the view's reads carry; see {@link LadderOptions.budget}. */
+  /**
+   * The memory budget the view's reads carry, where it is not the device's own.
+   *
+   * A block is read bin for bin up to what that budget affords
+   * (`denseCellCap`), so a plan as memory allows has to be made from the same
+   * number: a deck's panel reads with a share (§16.7).
+   */
   budget?: () => number | undefined
   onBusy?: (busy: boolean) => void
   onError?: (err: unknown) => void
@@ -1382,101 +1379,50 @@ export function attachRefine(options: {
   onInstalled?: (result: MatrixResult) => void
 }): BlockLadder {
   const seconds = new WeakMap<MatrixResult, MatrixResult>()
-  // The block, with the second file's kept beside it for `onBlock`.
-  const withSecond = (
-    read: Cancellable<{ result: MatrixResult; second?: MatrixResult }>,
-  ): Cancellable<MatrixResult> => ({
-    cancel: read.cancel,
-    promise: read.promise.then(({ result, second }) => {
-      if (second !== undefined) seconds.set(result, second)
-      return result
-    }),
-  })
+  const rungs = options.second === true ? [] : (options.rungs ?? [])
+  const open = Math.max(1, options.binsize)
   // **The finest rung the file stores**, in bins of the open map: where a zoom
   // with *Refine on zoom* on comes to rest, whichever rung the file was opened
   // at (§2). A fraction of one where a finer rung than the open one is stored.
-  const finest = finestFloor(options.rungs ?? [], options.binsize)
-  // Off, the resolution the reader picked: a stored rung, one the reader added,
-  // or the open map — in bins of the open map (§3.4).
+  const finest = finestFloor(rungs, open)
   const pick = (): PickedResolution | null => options.picked?.() ?? null
-  // What a read as memory allows is read at: the pick, or the open map where
-  // there is none — but not under a grid declared without one, which keeps its
-  // own road below.
-  const asPicked = (): PickedResolution | null =>
-    pick() ?? (Math.floor(options.floor?.() ?? 1) > 1 ? null : openPick(options.binsize))
-  const picked = (): number => {
-    const chosen = pick()
-    return chosen === null ? Math.max(1, Math.floor(options.floor?.() ?? 1)) : chosen.binsize / Math.max(1, options.binsize)
-  }
+  // The zoom picks while the preference is ticked and nothing is picked: a pick
+  // in the link wins (§3.4).
+  const refining = (): boolean => refineEnabled() && pick() === null
+  const target = (): PickedResolution => pick() ?? openPick(open)
   const ladder = new BlockLadder({
     ceiling: options.ceiling,
-    floor: () => (refineEnabled() ? finest : picked()),
+    floor: () => (refining() ? finest : target().binsize / open),
     view: () => options.panel.refineWindowNow?.() ?? null,
-    // A block's width at the picked grid: unpooled up to the dense cap for a
-    // stored rung, the pooled cap for one the reader added (§3.4).
-    readCap: () => {
-      const chosen = pick()
-      const pooled = chosen === null ? picked() > 1 : chosen.factor > 1
-      return (pooled ? POOLED_CELL_CAP : denseCellCap(options.budget?.())) * picked()
+    screenSized: refining,
+    // A block's width at the pick: bin for bin up to the dense cap for a stored
+    // rung, the pooled cap for one the reader added (§3.4).
+    reach: () => {
+      const at = target()
+      return ((at.factor > 1 ? POOLED_CELL_CAP : denseCellCap(options.budget?.())) * at.binsize) / open
     },
-    screenSized: () => refineEnabled(),
-    // What the read below brings back for a window, in the picked rung's own
-    // bins — so a pick finer than the open map is seen to be readable.
-    memoryGrid: (window) => {
-      const chosen = refineEnabled() ? null : asPicked()
-      if (chosen === null) return undefined
-      const open = Math.max(1, options.binsize)
-      const span = Math.max(window.rows[1] - window.rows[0], window.cols[1] - window.cols[0])
-      const at = pickedRead(chosen, options.rungs ?? [], options.binsize, span, options.budget?.())
-      const rungBp =
-        at.rung === undefined ? open : ((options.rungs ?? []).find((rung) => rung.name === at.rung)?.binsize ?? open)
-      const bins = (span * open) / Math.max(1, rungBp)
-      // Summed as declared, and further only where the cells would not fit the
-      // pooled read; otherwise the rung's own bins, pooled past the dense cap.
-      const k =
-        at.binsPerCell !== undefined
-          ? Math.max(at.binsPerCell, Math.ceil(bins / POOLED_CELL_CAP))
-          : gridForSpan(bins, POOLED_CELL_CAP, options.budget?.())
-      return (rungBp * k) / open
-    },
+    plan: (window, view) =>
+      readPlan({
+        rungs,
+        binsize: open,
+        view: Math.max(view.rows[1] - view.rows[0], view.cols[1] - view.cols[0]),
+        read: Math.max(window.rows[1] - window.rows[0], window.cols[1] - window.cols[0]),
+        ...(view.screen === undefined ? {} : { screen: view.screen }),
+        pick: pick(),
+        refining: refineEnabled(),
+        ...(options.budget?.() === undefined ? {} : { budget: options.budget?.() }),
+      }),
     gridOf: (result) =>
-      (Math.max(1, result.binsize ?? options.binsize) * Math.max(1, result.binsPerCell ?? 1)) /
-      Math.max(1, options.binsize),
-    ...(options.budget === undefined ? {} : { budget: options.budget }),
+      (Math.max(1, result.binsize ?? open) * Math.max(1, result.binsPerCell ?? 1)) / open,
     read: (rows, cols, plan) => {
-      // A screen-sized read says its own rung and grid (`screenPlan`, below). A
-      // read with no plan is read as memory allows: the resolution picked — the
-      // open map's where none is — or a coarser stored rung where the window is
-      // too wide for it (§3.4).
-      const chosen = refineEnabled() ? null : asPicked()
-      if (plan === undefined && chosen !== null) {
-        const at = pickedRead(
-          chosen,
-          options.rungs ?? [],
-          options.binsize,
-          Math.max(rows[1] - rows[0], cols[1] - cols[0]),
-          options.budget?.(),
-        )
-        return withSecond(options.read(rows, cols, at.rung, at.binsPerCell))
+      const read = options.read(rows, cols, plan.rung, plan.binsPerCell)
+      return {
+        cancel: read.cancel,
+        promise: read.promise.then(({ result, second }) => {
+          if (second !== undefined) seconds.set(result, second)
+          return result
+        }),
       }
-      const held = refineEnabled() ? 1 : picked()
-      // A declared grid takes the rung choice with it, for the reason
-      // {@link attachRefine}'s `floor` gives: the cell the reader was promised is
-      // a whole number of the *open* map's bins, and a coarser rung's bins do
-      // not divide it in general.
-      const rung =
-        plan !== undefined
-          ? plan.rung
-          : held > 1
-            ? undefined
-            : chooseRung(
-                options.rungs ?? [],
-                Math.max(rows[1] - rows[0], cols[1] - cols[0]),
-                options.binsize,
-                options.budget?.(),
-              )
-      const binsPerCell = plan !== undefined ? plan.binsPerCell : held > 1 ? held : undefined
-      return withSecond(options.read(rows, cols, rung, binsPerCell))
     },
     onBlock: (result) => {
       const placed = options.panel.regrid(
@@ -1484,21 +1430,12 @@ export function attachRefine(options: {
         // The bin size of the map that answered, which is the open one unless a
         // rung was read — `MatrixResult.binsize` is present only then, and a
         // caller that assumed otherwise would caption a 5 kb picture as 1 kb.
-        Math.max(1, result.binsize ?? options.binsize) * Math.max(1, result.binsPerCell ?? 1),
+        Math.max(1, result.binsize ?? open) * Math.max(1, result.binsPerCell ?? 1),
         seconds.get(result),
       )
       if (placed) options.onInstalled?.(result)
       return placed
     },
-    planFor: (window, view) =>
-      screenPlan({
-        rungs: options.rungs ?? [],
-        binsize: options.binsize,
-        view: Math.max(view.rows[1] - view.rows[0], view.cols[1] - view.cols[0]),
-        read: Math.max(window.rows[1] - window.rows[0], window.cols[1] - window.cols[0]),
-        screen: view.screen ?? 1,
-        floor: finest,
-      }),
     // The spinner, and the caller's own hook after it. Wired here rather than
     // left to each view because it is not a view's decision: a read is in
     // flight for the window on screen, and the picture says so — without

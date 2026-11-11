@@ -269,14 +269,16 @@ as the root and goes on drawing the same picture. **About** lists the published 
 
 The tick at the head of a map's resolution row, also in the command palette, on by default: a map is
 read at about the size of the screen, and zooming in reads the stretch on screen again at a finer
-resolution, down to the finest the file stores, without the map ever stopping; the row follows,
-greyed. Off, the map is drawn at the resolution you pick, coarser only where the window is too wide
-for it. See [Moving around](/browse/navigating/#resolution-and-the-zoom).
+resolution, down to the finest the file stores, without the map ever stopping; the row follows it.
+A resolution you pick wins over it: the map is drawn at the one picked, coarser only where the window
+is too wide for it, and the tick shows unticked. See
+[Moving around](/browse/navigating/#resolution-and-the-zoom).
 
 ## Resolution
 
 A map's bin size, such as `5 kb`. An `.mcool` or a `.hic` stores several, named in an address by
-`::/resolutions/<bin size>`; one summed from whole bins of a stored one is marked `*`: `3 kb*`. See
+`::/resolutions/<bin size>`; one summed from whole bins of a stored one is marked `*`: `3 kb*`. The
+one picked in the row above the map is in the link as `resolution=`. See
 [Contact maps](/files/contact-maps/).
 
 ## Score

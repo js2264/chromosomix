@@ -24,12 +24,10 @@ import { blockSummary, poolingNote } from './mapSummary'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
 import {
   attachRefine,
-  finestFloor,
-  openPick,
-  pickedRead,
+  planFields,
+  readPlan,
   refineEnabled,
   rungsOf,
-  screenPlan,
   type BlockLadder,
   type PickedResolution,
 } from './refine'
@@ -62,23 +60,8 @@ export interface GenomeViewProps {
   /** Sibling rungs of a laddered file (§3.4); absent for a plain one. */
   rungs?: readonly string[]
   /**
-   * Bins of this map summed into one drawn cell, because the reader asked for a
-   * resolution the file does not store (§3.4).
-   *
-   * The factor, not the bin size: a 10 kb rung derived from a 2 kb map is `5`,
-   * and the effective resolution on screen is this map's bin size times it. The
-   * base rung is the map that is *open* — picking a derived resolution navigates
-   * to it — so every read here is an ordinary one carrying an explicit plan,
-   * and the worker snaps that plan to each sequence's own grid so the cells hold
-   * the same sums wherever the reader pans (`worker/reader.worker.ts`).
-   *
-   * Absent, or 1, is every view of every file until somebody adds one.
-   */
-  binsPerCell?: number
-  /**
-   * The resolution picked (§3.4), asked live: what *Refine on zoom* off draws,
-   * read in place when it changes. Absent or `null` is the open map, at
-   * {@link binsPerCell}.
+   * The resolution picked (§3.4), asked live, and read in place when it
+   * changes; a pick wins over *Refine on zoom*. Absent or `null` is no pick.
    */
   picked?: () => PickedResolution | null
   genome: string
@@ -346,7 +329,6 @@ export class GenomeView {
       rungs: rungsOf(this.props.rungs ?? []),
       // The grid the reader declared (§3.4), so a zoom cannot quietly read past
       // the resolution the axis is labelled with.
-      floor: () => this.props.binsPerCell ?? 1,
       ...(this.props.picked === undefined ? {} : { picked: this.props.picked }),
       read: (rows, cols, rung, binsPerCell) => {
         const own = this.props.client.cancellable<'matrix'>({
@@ -364,50 +346,53 @@ export class GenomeView {
   }
 
   /**
-   * `{ binsPerCell }` where the reader declared a resolution, else nothing.
-   *
-   * Absent rather than `1` on the ordinary path: `1` is a plan, and absent is
-   * *choose one* — which is what a genome-wide read has always relied on, since
-   * the side that knows how many contigs are in a genome is the reader.
-   */
-  /**
-   * How the first read is asked for: **screen-sized** while *Refine on zoom* is
-   * on (`screenPlan`, §2), at the declared grid ({@link pooled}) as memory
-   * allows when it is off.
+   * How the first read is asked for, by the rule every map view's is ({@link
+   * readPlan}, §2, §3.4): screen-sized while the zoom picks the resolution, as
+   * memory allows at the pick — or the open map — otherwise.
    */
   private firstPlan(span: number): { rung?: string; binsPerCell?: number } {
-    if (!refineEnabled()) {
-      // The resolution picked, as memory allows (§3.4) — the open map's where
-      // none is, by the same rule.
-      const pick =
-        this.props.picked?.() ?? ((this.props.binsPerCell ?? 1) > 1 ? null : openPick(this.props.binsize))
-      return pick === null ? this.pooled() : pickedRead(pick, rungsOf(this.props.rungs ?? []), this.props.binsize, span)
-    }
-    const rungs = rungsOf(this.props.rungs ?? [])
-    const plan = screenPlan({
-      rungs,
-      binsize: this.props.binsize,
-      view: span,
-      read: span,
-      screen: this.panel.screenWidth(),
-      // Down to the finest rung, as the zoom after it goes (§2).
-      floor: finestFloor(rungs, this.props.binsize),
-    })
-    return {
-      ...(plan.rung === undefined ? {} : { rung: plan.rung }),
-      ...(plan.binsPerCell === undefined ? {} : { binsPerCell: plan.binsPerCell }),
-    }
+    return planFields(
+      readPlan({
+        rungs: rungsOf(this.props.rungs ?? []),
+        binsize: this.props.binsize,
+        view: span,
+        read: span,
+        screen: this.panel.screenWidth(),
+        pick: this.props.picked?.() ?? null,
+        refining: refineEnabled(),
+      }),
+    )
   }
 
-  private pooled(): { binsPerCell?: number } {
-    const k = this.props.binsPerCell ?? 1
-    return k > 1 ? { binsPerCell: k } : {}
+  /**
+   * The resolution asked for (§3.4): the pick, or the open map's with *Refine on
+   * zoom* off and nothing picked; `undefined` while the zoom picks it.
+   */
+  private picked(): number | undefined {
+    const pick = this.props.picked?.() ?? null
+    if (pick !== null) return pick.binsize
+    return refineEnabled() ? undefined : this.props.binsize
+  }
+
+  /**
+   * The resolution picked changed (§3.4): read it where the reader stands, as a
+   * refine is read. `false` with no block and ladder in hand, and the view is
+   * rebuilt instead.
+   */
+  resolutionChanged(): boolean {
+    const shown = this.panel.block
+    if (this.ladder === null || shown === null) return false
+    this.renderSummary(shown)
+    const pick = this.picked()
+    const drawn = (shown.binsize ?? this.props.binsize) * Math.max(1, shown.binsPerCell ?? 1)
+    this.panel.refineNow(pick !== undefined && Math.abs(pick - drawn) > 1e-6 * drawn ? { measureAt: pick } : {})
+    return true
   }
 
   private renderSummary(result: MatrixResult): void {
     const pooled = result.level === 'bin' ? poolingNote(result.nrows, result.ncols) : null
     this.summary.replaceChildren(
-      ...blockSummary(this.props.binsize, result, 'contig', refineEnabled() ? undefined : (this.props.picked?.()?.binsize ?? this.props.binsize * (this.props.binsPerCell ?? 1))),
+      ...blockSummary(this.props.binsize, result, 'contig', this.picked()),
       ...(pooled === null ? [] : [` · ${pooled.phrase}`]),
       ' · ',
       this.panel.viewNote,

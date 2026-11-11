@@ -88,7 +88,7 @@ export const MAX_DERIVED_BP = 100_000_000
  * rung of the file has a perfectly good answer here and must still be refused.
  * {@link derivable} is the question a form asks; this is the arithmetic under it,
  * separated because the read side wants the arithmetic alone: a link arriving
- * with `coarsen=3000` needs to know which rung to open and by how much to pool,
+ * with `resolution=3000` needs to know which rung to read and by how much to pool,
  * not whether a dialog should have accepted it.
  */
 export function coarsenTo(target: number, rungs: readonly Rung[]): DerivedRung | null {

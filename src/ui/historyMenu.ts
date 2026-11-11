@@ -90,7 +90,8 @@ export function stepDetail(state: ViewState, here?: string): string {
   const parts = here !== undefined && fileBaseLabel(here) === fileBaseLabel(state.uri) ? [] : [fileBaseLabel(state.uri)]
   const entry = entryLabel(state.uri)
   const rung = entry !== undefined && /^\d+$/.test(entry) ? Number(entry) : null
-  if (state.coarsen !== undefined) parts.push(`${resolutionLabel(state.coarsen)}*`)
+  // The resolution picked where one is (§3.4), else the rung the link opened.
+  if (state.resolution !== undefined) parts.push(resolutionLabel(state.resolution))
   else if (rung !== null) parts.push(resolutionLabel(rung))
   if (state.view === 'browser') parts.push('tracks')
   if (state.score !== undefined) parts.push(state.score)

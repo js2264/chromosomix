@@ -16,7 +16,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { Breadcrumb, resolutionLabel, type BreadcrumbProps } from '@/ui/Breadcrumb'
-import { REFINE_DEFAULT, refineEnabled, setRefineEnabled } from '@/ui/refine'
+import { REFINE_DEFAULT, setRefineEnabled } from '@/ui/refine'
 import type { ViewState } from '@/types'
 import { all, setUpDom, textsOf, type DomTeardown } from '../support/dom'
 
@@ -430,43 +430,78 @@ describe('the resolution picker', () => {
     expect(built.entries).toEqual([])
   })
 
-  it('is greyed while *Refine on zoom* picks, and follows the map', () => {
+  it('follows the map while *Refine on zoom* picks, and still takes a pick', () => {
     setRefineEnabled(true)
     const built = ladder()
     built.crumb.render(REGION)
     expect(built.crumb.el.querySelector('.crumb-res')?.classList.contains('is-refining')).toBe(true)
-    expect(box(built.crumb).disabled).toBe(true)
+    // Nothing is greyed: there is never a tick to find before a slot answers.
+    expect(box(built.crumb).disabled).toBe(false)
+    expect((built.crumb.el.querySelector('.res-add') as HTMLButtonElement | null)?.disabled ?? false).toBe(false)
     built.crumb.showResolution(50_000)
     expect(shown(built.crumb)).toBe('50 kb')
-    // A slot pressed while the zoom picks is a reading, not a pick.
-    all<HTMLButtonElement>(built.crumb.el, '.res-slot')[0]?.click()
-    expect(built.entries).toEqual([])
+    // A slot pressed while the zoom picks is a pick, which takes the
+    // resolution from the zoom (§3.4).
+    all<HTMLButtonElement>(built.crumb.el, '.res-slot')
+      .find((slot) => slot.getAttribute('aria-label') === '1 Mb')
+      ?.click()
+    expect(built.entries).toEqual(['1000000'])
   })
 
-  it('stands between two slots on a grid no rung stores', () => {
+  it('names the rung the file was opened at while nothing is picked and nothing drawn', () => {
+    // A table in front, or the preference off with no pick: not the finest
+    // rung, which is where a box with no value of its own fell back to.
+    setRefineEnabled(true)
+    const { crumb } = ladder({ standing: () => undefined })
+    crumb.render(REGION)
+    expect(shown(crumb)).toBe('10 kb')
+  })
+
+  it('sits on the nearest slot on a grid no rung stores, and the box names it', () => {
     setRefineEnabled(true)
     const { crumb } = ladder()
     crumb.render(REGION)
-    // Two of the 10 kb rung's bins to a cell: between 10 and 50 kb.
+    // Two of the 10 kb rung's bins to a cell: nearer 10 kb than 50 kb.
     crumb.showResolution(20_000)
     expect(shown(crumb)).toBe('20 kb')
     const left = (label: string): number =>
       parseFloat(all<HTMLElement>(crumb.el, '.res-slot').find((slot) => slot.getAttribute('aria-label') === label)?.style.left ?? '')
     const thumb = parseFloat((crumb.el.querySelector('.res-thumb') as HTMLElement).style.left)
-    expect(thumb).toBeGreaterThan(left('50 kb'))
-    expect(thumb).toBeLessThan(left('10 kb'))
+    expect(thumb).toBe(left('10 kb'))
   })
 
-  it('keeps what is on screen as the pick when unticked', () => {
+  it('hands the tick to the session, which keeps what is on screen as the pick', () => {
     setRefineEnabled(true)
-    const built = ladder()
+    const ticks: boolean[] = []
+    const built = ladder({ onRefine: (on) => ticks.push(on) })
     built.crumb.render(REGION)
-    built.crumb.showResolution(50_000)
     const tick = built.crumb.el.querySelector('.res-refine input') as HTMLInputElement
     tick.checked = false
     tick.dispatchEvent(new Event('change'))
-    expect(refineEnabled()).toBe(false)
+    expect(ticks).toEqual([false])
+  })
+
+  it('counts its value up to the right, finer, as a slider’s does', () => {
+    setRefineEnabled(false)
+    const { crumb } = ladder()
+    crumb.render(REGION)
+    const track = crumb.el.querySelector('.res-track') as HTMLElement
+    // Four rungs; 10 kb is the second finest, so third from the left: 2 of 0–3.
+    expect(track.getAttribute('aria-valuenow')).toBe('2')
+    expect(track.getAttribute('aria-valuetext')).toBe('10 kb')
+  })
+
+  it('keeps the keyboard on the slider when a key picks and the row is drawn again', () => {
+    setRefineEnabled(false)
+    const built = ladder()
+    built.crumb.render(REGION)
+    const track = built.crumb.el.querySelector('.res-track') as HTMLElement
+    track.focus()
+    track.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))
     expect(built.entries).toEqual(['50000'])
+    // The session redraws the bar for the pick: the new slider has the keys.
+    built.crumb.render(REGION)
+    expect(document.activeElement).toBe(built.crumb.el.querySelector('.res-track'))
   })
 
   it('is absent where there is nothing to pick between', () => {

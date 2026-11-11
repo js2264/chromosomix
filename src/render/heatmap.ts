@@ -103,12 +103,13 @@ export interface Raster {
  * Chosen at or below every desktop browser's canvas cap (Firefox stops at
  * 32,767 px per side, Chrome's *area* cap is 2^28 px, which is exactly 16,384²).
  * Not a display bound: the raster is drawn once and then scaled, so a zoomed-in
- * view of it re-rasterises nothing, and a raster this wide is what lets a whole
- * yeast chromosome IV be read at 100 bp (15,320 bins) and then zoomed to single
- * bins without another read. It used to be 4,096, which pooled that chromosome
- * to 400 bp. What it caps are the allocations that scale with the *picture*:
- * at the cap, 1 GB each of pooled values, RGBA and canvas — which is why how
- * close a block may come to it is the memory guard's call
+ * view of it re-rasterises nothing. It used to be 4,096, which pooled a whole
+ * yeast chromosome IV read at 100 bp (15,320 bins) to 400 bp; at this width that
+ * block was read whole and zoomed to single bins without another read, until a
+ * block read bin for bin was held to 8,192 a side ({@link denseCellCap}, SPECS
+ * §7.2), which now binds first. What it caps are the allocations that scale
+ * with the *picture*: at the cap, 1 GB each of pooled values, RGBA and canvas —
+ * which is why how close a block may come to it is the memory guard's call
  * ({@link denseCellCap}), not this constant's.
  */
 export const RASTER_MAX_DIM = 16384

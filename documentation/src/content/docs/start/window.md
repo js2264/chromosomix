@@ -35,9 +35,9 @@ A button's tooltip names its key.
 
 **Search commands…**, or <kbd>Ctrl</kbd>+<kbd>P</kbd> (<kbd>⌘</kbd><kbd>P</kbd> on a Mac), finds any
 action by name, with its key; one that cannot act on what is open is greyed. Here too is
-*Refine on zoom*, the tick at the head of a map's resolution row: on by default, it reads a map at
-about the size of the screen and finer as you zoom; off, the map is drawn at the resolution you pick.
-Only here, under Help, is *What this browser is remembering*, with a button that forgets it all
+*Refine on zoom*, which does what the tick at the head of a map's resolution row does: on by default,
+it reads a map at about the size of the screen and finer as you zoom; a resolution you pick is drawn
+whatever it says. Only here, under Help, is *What this browser is remembering*, with a button that forgets it all
 ([Keyboard and command palette](/browse/keyboard/)).
 
 ## Tabs
@@ -54,15 +54,18 @@ its file, such as a sequence that reads as circular, until you dismiss it.
 ## Over the picture: the trail and the heading
 
 **The trail** — the file, the table or the whole genome, the sequence, the window — says where you
-are and takes you back up; click the file to open another in its place. At its end, **resolution**
-picks a bin size the file stores (<kbd>-</kbd> and <kbd>+</kbd> step), and its **+** adds one summed
-from the file's bins, marked `*`. **contacts** draws every map in the tab at the number of contacts
-you type, `10M` say, to compare libraries at one depth.
+are and takes you back up; click the file to open another in its place. At its end, the
+**resolution** row: **refine on zoom**, ticked so that the map is read at the screen's resolution and
+finer as you zoom, and a slider and a box that follow it, or pick a bin size the file stores
+(<kbd>-</kbd> and <kbd>+</kbd> step), and its **+** adds one summed from the file's bins, marked `*`.
+**contacts** draws every map in the tab at the number of contacts you type, `10M` say, to compare
+libraries at one depth.
 
 **The heading** has the title, with `‹` and `›` for the previous and next sequence; the locus box
 and **go**; arrows and zoom steps; and a bookmark of the view (<kbd>B</kbd>). The line under it gives
-the *effective resolution*, coarser than the file's when the window holds more bins than the picture
-has room for ([Moving around](/browse/navigating/)).
+the *effective resolution*, the size of one cell as drawn: the screen's while *refine on zoom* picks
+it, and coarser than the one picked when the window holds more bins than a block can
+([Moving around](/browse/navigating/#resolution-and-the-zoom)).
 
 ## The picture, and the deck of cells
 
