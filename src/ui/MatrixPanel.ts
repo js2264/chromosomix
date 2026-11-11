@@ -820,6 +820,16 @@ export interface FigureSubject {
   file: string
   genome?: string
   /**
+   * What the picture is of, where the heading does not say it — `null` to read
+   * the heading, as every view but one does. A deck's companion is headed by
+   * its map's name (§16.10, {@link MatrixPanel.retitle}), and the framing a
+   * task runs on and a figure's title, which take the heading for the region,
+   * named the file in place of the sequence: *will run on
+   * 4DNFI18UHVRO.mcool:1-127,100,000*. A function, because the block it is
+   * read off arrives after the panel is built.
+   */
+  subject?: () => string | null
+  /**
    * What the map is drawn to, or `null` for the file as stored. A function,
    * because the reader's answer lands after the panel is built, and a figure
    * saved later has to say what it shows.
@@ -2975,7 +2985,7 @@ export class MatrixPanel {
    * merely stops it being wrong.
    */
   private framedSubject(): string {
-    const subject = this.exportName
+    const subject = this.options.caption?.subject?.() ?? this.exportName
     if (subject.includes(' × ')) return subject
     const range = this.framedBpRange()
     if (range === null) return subject

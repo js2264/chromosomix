@@ -381,6 +381,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   around it. A map's word counts now only once its block was read for the deck's place. And a map
   showing the deck's window clamped to a block that holds less of it no longer becomes the one
   every other map follows when it redraws — a sharper block landing on it is a redraw, not a move.
+- **A task on a starred map beside the first names the sequence it reads (§18.4).** Its framing took
+  the map's heading for the region, and a deck's companion is headed by its map's name: the drawer
+  said *will run on 4DNFI18UHVRO.mcool:1-127,100,000*, and the provenance line, the tables a run wrote
+  and a figure saved from the map said the same. It says *chr5:1-127,100,000* now, the sequence as that
+  map's file spells it; the heading and the figure's file name stay the map's name.
 - **Reproducibility's refusal of two grids says what to do (§18.4).** It advised opening the maps at
   one resolution, *an .mcool descends to any rung it carries*, and a map beside the first has no
   rung of its own to pick now; it says to pick, on the first map, a resolution every file carries.

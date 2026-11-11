@@ -1252,6 +1252,21 @@ export class MapPanel {
   }
 
   /**
+   * What this map's picture is of, for the framing a task runs on and a
+   * figure's title (`FigureSubject.subject`, §18.4): the sequence its block is
+   * on, as this file spells it, or the pair of them. Its heading is the map's
+   * name (§16.10), and the framing took it for the sequence. `null` for a block
+   * of several sequences, which keeps the map's name, as it always was.
+   */
+  private subjectOf(): string | null {
+    const block = this.panel?.blockSequences()
+    if (block === undefined || block.rows.length !== 1) return null
+    const [rows] = block.rows
+    if (block.cols.length === 0 || (block.cols.length === 1 && block.cols[0] === rows)) return rows
+    return block.cols.length === 1 ? `${rows} × ${block.cols[0]}` : null
+  }
+
+  /**
    * The view state the block on screen was read for, or `null` before one.
    *
    * What the deck asks before it takes this map's window as the deck's (§16.3).
@@ -2087,7 +2102,7 @@ export class MapPanel {
         ...(context === undefined ? {} : { annotations: context }),
         detachedControls: true,
         hideTitle: true,
-        caption: { file: fileLabel(this.uri), depth: () => this.depthHeld },
+        caption: { file: fileLabel(this.uri), depth: () => this.depthHeld, subject: () => this.subjectOf() },
         // Built from **this** file's columns, not from the lead's: what a
         // companion's cells can be is a fact about its own `/pixels`, and a
         // dropdown offering a column this file has not got would refuse the one

@@ -8701,6 +8701,15 @@ commonest file, and pushing both wrote `1 kb bins · balanced · balanced` into 
 and every TSV header, which reads as two normalisations having been applied. Where the two differ,
 both are said — `balanced · correlation` says what neither half says alone.
 
+**The window is named by its sequence, on every map.** The line takes the map's heading for what the
+picture is of, which on every view is the region — and on a deck's companion is the map's name
+(§16.10): starred and asked for a task, the second map of a K562 deck said *will run on
+4DNFI18UHVRO.mcool:1-127,100,000*, and a figure saved from it was titled the same. A companion now
+says what its picture is of from its own block (`FigureSubject.subject`): the sequence it is on, as
+its file spells it — `chrIV:200,001-600,000` beside a first map that says `IV` (§5.9) — or the pair
+of them, the sequence alone where the whole of it is on screen; a block of several sequences keeps
+the map's name. The heading and the name a figure is saved under stay the map's.
+
 It is a **snapshot**, and the result is a record rather than a live view. Panning afterwards does not
 change a finished pileup; the drawer states the framing the result belongs to and offers to recompute
 against the new one. This is the discipline the on-the-fly 4C lane never kept — it redrew itself from
