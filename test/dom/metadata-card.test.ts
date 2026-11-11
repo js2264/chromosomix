@@ -48,6 +48,14 @@ function table(columns: Record<string, string[] | Float64Array>): Table {
   }
 }
 
+/** What a cooler's `/bins` holds: its skeleton, and a weight. */
+const BIN_COLUMNS = [
+  { name: 'chrom', text: false },
+  { name: 'start', text: false },
+  { name: 'end', text: false },
+  { name: 'weight', text: false },
+]
+
 interface Made {
   store: AnnotationStore
   card: MetadataCard
@@ -55,8 +63,9 @@ interface Made {
 }
 
 /** A metagenome of two MAGs, four contigs, with a column on each table. */
-function make(level: MetaLevel | null): Made {
+function make(level: MetaLevel | null, given: { binsLater?: boolean } = {}): Made {
   const store = new AnnotationStore(`metadata-${Math.random()}.metacool`, { persist: false })
+  const changes = { count: 0 }
   const index = new MetadataIndex({
     genomes: table({
       name: ['MAG_1', 'MAG_2'],
@@ -69,14 +78,12 @@ function make(level: MetaLevel | null): Made {
       mge_class: ['phage', 'chromosome', 'chromosome', 'plasmid'],
     }),
     binsize: 1000,
-    binColumns: [
-      { name: 'chrom', text: false },
-      { name: 'start', text: false },
-      { name: 'end', text: false },
-      { name: 'weight', text: false },
-    ],
-    onChange: () => {},
+    binColumns: given.binsLater === true ? [] : BIN_COLUMNS,
+    onChange: () => {
+      changes.count++
+    },
   })
+  ;(index as unknown as { changes: typeof changes }).changes = changes
   const card = new MetadataCard({
     store,
     index: () => index,
@@ -115,6 +122,33 @@ describe('what the drop-down offers', () => {
     // `name`, `genome_id`, `chrom`, `start` and `end` are the tables' skeleton:
     // they are what the axis is already labelled with.
     expect(options(made.card).every((option) => option.enabled)).toBe(true)
+  })
+
+  it('offers the bins columns once they are told, after the map has drawn (§12)', () => {
+    // The session lists `/bins` after the first picture: four round trips
+    // through a remote cooler's object headers that the map used to wait for.
+    const made = make('bin', { binsLater: true })
+    expect(options(made.card).map((option) => option.value)).toEqual([
+      'genomes/completeness',
+      'contigs/length',
+      'contigs/mge_class',
+    ])
+    const changes = (made.index as unknown as { changes: { count: number } }).changes
+    const before = made.index.revision()
+    made.index.addBinColumns(BIN_COLUMNS)
+    made.card.refresh()
+    expect(options(made.card).map((option) => option.value)).toEqual([
+      'genomes/completeness',
+      'contigs/length',
+      'contigs/mge_class',
+      'bins/weight',
+    ])
+    expect(made.index.revision()).toBeGreaterThan(before)
+    expect(changes.count).toBe(1)
+    // Told again, nothing moves: a column already offered keeps its place.
+    made.index.addBinColumns(BIN_COLUMNS)
+    expect(changes.count).toBe(1)
+    expect(made.index.columnFor('bins', 'weight')?.kind).toBe('quantitative')
   })
 
   it('refuses a finer table than the axis, visibly and with the reason', () => {

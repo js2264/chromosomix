@@ -18,6 +18,8 @@ import { requireGenomes } from './_golden'
 
 const FILE = new URL('../../demo/metagenomics/mock-community/Mock_microbial_community.metacool', import.meta.url).pathname
 const URL_FOR = (path: string): string => `https://example.test/${path.replace(/^\//, '')}`
+/** The chunk a remote source reads in, which is what its probe asks for (§6.1). */
+const CHUNK = 256 * 1024
 
 let fd: number
 let size: number
@@ -197,7 +199,7 @@ describe('a HEAD that says the file has no bytes', () => {
    * backend's `Accept-Ranges` passed through. Believed, a 19 MB map was mounted
    * as a file of no bytes and refused as "not an HDF5 file".
    */
-  it('is not believed, and the one-byte probe gives the size', async () => {
+  it('is not believed, and the range probe gives the size', async () => {
     const { RemoteRangeSource } = await import('@/sources/RemoteRangeSource')
     const { calls, impl } = recordingFetch()
     const emptied = (async (url: string, init?: RequestInit) => {
@@ -211,7 +213,12 @@ describe('a HEAD that says the file has no bytes', () => {
     }) as unknown as typeof fetch
     const source = await RemoteRangeSource.open(URL_FOR(FILE), { fetchImpl: emptied })
     expect(source.size).toBe(size)
-    expect(calls.map((call) => `${call.method} ${call.headers['Range'] ?? '-'}`)).toEqual(['HEAD -', 'GET bytes=0-0'])
+    // The probe asks for the first chunk, which the first read of any container
+    // wants: one request answers the question and the read (§6.1).
+    expect(calls.map((call) => `${call.method} ${call.headers['Range'] ?? '-'}`)).toEqual([
+      'HEAD -',
+      `GET bytes=0-${CHUNK - 1}`,
+    ])
     source.close()
   })
 })
@@ -229,14 +236,14 @@ describe('a URL that carries its own signature', () => {
     '?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=3600' +
     '&X-Amz-SignedHeaders=host&X-Amz-Signature=deadbeefdeadbeef'
 
-  it('is opened without a HEAD, straight to the one-byte range probe', async () => {
+  it('is opened without a HEAD, straight to the range probe', async () => {
     const { RemoteRangeSource } = await import('@/sources/RemoteRangeSource')
     const { calls, impl } = recordingFetch()
 
     const source = await RemoteRangeSource.open(PRESIGNED, { fetchImpl: impl })
 
     expect(calls.map((call) => call.method)).toEqual(['GET'])
-    expect(calls[0].headers['Range']).toBe('bytes=0-0')
+    expect(calls[0].headers['Range']).toBe(`bytes=0-${CHUNK - 1}`)
     // …and the size comes from the probe's `Content-Range`, which is the only
     // place it can come from once the `HEAD` is gone.
     expect(source.size).toBe(size)

@@ -12,9 +12,10 @@
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-bacteria.mjs [out-dir]
  *
- * The map, reference and coverage are read from the lab's bucket unless
- * GALLERY_DATA names a folder served with byte ranges and CORS
- * (`python3 scripts/DBZ_store.py serve <folder>`) holding the same three names.
+ * The map, reference and coverage are the zoo's, which is no longer on the
+ * lab's bucket: GALLERY_DATA names a folder served with byte ranges and CORS
+ * (`python3 scripts/DBZ_store.py serve <folder>`) holding the three names, and
+ * every part but the store needs it.
  */
 
 import { createRequire } from 'node:module'
@@ -35,12 +36,10 @@ const { chromium } = playwright()
 
 const OUT = process.argv[2] ?? 'gallery-bacteria'
 const BASE = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
-const DATA = process.env.GALLERY_DATA ?? 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/PAK_MM142'
+const DATA = process.env.GALLERY_DATA
 const MAP = `${DATA}/PAK_MM142.mcool`
 const FASTA = `${DATA}/PAK.fa`
-const COVERAGE = process.env.GALLERY_DATA
-  ? `${DATA}/PAK_MM142_500.coverage.coverage-total.bw`
-  : `${DATA}/coverage/PAK_MM142_500.coverage.coverage-total.bw`
+const COVERAGE = `${DATA}/PAK_MM142_500.coverage.coverage-total.bw`
 mkdirSync(OUT, { recursive: true })
 const browsers = process.env.PLAYWRIGHT_BROWSERS_PATH
 const executablePath =
@@ -162,9 +161,16 @@ const originBox = () => page.evaluate(() => {
 // `declarations` for a 1D browser's Chromosomes table, a map dropped over it,
 // and a map's default origin, and `store` for the DNA Bacterial Zoo as
 // scripts/dbz-store.sh writes it — GALLERY_STORE names its store.chromosomix.json, served
-// by `python3 scripts/DBZ_store.py serve <store>`; the lab's bucket otherwise.
+// by `python3 scripts/DBZ_store.py serve <store>`; skipped otherwise, the zoo being on no bucket.
 const ONLY = process.env.GALLERY_ONLY ?? ''
-const STORE = process.env.GALLERY_STORE ?? 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.chromosomix.json'
+const STORE = process.env.GALLERY_STORE
+if (ONLY !== 'store' && DATA === undefined) {
+  console.error(
+    'The DNA Bacterial Zoo’s folder (dbz/) is no longer on the lab’s bucket: serve a folder holding PAK_MM142.mcool, PAK.fa and ' +
+      'PAK_MM142_500.coverage.coverage-total.bw (python3 scripts/DBZ_store.py serve <folder>) and name its address in GALLERY_DATA',
+  )
+  process.exit(1)
+}
 const DBZ_STORE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/store.chromosomix.json'
 
 try {
@@ -432,7 +438,9 @@ try {
   await ori('on the first base')
   await shot('b25-ori-on-first-base')
   }
-  if (ONLY === '' || ONLY === 'store') {
+  if ((ONLY === '' || ONLY === 'store') && STORE === undefined) {
+    console.log('store skipped: the zoo was never published on the lab’s bucket; name a store.chromosomix.json scripts/dbz-store.sh wrote in GALLERY_STORE')
+  } else if (ONLY === '' || ONLY === 'store') {
     // The store: a card a species, its session the card's button.
     page = await fresh()
     await page.goto(`${BASE}/?store=${encodeURIComponent(STORE)}`)

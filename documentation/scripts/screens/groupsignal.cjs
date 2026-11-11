@@ -2,7 +2,8 @@
  * Signal by group (analyses/groupsignal.mdx): GC content compared between the
  * A and B compartments of the P. aeruginosa PAK chromosome, as the repository's
  * `scripts/ui-bacteria.mjs` (GALLERY_ONLY=groups) drives it — the map at 8 kb
- * from the DNA Bacterial Zoo on the lab's bucket, the origin typed into the
+ * from the DNA Bacterial Zoo, which is no longer on the lab's bucket: name a
+ * folder serving PAK_MM142.mcool and PAK.fa in GALLERY_DATA — the origin typed into the
  * Chromosomes table, Base composition run for the GC content, Compartments
  * read along both arms and phased by GC content, then Signal by group on the
  * GC content split by the A/B call's names: the drawer's violins, the Groups
@@ -17,7 +18,14 @@
 const { open, sleep, BASE } = require('./lib-1d3d.cjs')
 
 const OUT = process.argv[2] ?? 'screens'
-const DATA = process.env.GALLERY_DATA ?? 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/PAK_MM142'
+const DATA = process.env.GALLERY_DATA
+if (DATA === undefined) {
+  console.error(
+    'The DNA Bacterial Zoo’s folder (dbz/) is no longer on the lab’s bucket: serve a folder holding PAK_MM142.mcool and PAK.fa ' +
+      '(python3 scripts/DBZ_store.py serve <folder>) and name its address in GALLERY_DATA',
+  )
+  process.exit(1)
+}
 const MAP = `${DATA}/PAK_MM142.mcool::/resolutions/8000`
 const FASTA = `${DATA}/PAK.fa`
 const HEIGHT = Number(process.env.SCREENS_HEIGHT ?? 1180)

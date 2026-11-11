@@ -1677,11 +1677,13 @@ export class MapPanel {
       return
     }
 
+    // This load's own open, once it has one: what a refused block still counts.
+    let opened: OpenResult | null = null
     try {
       const info = await this.open()
       if (this.disposed) return
       this.opened = info
-      this.countContacts(info)
+      opened = info
       this.paintEntries(info)
       void this.askSequences()
       // The ladder is known now, so a press this panel was too early to answer
@@ -1719,6 +1721,9 @@ export class MapPanel {
       // must not leave its lap behind for the ladder of a block it is not.
       this.wrap = wrap
       this.show(result, info, state)
+      // Once this map has its first block, as the lead's is counted (§6.5): a
+      // census asked at the open was a walk in the same reader as this read.
+      this.countContacts(info)
       this.paintSequences()
       this.props.onSettled()
     } catch (err) {
@@ -1738,6 +1743,9 @@ export class MapPanel {
       // of the budget will not lend (§16.7) — and it keeps the deck usable
       // while one of its files is wrong.
       this.say(err instanceof ViewerError || err instanceof Error ? err.message : String(err))
+      // A block refused is no reason to leave the file uncounted: the deck's
+      // contacts box asks every map for its total.
+      if (opened !== null) this.countContacts(opened)
       this.props.onSettled()
     }
   }

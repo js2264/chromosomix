@@ -51,6 +51,7 @@ import type { AnalysisFraming, TableOutput } from '../analysis/types'
 import type { CarriedResult } from '../analysis/workspace'
 import { UNBINNED_NAME } from '../constants'
 import { CircularStore } from '../state/circular'
+import { rememberPlans } from '../state/readPlans'
 import { OriginStore } from '../state/origins'
 import {
   junctionCandidates,
@@ -219,6 +220,8 @@ import { accessHeaders } from '../sources/access'
 import { canonicalUrl } from '../sources/rewrite'
 import { accessHeadersFor, credentialFor } from '../s3/credentials'
 import { contigNames, contigPairs } from './contigTable'
+import { PictureGate } from './pictureGate'
+import { planned, windowOf } from './readPlan'
 import { inferSource, mayResolve, resolveSource } from './resolve'
 import { SessionAnalysis } from './SessionAnalysis'
 import { SessionCommands } from './SessionCommands'
@@ -2357,11 +2360,24 @@ export class Session {
       // not stall at 99%; the other two report bytes and then pixels.
       // Through the edit kept for this file, where there is one to draw (§27.7).
       const edit = this.editToOpen(uri)
+      // The window this open is going to, where it says: what the first view
+      // read is kept under it, and a kept plan for it is fetched with the open.
+      const going = carry ?? this.store.state
+      const firstWindow = going?.uri === uri ? windowOf(going, uri) : undefined
+      // A comparison's second map opens beside this one rather than after it
+      // (§11, §12): it is half of the picture asked for, and its open is a walk
+      // of its own that need not wait for this one to finish.
+      if (going?.uri === uri && going.uri2 !== undefined) {
+        this.compare.prefetch(going.uri2, windowOf(going, going.uri2))
+      }
       task = client.cancellable<'open'>(
         {
           kind: 'open',
           uri,
-          source,
+          // What this open read the last time — or what an example ships with —
+          // fetched side by side as it starts, and the walk then run out of the
+          // cache (§6.1, §12).
+          source: planned(source, uri, firstWindow),
           ...(binning === undefined ? {} : { binning }),
           ...(edit === undefined ? {} : { edit }),
         },
@@ -2379,6 +2395,9 @@ export class Session {
       this.counted.delete(client)
       this.opens.set(client, (this.opens.get(client) ?? 0) + 1)
       this.countOf(client, info)
+      if (source.kind === 'remote') {
+        this.keepReadPlan(client, this.landedFrom === null ? [uri] : [uri, this.landedFrom], firstWindow)
+      }
       const genomes = await client.request<'genomes'>({ kind: 'genomes' })
       if (this.destroyed) return
       // The console's line for the file (§23). Here rather than at the door,
@@ -2585,8 +2604,9 @@ export class Session {
       // the *state* names: asked before it, the store was the previous file's,
       // so a file opened over one already measured was never measured, and one
       // opened over a measurement still running had its ticks written there.
-      // And after the map's first block: fifty corner reads queued in the same
-      // reader as the picture's first read are fifty reads it waited behind.
+      // And after the map's first block — on a landing table, the first block of
+      // the map a row opens: fifty corner reads queued in the same reader as the
+      // picture's first read are fifty reads it waited behind.
       void this.firstPicture().then(() => this.detectCircular(uri))
       // Last, and deliberately not awaited: the map is on screen and usable,
       // and the export is a second job over arrays that are already in memory.
@@ -2671,7 +2691,14 @@ export class Session {
         const forward =
           requested !== null && requested.uri === uri ? { ...requested, uri: entryUri } : undefined
         this.opening = null
-        await this.open(entryUri, source, forward)
+        // What the entry's open reads is kept under the root's address too, so a
+        // second visit to this link fetches both walks at once (§6.1, §12).
+        this.landedFrom = uri
+        try {
+          await this.open(entryUri, source, forward)
+        } finally {
+          this.landedFrom = null
+        }
         return
       }
       // The name said nothing and the reader could not open it. Ask what it
@@ -5011,6 +5038,7 @@ export class Session {
     this.metadataCard = null
     this.bookmarksCard = null
     this.compare.drop()
+    this.compare.cancelEarly()
     this.compareCard = null
     this.wholeFile?.view.destroy()
     this.wholeFile = null
@@ -5085,15 +5113,13 @@ export class Session {
       ? contigGenomes(contigs, this.file?.genomes.table ?? null)
       : new Map<string, string>()
 
-    // What `/bins` holds, by name and kind. A group listing and one dtype per
-    // column — no values, so §3.3's rule that `/bins` is never read at open
-    // time still holds, and the drop-down can offer the weights a cooler was
-    // balanced with (§8.12).
-    const binColumns = await this.clientOf()
-      .request<'binColumns'>({ kind: 'binColumns' })
-      .then((result) => result.columns)
-      .catch(() => [])
-    if (this.destroyed) return
+    // What `/bins` holds, by name and kind, is asked for *after* the map's
+    // first picture (below): a group listing and one dtype per column — no
+    // values, so §3.3's rule that `/bins` is never read at open time still
+    // holds — but on a remote cooler it is four round trips through object
+    // headers, and they were four the map waited for before its view was even
+    // mounted (§12). The drop-down offers the weights a cooler was balanced
+    // with (§8.12) once they land.
 
     const scope = this.memoryKey(uri)
     const store = new AnnotationStore(scope)
@@ -5146,7 +5172,7 @@ export class Session {
         genomes: info.hasGenomes ? (this.file?.genomes.table ?? null) : null,
         contigs: contigs?.table ?? { columns: [], length: 0, data: {} },
         binsize: info.binsize ?? 1,
-        binColumns,
+        binColumns: [],
         client: this.clientOf(),
         // A `/bins` slice landing is new data for a lane that is already drawn,
         // and the panels are what have to hear about it — the annotation store
@@ -5154,6 +5180,7 @@ export class Session {
         onChange: () => this.repaintMetadata(),
       }),
     }
+    void this.listBinColumns(this.annotations)
 
     this.manualCard = new ManualCard({
       store: manual,
@@ -7591,16 +7618,69 @@ export class Session {
   countOf(client: ReaderClient, info: OpenResult): void {
     if (info.contacts !== null) return
     const open = this.opens.get(client)
-    client
-      // Followed, and silently: its progress is not what any veil is up for,
-      // and on the veil of a view that is reading it named the wrong wait.
-      .request<'contacts'>({ kind: 'contacts' }, () => undefined)
-      .then(({ total }) => {
-        if (total === null || this.opens.get(client) !== open) return
-        this.counted.set(client, total)
-        this.contactsBox?.sync()
-      })
-      .catch(() => undefined)
+    // Once the map has its first block (§6.5, §12): asked at the open, the walk
+    // was mid-step when the reader's first click came — on the Chromosomes
+    // table, a moment later — and the chromosome waited for that step.
+    void this.firstPicture().then(() => {
+      if (this.destroyed || this.opens.get(client) !== open) return
+      client
+        // Followed, and silently: its progress is not what any veil is up for,
+        // and on the veil of a view that is reading it named the wrong wait.
+        .request<'contacts'>({ kind: 'contacts' }, () => undefined)
+        .then(({ total }) => {
+          if (total === null || this.opens.get(client) !== open) return
+          this.counted.set(client, total)
+          this.contactsBox?.sync()
+        })
+        .catch(() => undefined)
+    })
+  }
+
+  /**
+   * Keep what this open read — its walk, and its first view's — for the next
+   * open of the same map (§6.1, §12; `state/readPlans.ts`). Asked once the map
+   * has its first picture, which is when the reader has written both down.
+   *
+   * @internal SessionCompare keeps the second file's with it.
+   */
+  keepReadPlan(client: ReaderClient, uris: readonly string[], firstWindow: string | undefined): void {
+    const open = this.opens.get(client)
+    void this.firstPicture().then(async () => {
+      if (this.destroyed || this.opens.get(client) !== open) return
+      const plans = await client.request<'readPlan'>({ kind: 'readPlan' }).catch(() => null)
+      if (plans !== null) for (const uri of uris) rememberPlans(uri, firstWindow, plans)
+    })
+  }
+
+  /**
+   * The address a collection was asked for at, while it is opened again at the
+   * entry it lands on (`firstEntry`): what the entry's open reads is kept for
+   * both (§6.1).
+   */
+  private landedFrom: string | null = null
+
+  /**
+   * What `/bins` holds, told to the metadata index once the map has its first
+   * picture (§8.12, §12): the drop-down then offers the file's weights, and a
+   * row restored on a `/bins` column — which draws from its values whether or
+   * not the list is in — gets the summary it was seated without.
+   */
+  private async listBinColumns(held: FileAnnotations): Promise<void> {
+    await this.firstPicture()
+    if (this.destroyed || this.annotations !== held) return
+    const columns = await this.clientOf()
+      .request<'binColumns'>({ kind: 'binColumns' })
+      .then((result) => result.columns)
+      .catch(() => [])
+    if (this.destroyed || this.annotations !== held) return
+    held.metadata?.addBinColumns(columns)
+    for (const entry of held.store.forCard('metadata')) {
+      const source = entry.source
+      if (source.kind !== 'metadata' || source.table !== 'bins' || entry.summary !== undefined) continue
+      const found = held.metadata?.columnFor('bins', source.column) ?? null
+      if (found !== null) held.store.update(entry.id, { summary: summaryOf(found) })
+    }
+    this.metadataCard?.refresh()
   }
 
   /**
@@ -7683,7 +7763,9 @@ export class Session {
       // question `parseMetacoolerRange` is about to answer properly.
       onOpenRegion: (region) => this.navigate({ uri: state.uri, view: 'region', region }),
     })
-    this.showContent(view.el, view)
+    // A landing table: what waits behind the first picture waits for the map
+    // a row opens (`app/pictureGate.ts`).
+    this.showContent(view.el, view, { waypoint: true })
   }
 
   /**
@@ -7765,7 +7847,9 @@ export class Session {
       onShowCells: (names) => show(names),
       onShowAll: () => show(null),
     })
-    this.showContent(view.el, view)
+    // A landing table: what waits behind the first picture waits for the map
+    // a row opens (`app/pictureGate.ts`).
+    this.showContent(view.el, view, { waypoint: true })
   }
 
   /**
@@ -7906,7 +7990,9 @@ export class Session {
           }
         : {}),
     })
-    this.showContent(view.el, view)
+    // A landing table: what waits behind the first picture waits for the map
+    // a row opens (`app/pictureGate.ts`).
+    this.showContent(view.el, view, { waypoint: true })
   }
 
   /** @internal SessionRouter mounts the view through it. */
@@ -8535,31 +8621,56 @@ export class Session {
 
   /**
    * What is held behind the next mounted view's first picture: a file's track
-   * reads and its circularity measurement (§8.6, §8.15).
+   * reads, the census of its contacts and its circularity measurement (§6.5,
+   * §8.6, §8.15). See `app/pictureGate.ts`.
    */
-  private pictureWaiters: Array<() => void> = []
+  private readonly pictureGate = new PictureGate(MAP_FIRST_CAP_MS)
 
   /**
-   * Settles once the next view mounted has drawn its first block — at once for
-   * a view with no map to draw — or after {@link MAP_FIRST_CAP_MS}, whichever
-   * comes first.
+   * Settles once the next view that draws a map has drawn its first block — at
+   * once for a view whose picture has no map, never for a table on the way to
+   * one — or after {@link MAP_FIRST_CAP_MS}, whichever comes first.
    *
    * The map is the picture the reader opened, and until it is drawn nothing
    * else a file brings with it should be competing for the connection or the
-   * reader: a session's twelve-megabyte FASTA and ten-megabyte gene model, and
-   * up to fifty corner reads measuring which sequences are circles, all used to
-   * start in the same moment as the map's first read.
+   * reader: a session's twelve-megabyte FASTA and ten-megabyte gene model, a
+   * `.hic`'s census, and up to fifty corner reads measuring which sequences are
+   * circles, all used to start in the same moment as the map's first read.
    */
   private firstPicture(): Promise<void> {
-    return new Promise<void>((resolve) => {
-      let timer = 0
-      const done = (): void => {
-        window.clearTimeout(timer)
-        resolve()
-      }
-      timer = window.setTimeout(done, MAP_FIRST_CAP_MS)
-      this.pictureWaiters.push(done)
-    })
+    return this.pictureGate.wait()
+  }
+
+  /**
+   * The picture of the view on screen: settled once its map has its first block,
+   * at once for a view or a screen with no map reading, and after
+   * {@link MAP_FIRST_CAP_MS} whatever happens.
+   *
+   * @internal SessionCompare holds the remount that adds the second map behind
+   * it, so the first map is drawn as soon as it can be rather than with the
+   * second (§11).
+   */
+  shownPicture(): Promise<void> {
+    const panel = this.current?.panel
+    if (panel === undefined) return Promise.resolve()
+    // The block in hand is not yet the block on screen: the panel paints it on
+    // the next frame, so the frame after that is the one that has it — or a
+    // moment, where frames do not come (a tab in the background).
+    const painted = (): Promise<void> =>
+      new Promise((resolve) => {
+        const timer = setTimeout(resolve, PAINTED_CAP_MS)
+        if (typeof requestAnimationFrame !== 'function') return
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            clearTimeout(timer)
+            resolve()
+          }),
+        )
+      })
+    return Promise.race([
+      panel.firstData.then(painted, painted),
+      new Promise<void>((resolve) => setTimeout(resolve, MAP_FIRST_CAP_MS)),
+    ])
   }
 
   /** @internal SessionRouter puts on screen what it decides through it. */
@@ -8577,16 +8688,25 @@ export class Session {
       /** The box `/` puts the caret in, for a view that has one. */
       focusSearch?(): void
     },
+    options: {
+      /**
+       * A table a reader passes through on the way to a map — a file's landing
+       * view (§5.1). What waits behind the first picture stays held for the map
+       * opened from it, rather than starting under the reader's first click.
+       */
+      waypoint?: boolean
+    } = {},
   ): void {
     this.current?.destroy?.()
     this.current = view ?? null
     // What was held behind the first picture goes once this view has drawn
-    // one, or now for a view with nothing to draw. A screen that is not a view
-    // — a loading line, the picker — releases nothing; the cap does.
-    if (view !== undefined && this.pictureWaiters.length > 0) {
-      const waiting = this.pictureWaiters.splice(0)
-      void (view.panel?.firstData ?? Promise.resolve()).then(() => {
-        for (const done of waiting) done()
+    // one, now for a view whose picture has no map, and not yet for a table on
+    // the way to one. A screen that is not a view — a loading line, the picker
+    // — releases nothing; the cap does.
+    if (view !== undefined) {
+      this.pictureGate.shown({
+        ...(view.panel === undefined ? {} : { firstData: view.panel.firstData }),
+        ...(options.waypoint === true ? { waypoint: true } : {}),
       })
     }
     // Whichever stop of the map/tracks cycle we are at, applied to the panel
@@ -9434,6 +9554,9 @@ const BIN_REFUSED = 'bin × bin ran out of memory in this tab.'
  */
 const MAP_FIRST_CAP_MS = 4000
 
+/** How long {@link Session.shownPicture} waits for the frame that paints a block, where frames do not come. */
+const PAINTED_CAP_MS = 300
+
 /**
  * Which levels the view on screen can draw, or `null` for none (§7.3).
  *
@@ -9480,3 +9603,5 @@ function sameSteps(a: ReferenceEdit | undefined, b: ReferenceEdit | undefined): 
   return JSON.stringify(a.history.slice(0, a.cursor).map((entry) => entry.step)) ===
     JSON.stringify(b.history.slice(0, b.cursor).map((entry) => entry.step))
 }
+
+/** A remote source spec carrying `plan`, or the spec as it was where there is none. */

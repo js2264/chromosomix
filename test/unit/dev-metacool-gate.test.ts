@@ -4,8 +4,8 @@
  * Switched off, a `.metacool` and an `.mmetacool` are refused as files this
  * viewer does not read — in the sentence any unknown HDF5 file gets, naming
  * neither — and a plain cooler opens exactly as it always has. Absent, which is
- * the command line, everything is read. Run over the demo files the landing
- * page itself offers, so no generated fixture is needed.
+ * the command line, everything is read. Run over the repository's own demo
+ * files (`demo/metagenomics/`, `demo/yeast/`), so no generated fixture is needed.
  */
 
 import { describe, expect, it } from 'vitest'

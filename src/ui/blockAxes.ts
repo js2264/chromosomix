@@ -24,7 +24,7 @@
  */
 
 import type { AxisCoords, AxisSpan, SeparatorSet } from '../render/heatmap'
-import type { LocusAxis } from '../render/locus'
+import { bpAt, type LocusAxis } from '../render/locus'
 import type { RotatedBlock } from '../render/rotate'
 import type { DenseMatrix, Extent, Separator } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
@@ -159,6 +159,88 @@ export function spanOnAxis(
     }
   }
   return best
+}
+
+/**
+ * Where one axis is looking, to the base pair: the two ends of its visible
+ * window as places, and how far the window runs past the block at either end.
+ */
+export interface ViewedPlaces {
+  /** The first place on screen, or the block's first where the window starts before it. */
+  from: { contig: string; bp: number }
+  /** The last place on screen, or the block's last. */
+  to: { contig: string; bp: number }
+  /** Base pairs of window before the block's first place: none unless the view runs past it. */
+  before: number
+  /** Base pairs of window after the block's last place. */
+  after: number
+}
+
+/**
+ * The window an axis is showing, as {@link ViewedPlaces}.
+ *
+ * What a block landing under a stand-in the reader has moved is put back on
+ * (SPECS §7.2, `MatrixPanel.setData`). Not `MatrixPanel.framedEdges`, which
+ * rounds the window out to whole cells: on a stand-in's grid a cell can be half
+ * a megabase, and a reader zoomed onto a few of them would see the block land
+ * up to a whole cell wider at each edge. And not clipped to the block either: a
+ * reader who has zoomed out past the whole picture has a window wider than the
+ * block, and the block lands at that magnification rather than fitted. The part
+ * past either end is carried as a length, in that end's own base pairs per cell,
+ * since past the block there is no place to name.
+ *
+ * `null` for an axis with no locus (a turned map's rows) or a window that does
+ * not meet the block.
+ */
+export function viewedPlaces(
+  axis: LocusAxis | null,
+  domain: readonly [number, number],
+): ViewedPlaces | null {
+  if (axis === null) return null
+  const stretches = axis.fullWindows()
+  if (stretches.length === 0) return null
+  const first = stretches[0].segment
+  const last = stretches[stretches.length - 1].segment
+  const lo = Math.max(domain[0], first.unitStart)
+  const hi = Math.min(domain[1], last.unitEnd)
+  if (!(hi > lo)) return null
+  // A window ending exactly at the block's last cell edge is past every
+  // stretch's half-open end, and belongs to the last one.
+  const at = (unit: number): { contig: string; bp: number } => {
+    const segment = axis.segmentAt(unit) ?? last
+    return { contig: segment.contig, bp: bpAt(segment, unit) }
+  }
+  return {
+    from: at(lo),
+    to: at(hi),
+    before: Math.max(0, first.unitStart - domain[0]) * first.bpPerUnit,
+    after: Math.max(0, domain[1] - last.unitEnd) * last.bpPerUnit,
+  }
+}
+
+/**
+ * The inverse of {@link viewedPlaces}, on another block's axis: where those
+ * places fall in its cells, with the window's run past either end added back
+ * at this axis's own base pairs per cell. **Unclamped**, for
+ * `HeatmapView.showCellWindow` to place and clamp as it places any window.
+ *
+ * `null` where either place is on a sequence this axis does not carry, or the
+ * two land the wrong way round or on one point. The caller then leaves the
+ * block where it was put, which is fitted.
+ */
+export function unitsOfPlaces(
+  axis: LocusAxis | null,
+  places: ViewedPlaces | null,
+): [number, number] | null {
+  if (axis === null || places === null) return null
+  const stretches = axis.fullWindows()
+  if (stretches.length === 0) return null
+  const from = axis.locusToUnit(places.from.contig, places.from.bp)
+  const to = axis.locusToUnit(places.to.contig, places.to.bp)
+  if (from === null || to === null || !(to > from)) return null
+  const first = stretches[0].segment
+  const last = stretches[stretches.length - 1].segment
+  return [from - places.before / first.bpPerUnit, to + places.after / last.bpPerUnit]
 }
 
 /**

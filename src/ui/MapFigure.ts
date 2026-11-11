@@ -74,6 +74,10 @@ export class MapFigure {
   private deckExport: DeckExport | null = null
   /** The Export card's clipboard button, re-titled when a deck takes the key. */
   private copyButton: HTMLButtonElement | null = null
+  /** The Export card's save button, disabled while the export is held; see {@link hold}. */
+  private saveButton: HTMLButtonElement | null = null
+  /** Why the export is held back, or `null`; see {@link hold}. */
+  private held: string | null = null
   /** The Export card's resolution, away while the format is a vector page; see {@link syncExportRow}. */
   private dpiSelect: HTMLSelectElement | null = null
   private readonly exportStatus: HTMLElement
@@ -119,6 +123,7 @@ export class MapFigure {
     })
     this.exportStatus = row.note
     this.copyButton = row.parts.copy
+    this.saveButton = row.parts.save
     this.dpiSelect = row.parts.dpi
     this.syncExportRow()
     // On the line of the two buttons it qualifies: whether the saved figure
@@ -155,11 +160,36 @@ export class MapFigure {
    * export — `false` is a deck of one map, which is this panel's own figure.
    */
   private async saveFigure(): Promise<void> {
+    if (this.held !== null) {
+      this.exportStatus.textContent = this.held
+      return
+    }
     if (this.deckExport !== null && (await this.deckExport.save(this.exportFormat, this.exportDpi))) {
       this.exportStatus.textContent = 'saved the deck'
       return
     }
     await this.save(this.exportFormat)
+  }
+
+  /**
+   * Hold the export back, saying why, or let it go again with `null`.
+   *
+   * Held while the picture on screen stands in for a block still being read
+   * (SPECS §7.2): a coarser rung of the same window, seconds from being
+   * replaced, and a figure of it is a figure of what the reader did not ask
+   * for. Both buttons are disabled and the line under them says why. The keys
+   * that press them (`S`, `⌘C`) say the same rather than saving the stand-in.
+   */
+  hold(why: string | null): void {
+    if (this.held === why) return
+    const said = this.held
+    this.held = why
+    for (const button of [this.saveButton, this.copyButton]) {
+      if (button !== null) button.disabled = why !== null
+    }
+    if (why !== null) this.exportStatus.textContent = why
+    // Only the line this hold wrote: a status written since is the reader's.
+    else if (said !== null && this.exportStatus.textContent === said) this.exportStatus.textContent = ''
   }
 
   /**
@@ -218,6 +248,10 @@ export class MapFigure {
   }
 
   private async copy(): Promise<void> {
+    if (this.held !== null) {
+      this.exportStatus.textContent = this.held
+      return
+    }
     this.exportStatus.textContent = 'copying…'
     try {
       if (this.deckExport !== null && (await this.deckExport.copy(this.exportDpi))) {

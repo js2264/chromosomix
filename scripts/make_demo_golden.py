@@ -7,10 +7,10 @@ The goldens in ``test/golden/`` are built over fixtures that ``make_fixtures.py`
 writes with the metacooler CLI, and metacooler is not on PyPI: a runner without
 access to its repository builds none of them, and the reader suites that compare
 against them never run there. This script is the half of that comparison that
-needs nothing private. Its inputs are the maps the app itself publishes on the
-lab's bucket (``rsglab-data``, ``demo/``) — a ``.metacool`` and an ``.mmetacool``
-that metacooler really wrote, a yeast ``.cool`` and an E. coli ``.mcool`` — and
-its oracle is ``cooler``, which opens every one of them: a ``.metacool`` is a
+needs nothing private. Its inputs are four maps of this repository's ``demo/`` —
+a ``.metacool`` and an ``.mmetacool`` that metacooler really wrote, a yeast
+``.cool`` and an E. coli ``.mcool`` — of which the yeast one is also on the lab's
+bucket (``rsglab-data``, ``demo/``), where the app reads it; and its oracle is ``cooler``, which opens every one of them: a ``.metacool`` is a
 cooler by construction (metacooler's own central invariant), and an entry of an
 ``.mmetacool`` or a resolution of an ``.mcool`` is a cooler group.
 
@@ -36,7 +36,8 @@ What is recorded, per map
 
 The files themselves are not committed here: ``npm run fixtures:demo``
 (``scripts/fetch-demo-maps.mjs``) puts them in ``test/fixtures/demo/``, from the
-bucket or from an identical copy already under ``demo/``, and
+bucket or from an identical copy already under ``demo/`` — and from ``demo/``
+alone for the three that are not on the bucket, whose ``url`` is null — and
 ``test/unit/demo-maps.test.ts`` skips by name for any that is absent.
 
 Usage::
@@ -59,20 +60,25 @@ REPO = Path(__file__).resolve().parent.parent
 OUT = REPO / "test" / "golden" / "demo"
 BUCKET = "https://rsglab-data.s3.eu-west-3.amazonaws.com/"
 
-#: The published maps, by their path on the bucket — which is also their path
-#: under ``demo/`` in this repository. ``groups`` names what inside a container
-#: is opened: every entry of an ``.mmetacool``, two rungs of an ``.mcool``.
+#: The maps, by their path under ``demo/`` in this repository — which is also their
+#: path on the bucket, for the one that is published there (``published``).
+#: ``groups`` names what inside a container is opened: every entry of an
+#: ``.mmetacool``, two rungs of an ``.mcool``. The other three are the tests' own:
+#: their copies on the bucket were deleted, and ``scripts/publish-demo.sh`` leaves
+#: their folders out.
 MAPS: list[dict] = [
     {
         "path": "demo/metagenomics/mock-community/Mock_microbial_community.metacool",
         "groups": [""],
+        "published": False,
     },
     {
         "path": "demo/metagenomics/mock-community/Mock_microbial_community.mmetacool",
         "groups": ["entries/1000", "entries/2000", "entries/4000"],
+        "published": False,
     },
-    {"path": "demo/yeast/Yeast_microC_G2M_1kb.cool", "groups": [""]},
-    {"path": "demo/ecoli/Ecoli.mcool", "groups": ["resolutions/5000", "resolutions/1000"]},
+    {"path": "demo/yeast/Yeast_microC_G2M_1kb.cool", "groups": [""], "published": True},
+    {"path": "demo/ecoli/Ecoli.mcool", "groups": ["resolutions/5000", "resolutions/1000"], "published": False},
 ]
 
 #: Side of a window, in bins. Small on purpose: what a window proves is where the
@@ -297,7 +303,7 @@ def main(argv: list[str] | None = None) -> int:
         golden = {
             "file": rel.name,
             "path": entry["path"],
-            "url": BUCKET + entry["path"],
+            "url": BUCKET + entry["path"] if entry["published"] else None,
             "bytes": path.stat().st_size,
             "md5": md5_of(path),
             "maps": [describe(path, group) for group in entry["groups"]],

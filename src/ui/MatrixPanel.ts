@@ -159,6 +159,9 @@ import {
   slidesAlongDiagonal,
   spanOnAxis,
   toDense,
+  unitsOfPlaces,
+  viewedPlaces,
+  type ViewedPlaces,
 } from './blockAxes'
 import { FIGURE_BACKGROUND, readCanvasPalette, readPageText } from './canvasPalette'
 import { ClipRange } from './ClipRange'
@@ -274,6 +277,13 @@ const REFINE_HINT =
   'with a spinner in the corner, and Escape calls it off. Panning to the edge of what has been ' +
   'read fetches the next stretch at the same resolution. Nothing is tiled and nothing is ' +
   'stitched — every picture is one whole block.'
+
+/**
+ * What the Export card says while a coarse stand-in is on screen (§7.2,
+ * {@link MatrixPanel.setPreview}): the figure the reader would save is of a
+ * rung they did not ask for, with seconds to live.
+ */
+const PREVIEW_EXPORT_HOLD = 'waits for the map: a coarser stand-in is on screen while it reads'
 
 const TURN_HINT =
   'Turn the map 45°: position along the bottom, distance from the diagonal up the side. ' +
@@ -3179,7 +3189,9 @@ export class MatrixPanel {
    */
   analysisFraming(uri: string, derived: DerivedGrid | null = null): AnalysisFraming | null {
     const data = this.data
-    if (data === null) return null
+    // A stand-in's extents are in another rung's bins, under this view's file
+    // name (§7.2): a task framed on one would read the wrong stretch of the map.
+    if (data === null || this.standIn) return null
     const binsPerCell = Math.max(1, Math.round((data.binsPerCell ?? 1) / (derived?.rung.factor ?? 1)))
     const binsize = derived?.rung.binsize ?? this.options.binsize
 
@@ -3274,7 +3286,8 @@ export class MatrixPanel {
 
   analysisBlock(): BlockInput | null {
     const data = this.data
-    if (data === null) return null
+    // Nor is a stand-in lent to one, for the same reason (§7.2).
+    if (data === null || this.standIn) return null
     if (data.values.byteLength > BLOCK_COPY_LIMIT_BYTES) return null
     // **Never a block read round a circle** (SPECS §8.15). Its extents are
     // unwrapped — they run off the end of the sequence and resolve modulo it —
@@ -3788,9 +3801,26 @@ export class MatrixPanel {
    * view that refitted whenever the colour scale moved would throw away the pan
    * and zoom the reader had arrived at.
    */
-  setData(data: MatrixResult, title: string, second?: MatrixResult): void {
+  setData(
+    data: MatrixResult,
+    title: string,
+    second?: MatrixResult,
+    options: {
+      /**
+       * A coarse stand-in for the block being read ({@link setPreview}): drawn
+       * as any block is, but not the first picture the session holds its
+       * tracks, census and circularity check behind (`firstData`).
+       */
+      preview?: boolean
+    } = {},
+  ): void {
+    // A stand-in the reader has moved gives way to its block on their window
+    // (§7.2). Read here, off the axes the stand-in is drawn against and before
+    // anything is replaced, then put back once the block's own axes are in.
+    const carried = options.preview !== true && this.previewMoved ? this.shownPlaces() : null
     this.data = data
-    this.markFirstData()
+    this.standIn = options.preview === true
+    if (options.preview !== true) this.markFirstData()
     this.syncCardsShown()
     // Before the derivation below, which builds the correlation's cache key out
     // of it. A block arriving is the one event the key cannot infer: a reader
@@ -3916,9 +3946,113 @@ export class MatrixPanel {
     // The caret was measured into a lane of the outgoing block, and the number
     // in it belongs to a picture that no longer exists.
     this.laneEditor?.close()
+    // After every setter that can move the gutters, so the window is placed in
+    // the plot it will be drawn in.
+    if (carried !== null) this.showPlaces(carried)
     this.heatmap.setScale(this.scale())
+    // The block a preview stood in for: the picture is the reader's again.
+    if (options.preview !== true) this.endPreview()
     this.setBusy(false)
     this.schedule()
+  }
+
+  /**
+   * A coarse stand-in is on screen and the block it stands in for is being
+   * read ({@link setPreview}).
+   */
+  private previewing = false
+
+  /**
+   * The block on screen is a stand-in: read at a coarser rung than the one this
+   * view names. Unlike {@link previewing} it outlives a read that failed, since
+   * the stand-in is then the picture there is. Either way its extents are in
+   * another rung's bins, so no analysis is framed on it or borrows it
+   * ({@link analysisFraming}, {@link analysisBlock}).
+   */
+  private standIn = false
+
+  /**
+   * Draw a coarse stand-in for the block being read (§7.2): the same window
+   * from a coarser rung, on screen while the asked block reads, until
+   * {@link setData} draws the block itself.
+   *
+   * **Live, not held.** The reader can pan, zoom and hover it at once. The
+   * spinner turns in its corner, and that is the only sign the sharper picture
+   * is on its way. The block lands on the window they arrived at
+   * ({@link previewMoved}), and what has no business acting on a stand-in waits
+   * for it. The zoom ladder is armed only after the block (`ui/RegionView.ts`),
+   * the Export card's buttons are held, and no analysis is framed on it.
+   *
+   * Drawn as a block of its own, with its own colour range: its cells are sums
+   * of many of the asked block's, so no range of one is a range of the other,
+   * and the block that replaces it measures its own as any new block does. And
+   * not the first picture the session waits for: what it holds back — the
+   * tracks, the census, the circularity check — waits for the block the reader
+   * asked for, as it did before there was a preview.
+   */
+  setPreview(data: MatrixResult, title: string): void {
+    this.setData(data, title, undefined, { preview: true })
+    this.previewing = true
+    this.heatmap.setWaiting(true)
+    // The page's report of a finished picture waits for the block, not for
+    // the stand-in (`perf/rendered.ts`).
+    this.surface?.wait('preview', true)
+    this.figure.hold(PREVIEW_EXPORT_HOLD)
+  }
+
+  /**
+   * Whether the reader has moved the stand-in on screen (§7.2), that is,
+   * zoomed it off the whole-block view it was drawn at, and perhaps panned it
+   * since. At fit zoom nothing pans, so a stand-in still fitted is one nobody
+   * moved. The block that replaces a moved one lands on the reader's window
+   * rather than refitted, and a view opened on a bookmark leaves the bookmark
+   * for where they went (`ui/RegionView.ts`).
+   */
+  get previewMoved(): boolean {
+    return this.previewing && !this.heatmap.fitted
+  }
+
+  /**
+   * Let a stand-in go without a block to replace it — the read it stood in for
+   * failed or was abandoned, and the picture on screen is what there is.
+   */
+  endPreview(): void {
+    if (!this.previewing) return
+    this.previewing = false
+    this.heatmap.setWaiting(false)
+    this.surface?.wait('preview', false)
+    this.figure.hold(null)
+  }
+
+  /**
+   * The window on screen as places, per axis, to the base pair and past the
+   * block's edges ({@link viewedPlaces}). What {@link setData} carries from a
+   * moved stand-in to the block that replaces it.
+   */
+  private shownPlaces(): { rows: ViewedPlaces | null; cols: ViewedPlaces | null } {
+    return {
+      rows: viewedPlaces(this.locusAxes.rows, this.heatmap.scaleY.domain),
+      cols: viewedPlaces(this.locusAxes.cols, this.heatmap.scaleX.domain),
+    }
+  }
+
+  /**
+   * Show {@link shownPlaces} on the block now installed. Where they cannot be
+   * placed (a sequence the block does not carry, or a turn the stand-in did
+   * not have) the block stays fitted, as it would have landed anyway.
+   */
+  private showPlaces(places: { rows: ViewedPlaces | null; cols: ViewedPlaces | null }): void {
+    const cols = unitsOfPlaces(this.locusAxes.cols, places.cols)
+    if (cols === null) return
+    // A band's rows are distance from the diagonal, not places: the stretch
+    // along it is the whole of its window (`HeatmapView.showCellSpan`).
+    if (this.turned !== null) {
+      this.heatmap.showCellSpan(cols)
+      return
+    }
+    const rows = unitsOfPlaces(this.locusAxes.rows, places.rows)
+    if (rows === null) return
+    this.heatmap.showCellWindow(rows, cols)
   }
 
   /**
@@ -3979,6 +4113,8 @@ export class MatrixPanel {
     }
 
     this.turned = turned
+    // A refine reads the rung the view names, or a finer one: never a stand-in.
+    this.standIn = false
     this.syncLegendSlots()
     this.painted = null
     this.heatmap.setAnchor(anchorFor(turned))
@@ -5756,6 +5892,9 @@ export class MatrixPanel {
       // the lanes asked for their windows in the draw above, so their reads are
       // counted before the paint is said to have been made.
       this.surface?.wait('lanes', this.lanes.waiting())
+      // A large block's finer level still being painted between frames
+      // (`render/levels.ts`): the picture on screen is about to sharpen.
+      this.surface?.wait('level', this.heatmap.sharpening)
       this.surface?.wait('paint', false)
     })
   }

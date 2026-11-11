@@ -1,7 +1,7 @@
 /**
  * The landing page's example sessions (§24.11), in headless Chromium: the
- * column under *Just looking?* and the four tabs it opens, read from 4DN's,
- * ENCODE's, IGV's and the lab's buckets.
+ * column under *Just looking?* and the four tabs it opens, every file read
+ * from the lab's bucket.
  *
  * The column in the margin beside the store tiles on a wide page, a `?`
  * hovered and its tip, the dark theme, under the tiles where the column has no
@@ -12,7 +12,7 @@
  * second tab, which opens one tab and not two. It prints where the column
  * stands against the tiles and each tab's rows, so a lane that did not arrive
  * is a line in the log rather than a gap to spot in a picture. It needs the
- * network: every file is on its publisher's own bucket.
+ * network: every file is on the lab's bucket, in its store (`demo/store/`).
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-examples.mjs [out-dir]     # ex01 … ex13
