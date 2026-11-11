@@ -270,13 +270,6 @@
       "date": "2026-11-09T22:30:11Z"
     },
     {
-      "number": 165,
-      "commit": "384b3b9",
-      "title": "Draw a map's first picture sooner, and read the examples from the lab's bucket",
-      "branch": "js/TTFI",
-      "date": "2026-11-10T00:45:43Z"
-    },
-    {
       "number": 122,
       "commit": "cda261b",
       "title": "Add ideogram visualization of chromosomes",
