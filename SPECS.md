@@ -179,6 +179,11 @@ Read on open (all small, all cached for the session):
 | `/indexes/chrom_offset` | n_contigs + 1 | contig → first bin |
 | `/indexes/genome_offset` | n_genomes + 1 | genome → first contig |
 
+The counted root attributes — `bin-size`, `nbins`, `nnz`, `sum`, `ngenomes`, `ncontigs` — are read as
+metacooler's `MetaCooler.info` reads them: Python's `int()`, kept only where it equals the value, so a
+whole number or an integer literal is an integer and anything else is left as it is. A float-count
+map's `sum` is its sum, then, and not its floor (metacooler stopped flooring it in `c3d91ce`).
+
 The optional metadata columns of both tables are read when the table that shows them first opens,
 and kept: on the reference file they were 72% of the open's HDF5 bytes, for a view the reader may
 never reach.

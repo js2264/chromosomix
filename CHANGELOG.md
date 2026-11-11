@@ -75,6 +75,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   now asks the server for every file and keeps a page only if every script it loads is this build's.
   A browser already stuck on a blank page recovers by itself on its first visit after this build:
   the new version takes over without the bar, which that page could not show, and reloads the tab.
+- **A float-count map's `sum` is its sum, not its floor (§3.2).** The File card read a `.metacool`'s
+  counted attributes through Python's `int()`, as metacooler's `MetaCooler.info` did, and so showed
+  60816 for a map whose counts sum to 60816.5. metacooler now keeps a fractional value (its `c3d91ce`),
+  and so does the reader; the goldens metacooler builds are rebuilt with it.
 
 ## [0.21.0] - 2026-11-05
 
