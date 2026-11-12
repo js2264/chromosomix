@@ -98,6 +98,8 @@ function ladder(
   let waiting: (() => void) | null = null
   // What the ladder said it reads at, each time that changed (`onTarget`).
   const targets: Array<number | null> = []
+  // How many times the ladder asked for the view to be fitted (`onWhole`).
+  let wholes = 0
 
   const it = new BlockLadder({
     ceiling: { rows: ceiling, cols: ceiling },
@@ -119,6 +121,9 @@ function ladder(
     },
     onBusy: (on) => busy.push(on),
     onTarget: (grid) => targets.push(grid),
+    onWhole: () => {
+      wholes += 1
+    },
     now: options.now ?? (() => clockAt),
     after: (_ms, then) => {
       waiting = then
@@ -172,6 +177,10 @@ function ladder(
     targets,
     get cancels() {
       return cancels
+    },
+    /** How many times a whole read landed on a view still fitted. */
+    get wholes() {
+      return wholes
     },
     /** Land the outstanding read. */
     land(result: MatrixResult): Promise<void> {
@@ -611,6 +620,74 @@ describe('what the ladder holds', () => {
     // A window inside both: the finer one wins.
     l.it.consider({ rows: [12_000, 14_000], cols: [12_000, 14_000] })
     expect(l.given.at(-1)).toBe(fine)
+  })
+})
+
+describe('putting the whole domain back (a double click)', () => {
+  /**
+   * Zoomed to the end of a chromosome at its finest bins, a double click fitted
+   * the block in hand: the 160 kb read around the view, at 100 bp, a tenth of
+   * the chromosome — and a fitted view asks for nothing wider.
+   */
+  it('hands back a block of the whole domain it still holds, and reads nothing', async () => {
+    const l = ladder()
+    const whole = block(WHOLE, 13)
+    l.it.adopt(whole)
+    l.it.consider({ rows: [40_000, 46_000], cols: [40_000, 46_000] })
+    const fine = block([37_000, 49_000], 1)
+    await l.land(fine)
+    expect(l.given.at(-1)).toBe(fine)
+
+    const asked = l.asked.length
+    l.it.whole()
+    expect(l.given.at(-1), 'the whole domain is on screen for the fit').toBe(whole)
+    expect(l.asked).toHaveLength(asked)
+  })
+
+  it('does nothing where the block on screen is already the whole domain', () => {
+    const l = ladder()
+    const whole = block(WHOLE, 13)
+    l.it.adopt(whole)
+    const given = l.given.length
+    l.it.whole()
+    expect(l.given).toHaveLength(given)
+    expect(l.asked).toHaveLength(0)
+  })
+
+  it('reads the whole domain where none is held, and fits the view to it when it lands', async () => {
+    const view = seen([37_000, 49_000], { screen: 500, fit: 1 })
+    const l = ladder({ view: () => view })
+    // A block of part of the domain only: what a region opened inside it, or a
+    // ladder that has let its first block go, holds.
+    l.it.adopt(block([37_000, 49_000], 1))
+    l.it.whole()
+    expect(l.asked.at(-1)?.rows).toEqual(WHOLE)
+    expect(l.asked.at(-1)?.cols).toEqual(WHOLE)
+    expect(l.busy.at(-1), 'with the spinner up').toBe(true)
+
+    // The view is fitted to the block it has meanwhile, and stays so: the read
+    // is what it is waiting for, and is not called off.
+    l.it.consider(view)
+    expect(l.cancels).toBe(0)
+
+    const whole = block(WHOLE, 100)
+    await l.land(whole)
+    await Promise.resolve()
+    expect(l.given.at(-1)).toBe(whole)
+    expect(l.wholes).toBe(1)
+  })
+
+  it('lands where the reader is, unfitted, when they have moved since', async () => {
+    const view = seen([37_000, 49_000], { screen: 500, fit: 1 })
+    const l = ladder({ view: () => view })
+    l.it.adopt(block([37_000, 49_000], 1))
+    l.it.whole()
+    // Zoomed in again before it landed.
+    view.fit = 1.04
+    const whole = block(WHOLE, 100)
+    await l.land(whole)
+    await Promise.resolve()
+    expect(l.wholes).toBe(0)
   })
 })
 

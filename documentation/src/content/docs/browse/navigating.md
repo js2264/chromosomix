@@ -16,7 +16,8 @@ new block, the address follows, and the back button undoes them.
 - **Scroll sideways** to slide along the map's columns. On a Mac, hold <kbd>⌘</kbd> and two fingers
   move it in any direction.
 - **Double-click** (a double tap), <kbd>0</kbd>, or the first button of the **picture** row on the
-  **Map** card (in the **Aesthetics** panel) undoes every pan and zoom.
+  **Map** card (in the **Aesthetics** panel) undoes every pan and zoom: the whole sequence, range or
+  genome you opened, at the resolution that fits the screen, however far in you had zoomed.
 
 Panning and zooming reach as far as the sequence the range is on, or the genome on the whole
 genome: near the edge of what was read, the map reads on ahead of you. To see another sequence,

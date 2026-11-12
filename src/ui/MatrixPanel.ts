@@ -558,6 +558,18 @@ export interface CircularPresentation {
 }
 
 /**
+ * How much sequence each axis of the block a view first drew covers
+ * (`MatrixPanel.frameSpan`), and the cell it was drawn at.
+ */
+export interface FrameSpan {
+  rows: number
+  cols: number
+  sequences: { rows: number; cols: number }
+  /** Base pairs a cell of that block covered: what its span was rounded to. */
+  bpPerCell: number
+}
+
+/**
  * The stretch of one sequence a panel is showing, with the sequence's length.
  *
  * Two callers and they do different things with it: the Bookmarks card writes it
@@ -1115,6 +1127,8 @@ export class MatrixPanel {
    * read can be made of them.
    */
   private refineListener: ((view: RefineView) => void) | null = null
+  /** Who puts the whole domain in hand before a fit; see {@link setWholeListener}. */
+  private wholeListener: (() => void) | null = null
   /**
    * The second file's block, when one is open.
    *
@@ -1510,6 +1524,9 @@ export class MatrixPanel {
       autoMargin: true,
       labelFont: scaleFont(DEFAULT_LABEL_FONT),
       onChange: () => this.schedule(),
+      // A double click, a double tap or Home: the whole domain back, not the
+      // block the zoom last read ({@link fit}).
+      onFit: () => this.fit(),
       onHover: (cell, event) => this.describe(cell, event),
       onCellClick: (cell) => this.emitClick(cell),
       onLabelClick: (axis, block) => this.options.onLabelClick?.(axis, block.label),
@@ -2936,10 +2953,32 @@ export class MatrixPanel {
     this.box.placeGrips()
   }
 
-  /** Refit the block to the canvas, undoing every pan and zoom. */
+  /**
+   * Undo every pan and zoom: the view's whole domain, fitted to the canvas.
+   *
+   * The domain rather than the block in hand, which once a zoom reads its own
+   * blocks is only the window last read around the view (SPECS §7.2): the
+   * refine puts a block spanning the domain on screen first, or reads one and
+   * fits it when it lands ({@link setWholeListener}). With nothing refining,
+   * the block is the domain.
+   */
   fit(): void {
+    this.wholeListener?.()
+    this.fitBlock()
+  }
+
+  /** Fit the block in hand to the canvas, whatever part of the domain it is. */
+  fitBlock(): void {
     this.heatmap.fit()
     this.schedule()
+  }
+
+  /**
+   * Who puts the whole domain in hand before {@link fit} fits it — the refine
+   * (`ui/refine.ts`, `BlockLadder.whole`). `null` lets go.
+   */
+  setWholeListener(listener: (() => void) | null): void {
+    this.wholeListener = listener
   }
 
   /**
@@ -3958,8 +3997,10 @@ export class MatrixPanel {
     this.squareAxes = axes.square
     this.ownAxes = axes.own
     // The region this view names, as first drawn: what the deck's gate
-    // compares, whatever window a refine reads inside it later.
-    this.framed = this.blockSpan()
+    // compares, whatever window a refine reads inside it later — with the
+    // cell it was rounded to, which is the gate's tolerance for it and which a
+    // refine changes under it.
+    this.framed = { ...this.blockSpan(), bpPerCell: this.bpPerCell() }
     // The presentation a derivation took over, recorded now that the block it
     // was chosen for is actually in. Announced from here rather than from
     // `syncDivergingScale` so the store is not patched — and the router not
@@ -6695,13 +6736,20 @@ export class MatrixPanel {
    * block a zoom refined is a window read inside it, and two maps whose zooms
    * read different windows were told the same name had resolved against
    * different sequences, and were let off the lock for it.
+   *
+   * `bpPerCell` is the cell that block was drawn at, which its span was
+   * rounded up to a whole number of. The gate's tolerance is that cell and not
+   * the one on screen now: a chromosome first drawn at 1.6 kb a cell spans up
+   * to 1.6 kb more than it is long, and measured against the 100 bp cell a
+   * zoom had since read, a companion first drawn at another grid was told the
+   * same name had resolved against a different sequence (§16.4).
    */
-  frameSpan(): { rows: number; cols: number; sequences: { rows: number; cols: number } } | null {
+  frameSpan(): FrameSpan | null {
     return this.framed
   }
 
   /** See {@link frameSpan}: set by {@link setData}, kept through every {@link regrid}. */
-  private framed: { rows: number; cols: number; sequences: { rows: number; cols: number } } | null = null
+  private framed: FrameSpan | null = null
 
   /**
    * What one cell of the drawn block *is* — a stretch of a sequence, a whole

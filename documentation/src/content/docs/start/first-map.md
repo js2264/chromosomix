@@ -46,8 +46,8 @@ checkerboard off the diagonal is the long arm's compartments.
 
 ## Move around
 
-- **Drag** pans, the **wheel** or a pinch zooms, **double-click** fits the picture. After a click on
-  the map, the arrow keys pan it; <kbd>0</kbd> fits it from anywhere.
+- **Drag** pans, the **wheel** or a pinch zooms, **double-click** shows the whole chromosome again.
+  After a click on the map, the arrow keys pan it; <kbd>0</kbd> fits it from anywhere.
 - To open a stretch rather than enlarge it, hold <kbd>⌥ Option</kbd> (<kbd>Alt</kbd> on Windows and
   Linux) and drag a box across it; add <kbd>⇧ Shift</kbd> to keep it on the diagonal.
 - Or type a place, `chr15:30,000,001-60,000,000`, and press **go**. Coordinates are 1-based and

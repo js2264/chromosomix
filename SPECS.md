@@ -149,7 +149,14 @@ show. The properties that keep this inside §2 rather than beside it:
   more bins than the plot can show is the finest data in its file from the first read, so §2's own
   case reads nothing more; a larger one reads its own bins once a zoom can show them;
 - **it is bounded by the view.** A zoom can never widen past the domain the view was entered on, so
-  it cannot become the full pixel scan §7.3 gates;
+  it cannot become the full pixel scan §7.3 gates. **And the domain is what a refit puts back** — a
+  double click, a double tap, Home, `0`, *Fit the view* (`BlockLadder.whole`): the finest retained
+  block that spans it goes on screen and is fitted, which the view's first read always was, so this
+  is usually free; where none is retained the domain is read, at the screen's grid, the block in hand
+  fitted meanwhile, and the view is fitted to the domain when it lands unless the reader has moved
+  since. A refit used to fit the block in hand, which after a zoom is the window last read around the
+  view: zoomed to 100 bp at the end of yeast chrIV, a double click showed 1.37–1.53 Mb at 100 bp, a
+  tenth of the chromosome, and a view showing its whole block reads nothing more (above);
 - **it is a preference, and it is on.** A view's first read is screen-sized too (§7.2), so a map opens
   at the screen's resolution — a chromosome of a remote file in well under a second, whatever rung it
   was opened at — and sharpens as the reader zooms. It is the tick at the head of the crumb bar's
@@ -2554,7 +2561,9 @@ straight from the values (*a large block is drawn at the size it is looked at*, 
 are canvas transforms over the in-memory matrix. A colour-vision-safe
 colormap is selectable; keyboard pan and zoom are supported — on the focused map the arrows pan,
 Page Up and Page Down zoom about the centre a wheel notch at a time, and Home refits — and from
-anywhere in the window `0` refits (*Fit the view*, by its place, so AZERTY's bare `à` does) and
+anywhere in the window `0` refits (*Fit the view*, by its place, so AZERTY's bare `à` does), as a
+double click on the plot does: the whole of the view's domain — the chromosome, region or genome it
+was opened on — at the resolution that fits the screen, never only the block a zoom last read (§2) — and
 Space locks the map onto its diagonal (§8.9). `−` and `+` are not a zoom on a map: they step its
 resolution (§5.5), and the wheel, a pinch, the paging keys and the boxes zoom. In the 1D browser `0`
 is the whole genome, as a double click is.
@@ -7196,7 +7205,15 @@ different sequences, whatever the name says, and a shared window between them wo
 The tolerance is one cell of the coarser panel **per sequence on the axis**, because the last bin of
 a contig may be short (§3.3) and a stricter test would refuse every honest pair whose bin size does
 not divide the contig — and a cell never straddles two sequences, so an axis of sixteen chromosomes
-rounds sixteen last cells, not one.
+rounds sixteen last cells, not one. The cell is each region's **own**: the cell of the block it was
+first drawn at, whose whole number of cells its span was rounded up to — not the cell on screen now,
+which a zoom has made finer since. Held to the zooms' cells, a second copy of the first map's own
+file was refused: yeast chrIV (1,531,933 bp) first drawn at 1.6 kb a cell spans 958 cells,
+1,532,800 bp, and a companion first drawn at 200 bp spans 1,532,000 — 800 bp apart, against a
+tolerance of the 200 bp the two zooms had reached — and the reader was told *this block spans
+1.53 Mb × 1.53 Mb where the first map spans 1.53 Mb × 1.53 Mb. The same name resolved against
+different sequences*. Whether it happened depended on the grids two maps happened to open at, which
+is the screen and the deck's resolution at the moment the companion was added.
 
 It used to compare the blocks on screen, and a block a zoom has refined is a window read inside the
 region (§2), as wide as that map's zoom made it. Two maps whose refines read different windows were
