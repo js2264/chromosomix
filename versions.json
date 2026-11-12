@@ -1,6 +1,13 @@
 {
-  "latest": "4762613",
+  "latest": "3e4d5f1",
   "versions": [
+    {
+      "commit": "3e4d5f1",
+      "version": "0.21.0",
+      "date": "2026-11-12T17:25:22+01:00",
+      "subject": "A double click shows the whole chromosome again; a copy of the first map follows the deck (#171)",
+      "tag": ""
+    },
     {
       "commit": "4762613",
       "version": "0.21.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "b497151",
-      "version": "0.19.0",
-      "date": "2026-11-04T00:21:10+01:00",
-      "subject": "docs: live examples, the app itself in place of its picture (#158)",
-      "tag": ""
-    },
-    {
       "commit": "9731db4",
       "version": "0.19.0",
       "date": "2026-11-01T19:24:42+01:00",
@@ -255,13 +255,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 171,
-      "commit": "a3d5a58",
-      "title": "Fit the whole domain on double-click, not the zoomed block",
-      "branch": "js/pensive-gates-bl5bxl",
-      "date": "2026-11-12T14:56:21Z"
-    },
     {
       "number": 168,
       "commit": "bf0eeff",
