@@ -2164,16 +2164,21 @@ export class PanelDeck {
     // zooms read different windows have blocks of different spans over one
     // place — which this used to call the same name resolved against two
     // sequences, and let the companion off the lock for.
-    const mine = map.frameSpan() ?? map.blockSpan()
-    const theirs = lead.frameSpan() ?? lead.blockSpan()
+    // Each held to the cell **its** span was rounded to: the cell of the block
+    // first drawn, not the one a zoom has read since. A chromosome first drawn
+    // at 1.6 kb spans up to 1.6 kb more than it is long, and measured against
+    // a 100 bp cell beside a companion first drawn at another grid, the same
+    // chromosome in the same file was refused as another sequence.
+    const mine = map.frameSpan() ?? { ...map.blockSpan(), bpPerCell: map.bpPerCell() }
+    const theirs = lead.frameSpan() ?? { ...lead.blockSpan(), bpPerCell: lead.bpPerCell() }
     const rows = spansAgree(
-      { spanBp: mine.rows, bpPerCell: map.bpPerCell() },
-      { spanBp: theirs.rows, bpPerCell: lead.bpPerCell() },
+      { spanBp: mine.rows, bpPerCell: mine.bpPerCell },
+      { spanBp: theirs.rows, bpPerCell: theirs.bpPerCell },
       Math.max(mine.sequences.rows, theirs.sequences.rows),
     )
     const cols = spansAgree(
-      { spanBp: mine.cols, bpPerCell: map.bpPerCell() },
-      { spanBp: theirs.cols, bpPerCell: lead.bpPerCell() },
+      { spanBp: mine.cols, bpPerCell: mine.bpPerCell },
+      { spanBp: theirs.cols, bpPerCell: theirs.bpPerCell },
       Math.max(mine.sequences.cols, theirs.sequences.cols),
     )
     if (rows && cols) {

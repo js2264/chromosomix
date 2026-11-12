@@ -315,6 +315,11 @@ export interface LadderOptions {
    * beside this one rather than after it has landed.
    */
   onTarget?(grid: number | null): void
+  /**
+   * Told when a read {@link BlockLadder.whole} made for the whole domain has
+   * gone in, and the reader has not moved since: fit the view to it.
+   */
+  onWhole?(): void
   /** Told when the ladder is destroyed, for whatever its wiring must let go of. */
   dispose?(): void
 }
@@ -373,8 +378,16 @@ export class BlockLadder {
   private readonly options: LadderOptions
   private held: Held[] = []
   private current: MatrixResult | null = null
-  private inflight: { key: string; rows: Extent; cols: Extent; grid: number; cancel(): void } | null = null
-  private pending: { rows: Extent; cols: Extent; key: string } | null = null
+  private inflight: {
+    key: string
+    rows: Extent
+    cols: Extent
+    grid: number
+    cancel(): void
+    /** A read of the whole domain, which the view is fitted to when it lands ({@link whole}). */
+    whole?: boolean
+  } | null = null
+  private pending: { rows: Extent; cols: Extent; key: string; whole?: boolean } | null = null
   /**
    * Reads that failed, by key.
    *
@@ -511,6 +524,9 @@ export class BlockLadder {
     if (flight !== null) {
       const inside = covers(flight.rows, view.rows) && covers(flight.cols, view.cols)
       if (inside && flight.grid <= this.gridWanted(view) * REFINE_FACTOR) return
+      // The whole domain, read for a view that has been put back and has not
+      // moved since, is what that view is waiting for ({@link whole}).
+      if (flight.whole === true && (view.fit === undefined || Math.abs(view.fit - 1) <= FIT_SLACK)) return
       flight.cancel()
       this.inflight = null
       this.options.onBusy?.(false)
@@ -529,6 +545,70 @@ export class BlockLadder {
       return
     }
     this.fire(view)
+  }
+
+  /**
+   * Put the view's **whole domain** in hand, for a view about to be fitted —
+   * what a double click asks for (SPECS §7.2).
+   *
+   * A fitted view fits the block on screen, and once a zoom has read its own
+   * blocks that is the window last read around the view: 160 kb of a 1.5 Mb
+   * chromosome, at the 100 bp the zoom had got to. Fitting it was a zoom out to
+   * that stretch and no further, and a fitted view asks for nothing wider
+   * ({@link edgeWanted}) — so the double click that means "the whole thing"
+   * stopped a tenth of the way there, at the finest grid, on whatever part of
+   * the sequence the reader had panned to.
+   *
+   * The finest block in hand that spans the domain goes on screen now, for the
+   * caller to fit — the view's first read always did, so this is usually free.
+   * Where none is held any longer, the domain is read, the block on screen
+   * stays up meanwhile, and {@link LadderOptions.onWhole} is told when it lands
+   * so the view is fitted to it — unless the reader has moved since, when the
+   * block lands where they are, as any other does.
+   */
+  whole(): void {
+    if (this.disposed) return
+    const { ceiling } = this.options
+    const spans = (held: Held): boolean => covers(held.rows, ceiling.rows) && covers(held.cols, ceiling.cols)
+    const shown = this.held0()
+    if (shown !== null && spans(shown)) return
+    let best: Held | null = null
+    for (const held of this.held) {
+      if (spans(held) && (best === null || held.grid < best.grid)) best = held
+    }
+    if (best !== null) {
+      if (this.options.onBlock(best.result)) {
+        this.current = best.result
+        this.report()
+        return
+      }
+      this.drop(best.result)
+    }
+    const key = keyOf(ceiling.rows, ceiling.cols)
+    if (this.refused.has(key)) return
+    if (this.inflight?.whole === true) return
+    if (this.inflight !== null) {
+      this.inflight.cancel()
+      this.inflight = null
+      this.options.onBusy?.(false)
+    }
+    this.paused?.()
+    this.paused = null
+    const screen = this.options.view?.()?.screen
+    const view: RefineView = {
+      rows: ceiling.rows,
+      cols: ceiling.cols,
+      fit: 1,
+      ...(screen === undefined ? {} : { screen }),
+    }
+    this.pending = { rows: ceiling.rows, cols: ceiling.cols, key, whole: true }
+    this.fire(view)
+  }
+
+  /** Whether the view on screen is fitted to the block it shows, as a view just put back is. */
+  private fitted(): boolean {
+    const fit = this.options.view?.()?.fit
+    return fit === undefined || Math.abs(fit - 1) <= FIT_SLACK
   }
 
   /** Consider the last view again once the zoom has paused, in `ms`. */
@@ -752,7 +832,15 @@ export class BlockLadder {
 
     const plan = this.options.plan(pending, view)
     const { promise, cancel } = this.options.read(pending.rows, pending.cols, plan)
-    this.inflight = { key: pending.key, rows: pending.rows, cols: pending.cols, grid: plan.grid, cancel }
+    const whole = pending.whole === true
+    this.inflight = {
+      key: pending.key,
+      rows: pending.rows,
+      cols: pending.cols,
+      grid: plan.grid,
+      cancel,
+      ...(whole ? { whole } : {}),
+    }
     this.options.onBusy?.(true)
     this.report()
     void promise
@@ -761,8 +849,13 @@ export class BlockLadder {
         this.inflight = null
         this.options.onBusy?.(false)
         this.keep(result, pending.rows, pending.cols)
-        if (this.options.onBlock(result)) this.current = result
-        else {
+        // Asked before the block goes in, which carries the window across and
+        // so changes how the view is zoomed against its block.
+        const refit = whole && this.fitted()
+        if (this.options.onBlock(result)) {
+          this.current = result
+          if (refit) this.options.onWhole?.()
+        } else {
           this.drop(result)
           this.refused.add(pending.key)
         }
@@ -1423,6 +1516,13 @@ export interface RefinablePanel {
   setWaiting(on: boolean): void
   /** The window on screen now ({@link LadderOptions.view}); optional. */
   refineWindowNow?(): RefineView | null
+  /**
+   * Who to ask for the whole domain before the view is fitted
+   * ({@link BlockLadder.whole}); `null` lets go. Optional.
+   */
+  setWholeListener?(listener: (() => void) | null): void
+  /** Fit the view to the block it holds, as a whole read lands; optional. */
+  fitBlock?(): void
 }
 
 /**
@@ -1575,12 +1675,19 @@ export function attachRefine(options: {
     ...(options.onTarget === undefined
       ? {}
       : { onTarget: (grid: number | null) => options.onTarget?.(grid === null ? null : Math.round(grid * open)) }),
-    dispose: () => stopRefine(),
+    onWhole: () => options.panel.fitBlock?.(),
+    dispose: () => {
+      stopRefine()
+      options.panel.setWholeListener?.(null)
+    },
   })
   // Every frame, on or off: on, the screen's resolution down to the finest
   // rung; off, the picked resolution, coarser only where the window is too
   // wide for it — and its own resolution again as soon as it is not (§3.4).
   options.panel.setRefineListener((view) => ladder.consider(view))
+  // A double click puts back the view's domain, not the block the zoom last
+  // read around it (SPECS §7.2).
+  options.panel.setWholeListener?.(() => ladder.whole())
   // The preference changes what the window on screen wants, so it is asked
   // again at once rather than at the reader's next gesture.
   const stopRefine = subscribeRefine(() => ladder.reconsider())

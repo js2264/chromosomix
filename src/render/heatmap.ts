@@ -1574,6 +1574,18 @@ export interface HeatmapOptions {
    * is a place on the genome rather than a cell.
    */
   onHover?: (cell: Cell | null, at?: { x: number; y: number; span?: boolean }) => void
+  /**
+   * Asked for the whole picture back — a double click, a double tap, Home —
+   * instead of {@link HeatmapView.fit}, which fits the block in hand.
+   *
+   * The two are not the same once a zoom reads blocks of its own (§2): the
+   * block in hand is then the window last read around the view, a stretch of
+   * the chromosome rather than the chromosome, and fitting it was a zoom out
+   * to that stretch. The caller knows the view's domain, and puts it back.
+   * Absent, the gestures fit the block, which is the whole of the domain
+   * wherever nothing refines.
+   */
+  onFit?: () => void
 }
 
 // `plotOptions` is resolved into its own field rather than into `opts`,
@@ -1631,6 +1643,7 @@ type ResolvedOptions = Required<
     | 'onDrawing'
     | 'selectionLabel'
     | 'onHover'
+    | 'onFit'
     | 'plotOptions'
   >
 > & { margin: Margin }
@@ -1813,6 +1826,7 @@ export class HeatmapView {
   private readonly onHover:
     | ((cell: Cell | null, at?: { x: number; y: number; span?: boolean }) => void)
     | null
+  private readonly onFit: (() => void) | null
 
   private matrix: DenseMatrix | null = null
   /** Base-pair mapping per axis; `null` where the axis has no single one. */
@@ -2090,6 +2104,7 @@ export class HeatmapView {
     this.onDrawing = options.onDrawing ?? null
     this.selectionLabel = options.selectionLabel ?? null
     this.onHover = options.onHover ?? null
+    this.onFit = options.onFit ?? null
 
     // The `metacooler show` defaults, verbatim (spec §7.1). Two NaN bounds mean
     // "vmin 0, vmax at the 99th percentile of the non-zero transformed values",
@@ -2833,6 +2848,15 @@ export class HeatmapView {
     this.clampView()
     this.syncScales()
     this.changed()
+  }
+
+  /**
+   * The whole picture back, as the reader's gestures ask for it: the caller's
+   * {@link HeatmapOptions.onFit} where it has one, {@link fit} where not.
+   */
+  private putBack(): void {
+    if (this.onFit === null) this.fit()
+    else this.onFit()
   }
 
   /**
@@ -5811,7 +5835,7 @@ export class HeatmapView {
         this.zoomAt(plot.x + plot.width / 2, plot.y + plot.height / 2, 1 / KEY_ZOOM)
         break
       case 'Home':
-        this.fit()
+        this.putBack()
         break
       default:
         handled = false
@@ -6157,7 +6181,7 @@ export class HeatmapView {
       // Beats the pending single click, which is the point: this is "put it
       // back", not "go there and put it back".
       cancelPendingClick()
-      this.fit()
+      this.putBack()
       this.changed()
     }
     const onLeave = (): void => {
@@ -6298,7 +6322,7 @@ export class HeatmapView {
         // beat the first tap's pending navigation.
         lastTapAt = 0
         cancelPendingClick()
-        this.fit()
+        this.putBack()
         this.changed()
         return
       }

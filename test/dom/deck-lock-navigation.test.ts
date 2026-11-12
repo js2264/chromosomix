@@ -127,7 +127,15 @@ function release(): void {
 function leadPanel() {
   /** Every window the deck put this map at. */
   const shown: Array<[number, number]> = []
-  const at = { origin: 0, cells: BINS, reading: false }
+  const at = {
+    origin: 0,
+    cells: BINS,
+    reading: false,
+    /** Base pairs a cell of the block on screen covers: the zoom's grid. */
+    bp: BINSIZE,
+    /** The region as this map first drew it, where that is not the block on screen. */
+    frame: null as null | { rows: number; cols: number; sequences: { rows: number; cols: number }; bpPerCell: number },
+  }
   /** The deck's listener, so a test can make this map report. */
   let listener: ((rows: [number, number], cols: [number, number]) => void) | null = null
   const panel = {
@@ -144,12 +152,12 @@ function leadPanel() {
     turnReach: () => null,
     setLaneFloor: () => {},
     remeasure: () => {},
-    bpPerCell: () => BINSIZE,
+    bpPerCell: () => at.bp,
     cellCount: () => (at.reading ? { rows: 1, cols: 1 } : { rows: at.cells, cols: at.cells }),
     blockLevel: () => 'bin',
-    frameSpan: () => null,
+    frameSpan: () => at.frame,
     lockOrigin: () => ({ rows: at.origin, cols: at.origin }),
-    blockSpan: () => ({ rows: at.cells * BINSIZE, cols: at.cells * BINSIZE, sequences: { rows: 1, cols: 1 } }),
+    blockSpan: () => ({ rows: at.cells * at.bp, cols: at.cells * at.bp, sequences: { rows: 1, cols: 1 } }),
     viewport: () => ({ rows: [0, at.cells], cols: [0, at.cells] }),
     get hasBlock(): boolean {
       return !at.reading
@@ -204,8 +212,11 @@ afterEach(() => {
   teardown()
 })
 
-/** A deck of the stand-in and one companion, at 200–600 kb. */
-async function deckAt() {
+/**
+ * A deck of the stand-in and one companion, at 200–600 kb — `before` done to
+ * the first map once it has drawn, before the companion is added.
+ */
+async function deckAt(before?: (lead: ReturnType<typeof leadPanel>) => void) {
   let maps: string | undefined
   const deck = new PanelDeck({
     onMapsChange: (next) => {
@@ -234,6 +245,7 @@ async function deckAt() {
   }
   go(`${SEQUENCE}:200000-600000`)
   lead.lands()
+  before?.(lead)
   deck.add({ kind: 'remote', uri: 'https://x.example.org/rep2.cool' })
   await settled()
   const companion = deck.analysable()[0]?.panel.map ?? null
@@ -278,5 +290,40 @@ describe('the deck’s window across a navigation', () => {
     lead.shown.length = 0
     redraw([30, 40])
     expect(lead.shown).toEqual([[30, 40]])
+  })
+})
+
+describe('whether a companion of the same file follows', () => {
+  /**
+   * The note seen under a second copy of the first map's own file: "this block
+   * spans 1.53 Mb × 1.53 Mb where the first map spans 1.53 Mb × 1.53 Mb … the
+   * same name resolved against different sequences". Each region is the block
+   * its map first drew, rounded up to whole cells of *that* block; it was held
+   * to the cells the zooms had read since, a hundred base pairs, so a first map
+   * first drawn at a coarser grid than its companion was a different sequence.
+   */
+  it('holds each map’s region to the cell it was first drawn at, not the one a zoom has read since', async () => {
+    const { deck } = await deckAt((lead) => {
+      // 400 kb first drawn at 30 kb a cell, rounded up to 14 cells: 420 kb.
+      lead.at.frame = { rows: 420_000, cols: 420_000, sequences: { rows: 1, cols: 1 }, bpPerCell: 30_000 }
+      // Zoomed since, to 1 kb a cell.
+      lead.at.bp = 1_000
+      lead.at.cells = 400
+    })
+    const cell = deck.el.querySelector<HTMLElement>('.deck-grid > .deck-panel:not(.is-lead)')
+    const note = cell?.querySelector('.deck-note.deck-unlocked:not(.deck-res-note)')
+    expect(note?.textContent ?? '').toBe('')
+    expect(cell?.classList.contains('is-unlocked')).toBe(false)
+  })
+
+  it('still refuses a region longer by more than a cell of either', async () => {
+    const { deck } = await deckAt((lead) => {
+      lead.at.frame = { rows: 480_000, cols: 480_000, sequences: { rows: 1, cols: 1 }, bpPerCell: 30_000 }
+      lead.at.bp = 1_000
+      lead.at.cells = 480
+    })
+    const cell = deck.el.querySelector<HTMLElement>('.deck-grid > .deck-panel:not(.is-lead)')
+    const note = cell?.querySelector('.deck-note.deck-unlocked:not(.deck-res-note)')
+    expect(note?.textContent ?? '').toContain('resolved against different sequences')
   })
 })

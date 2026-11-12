@@ -314,6 +314,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A double click puts the whole chromosome back, at the resolution that fits the screen (§2,
+  §7.2).** With *Refine on zoom* on it fitted the block the zoom had last read around the view: zoomed
+  to 100 bp at the end of yeast chrIV, a double click showed 1.37–1.53 Mb at 100 bp, a tenth of the
+  chromosome, and nothing more was read. A double click, a double tap, Home, `0` and *Fit the view*
+  now show the view's whole domain — the coarser block of it the map opened on, which is still in
+  hand, or a fresh read of it where that has been let go.
+- **A second copy of the first map's file follows the deck (§16.4).** Adding the same map to a deck
+  sometimes left it *not following: this block spans 1.53 Mb × 1.53 Mb where the first map spans
+  1.53 Mb × 1.53 Mb. The same name resolved against different sequences*. Each map's region is its
+  first block's span, rounded up to whole cells of that block, and it was held to the much finer
+  cells the zooms had read since — so two maps first drawn at different grids, which depends on the
+  screen and the deck's resolution when the second was added, disagreed by more than a 100 bp cell.
+  Each region is now held to the cell it was first drawn at.
 - **A wheel or pinch zoom aimed at the diagonal stays on it (§7.2, §8.9).** A zoom keeps the point
   under the pointer fixed, and a pointer a fraction of a pixel off the diagonal carried the view's
   centre off it by that fraction times the zoom, notch after notch: on the whole of K562 chr5, 263 kb

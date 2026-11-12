@@ -146,7 +146,7 @@ Only while a 3D model is enlarged; elsewhere these letters keep the meanings abo
 | <kbd>Alt</kbd> + drag (<kbd>⌥</kbd> on a Mac) | Select a square and open it as a region, on the diagonal while it is locked |
 | <kbd>Shift</kbd> + <kbd>Alt</kbd> + drag | The same, pinned to the diagonal from the nearest bin on it |
 | <kbd>Shift</kbd> + drag | Zoom to the stretch it spans, on the diagonal, and copy its locus |
-| double click | Fit the block back to the canvas |
+| double click | The whole sequence, range or genome back on the canvas |
 | wheel | Zoom about the pointer |
 | two fingers sideways | Slide sideways, down the diagonal while it is locked (Space) |
 | <kbd>Win</kbd> + wheel (<kbd>⌘</kbd> on a Mac) | Slide the map up and down, and sideways with it |
