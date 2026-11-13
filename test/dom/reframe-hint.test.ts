@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 /**
- * How to zoom into a region, said in the picture's corner while the pointer is
- * over it (§7.2) — the map's under its key, the 1D browser's under its ruler.
+ * What a drag with a key held does, said in the picture's corner while the
+ * pointer is over it (§8.9) — the map's under its key, the 1D browser's under
+ * its ruler.
  *
  * What is pinned is what the words say, since that is what changes with the
- * picture: Option and Shift's line only where there is a diagonal for Shift to
- * pin a box to, Option's alone under the diagonal lock (which already pins it),
- * a stretch under a turn, and the reader's own modifiers. That it shows only
+ * picture: Shift zooms and Option refocuses — or zooms, where the view has
+ * nowhere to open a box — Option and Shift's line only where there is a
+ * diagonal for Shift to pin a box to, Option's alone under the diagonal lock
+ * (which already pins it), a stretch under a turn, and the reader's own
+ * modifiers. That it shows only
  * on hover is a stylesheet rule, which jsdom does not apply; the gallery script
  * `scripts/ui-reframe-hint.mjs` looks at it.
  */
@@ -45,11 +48,19 @@ afterEach(() => {
   resetDiagonalLock()
 })
 
-/** A map of `rows × cols`, laid out in a 400-pixel box, since jsdom lays nothing out. */
-function map(rows: [number, number], cols: [number, number]): MatrixPanel {
+/**
+ * A map of `rows × cols`, laid out in a 400-pixel box, since jsdom lays nothing
+ * out — and, with `opens`, in a view that opens a box as a region of its own.
+ */
+function map(rows: [number, number], cols: [number, number], opens = true): MatrixPanel {
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(400)
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400)
-  const panel = new MatrixPanel({ binsize: 1000, detachedControls: true, hideTitle: true })
+  const panel = new MatrixPanel({
+    binsize: 1000,
+    detachedControls: true,
+    hideTitle: true,
+    ...(opens ? { onSelectRegion: () => {} } : {}),
+  })
   panels.push(panel)
   document.body.append(panel.el)
   const nrows = rows[1] - rows[0]
@@ -75,33 +86,46 @@ const lines = (root: ParentNode, selector: string): string[] =>
   [...(root.querySelector(selector)?.children ?? [])].map((line) => line.textContent ?? '')
 
 describe('on a map', () => {
-  it('says Option and a drag, and Shift with it for the diagonal, where there is one', () => {
+  it('says Shift zooms and Option refocuses, with Shift and Option for the diagonal, where there is one', () => {
+    setDiagonalLocked(false)
     const panel = map([0, 40], [0, 40])
     expect(lines(panel.el, '.map-hint')).toEqual([
+      'Shift + drag to zoom',
+      'Alt + drag to refocus on a region',
+      'Shift + Alt + drag to refocus along the diagonal',
+    ])
+  })
+
+  it('says Option alone under the diagonal lock, which already pins the box — the lock a map opens with', () => {
+    const panel = map([0, 40], [0, 40])
+    expect(lines(panel.el, '.map-hint')).toEqual(['Shift + drag to zoom', 'Alt + drag to refocus along the diagonal'])
+    setDiagonalLocked(false)
+    expect(lines(panel.el, '.map-hint')).toHaveLength(3)
+  })
+
+  it('leaves Shift and Option out on a block the diagonal does not cross', () => {
+    const panel = map([0, 40], [100, 140])
+    expect(lines(panel.el, '.map-hint')).toEqual(['Shift + drag to zoom', 'Alt + drag to refocus on a region'])
+  })
+
+  it('says Option zooms where the view has nowhere to open a box', () => {
+    setDiagonalLocked(false)
+    const panel = map([0, 40], [0, 40], false)
+    expect(lines(panel.el, '.map-hint')).toEqual([
+      'Shift + drag to zoom',
       'Alt + drag to zoom into a region',
       'Shift + Alt + drag to zoom along the diagonal',
     ])
   })
 
-  it('says Option alone under the diagonal lock, which already pins the box', () => {
-    const panel = map([0, 40], [0, 40])
-    setDiagonalLocked(true)
-    expect(lines(panel.el, '.map-hint')).toEqual(['Alt + drag to zoom along the diagonal'])
-    setDiagonalLocked(false)
-    expect(lines(panel.el, '.map-hint')).toHaveLength(2)
-  })
-
-  it('leaves Shift out on a block the diagonal does not cross', () => {
-    const panel = map([0, 40], [100, 140])
-    expect(lines(panel.el, '.map-hint')).toEqual(['Alt + drag to zoom into a region'])
-  })
-
   it('prints a Mac’s own marks on a Mac', () => {
     vi.stubGlobal('navigator', { ...window.navigator, platform: 'MacIntel', userAgent: 'MacIntel' })
+    setDiagonalLocked(false)
     const panel = map([0, 40], [0, 40])
     expect(lines(panel.el, '.map-hint')).toEqual([
-      '⌥ + drag to zoom into a region',
-      '⇧ + ⌥ + drag to zoom along the diagonal',
+      '⇧ + drag to zoom',
+      '⌥ + drag to refocus on a region',
+      '⇧ + ⌥ + drag to refocus along the diagonal',
     ])
   })
 
@@ -128,7 +152,7 @@ describe('in the 1D browser', () => {
     terminate(): void {}
   }
 
-  it('says Option and a drag over the tracks, or a drag along the ruler, under the ruler', () => {
+  it('says Shift and a drag over the tracks, or a drag along the ruler, under the ruler', () => {
     const key = `reframe-${Math.random()}`
     const view = new BrowserView({
       assembly: assemblyOf({ uri: key, name: key, contigs: [{ name: 'I', length: 1_000 }], origin: 'sizes' }),
@@ -140,7 +164,7 @@ describe('in the 1D browser', () => {
       onLocusChange: () => {},
     })
     views.push(view)
-    expect(lines(view.el, '.browser-hint')).toEqual(['Alt + drag to zoom into a stretch', 'or drag along the ruler'])
+    expect(lines(view.el, '.browser-hint')).toEqual(['Shift + drag to zoom into a stretch', 'or drag along the ruler'])
     const hint = view.el.querySelector<HTMLElement>('.browser-hint')
     expect(Number.parseFloat(hint?.style.top ?? '')).toBeGreaterThan(0)
   })

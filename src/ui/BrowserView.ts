@@ -241,7 +241,7 @@ import {
 import { locusText, type PickHandlers } from './mapPick'
 import { VectorPage } from './vector'
 import type { CellFigure } from '../panels/deckFigure'
-import { KEYS, matchesKeys, optionKey, wantsTextCopy, withKey } from './commands'
+import { KEYS, matchesKeys, shiftKey, wantsTextCopy, withKey } from './commands'
 import { exportRow } from './exportRow'
 import { fitPlaceholder, locusPlaceholder, searchKey } from './SearchBox'
 // The map's own zoom steps and the button that draws one. §26.6: one bar shape
@@ -820,8 +820,12 @@ export class BrowserView {
     // lanes are the map's (§5.8).
     this.stackBar = props.map === undefined ? this.stackBarFor() : null
     if (this.stackBar !== null) this.stage.append(this.stackBar)
+    // Shift first, and named as the map names it (§7.2): a band dragged with
+    // Shift zooms, here as on the map. Option does the same here, as it always
+    // has, but on the map it refocuses — opens the box as a view of its own —
+    // and one hint spelling one key two ways on two surfaces taught neither.
     this.reframeHint.append(
-      el('div', { text: `${optionKey()} + drag to zoom into a stretch` }),
+      el('div', { text: `${shiftKey()} + drag to zoom into a stretch` }),
       el('div', { text: 'or drag along the ruler' }),
     )
     this.reframeHint.style.top = `${this.rulerHeight + LANE_GAP}px`

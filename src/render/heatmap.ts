@@ -3486,6 +3486,30 @@ export class HeatmapView {
   }
 
   /**
+   * Whether the diagonal runs through the **middle** of the window on screen —
+   * the half of it a quarter in from each edge — or `null` where the block has
+   * no diagonal at all (§7.1).
+   *
+   * The middle, not the frame: a view that has been dragged off the line with
+   * the diagonal still clipping one corner is a picture of the contacts away
+   * from it, and a colour range measured for the line is no range for it. What
+   * `MatrixPanel` decides whether a range must follow the view by.
+   */
+  diagonalThroughView(): boolean | null {
+    const offset = this.diagonalOffset()
+    if (offset === null) return null
+    const { rows, cols } = this.cellWindow()
+    const inset = (extent: [number, number]): [number, number] => {
+      const quarter = (extent[1] - extent[0]) / 4
+      return [extent[0] + quarter, extent[1] - quarter]
+    }
+    const [r0, r1] = inset(rows)
+    const [c0, c1] = inset(cols)
+    // `col = row + offset`: the rows' middle carried onto the columns.
+    return r0 + offset < c1 && r1 + offset > c0
+  }
+
+  /**
    * Slide the view onto the diagonal, at the zoom it is already at.
    *
    * The perpendicular foot of the picture's own centre on `col = row + offset`,

@@ -320,6 +320,15 @@ export interface LadderOptions {
    * gone in, and the reader has not moved since: fit the view to it.
    */
   onWhole?(): void
+  /**
+   * Told of every block before the ladder holds it — the view's own first read
+   * it {@link BlockLadder.adopt}s and each of its own — for what a block says
+   * about the file rather than about the window: a balanced read answered from
+   * a coarser rung because the one asked for carries no weights
+   * (`MatrixResult.unweighted`), which {@link attachRefine} takes off the
+   * ladder so the zoom comes to rest above it.
+   */
+  learn?(result: MatrixResult): void
   /** Told when the ladder is destroyed, for whatever its wiring must let go of. */
   dispose?(): void
 }
@@ -425,6 +434,7 @@ export class BlockLadder {
    * for free.
    */
   adopt(result: MatrixResult, rows?: Extent, cols?: Extent): void {
+    this.options.learn?.(result)
     this.current = result
     // A block read from a sibling rung describes itself on that rung's grid;
     // `source` is the window it was asked for, in the open map's bins.
@@ -848,6 +858,7 @@ export class BlockLadder {
         if (this.disposed || this.inflight?.key !== pending.key) return
         this.inflight = null
         this.options.onBusy?.(false)
+        this.options.learn?.(result)
         this.keep(result, pending.rows, pending.cols)
         // Asked before the block goes in, which carries the window across and
         // so changes how the view is zoomed against its block.
@@ -1604,13 +1615,40 @@ export function attachRefine(options: {
   onTarget?: (binsize: number | null) => void
 }): BlockLadder {
   const seconds = new WeakMap<MatrixResult, MatrixResult>()
-  const rungs = options.second === true ? [] : (options.rungs ?? [])
+  const stored = options.second === true ? [] : (options.rungs ?? [])
   const open = Math.max(1, options.binsize)
-  // **The finest rung the file stores**, in bins of the open map: where a zoom
-  // with *Refine on zoom* on comes to rest, whichever rung the file was opened
-  // at (§2). A fraction of one where a finer rung than the open one is stored.
-  const finest = finestFloor(rungs, open)
-  const pick = (): PickedResolution | null => options.picked?.() ?? null
+  // **The rungs this view can read**: every stored one, less any a balanced
+  // read has gone round for want of weights (`MatrixResult.unweighted`) — the
+  // E. coli micro-C `.mcool` balanced every rung but its finest, 10 bp. Learnt
+  // from the blocks rather than asked of the file at open, which would cost a
+  // walk of every rung's `/bins` before the first picture; and per ladder, so a
+  // view rebuilt on raw counts reads them all again.
+  const unweighted = new Set<string>()
+  let rungs: ReadonlyArray<Rung> = stored
+  // **The finest of them**, in bins of the open map: where a zoom with *Refine
+  // on zoom* on comes to rest, whichever rung the file was opened at (§2). A
+  // fraction of one where a finer rung than the open one is stored.
+  let finest = finestFloor(rungs, open)
+  const learn = (result: MatrixResult): void => {
+    const names = result.unweighted ?? []
+    if (names.every((name) => unweighted.has(name))) return
+    for (const name of names) unweighted.add(name)
+    rungs = stored.filter((rung) => !unweighted.has(rung.name))
+    finest = finestFloor(rungs, open)
+  }
+  // A pick on a rung with no weights is drawn from the nearest one above it
+  // that has them, as the reader answers it: planned there, so the ladder
+  // expects the grid the block comes back on rather than asking again for one
+  // it will never get.
+  const pick = (): PickedResolution | null => {
+    const asked = options.picked?.() ?? null
+    if (asked === null || !unweighted.has(asked.rung.name)) return asked
+    const above = rungs.filter((rung) => rung.binsize > asked.rung.binsize)
+    const next = above.length === 0 ? null : above.reduce((a, b) => (b.binsize < a.binsize ? b : a))
+    return next === null
+      ? openPick(open)
+      : { binsize: next.binsize, rung: next, factor: 1 }
+  }
   // The zoom picks while the preference is ticked and nothing is picked: a pick
   // in the link wins (§3.4).
   const refining = (): boolean => refineEnabled() && pick() === null
@@ -1676,6 +1714,7 @@ export function attachRefine(options: {
       ? {}
       : { onTarget: (grid: number | null) => options.onTarget?.(grid === null ? null : Math.round(grid * open)) }),
     onWhole: () => options.panel.fitBlock?.(),
+    learn,
     dispose: () => {
       stopRefine()
       options.panel.setWholeListener?.(null)

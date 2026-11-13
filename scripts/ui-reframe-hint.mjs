@@ -1,10 +1,12 @@
 /**
- * How to zoom into a region, said in the corner while the pointer is over the
- * picture (§7.2), in headless Chromium on the yeast micro-C demo: under the key
- * on the map, in the corner when the legend is off, one line under the diagonal
- * lock, a stretch on a turned map, nothing when the pointer is elsewhere, under
- * the ruler in the 1D browser, and the dark theme. The log prints the hint's
- * words and whether it is showing after each step.
+ * What a drag with a key held does, said in the corner while the pointer is
+ * over the picture (§8.9), in headless Chromium on the yeast micro-C demo:
+ * Shift zooms and Option refocuses — under the key on the map, held on its
+ * diagonal as every map opens, Option's one line; in the corner when the
+ * legend is off; Shift with Option once the lock is let go; a stretch on a
+ * turned map; nothing when the pointer is elsewhere; under the ruler in the 1D
+ * browser; and the dark theme. The log prints the hint's words and whether it
+ * is showing after each step.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-reframe-hint.mjs [out-dir]     # rh01 … rh08
@@ -57,7 +59,7 @@ await sleep(400)
 console.log('pointer away  ', await hint('.map-hint'))
 await corner('rh01-map-pointer-away', '.heatmap-canvas')
 
-// Over the map: two lines under the key.
+// Over the map, held on its diagonal as it opens: Shift's line and Option's.
 await page.mouse.move(over.x, over.y)
 await sleep(500)
 console.log('over the map  ', await hint('.map-hint'))
@@ -72,12 +74,12 @@ console.log('legend off    ', await hint('.map-hint'))
 await corner('rh03-map-legend-off', '.heatmap-canvas')
 await palette('legend')
 
-// The diagonal lock: Option alone draws on the diagonal, so one line.
+// The lock let go: Shift with Option for the diagonal as well, so three lines.
 await page.keyboard.press('Space')
 await page.mouse.move(over.x, over.y + 2)
 await sleep(800)
-console.log('locked        ', await hint('.map-hint'))
-await corner('rh04-map-locked', '.heatmap-canvas')
+console.log('let go        ', await hint('.map-hint'))
+await corner('rh04-map-let-go', '.heatmap-canvas')
 await page.keyboard.press('Space')
 await sleep(400)
 

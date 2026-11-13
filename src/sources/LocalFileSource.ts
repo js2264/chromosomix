@@ -416,6 +416,11 @@ export class LocalFileSource implements ByteSource {
     return { requests: this.requests, bytes: this.bytesRead }
   }
 
+  /** Bytes of chunks retained now. */
+  heldBytes(): number {
+    return this.cachedBytes
+  }
+
   /** Slices currently retained — a cache-behaviour assertion for tests. */
   cachedChunkCount(): number {
     return this.cache.size

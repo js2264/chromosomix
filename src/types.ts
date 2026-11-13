@@ -80,6 +80,12 @@ export interface ByteSource {
   close(): void
   /** Bytes fetched and requests issued so far — drives the §12 budget tests. */
   stats(): SourceStats
+  /**
+   * Bytes this source holds in its cache now — what it costs the tab to keep
+   * the chunks it has read, for the status bar's memory (§12). Optional: a
+   * source with no cache of its own holds nothing worth saying.
+   */
+  heldBytes?(): number
 }
 
 export interface SourceStats {

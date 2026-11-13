@@ -1418,3 +1418,79 @@ describe('attachRefine, beside a second file (§5.7)', () => {
     }
   })
 })
+
+describe('a ladder whose finest rung carries no weights', () => {
+  // The lab's E. coli micro-C `.mcool`: opened at 200 bp, stored down to 10 bp,
+  // balanced at every rung but the 10 bp one (§2).
+  function ecoli() {
+    let listener: ((view: RefineView) => void) | null = null
+    const reads: Array<{ rows: Extent; rung: string | undefined; land(result: MatrixResult): void }> = []
+    const ladder = attachRefine({
+      panel: {
+        setRefineListener: (fn) => {
+          listener = fn
+        },
+        regrid: () => true,
+        setWaiting: () => {},
+      },
+      read: (rows, _cols, rung) => {
+        let land: (result: MatrixResult) => void = () => {}
+        const promise = new Promise<{ result: MatrixResult }>((resolve) => {
+          land = (result) => resolve({ result })
+        })
+        reads.push({ rows, rung, land })
+        return { promise, cancel: () => {} }
+      },
+      ceiling: { rows: [0, 23_209], cols: [0, 23_209] },
+      binsize: 200,
+      rungs: rungsOf(['10', '100', '200', '500', '1000', '2000', '5000', '10000']),
+    })
+    // The whole chromosome at 5 kb, from its own rung.
+    ladder.adopt({ ...block([0, 1_000], 1), binsize: 5_000, source: { rows: [0, 23_209], cols: [0, 23_209] } })
+    return { ladder, reads, look: (view: RefineView) => listener?.(view) }
+  }
+
+  it('comes to rest on the rung that answered, and asks nothing more of the one it went round', async () => {
+    const was = refineEnabled()
+    setRefineEnabled(true)
+    try {
+      const { ladder, reads, look } = ecoli()
+      // 4 kb on a 700-pixel plot: 6 bp a pixel, nearest the 10 bp rung.
+      const view = seen([5_000, 5_020], { screen: 700, fit: 300 })
+      look(view)
+      expect(reads).toHaveLength(1)
+      expect(reads[0].rung).toBe('10')
+      // The reader answered from 100 bp, and said which rung it went round.
+      const [lo, hi] = reads[0].rows
+      reads[0].land({
+        ...block([0, ((hi - lo) * 200) / 100], 1),
+        binsize: 100,
+        source: { rows: reads[0].rows, cols: reads[0].rows },
+        unweighted: ['10'],
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+      look(view)
+      look(seen([5_002, 5_020], { screen: 700, fit: 330 }))
+      expect(reads).toHaveLength(1)
+      ladder.destroy()
+    } finally {
+      setRefineEnabled(was)
+    }
+  })
+
+  it('reads the 10 bp rung for a view that has not met a refusal', () => {
+    const was = refineEnabled()
+    setRefineEnabled(true)
+    try {
+      // A ladder of its own — the view rebuilt on raw counts — knows nothing of
+      // what a balanced one learnt.
+      const { ladder, reads, look } = ecoli()
+      look(seen([5_000, 5_020], { screen: 700, fit: 300 }))
+      expect(reads.map((read) => read.rung)).toEqual(['10'])
+      ladder.destroy()
+    } finally {
+      setRefineEnabled(was)
+    }
+  })
+})
