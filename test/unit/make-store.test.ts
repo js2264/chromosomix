@@ -1674,10 +1674,10 @@ describe.skipIf(!havePython)('--timestamp and --limit', () => {
  * traceback where every other failure in this script is a sentence.
  *
  * So `--portal-base` points the front end at a server started here, and the
- * four things that decide whether a walk finishes are each made to happen: the
- * pages are followed, a cut-off answer is retried, a portal that ignores `from`
- * is noticed rather than looped on, and a JSON-bodied 404 is still zero
- * results.
+ * things that decide whether a walk finishes are each made to happen: the pages
+ * are followed, a cut-off answer is retried, a gateway's 503 is asked again, a
+ * portal that ignores `from` is noticed rather than looped on, and a
+ * JSON-bodied 404 is still zero results.
  *
  * **The server is a second process, and that is not an implementation detail.**
  * `make()` is `spawnSync`, which blocks this process until Python exits; a
@@ -1697,6 +1697,7 @@ import { appendFileSync, readFileSync, writeFileSync } from 'node:fs'
 const [, , mode, fixture, asks, port] = process.argv
 const graph = JSON.parse(readFileSync(fixture, 'utf8'))['@graph']
 let cut = 0
+let busy = 0
 
 const server = createServer((req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1')
@@ -1725,6 +1726,13 @@ const server = createServer((req, res) => {
     const body = JSON.stringify({ '@type': ['HTTPNotFound', 'Error'], code: 404, '@graph': [] })
     res.writeHead(404, { 'Content-Type': 'application/json' })
     res.end(body)
+    return
+  }
+  // A gateway's bad minute, once, on the second page: ENCODE's 504 of
+  // 2026-10-26 had this shape, and the run gave up on it at the first answer.
+  if (mode === 'busy' && from === 2 && busy++ === 0) {
+    res.writeHead(503, { 'Content-Type': 'text/html' })
+    res.end('<html><body>Service Unavailable</body></html>')
     return
   }
   // 'stuck' answers the first page whatever \`from\` says, which is the shape of
@@ -1855,6 +1863,20 @@ server.listen(0, '127.0.0.1', () => {
     })
   }, 60_000)
 
+  it('asks a page again when the gateway answers 503, and says it did', async () => {
+    const held = await portal('busy')
+    const run = against(held.base, 'busy.json')
+    expect(run.stderr, run.stderr).not.toMatch(/Traceback/)
+    expect(run.status, run.stderr).toBe(0)
+    // The second page twice: once refused, once answered.
+    expect(held.asked()).toEqual(['2 0', '2 2', '2 2', '2 4', '2 6'])
+    expect(run.stderr).toMatch(/did not answer \(HTTP 503 Service Unavailable\)/)
+    expect(run.stderr).toMatch(/Asking again in 2s \(2 of 6\)/)
+    expect(row(read('busy.json'), '4DNFIO2TD17P')?.fields).toMatchObject({
+      dataset: 'Micro-C on HFF cells',
+    })
+  }, 60_000)
+
   it('gives up with a sentence rather than a traceback when it never completes', async () => {
     const held = await portal('never')
     const target = join(out, 'never-completes.json')
@@ -1948,5 +1970,116 @@ server.listen(0, '127.0.0.1', () => {
     for (const entry of store.entries ?? []) {
       expect(Object.keys(entry.fields as Record<string, string>)).toEqual(['format'])
     }
+  })
+})
+
+/**
+ * A host that will not answer at all, which is not what the server above can
+ * be made to do: the weekly run of 2026-11-02, the next one and the dispatch of
+ * 2026-11-13 each met 4DN dropping the connection during its TLS handshake
+ * (`[SSL: UNEXPECTED_EOF_WHILE_READING]`), and the one of 2026-10-26 met
+ * ENCODE's `504 Gateway Time-out`; each was one request, and the generator gave
+ * up on it at the first try (SPECS §24.3).
+ *
+ * Driven in-process, with `urlopen` and `sleep` replaced: the waits add up to
+ * almost four minutes, and a handshake cut off is not something a local
+ * server answers on demand. What is held is *which* failures are asked again,
+ * how often, after what waits, and the sentence the last one ends in.
+ */
+describe.skipIf(!havePython)('a host that will not answer', () => {
+  const PROBE = `
+import io, json, ssl, sys, urllib.error, urllib.request
+sys.path.insert(0, sys.argv[1])
+import make_store
+
+REASONS = {403: "Forbidden", 404: "Not Found", 504: "Gateway Time-out"}
+
+def failure(kind):
+    if kind == "tls":
+        return urllib.error.URLError(ssl.SSLEOFError(
+            8, "[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol"))
+    if kind == "cert":
+        return urllib.error.URLError(ssl.SSLCertVerificationError(1, "certificate verify failed"))
+    code = int(kind)
+    body = b'{"@graph": []}' if code == 404 else b"<html></html>"
+    return urllib.error.HTTPError("https://portal.test/", code, REASONS[code], {}, io.BytesIO(body))
+
+results = []
+for case in json.load(sys.stdin):
+    asked, waited = [], []
+    def urlopen(request, timeout=None):
+        asked.append(request.full_url)
+        if len(asked) <= case["fails"]:
+            raise failure(case["kind"])
+        return io.BytesIO(b'{"@graph": [{"@id": "/sets/A/"}], "total": 1}')
+    urllib.request.urlopen = urlopen
+    make_store.time.sleep = waited.append
+    try:
+        graph = make_store.fetch_json("https://portal.test/search/?type=X&limit=50&from=0")["@graph"]
+        results.append({"asked": len(asked), "waited": waited, "records": len(graph)})
+    except SystemExit as stop:
+        results.append({"asked": len(asked), "waited": waited, "said": str(stop)})
+print(json.dumps(results))
+`
+
+  interface Outcome {
+    asked: number
+    waited: number[]
+    records?: number
+    said?: string
+  }
+
+  function fetchThrough(cases: Array<{ kind: string; fails: number }>): Outcome[] {
+    const run = spawnSync('python3', ['-c', PROBE, join(REPO, 'scripts')], {
+      input: JSON.stringify(cases),
+      encoding: 'utf8',
+    })
+    expect(run.status, run.stderr).toBe(0)
+    return JSON.parse(run.stdout) as Outcome[]
+  }
+
+  const EVERY_WAIT = [2, 10, 30, 60, 120]
+
+  it('asks again after a handshake cut off, and after a gateway time-out', () => {
+    const [tls, gateway] = fetchThrough([
+      { kind: 'tls', fails: 1 },
+      { kind: '504', fails: 2 },
+    ])
+    expect(tls).toEqual({ asked: 2, waited: [2], records: 1 })
+    expect(gateway).toEqual({ asked: 3, waited: [2, 10], records: 1 })
+  })
+
+  it('gives up after six attempts and under four minutes, with a sentence naming them', () => {
+    const [tls, gateway] = fetchThrough([
+      { kind: 'tls', fails: 99 },
+      { kind: '504', fails: 99 },
+    ])
+    expect(tls.asked).toBe(6)
+    expect(tls.waited).toEqual(EVERY_WAIT)
+    expect(tls.said).toMatch(/^Could not reach https:\/\/portal\.test\//)
+    expect(tls.said).toMatch(/UNEXPECTED_EOF_WHILE_READING.*\(6 attempts\)/)
+    expect(tls.said).toMatch(/Nothing was written/)
+    expect(gateway.asked).toBe(6)
+    expect(gateway.waited).toEqual(EVERY_WAIT)
+    expect(gateway.said).toMatch(/answered HTTP 504 Gateway Time-out, 6 times\./)
+  })
+
+  it('never asks again where the answer is a decision: zero results, a refused page, a wrong certificate', () => {
+    const [notFound, refused, certificate] = fetchThrough([
+      { kind: '404', fails: 1 },
+      { kind: '403', fails: 1 },
+      { kind: 'cert', fails: 1 },
+    ])
+    // 4DN's JSON-bodied 404 is zero results, read at the first answer.
+    expect(notFound).toEqual({ asked: 1, waited: [], records: 0 })
+    // ENCODE's 403 to a page has its own fix, which a retry would only delay.
+    expect(refused.asked).toBe(1)
+    expect(refused.waited).toEqual([])
+    expect(refused.said).toMatch(/answered HTTP 403 Forbidden\./)
+    expect(refused.said).toMatch(/try --page-size 0/)
+    // A certificate that is not the host's will not become the host's.
+    expect(certificate.asked).toBe(1)
+    expect(certificate.said).toMatch(/certificate verify failed/)
+    expect(certificate.said).not.toMatch(/attempts/)
   })
 })
