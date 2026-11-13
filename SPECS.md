@@ -13524,10 +13524,18 @@ one was answered `403 Forbidden` on `&limit=500&from=0`, having answered the sam
 `limit=all`, and `--page-size` is there for the run that disagrees; the tempting uniformity is the
 one thing the evidence rules out.
 
-Around that, three rules that hold for both. Every **whole read is retried** three times when a
-host agrees to answer and then stops talking — an HTTP *status* is never retried, because 4DN's
-JSON-bodied 404 is zero results and retrying it would turn it into a failure. A **refused page says
-what to do**: a 403 on a query carrying `from` names `--page-size 0` in its message, because that is
+Around that, four rules that hold for both. Every **whole read is retried** three times when a
+host agrees to answer and then stops talking. A **request the host would not answer is asked
+again** — a connection refused, reset or dropped before a status line came back, or a status that
+is a server's load rather than an answer about the request (408, 425, 429, 500, 502, 503, 504) —
+after waits of 2, 10, 30, 60 and 120 seconds: six attempts and under four minutes, and the sentence
+the last one ends in says how many there were. The runs that taught it were ENCODE's
+`504 Gateway Time-out` of 2026-10-26 and 4DN's TLS handshakes cut off (`UNEXPECTED_EOF_WHILE_READING`)
+from 2026-11-02, each one request that ended the run at its first answer. Every other status is
+never retried, because each is a decision: 4DN's JSON-bodied 404 is zero results and retrying it
+would turn it into a failure, a bucket's 404 is a README that is not there, and a 403 to a page has
+the fix below; nor is a certificate that is not the host's, which no second attempt changes. A
+**refused page says what to do**: a 403 on a query carrying `from` names `--page-size 0` in its message, because that is
 the fix and no status page will suggest it. And the paged walk stops on `total`, on a short page, or
 on a page that adds no record it has not already seen — the last of which is **fatal when the walk
 is short**, since a portal ignoring `from` would otherwise publish a store whose enrichment covers a
@@ -13542,8 +13550,17 @@ column name** for the same reason, since columns have been added to that file be
 that counted fields would have shifted every cell the week it happened. A run that finds nothing
 exits 2 — distinct from the 1 an HTTP failure exits with — so that a workflow never overwrites a
 good store with an empty one and never has to tell a portal outage from an empty catalogue by reading
-a log. A run that loses **one** front end publishes nothing at all, because the branch is replaced
-wholesale: a missing store would delete last week's good copy of that shelf rather than leave it.
+a log. A run that loses a front end **keeps that front end's shelf and publishes the others**. The
+branch is replaced wholesale, so a store missing from the run would delete its good copy; the
+workflow therefore copies the lost front end's files from the branch — its store or shards, its
+session shelf, its sessions — into the run before it publishes, unchanged, `generatedAt` and all, so
+the shelf still says how old it is, and the run is failed at its very end, after the publish and the
+deploy, so a portal that keeps failing is a red run every week. Until 2026-11 a lost front end
+published nothing at all, which let one portal's outage hold every shelf back: 4DN's portal dropped
+the connection on 2026-11-02, -09 and -13, and ENCODE, IGV and DNA Zoo went unpublished with it. An empty
+catalogue (exit 2) takes the same road, so it is never published over a good one; a front end the
+branch has never held stays unpublished, and a run in which nothing finished and nothing was held
+publishes nothing.
 
 `.github/workflows/stores.yml` runs `igv`, `4dn` and `encode` with their sessions, and `dnazoo`,
 weekly and on demand, uploads everything as a **timestamped workflow artifact** (`stores-<date>`,
@@ -13960,12 +13977,21 @@ show syntax, which this document does better, but to be pressed: the reader's fi
 something that already drew a shelf.
 
 **What CORS costs, measured.** On 2026-09-16 neither `genome.ucsc.edu` nor
-`hgdownload.soe.ucsc.edu` answers a cross-origin `GET`, which puts UCSC's own example hubs and the
+`hgdownload.soe.ucsc.edu` answered a cross-origin `GET`, which put UCSC's own example hubs and the
 whole of GenArk out of reach of every browser-only viewer — this one, igv.js, anything without a
-server. The failure message says so for a `*.ucsc.edu` host rather than sending a reader to check a
-URL that is perfectly correct, and says the part that would otherwise be found out one row at a
-time: pasting such a hub's text gets past the header for the *hub*, and its `bigDataUrl`s are on the
-same hosts and will not open. Downloading the hub and opening it from a connected folder is the road
+server. **On 2026-11-13 `hgdownload.soe.ucsc.edu` did**: `Access-Control-Allow-Origin: *`, a
+preflight allowing `Range`, and `206` to a ranged `GET`, on GenArk's files — a `hub.txt`, a `.2bit`,
+a `chrom.sizes`, a bigBed under `bbi/` — and on `goldenPath` alike (`hg38.2bit`,
+`ncbiRefSeq.txt.gz`). So a GenArk hub, of the 54,942 assemblies GenArk listed that day, opens by its
+URL like any other, and so does a `.2bit` on that host. It exposes nothing past the headers CORS
+lets every page read, so `Content-Range` is hidden and a file's size comes from a `HEAD`, as on 4DN's
+bucket (§8.8). `genome.ucsc.edu` and `genome-euro.ucsc.edu` answered the same request `403` with no
+header, so UCSC's own example hubs are still out of reach as far as that request shows. The failure
+message adds a sentence for a `*.ucsc.edu` host rather than sending a reader to check a URL that is
+perfectly correct, and says the part that would otherwise be found out one row at a time: pasting
+such a hub's text gets past the header for the *hub*, and its `bigDataUrl`s are on the same hosts
+and will not open. That sentence still names every `*.ucsc.edu` host, `hgdownload` among them, which
+since 2026-11-13 is right of the genome browser's hosts only. Downloading the hub and opening it from a connected folder is the road
 that works, and it is the reader's own machine doing the fetching, which is the only place this
 project is willing to move that work to. What this does **not** do is proxy the fetch — routing a
 reader's traffic through a third party to work around somebody else's header is exactly what C1
@@ -14042,7 +14068,8 @@ modelled on those round trips), the first picture in 0.9 s where it took 1.6. Ar
 
 - **Above**, IGV's hg38 (`hg38_1kg`, the IGV store's human genome): RefSeq genes against the map,
   then the sequence, then the bands. The genes and the bands are IGV's own copies and not the files
-  IGV's genome table names, because UCSC's `ncbiRefSeq.txt.gz` carries no CORS header; the sequence is
+  IGV's genome table names, because UCSC's `ncbiRefSeq.txt.gz` carried no CORS header when the example
+was put together (it has since 2026-11-13, §24.10); the sequence is
   the 1000 Genomes FASTA read by range through its index, because the FASTA of IGV's own `hg38` is on
   a bucket that refuses an anonymous reader (§24.3). All three are read from the lab's copies, as the
   rest are.

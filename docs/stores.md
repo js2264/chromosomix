@@ -139,7 +139,9 @@ exists; a file the portal does not describe keeps its row with empty metadata ce
 
 Lower it if a portal cuts responses off part-way; set it to `0` if a portal refuses `from` — a 403
 on a page says so in its own message. Every whole read is retried three times when a host agrees to
-answer and then stops talking. `--portal-base` points the same front end at a mirror or a staging
+answer and then stops talking, and a request the host would not answer at all — a connection refused,
+reset or dropped during its TLS handshake, or a 408, 425, 429 or 5xx — is asked again after 2, 10, 30,
+60 and 120 s before the run gives up. Any other status is never asked again. `--portal-base` points the same front end at a mirror or a staging
 instance.
 
 The filter on what gets a row is **whether this viewer can open the file name**, with one
@@ -278,6 +280,13 @@ And **a run that found nothing new publishes nothing**: every file carries the i
 written, so the comparison is made on `fingerprint.json` — each file hashed with `generatedAt` and
 `createdAt` removed — rather than on the bytes. A second run over unchanged portals commits
 nothing, pushes nothing and asks for no deploy.
+
+**A front end that fails does not hold the others back.** Its files on the branch — its store or
+shards, its session shelf and its sessions — are copied into the run and published again unchanged,
+with their own `generatedAt`, while the others are refreshed; the run is then failed at its end, so
+the Actions page shows it in red and the "Generate every store" step says which front end failed,
+why, and the date of the shelf that was kept. A front end the branch has never held stays
+unpublished until a run reaches it.
 
 Until the workflow has run once on a fork, those pages answer *not generated yet* and name
 the workflow to run. On the first run, check the "Generate every store" step's counts (about 75 IGV

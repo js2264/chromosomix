@@ -314,6 +314,15 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The built-in stores are refreshed again while a portal is down (§24.3).** The weekly Stores run
+  failed on 2026-10-26 (ENCODE answered `504 Gateway Time-out`), 2026-11-02 and 2026-11-09, and again
+  when run by hand on 2026-11-13 (4DN's portal dropped the connection during its TLS handshake), and
+  each failure published nothing, so no shelf had been refreshed since 2026-10-15. `make_store.py` now asks again
+  when a host does not answer — a connection refused, reset or dropped, or a 408, 425, 429 or 5xx —
+  after waits of 2, 10, 30, 60 and 120 s, and still never retries a 404, a 403 or a certificate that
+  is not the host's. When a front end fails anyway, the workflow republishes its last good shelf
+  unchanged, with its own date, publishes the others, and fails the run at its end so the failure is
+  still seen.
 - **A double click puts the whole chromosome back, at the resolution that fits the screen (§2,
   §7.2).** With *Refine on zoom* on it fitted the block the zoom had last read around the view: zoomed
   to 100 bp at the end of yeast chrIV, a double click showed 1.37–1.53 Mb at 100 bp, a tenth of the
