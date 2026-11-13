@@ -330,7 +330,7 @@ cost. See [A tour of the window](/start/window/).
 ## Store
 
 A catalogue of published files, browsed in the store drawer: one JSON file, or a UCSC track hub.
-Built in: RSG lab data, IGV genomes, 4DN open data, ENCODE, DNA Zoo and Roadmap;
+Built in: Example datasets, IGV genomes, 4DN open data, ENCODE, DNA Zoo and Roadmap;
 **Add a custom store** opens others. See [Data stores](/files/stores/) and
 [Your own data store](/advanced/data-store/).
 

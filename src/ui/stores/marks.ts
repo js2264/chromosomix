@@ -32,7 +32,7 @@ const SHORT_BELOW = 40
  * The mark, at `size` CSS pixels a side.
  *
  * `aria-hidden`: every mark stands beside its store's name, and a screen reader
- * announcing "RSG, RSG lab data" would be reading it twice.
+ * announcing "RSG, Example datasets" would be reading it twice.
  */
 export function storeMark(mark: StoreMark, size: number): HTMLElement {
   const text = size < SHORT_BELOW && mark.short !== undefined ? mark.short : mark.text

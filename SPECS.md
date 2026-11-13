@@ -13260,7 +13260,7 @@ used to go with the toolbar, which left a red line and nothing on the page to pr
 **Each store is drawn by a front that knows what it is for** (`ui/stores/registry.ts`), which is
 why one table for all of them was the wrong shape and is gone:
 
-- **RSG lab data** — a *gallery* (`GalleryView`): one card per published figure, of the shape above
+- **Example datasets** — a *gallery* (`GalleryView`): one card per published figure, of the shape above
   — a title and *open*, the assembly and the provenance as chips (the provenance clipped at the
   card's width and whole on its tooltip), one line with the paragraph that used to be the row on
   its tooltip, and the figure's files behind a fold — under two headings. **Demo**: one yeast
@@ -13595,7 +13595,7 @@ bucket answers 404, which a shipped store reads as *Nothing has been published f
 sentence says what publishes this one (`StoreRef.publishedBy`) rather than sending a maintainer to
 the Stores workflow, which has nothing to do with it.
 
-**Nor is the lab's own store.** *RSG lab data* is inline (`demosStore()`, `ui/examples.ts`), and
+**Nor is the lab's own store.** *Example datasets* is inline (`demosStore()`, `ui/examples.ts`), and
 the files its cards open are one folder on the lab's bucket, `demo/store/`, a directory a card or a
 dataset — `yeast/`, `human/`, `gibcus2018/`, `meneu2025/`, `chromosomix_paper/`, `k562/`, every file
 the landing page's *Human Hi-C data* reads (§24.11), and `ecoli/`, the *E. coli* K-12 sequence and genes

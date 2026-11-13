@@ -343,7 +343,7 @@ export function builtinStores(): StoreFront[] {
   return [
     {
       id: 'rsg',
-      label: 'RSG lab data',
+      label: 'Example datasets',
       // The drawer's header and the tile's tooltip: the first sentence about the
       // store a reader sees.
       blurb: 'Demos of the viewer and the figures of the lab’s papers, over yeast, human, chicken, mouse and bacterial data, one click each.',
@@ -352,7 +352,7 @@ export function builtinStores(): StoreFront[] {
       mark: { text: 'RSG', colour: COLOURS.rsg, image: RSG_MARK_IMAGE },
       builtin: true,
       // Inline: the one store that costs no request and is certainly there.
-      rows: { id: 'rsg', label: 'RSG lab data', inline: demosStore(), builtin: true },
+      rows: { id: 'rsg', label: 'Example datasets', inline: demosStore(), builtin: true },
       group: 'assembly',
       home: 'https://research.pasteur.fr/fr/team/spatial-regulation-of-genomes/',
     },

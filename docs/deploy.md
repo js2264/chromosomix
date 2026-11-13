@@ -222,7 +222,7 @@ mean re-uploading 250 MB to publish a CSS fix.
 
 ## The published workspaces
 
-The drawer's **RSG lab data** store (`demosStore()` in `ui/examples.ts`, offered through
+The drawer's **Example datasets** store (`demosStore()` in `ui/examples.ts`, offered through
 `ui/stores/registry.ts`, SPECS §24.2) leads with **workspace files**, drawn as figures under two
 headings. They are in one folder, `demo/store/`, a directory a card or a dataset:
 

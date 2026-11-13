@@ -62,7 +62,7 @@ cp stores-branch/*.json /var/www/html/viewer/stores/
 cp -R stores-branch/sessions /var/www/html/viewer/stores/sessions
 ```
 
-Without them, those tiles say *Nothing has been published for … yet* and the [guided tutorial](/start/tutorial/) has nothing to play on. **RSG lab data** and **Roadmap** open regardless.
+Without them, those tiles say *Nothing has been published for … yet* and the [guided tutorial](/start/tutorial/) has nothing to play on. **Example datasets** and **Roadmap** open regardless.
 
 ## Signing in to Google and Dropbox
 

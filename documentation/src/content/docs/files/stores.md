@@ -11,11 +11,11 @@ published, and nothing is fetched until you open a store.
 
 The landing page's **Connect to a data store** has a tile per store.
 
-![The landing page's Connect to a data store tiles, from RSG lab data to Add a custom store, with Just looking? and its four example sessions in the margin beside them.](../../../assets/screens/files/store-tiles.webp)
+![The landing page's Connect to a data store tiles, from Example datasets to Add a custom store, with Just looking? and its four example sessions in the margin beside them.](../../../assets/screens/files/store-tiles.webp)
 
 | Store | What it holds | Drawn as |
 | --- | --- | --- |
-| **RSG lab data** | the lab's demos of the viewer and the figures of its papers | a card per figure, under *Demo* and *Papers* |
+| **Example datasets** | the lab's demos of the viewer and the figures of its papers | a card per figure, under *Demo* and *Papers* |
 | **IGV genomes** | IGV's reference genomes and the tracks it ships for each | a card per genome, opening it with its tracks in the 1D browser |
 | **4DN open data** | every file on the 4DN open-data bucket | a faceted list, grouped by experiment set |
 | **ENCODE** | ENCODE's released signal, peaks and alignments, by assembly | a faceted list, grouped by experiment |
