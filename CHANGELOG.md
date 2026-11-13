@@ -31,6 +31,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   sessions that open its figures say so; what it holds is unchanged. Its tile's mark is still a
   contact map in the viewer's own colours, but no longer spells *RSG* down its diagonal: the diagonal
   is a plain Hi-C diagonal, and the letters shown while the picture loads are *EX*.
+- **The app's mark is an X, and has a red track on all four sides.** The anti-diagonal of its contact
+  map is lit from corner to corner through the centre, symmetric about both diagonals, and a few
+  cells round it are quieted so the cross reads at sixteen pixels. A red track runs along every edge
+  of the map, outside the blue lanes on the left and the bottom; the map is smaller to make room, and
+  the margin round the mark is unchanged. The favicon, the install and home-screen icons, the desktop
+  icon, the header, the landing page and the *Add a custom store* tile all carry it
+  (`scripts/make-app-icons.py`, `npm run icons:app`).
 - **A map opens at the screen's resolution and sharpens as you zoom, down to the finest resolution the
   file stores: *Refine on zoom* is on by default (§2, §7.2, §12).** With nothing picked, a view's
   first read is the stored rung nearest a cell to each pixel of the plot, so a chromosome opens quickly
