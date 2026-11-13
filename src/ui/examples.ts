@@ -751,7 +751,7 @@ export function demosStore(): StoreFile {
   return {
     kind: STORE_KIND,
     version: STORE_VERSION,
-    name: 'RSG lab data',
+    name: 'Example datasets',
     description:
       'Composed figures over the lab’s published data, and the files they are made of. Every ' +
       'one is read over the network exactly as a file on your own bucket would be.',

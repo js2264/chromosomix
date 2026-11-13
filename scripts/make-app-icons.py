@@ -23,11 +23,13 @@ What this writes, and who reads it:
                                  every macOS, Windows and Linux icon from
     index.html                   the `<link rel="icon">` data URI, rewritten in
                                  place from the constants below
+    src/ui/mark.generated.ts     the mark as data, which the landing page draws
+                                 inline beside the name and in its margin
 
     out/icon_{dark,light}_NNNN.png   the full ladder, for anything that wants a
                                      PNG by hand. Read by nothing; not committed.
 
-All five are *committed*, because they are build inputs rather than build
+All six are *committed*, because they are build inputs rather than build
 output: a fresh clone builds the site and packs an installer without a Python
 interpreter anywhere near it. Rerun this after changing anything above the
 fold, and commit what it changes.
@@ -99,7 +101,7 @@ SS        = 4                # supersampling factor for antialiasing
 C         = OUT * SS         # working canvas
 ICON      = int(C * 824 / 1024)   # Apple's large-icon footprint in the canvas
 R_FRAC    = 0.2237           # corner radius as a fraction of the plate width
-SPAN      = 0.845            # the map's width as a fraction of the plate width
+INK       = 0.9054           # the map and its lanes, end to end, as a fraction of the plate
 CELL_GAP  = 0.085            # gap around each cell, as a fraction of the pitch
 CELL_ROUND = 0.17            # cell corner radius, as a fraction of cell size
 RIM_W     = 0.0085           # edge hairline width, as a fraction of the plate
@@ -110,7 +112,19 @@ SIZES     = (512, 256, 128, 64, 32, 16)
 N       = 7                                   # cells along the diagonal
 BLOCKS  = [(0, 3), (3, 5), (5, 7)]            # three genomes / MAGs
 ACCENTS = {(0, 6): 0.60, (6, 0): 0.60,        # longest-range contact
-           (1, 4): 0.34, (4, 1): 0.34}        # mid-range contact
+           (1, 4): 0.34, (4, 1): 0.34,        # mid-range contact
+           # The X the name ends on: the anti-diagonal lit from corner to
+           # corner through the centre, so the map reads as a cross and not
+           # only as a staircase. Each cell with its mirror, because a contact
+           # map is symmetric; every one of these is on the anti-diagonal or
+           # beside it, so the X is symmetric about both diagonals.
+           (1, 5): 0.56, (5, 1): 0.56,
+           (2, 4): 0.56, (4, 2): 0.56,
+           (4, 5): 0.34, (5, 4): 0.34,
+           # And quieted where the first block would otherwise fill the corner
+           # the X's arm runs into, or bridge the crossing into one blot.
+           (0, 2): 0.00, (2, 0): 0.00,
+           (2, 3): 0.20, (3, 2): 0.20}
 DECAY_IN  = 1.7      # intensity falloff within a block
 FLOOR_IN  = 0.30     # minimum intensity within a block
 BG_LEVEL  = 0.15     # background level between blocks
@@ -146,78 +160,116 @@ CUTOFF    = 0.06     # cells fainter than this are not drawn
 #
 # So the lanes are **slivers in the margin the plate already had**: a third of a
 # pitch wide, a fifth of a pitch clear of the map, laid in the 7.75% of the
-# plate that the 0.845 span leaves on every side. The map goes back to the size
-# and the position it has always had — this is additive now, in the literal
-# sense that nothing else moved.
+# plate that the 0.845 span leaves on every side. The map kept the size and
+# the position it had always had.
 #
 # The two are one hue at two saturations and two values, which is how a browser
 # draws two tracks that are not the same measurement, and is enough to read as
 # two at any size a lane is still visible at. Beside ember they are the cool
 # end of the same picture rather than a second and third opinion about it.
+#
+# A third track, red and on all four sides, came later (see `TRACKS`), and that
+# one did not fit in the margin: two lanes deep on the left and the bottom is
+# more than 7.75% of the plate. So the map is no longer a fixed span. `layout`
+# gives the map and its lanes together `INK` of the plate, the extent they had
+# before the red lane, and the map shrinks to make room — to 0.746 of the
+# plate from 0.845 — rather than the mark's margin.
 LANE_HUE = 202
 LANE_W   = 0.30      # a lane's thickness, as a fraction of the map's pitch
 LANE_GAP = 0.20      # clear air between the map's edge and the lane, likewise
 LANE_ROUND = 0.34    # a sliver's corner radius, as a fraction of its thickness
 
-TRACKS = {
-    #                sat    value-on-dark / value-on-light
-    "left":   {"s": 0.58, "v": {"dark": 0.88, "light": 0.58}},
-    "bottom": {"s": 0.30, "v": {"dark": 0.60, "light": 0.38}},
-}
-
 # What each lane reads, as seven levels.
 #
-# Not a mirror of each other, because two tracks that agree everywhere are one
-# track drawn twice. Both rise at the first bin of each block — 0, 3 and 5, the
-# starts of the three genomes — so the lanes and the blocks are visibly about
-# the same thing, and they disagree in between, which is what having two of
-# them is for.
-TRACK_LEVELS = {
-    "left":   [1.00, 0.52, 0.30, 0.86, 0.44, 0.74, 0.36],
-    "bottom": [0.82, 0.38, 0.55, 1.00, 0.34, 0.68, 0.46],
+# The two blue lanes are not a mirror of each other, because two tracks that
+# agree everywhere are one track drawn twice. Both rise at the first bin of each
+# block — 0, 3 and 5, the starts of the three genomes — so the lanes and the
+# blocks are visibly about the same thing, and they disagree in between, which
+# is what having two of them is for.
+#
+# The red one is a third track, and is drawn on **all four sides**: a track
+# plotted against a symmetric map belongs to both of its axes, and this is what
+# a viewer shows when it draws the same track along each edge. The same levels
+# on every side keep the mark symmetric, as the map is. On the left and the
+# bottom it is outside the blue lane, which keeps the place nearest the map;
+# on the top and the right it is the only lane, and so next to the map.
+RED_LEVELS = [0.86, 0.42, 0.30, 1.00, 0.38, 0.74, 0.50]
+
+# Every lane: the side it is on, its slot counted outwards from the map, and
+# its colour as HSV — the hue and saturation are its identity, the value falls
+# on the light plate, where ink is dark on paper, and rises on the dark one.
+RED = {"h": 353, "s": 0.70, "v": {"dark": 0.86, "light": 0.64}, "levels": RED_LEVELS}
+TRACKS = {
+    "left":       {"side": "left", "slot": 0, "h": LANE_HUE, "s": 0.58,
+                   "v": {"dark": 0.88, "light": 0.58},
+                   "levels": [1.00, 0.52, 0.30, 0.86, 0.44, 0.74, 0.36]},
+    "bottom":     {"side": "bottom", "slot": 0, "h": LANE_HUE, "s": 0.30,
+                   "v": {"dark": 0.60, "light": 0.38},
+                   "levels": [0.82, 0.38, 0.55, 1.00, 0.34, 0.68, 0.46]},
+    "red-left":   {"side": "left", "slot": 1, **RED},
+    "red-bottom": {"side": "bottom", "slot": 1, **RED},
+    "red-top":    {"side": "top", "slot": 0, **RED},
+    "red-right":  {"side": "right", "slot": 0, **RED},
 }
 
+SIDES = ("left", "right", "top", "bottom")
 
-def mark_origin(extent, span, pitch):
-    """Where the map's top-left corner goes, given that it is not alone.
 
-    Centring the map centres the *map*, and the mark is now a map with a lane
-    off its left edge and another off its bottom one — so the ink runs from the
-    left lane to the map's right edge and from the map's top edge to the bottom
-    lane, and centring the square inside that leaves the two lanes hard against
-    the rim with a margin twice their size on the other two sides.
+def lanes_on(side):
+    """How many lanes deep one side of the map is."""
+    return max((t["slot"] + 1 for t in TRACKS.values() if t["side"] == side), default=0)
 
-    So the map is nudged half a lane's footprint right and half of it up, which
-    puts the *whole mark* in the middle: both margins come out at 4.6% of the
-    plate instead of 1.7% and 7.8%. It is optical centring, and it is the one
-    thing the lanes ask of the map — the size and the spacing of the field are
-    untouched, which is what this drawing of the lanes was for.
+
+def footprint(side):
+    """One side's lanes and the air between them, in pitches."""
+    return lanes_on(side) * (LANE_W + LANE_GAP)
+
+
+def layout(extent, n=N):
+    """The map's span, its pitch and its top-left corner, in canvas units.
+
+    The map and every lane, end to end, take `INK` of the plate on whichever
+    axis is the longer, and the whole of that is centred — so a side with more
+    lanes than its opposite pushes the map the other way, and the margin round
+    the mark is the same on all four sides. It is optical centring: centring
+    the map alone would leave the deeper sides hard against the rim.
+
+    With one lane on the left and one under the map, this is the layout the
+    mark had when the map's span was a fixed 0.845 of the plate; every lane
+    added since is paid for by a smaller map rather than by a thinner margin.
     """
-    half = pitch * (LANE_W + LANE_GAP) / 2
-    base = (extent - span) / 2
-    return (base + half, base - half)
+    across = n + footprint("left") + footprint("right")
+    down = n + footprint("top") + footprint("bottom")
+    pitch = extent * INK / max(across, down)
+    ox = (extent - across * pitch) / 2 + footprint("left") * pitch
+    oy = (extent - down * pitch) / 2 + footprint("top") * pitch
+    return n * pitch, pitch, ox, oy
 
 
-def lane_geometry(which, ox, oy, span, pitch, n=N):
+def lane_geometry(which, ox, oy, span, pitch):
     """Yield (x0, y0, x1, y1, level) for one lane, in canvas units.
 
     A sliver per bin, on the bin's own extent, so a lane lines up with the map
     cell it is about — which is the whole claim the mark is making. The gap
     between bins is the map's own `CELL_GAP`, for the same reason.
     """
+    spec = TRACKS[which]
     w = pitch * LANE_W
     gap = pitch * LANE_GAP
     pad = pitch * CELL_GAP
     size = pitch - 2 * pad
-    for k, level in enumerate(TRACK_LEVELS[which]):
-        if which == "left":
-            x0 = ox - gap - w
-            y = oy + k * pitch + pad
-            yield (x0, y, x0 + w, y + size, level)
+    off = gap + spec["slot"] * (w + gap)
+    for k, level in enumerate(spec["levels"]):
+        along_x = ox + k * pitch + pad
+        along_y = oy + k * pitch + pad
+        if spec["side"] == "left":
+            yield (ox - off - w, along_y, ox - off, along_y + size, level)
+        elif spec["side"] == "right":
+            yield (ox + span + off, along_y, ox + span + off + w, along_y + size, level)
+        elif spec["side"] == "top":
+            yield (along_x, oy - off - w, along_x + size, oy - off, level)
         else:
-            y0 = oy + span + gap
-            x = ox + k * pitch + pad
-            yield (x, y0, x + size, y0 + w, level)
+            yield (along_x, oy + span + off, along_x + size, oy + span + off + w, level)
 
 # ----------------------------------------------------------------- targets
 # (path relative to the repository root, pixel size, full bleed).
@@ -290,7 +342,7 @@ def field_cells(n=N):
 def track_rgb(which, variant):
     """One lane's colour on one plate, from the hue and the two knobs above."""
     spec = TRACKS[which]
-    r, g, b = colorsys.hsv_to_rgb(LANE_HUE / 360.0, spec["s"], spec["v"][variant])
+    r, g, b = colorsys.hsv_to_rgb(spec["h"] / 360.0, spec["s"], spec["v"][variant])
     return (int(round(r * 255)), int(round(g * 255)), int(round(b * 255)))
 
 
@@ -376,9 +428,9 @@ def build(variant=SHIPPED, n=N, bleed=False):
     # the contact map, with a lane down its left side and another under it
     art = Image.new("RGBA", (C, C), (0, 0, 0, 0))
     draw = ImageDraw.Draw(art)
-    span = extent * SPAN
-    pitch = span / n
-    ox, oy = mark_origin(C, span, pitch)
+    span, pitch, ox, oy = layout(extent, n)
+    ox += (C - extent) / 2
+    oy += (C - extent) / 2
     pad = pitch * CELL_GAP
     size = pitch - 2 * pad
     for i, j, a in field_cells(n):
@@ -390,7 +442,7 @@ def build(variant=SHIPPED, n=N, bleed=False):
     for which in TRACKS:
         colour = track_rgb(which, variant)
         r = pitch * LANE_W * LANE_ROUND
-        for x0, y0, x1, y1, level in lane_geometry(which, ox, oy, span, pitch, n):
+        for x0, y0, x1, y1, level in lane_geometry(which, ox, oy, span, pitch):
             draw.rounded_rectangle([x0, y0, x1, y1], radius=r,
                                    fill=(*colour, int(round(level * 255))))
     img = Image.alpha_composite(img, clip_to(art, mask))
@@ -442,9 +494,7 @@ def favicon_svg(variant=SHIPPED, n=N):
     spec = VARIANTS[variant]
     (plate_hi, plate_lo), cells = spec["plate"], spec["cells"]
     (rim_hi, rim_lo) = spec["rim"]
-    span = OUT * SPAN
-    pitch = span / n
-    ox, oy = mark_origin(OUT, span, pitch)
+    span, pitch, ox, oy = layout(OUT, n)
     cell = 1 - 2 * CELL_GAP                      # in grid units, so `<use>` is integral
     rim_w = OUT * FAVICON_RIM_W
     uses = "".join(
@@ -465,7 +515,7 @@ def favicon_svg(variant=SHIPPED, n=N):
             f" rx='{_num(pitch * LANE_W * LANE_ROUND)}'"
             + ("" if level > 0.995 else f" opacity='{_num(level)}'")
             + "/>"
-            for x0, y0, x1, y1, level in lane_geometry(which, ox, oy, span, pitch, n)
+            for x0, y0, x1, y1, level in lane_geometry(which, ox, oy, span, pitch)
         )
         + "</g>"
         for which in TRACKS
@@ -545,6 +595,112 @@ def write_favicon(path):
     print(f"wrote {path.name} (favicon data URI, {len(tag)} bytes)")
 
 
+# ------------------------------------------------------------ the inline mark
+def _hex(rgb):
+    return "#%02x%02x%02x" % tuple(rgb[:3])
+
+
+def _path(points):
+    """A closed SVG path through `points`, at a precision the eye cannot see past."""
+    head, *rest = points
+    return (f"M{head[0]:.1f} {head[1]:.1f}"
+            + "".join(f"L{x:.1f} {y:.1f}" for x, y in rest) + "Z")
+
+
+def mark_module():
+    """The mark as data, for the page to draw itself: `src/ui/mark.generated.ts`.
+
+    The landing page draws the mark twice that a PNG cannot serve: beside the
+    name, where its cells move when the pointer is over it, and as the half
+    mark in the page's right margin, whose colours follow the theme. Both are
+    built by `ui/markSvg.ts` from what this writes — the same cells, lanes,
+    plate and colours every PNG above is rendered from, in the favicon's
+    full-bleed frame of `OUT` units a side — so there is still one description
+    of the mark, and a TypeScript copy of it would be the second.
+
+    The plate is the squircle itself, as a path, rather than the favicon's
+    `rx` rectangle: at the size the landing page draws it the difference
+    between the two corners shows, and a sixteen-pixel tab is where it did not.
+    """
+    span, pitch, ox, oy = layout(OUT)
+    half = OUT / 2
+    rim_w = OUT * RIM_W
+    plate = _path(squircle(half, half, half, steps=24))
+    rim = _path(squircle(half, half, half - rim_w / 2, steps=24))
+    (plate_hi, plate_lo) = VARIANTS["dark"]["plate"]
+    (rim_hi, rim_lo) = VARIANTS["dark"]["rim"]
+    cells = ",".join(f"[{i},{j},{_num(a)}]" for i, j, a in field_cells())
+    lanes = []
+    for which, spec in TRACKS.items():
+        rects = ",".join(
+            f"[{x0:.1f},{y0:.1f},{x1 - x0:.1f},{y1 - y0:.1f},{_num(level)}]"
+            for x0, y0, x1, y1, level in lane_geometry(which, ox, oy, span, pitch)
+        )
+        lanes.append(
+            f"  {{ track: '{which}', dark: '{_hex(track_rgb(which, 'dark'))}',"
+            f" light: '{_hex(track_rgb(which, 'light'))}', rects: [{rects}] }},"
+        )
+    return f"""/**
+ * The app's mark, as data: what `ui/markSvg.ts` draws the landing page's two
+ * inline marks from.
+ *
+ * Generated — run `npm run icons:app` after editing
+ * `scripts/make-app-icons.py`, which renders every PNG of the mark and the
+ * favicon from the same constants. Coordinates are in a square of
+ * `MARK_VIEW` units, full bleed: the plate is the whole square.
+ */
+
+export const MARK_VIEW = {OUT}
+
+/** The plate and its rim, on the dark variant, which is the one that ships. */
+export const MARK_PLATE = {{
+  path: '{plate}',
+  top: '{_hex(plate_hi)}',
+  bottom: '{_hex(plate_lo)}',
+  rim: '{rim}',
+  rimWidth: {_num(rim_w)},
+  rimTop: '{_hex(rim_hi)}',
+  rimTopOpacity: {_num(rim_hi[3] / 255)},
+  rimBottom: '{_hex(rim_lo)}',
+  rimBottomOpacity: {_num(rim_lo[3] / 255)},
+}}
+
+/** The map: its top-left corner and pitch, and each cell's inset and corner. */
+export const MARK_MAP = {{
+  x: {_num(ox)},
+  y: {_num(oy)},
+  pitch: {_num(pitch)},
+  inset: {_num(CELL_GAP)},
+  round: {_num(CELL_ROUND)},
+  /** The cells' colour on each plate. */
+  dark: '{_hex(VARIANTS["dark"]["cells"])}',
+  light: '{_hex(VARIANTS["light"]["cells"])}',
+}}
+
+/** Every drawn cell as `[row, column, intensity]`, row 0 at the top. */
+export const MARK_CELLS: readonly (readonly [number, number, number])[] = [{cells}]
+
+/** Each lane's colour on each plate, and its slivers as `[x, y, width, height, level]`. */
+export const MARK_LANES: readonly {{
+  readonly track: string
+  readonly dark: string
+  readonly light: string
+  readonly rects: readonly (readonly [number, number, number, number, number])[]
+}}[] = [
+{chr(10).join(lanes)}
+]
+
+/** A lane sliver's corner radius, in the same units. */
+export const MARK_LANE_RADIUS = {_num(pitch * LANE_W * LANE_ROUND)}
+"""
+
+
+def write_mark_module(path):
+    path.write_text(mark_module(), encoding="utf-8")
+    print(f"wrote {path.relative_to(ROOT)}")
+
+
+
 def main():
     dark, light = build("dark"), build("light")
     bleed = build("dark", bleed=True)
@@ -564,6 +720,7 @@ def main():
         print(f"wrote {name} ({px} px{', full bleed' if wants_bleed else ''})")
 
     write_favicon(ROOT / "index.html")
+    write_mark_module(ROOT / "src" / "ui" / "mark.generated.ts")
 
 
 if __name__ == "__main__":

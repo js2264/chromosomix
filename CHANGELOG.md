@@ -26,6 +26,25 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The lab's store is called *Example datasets*, no longer *RSG lab data* (§24.2).** The first tile
+  of the landing page's *Connect to a data store*, the drawer it opens and the credit under the example
+  sessions that open its figures say so; what it holds is unchanged. Its tile's mark is still a
+  contact map in the viewer's own colours, but no longer spells *RSG* down its diagonal: the diagonal
+  is a plain Hi-C diagonal, and the letters shown while the picture loads are *EX*.
+- **The app's mark is an X, and has a red track on all four sides.** The anti-diagonal of its contact
+  map is lit from corner to corner through the centre, symmetric about both diagonals, and a few
+  cells round it are quieted so the cross reads at sixteen pixels. A red track runs along every edge
+  of the map, outside the blue lanes on the left and the bottom; the map is smaller to make room, and
+  the margin round the mark is unchanged. The favicon, the install and home-screen icons, the desktop
+  icon, the header, the landing page and the *Add a custom store* tile all carry it
+  (`scripts/make-app-icons.py`, `npm run icons:app`).
+- **The landing page carries the mark larger, draws its X on hover, and stands half of it in the
+  margin (§24.12).** The mark beside the name is drawn inline and its plate is near the name's own
+  height, where it was four fifths of it. With the pointer over the mark or the name, the
+  anti-diagonal lights from the corners in while the diagonal steps back, and settles again — not
+  for a reader who asks for less motion. On a window at least 1560 px wide and 820 px tall, half the
+  mark's map and lanes stands faint against the right edge, in the theme's colours. Both are built
+  from `src/ui/mark.generated.ts`, which the icon script now writes beside the icons.
 - **A map opens at the screen's resolution and sharpens as you zoom, down to the finest resolution the
   file stores: *Refine on zoom* is on by default (§2, §7.2, §12).** With nothing picked, a view's
   first read is the stored rung nearest a cell to each pixel of the plot, so a chromosome opens quickly

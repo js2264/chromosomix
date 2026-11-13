@@ -132,14 +132,14 @@ export function exampleSessions(): ExampleSession[] {
       id: 'yeast',
       label: 'Yeast micro-C data',
       about: microC.line,
-      from: `${microC.title}, from the RSG lab data · ${microC.provenance}`,
+      from: `${microC.title}, from the Example datasets · ${microC.provenance}`,
       open: { workspace: microC.uri },
     },
     {
       id: 'linear',
       label: 'Linear tracks',
       about: landscape.line,
-      from: `${landscape.title}, from the RSG lab data · ${landscape.provenance}`,
+      from: `${landscape.title}, from the Example datasets · ${landscape.provenance}`,
       open: { workspace: landscape.uri },
     },
     {

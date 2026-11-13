@@ -1,20 +1,22 @@
 /**
  * Generate `src/ui/stores/rsg-mark.generated.ts` and `dbz-mark.generated.ts`:
- * the tile marks of the lab's two stores, RSG's and the DNA Bacterial Zoo's.
+ * the tile marks of the lab's two stores, *Example datasets* and the DNA
+ * Bacterial Zoo.
  *
  *     npm run icons:rsg
  *
  * Both are drawn the one way described here, over two different maps — the
  * second is at *The DNA Bacterial Zoo's map*, below.
  *
- * The mark is a Hi-C map 100 bins square whose diagonal spells *RSG*. That is
- * the whole idea: every other store's tile is a lettermark because its logo is
- * not ours to ship (`ui/stores/registry.ts` on `StoreMark.image`), but this one
- * is the lab's own, so it can be the thing the viewer actually draws — a
- * contact map, in the viewer's own colour scale, with the letters standing
- * where the main diagonal normally does.
+ * *Example datasets*' mark is a Hi-C map 100 bins square, and nothing else:
+ * no writing on it. The other stores' tiles carry their projects' published
+ * logos (`ui/stores/registry.ts` on `StoreMark.image`); this one is the
+ * lab's own to draw, so it is the thing the viewer actually draws — a contact
+ * map, in the viewer's own colour scale. It used to spell *RSG* down its
+ * diagonal; the store was renamed for what it holds, and the letters went with
+ * the old name.
  *
- * Three things make it read as Hi-C rather than as a gradient behind type:
+ * Four things make it read as Hi-C rather than as a gradient:
  *
  * 1. **Distance decay.** Contact frequency falls with genomic separation, so
  *    the corners furthest from the diagonal are paper and the map is warm only
@@ -23,12 +25,13 @@
  *    across a boundary — so each letter sits in its own TAD, which is also what
  *    gives the three letters their spacing.
  * 3. **Loops.** The corner peak a pair of domain boundaries makes, off the
- *    diagonal, at the three pairs the three domains form.
+ *    diagonal, and a few longer-range ones between domains.
+ * 4. **Compartments.** The A/B plaid that fills a real map's off-diagonal.
  *
- * The letters break the symmetry a real contact map has, and are meant to: a
- * mirrored *R* under the diagonal is a butterfly, not a letter. Everything
- * under them is symmetric, so what a reader sees is a Hi-C map with writing on
- * it rather than a picture that is neither.
+ * The map is symmetric, as a real contact map is. The Zoo's mark is the one
+ * with writing on it: *DBZ* down its diagonal, the letters breaking that
+ * symmetry on purpose — a mirrored *D* under the diagonal is a butterfly, not
+ * a letter.
  *
  * ## Why a data URI in a generated module, and not a file
  *
@@ -115,30 +118,6 @@ function rampFromStops(stops, size) {
 const LETTER = 26
 
 /** Angles run counterclockwise from *east*, so 90 is the top of the box. */
-const R_SHAPE = [
-  // The stem, full height, and the widest stroke — the letter's spine.
-  { kind: 'rect', x0: 0, y0: 0, x1: 6, y1: 26 },
-  // The bowl: the right half of an elliptical ring, so its top and bottom bars
-  // land thinner than the stem, which is what a bowl does on a real face.
-  { kind: 'ring', cx: 6, cy: 7, rxO: 15, ryO: 7, rxI: 9.5, ryI: 3.2, a0: 270, a1: 90 },
-  // The leg, from under the bowl to the bottom-right corner.
-  { kind: 'seg', x0: 9.5, y0: 12.5, x1: 22, y1: 26, w: 6 },
-]
-
-const S_SHAPE = [
-  // Upper bowl: from the top-right terminal, over the top, down the left, to
-  // the waist. Lower bowl picks the waist up and mirrors it to the lower left.
-  { kind: 'ring', cx: 13, cy: 7, rxO: 11, ryO: 7, rxI: 5.5, ryI: 3.2, a0: 20, a1: 270 },
-  { kind: 'ring', cx: 13, cy: 19, rxO: 11, ryO: 7, rxI: 5.5, ryI: 3.2, a0: 200, a1: 90 },
-]
-
-const G_SHAPE = [
-  // A ring with the upper right quadrant left open, which is the aperture.
-  { kind: 'ring', cx: 13, cy: 13, rxO: 12, ryO: 13, rxI: 6.5, ryI: 8, a0: 60, a1: 359.9 },
-  // The spur: what tells a G from a C, jutting in from the right at the waist.
-  { kind: 'rect', x0: 12.5, y0: 10.5, x1: 25, y1: 15.5 },
-]
-
 const B_SHAPE = [
   // The stem, and two bowls on it: the lower one wider, as a B's is, so the
   // letter stands on its foot rather than on its head.
@@ -206,27 +185,11 @@ function ink(shape, x, y) {
 // --- the map ---------------------------------------------------------------
 
 /**
- * Where each letter's box sits: `at` is both its first row and its first
- * column, which is what puts the box square on the diagonal and the letter
- * standing on it rather than beside it.
- *
- * Evenly spaced, and the spacing owes nothing to `DOMAINS` — see there for why
- * the two are deliberately out of step.
- */
-const LETTERS = [
-  { shape: R_SHAPE, at: 4 },
-  { shape: S_SHAPE, at: 37 },
-  { shape: G_SHAPE, at: 70 },
-]
-
-/**
  * The domains, as `[first, last]` bins.
  *
- * Six of them, of six different widths, and deliberately *not* one per letter:
- * three domains with a letter centred in each drew a noughts-and-crosses grid,
- * three coloured squares on a pale ground, which is a diagram of a tiling and
- * not a picture of a genome. Boundaries that fall across the letters instead
- * make the map something the letters are written on.
+ * Six of them, of six different widths: domains of one size drew a
+ * noughts-and-crosses grid, coloured squares on a pale ground, which is a
+ * diagram of a tiling and not a picture of a genome.
  */
 const DOMAINS = [
   [1, 14],
@@ -290,9 +253,8 @@ function grain(i, j) {
 function contacts(i, j) {
   const d = Math.abs(i - j)
   // Decay: contacts fall away with separation, so the corners are paper.
-  // Steep enough that the fall is the first thing read, because with the
-  // diagonal given away it is the only cue left that this is a contact map
-  // and not a plaid.
+  // Steep enough that the fall is the first thing read: it is what says this
+  // is a contact map and not a plaid.
   let v = 0.5 / (1 + (d / 9) ** 1.35)
   const a = domainOf(i)
   const b = domainOf(j)
@@ -313,11 +275,6 @@ function contacts(i, j) {
       if (e < 12) v += 0.22 * Math.exp(-e)
     }
   }
-  // The diagonal itself is given over to the letters, so the band that would
-  // carry it is damped. Damped rather than erased: what is hot near the
-  // diagonal here is the writing, but a map with a white stripe down it is a
-  // map with a fault in it.
-  v *= 1 - 0.55 * Math.exp(-((d / 8) ** 2))
   // Contacts are counted, and counts are read on a log scale — every Hi-C
   // figure ever published is. Linear, the bottom three quarters of the ramp do
   // the work, and that end of it is white through cream through pale yellow:
@@ -327,7 +284,7 @@ function contacts(i, j) {
   return v ** 0.72 * (0.92 + 0.16 * grain(i, j))
 }
 
-/** The 100x100 matrix of one mark, as one palette index a bin. */
+/** The 100x100 matrix of one mark, as one palette index a bin; `letters` may be empty. */
 function matrix(letters, contacts) {
   const out = new Uint8Array(N * N)
   for (let i = 0; i < N; i++) {
@@ -355,12 +312,12 @@ function matrix(letters, contacts) {
 
 /**
  * The same idea for the lab's other shelf, over a **bacterial** map — which a
- * reader who knows one tells from RSG's at a glance, by two things no map of a
+ * reader who knows one tells from *Example datasets'* at a glance, by two things no map of a
  * eukaryote has:
  *
  * 1. **A circle.** A bacterial chromosome joins its own ends, so the first bin
  *    and the last are neighbours and separation is measured round the circle:
- *    the two corners that are paper on RSG's mark are warm on this one.
+ *    the two corners that are paper on the other mark are warm on this one.
  * 2. **The second diagonal.** Condensin loaded at the origin zips the two arms
  *    together, so a locus meets its mirror across the origin — the
  *    anti-diagonal that crosses the main one in an X, sharp near the origin and
@@ -402,8 +359,10 @@ function dbzContacts(i, j) {
   const off = i + j - (N - 1)
   const width = 1.6 + k / 12
   v += 0.34 * Math.exp(-k / 20) * Math.exp(-(off ** 2) / (2 * width ** 2))
-  // The letters' diagonal, damped as RSG's is — the true one only, since the
-  // corners a circle warms carry no letters.
+  // The diagonal is given over to the letters, so the band that would carry
+  // it is damped — the true one only, since the corners a circle warms carry
+  // no letters. Damped rather than erased: what is hot near the diagonal here
+  // is the writing, but a map with a white stripe down it has a fault in it.
   v *= 1 - 0.55 * Math.exp(-((linear / 8) ** 2))
   return v ** 0.72 * (0.92 + 0.16 * grain(i, j))
 }
@@ -511,9 +470,9 @@ const provenance = ` *
 writeMark(
   'rsg-mark.generated.ts',
   'RSG_MARK_IMAGE',
-  matrix(LETTERS, contacts),
-  ` * The RSG store's tile mark: a Hi-C map ${N} bins square whose diagonal spells
- * *RSG*, as a data URI.
+  matrix([], contacts),
+  ` * The *Example datasets* store's tile mark: a Hi-C map ${N} bins square, with
+ * nothing written on it, as a data URI.
 ${provenance}`,
 )
 writeMark(

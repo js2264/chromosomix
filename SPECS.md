@@ -13260,7 +13260,7 @@ used to go with the toolbar, which left a red line and nothing on the page to pr
 **Each store is drawn by a front that knows what it is for** (`ui/stores/registry.ts`), which is
 why one table for all of them was the wrong shape and is gone:
 
-- **RSG lab data** — a *gallery* (`GalleryView`): one card per published figure, of the shape above
+- **Example datasets** — a *gallery* (`GalleryView`): one card per published figure, of the shape above
   — a title and *open*, the assembly and the provenance as chips (the provenance clipped at the
   card's width and whole on its tooltip), one line with the paragraph that used to be the row on
   its tooltip, and the figure's files behind a fold — under two headings. **Demo**: one yeast
@@ -13276,7 +13276,10 @@ why one table for all of them was the wrong shape and is gone:
   Fig. 2's GM12878 map on chr19 with two labs' CTCF and ATAC-seq and nothing computed, each task of its
   chain — insulation at four scales, peaks on both CTCF tracks, the APA between consecutive peaks, the
   metaplots — opening on the figure's recipe (`analysis`, §18.2), and Fig. S3a–c's bacteria read along their arms — and Meneu et al. 2025's bacterial
-  chromosomes in yeast. Inline, so it costs no request; where its files live is §24.3.
+  chromosomes in yeast. Inline, so it costs no request; where its files live is §24.3. Its mark is
+  a Hi-C map 100 bins square in the viewer's own ramp — decay, domains, loops and the A/B plaid —
+  with nothing written on it (`scripts/make-rsg-mark.mjs`); the letters behind it, shown while it
+  loads, are *EX*. It used to spell *RSG* down its diagonal, which went with the store's old name.
 - **DNA Bacterial Zoo** — a dev feature (§29), published with the multi-genome format: switched
   off, it has no tile. The genome gallery's cards over **one** file: a card a species, whose
   button is the species' session, with its sample and its replicon count as chips and its map, its
@@ -13291,7 +13294,7 @@ why one table for all of them was the wrong shape and is gone:
   (§24.1), fixed here in the registry as a shipped store's page is — `group: species`, no
   `sessions` file, which is what tells the gallery to read the one file rather than IGV's two.
   Read from the lab's bucket on the gesture that opens it (§24.3). Its mark is drawn by the script
-  that draws RSG's, over a map a bacterium would make: a circle, whose far corners are warm, with
+  that draws *Example datasets*', over a map a bacterium would make: a circle, whose far corners are warm, with
   the X its arms, zipped from the origin, draw across the diagonal *DBZ* stands on.
 - **IGV genomes** — a *genome gallery* (`GenomesView`): one card per genome, whose button is its
   pre-configured session — the FASTA with every track IGV ships for it, in the 1D browser — and
@@ -13612,7 +13615,7 @@ bucket answers 404, which a shipped store reads as *Nothing has been published f
 sentence says what publishes this one (`StoreRef.publishedBy`) rather than sending a maintainer to
 the Stores workflow, which has nothing to do with it.
 
-**Nor is the lab's own store.** *RSG lab data* is inline (`demosStore()`, `ui/examples.ts`), and
+**Nor is the lab's own store.** *Example datasets* is inline (`demosStore()`, `ui/examples.ts`), and
 the files its cards open are one folder on the lab's bucket, `demo/store/`, a directory a card or a
 dataset — `yeast/`, `human/`, `gibcus2018/`, `meneu2025/`, `chromosomix_paper/`, `k562/`, every file
 the landing page's *Human Hi-C data* reads (§24.11), and `ecoli/`, the *E. coli* K-12 sequence and genes
@@ -14108,6 +14111,28 @@ kilobytes of code is a session that cannot go missing from a bucket. Each is a `
 any a workspace file holds, and its test reads it back through `parseWorkspaceFile`, the validator
 every such file meets. Each carries the reader's own overlay preferences and no column layout, so
 opening it changes neither.
+
+### 24.12 The mark on the landing page
+
+**The masthead is the mark and the name**, the mark's plate 1.17em of a name whose size is
+`clamp`ed to the window — near the name's own height, where the 192 px icon at 1em drew a plate four
+fifths of it. It is drawn **inline** (`ui/markSvg.ts`), not as that icon, for two reasons: it is
+sharp at the size the masthead sets it on any screen, and its cells are elements. **Over the mark or
+the name, the X draws itself**: the anti-diagonal's corners light, its arms run in to the centre a
+step at a time, the six other cells of the diagonal step back while the cross is whole, and the map
+settles again, in under a second. Nothing happens on a press, and nothing moves at all for a reader
+whose system asks for less motion.
+
+**Half the mark stands in the right margin**, where the margin can hold it clear of the page: the map
+and its lanes without the plate, 640 px tall, cut down its middle by the window's edge, at 40% in the
+light theme and 26% in the dark, in the colours of the light and the dark plate respectively. Only on
+the page with the store tiles (§24.2), not in a dialog's picker; only on a window at least 1560 px
+wide and 820 px tall; never a target, and hidden from a screen reader, as the masthead's mark is.
+
+**Both are one drawing with every other picture of the mark.** `scripts/make-app-icons.py` renders
+the icons, writes the favicon and writes `ui/mark.generated.ts`, the cells, lanes, plate and colours
+as data, from the same constants; the page builds its two SVGs from that data with
+`createElementNS` and attributes alone, because the page's policy allows no inline `style` (§11).
 
 ## 25. A 3D structure beside the map
 

@@ -238,7 +238,7 @@ describe('the landing page', () => {
     const { el } = build()
     // The DNA Bacterial Zoo is a dev feature (§29), and the switch is off here.
     expect(textsOf(el, '.store-tile .store-tile-name')).toEqual([
-      'RSG lab data',
+      'Example datasets',
       'IGV genomes',
       '4DN open data',
       'ENCODE',

@@ -6778,7 +6778,7 @@ p {
    Sized so the pair spans most of the drop zone below it — this is the first
    screen, and the app's name on it should be the size of a name on a cover.
 
-   One `font-size` drives all of it. The mark is `1em` and the name is the em,
+   One `font-size` drives all of it. The mark is `1.17em` and the name is the em,
    so the ratio between them is fixed and the pair scales as one thing; the
    `clamp` is against the viewport rather than the container, because a phone
    sets the width here and a `52rem` page is what the maximum is tuned for. */
@@ -6827,10 +6827,136 @@ p {
    `em` so it holds at every size the `clamp` produces. `transform`, so the
    layout the masthead is centred by does not move. */
 .picker-masthead > .app-mark {
-  width: 1em;
-  height: 1em;
-  border-radius: 0.22em;
+  /* The plate, which is the whole of this drawing (`ui/markSvg.ts`, full
+     bleed): 1.17em, the plate the 192 px icon drew at 1.45em once its own
+     margin and shadow were taken off. It was 1em of that icon, which put a
+     plate four fifths of the name's height beside it, and the mark read as a
+     bullet rather than as the other half of the name. */
+  width: 1.17em;
+  height: 1.17em;
   transform: translateY(0.108em);
+  /* The shadow the icon's PNG carries in its margin, which a full-bleed plate
+     has no margin for. */
+  filter: drop-shadow(0 0.02em 0.03em rgb(0 0 0 / 28%));
+  /* A target for the pointer, unlike every other `.app-mark`: nothing happens
+     on a press, but being over it is what draws the X (below). */
+  pointer-events: auto;
+}
+
+/* The X the name ends on, drawn on the mark while the pointer is over the
+   masthead — the mark or the name. The corners light, the arms run in to the
+   centre a step at a time, the diagonal the X crosses steps back while the
+   cross is whole, and the map settles to itself again. Keyframes with no
+   first or last frame start and end on each cell's own opacity, which is its
+   intensity in the map. Not drawn at all where the reader has asked for less
+   motion. */
+@keyframes cx-arm {
+  35%,
+  65% {
+    opacity: 1;
+  }
+}
+
+@keyframes cx-diag {
+  35%,
+  65% {
+    opacity: 0.45;
+  }
+}
+
+.picker-masthead:hover .cx-arm {
+  animation: cx-arm 900ms ease-in-out both;
+}
+
+.picker-masthead:hover .cx-arm-1 {
+  animation-delay: 70ms;
+}
+
+.picker-masthead:hover .cx-arm-2 {
+  animation-delay: 140ms;
+}
+
+.picker-masthead:hover .cx-arm-3 {
+  animation-delay: 210ms;
+}
+
+.picker-masthead:hover .cx-diag {
+  animation: cx-diag 900ms ease-in-out 140ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .picker-masthead:hover .cx-arm,
+  .picker-masthead:hover .cx-diag {
+    animation: none;
+  }
+}
+
+/* Half the mark in the landing page's right margin, faint: its map and lanes
+   without the plate (`markWatermark`), cut by the window's edge. Only where the
+   margin is wide enough to hold it clear of the page — a 52rem column leaves
+   (width − 52rem) / 2 either side, and the half mark is 320 px — and tall
+   enough that it does not reach the header or the status bar. Never in a
+   dialog's picker, and never a target. Drawn in the light plate's colours on a
+   light page and the dark plate's on a dark one, darker in light, where paper
+   swallows a faint warm colour that ink does not. */
+.picker-watermark {
+  display: none;
+  position: fixed;
+  right: 0;
+  top: calc(50% + 1.5rem);
+  width: 320px;
+  height: 640px;
+  overflow: hidden;
+  transform: translateY(-50%);
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.4;
+}
+
+.picker-watermark > svg {
+  display: block;
+  width: 640px;
+  height: 640px;
+}
+
+.picker-watermark .cx-ink-dark {
+  display: none;
+}
+
+@media (min-width: 1560px) and (min-height: 820px) {
+  .picker-watermark {
+    display: block;
+  }
+}
+
+.modal-panel .picker-watermark {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .picker-watermark {
+    opacity: 0.26;
+  }
+
+  :root:not([data-theme]) .picker-watermark .cx-ink-light {
+    display: none;
+  }
+
+  :root:not([data-theme]) .picker-watermark .cx-ink-dark {
+    display: inline;
+  }
+}
+
+:root[data-theme='dark'] .picker-watermark {
+  opacity: 0.26;
+}
+
+:root[data-theme='dark'] .picker-watermark .cx-ink-light {
+  display: none;
+}
+
+:root[data-theme='dark'] .picker-watermark .cx-ink-dark {
+  display: inline;
 }
 
 /* The guided tutorial's offer (§30): first under the masthead, as a row, where
