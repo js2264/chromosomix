@@ -1,0 +1,706 @@
+<!DOCTYPE html><html lang="en" dir="ltr" data-theme="dark" data-has-toc data-has-sidebar class="astro-g5ptsecz"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>chromosomix 0.6.0 | chromosomix</title><link rel="canonical" href="https://doc.chromosomix.app/releases/v0.6.0/"/><link rel="sitemap" href="/pr/173/docs/sitemap-index.xml"/><link rel="shortcut icon" href="/pr/173/docs/favicon.png" type="image/png"/><meta name="generator" content="Astro v7.4.5"/><meta name="generator" content="Starlight v0.42.8"/><meta property="og:title" content="chromosomix 0.6.0"/><meta property="og:type" content="article"/><meta property="og:url" content="https://doc.chromosomix.app/releases/v0.6.0/"/><meta property="og:locale" content="en"/><meta property="og:description" content="What changed in chromosomix 0.6.0, released on 5 August 2026."/><meta property="og:site_name" content="chromosomix"/><meta name="twitter:card" content="summary_large_image"/><meta name="description" content="What changed in chromosomix 0.6.0, released on 5 August 2026."/><meta name="robots" content="noindex"/><script>
+	window.StarlightThemeProvider = (() => {
+		const storedTheme =
+			typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+		const theme =
+			storedTheme ||
+			(window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+		return {
+			updatePickers(theme = storedTheme || 'auto') {
+				document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+					const select = picker.querySelector('select');
+					if (select) select.value = theme;
+					/** @type {HTMLTemplateElement | null} */
+					const tmpl = document.querySelector(`#theme-icons`);
+					const newIcon = tmpl && tmpl.content.querySelector('.' + theme);
+					if (newIcon) {
+						const oldIcon = picker.querySelector('svg.label-icon');
+						if (oldIcon) {
+							oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+						}
+					}
+				});
+			},
+		};
+	})();
+</script><template id="theme-icons"><svg aria-hidden="true" class="light astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M5 12a1 1 0 0 0-1-1H3a1 1 0 0 0 0 2h1a1 1 0 0 0 1-1Zm.64 5-.71.71a1 1 0 0 0 0 1.41 1 1 0 0 0 1.41 0l.71-.71A1 1 0 0 0 5.64 17ZM12 5a1 1 0 0 0 1-1V3a1 1 0 0 0-2 0v1a1 1 0 0 0 1 1Zm5.66 2.34a1 1 0 0 0 .7-.29l.71-.71a1 1 0 1 0-1.41-1.41l-.66.71a1 1 0 0 0 0 1.41 1 1 0 0 0 .66.29Zm-12-.29a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.71-.71a1.004 1.004 0 1 0-1.43 1.41l.73.71ZM21 11h-1a1 1 0 0 0 0 2h1a1 1 0 0 0 0-2Zm-2.64 6A1 1 0 0 0 17 18.36l.71.71a1 1 0 0 0 1.41 0 1 1 0 0 0 0-1.41l-.76-.66ZM12 6.5a5.5 5.5 0 1 0 5.5 5.5A5.51 5.51 0 0 0 12 6.5Zm0 9a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Zm0 3.5a1 1 0 0 0-1 1v1a1 1 0 0 0 2 0v-1a1 1 0 0 0-1-1Z"/></svg><svg aria-hidden="true" class="dark astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.64 13a1 1 0 0 0-1.05-.14 8.049 8.049 0 0 1-3.37.73 8.15 8.15 0 0 1-8.14-8.1 8.59 8.59 0 0 1 .25-2A1 1 0 0 0 8 2.36a10.14 10.14 0 1 0 14 11.69 1 1 0 0 0-.36-1.05Zm-9.5 6.69A8.14 8.14 0 0 1 7.08 5.22v.27a10.15 10.15 0 0 0 10.14 10.14 9.784 9.784 0 0 0 2.1-.22 8.11 8.11 0 0 1-7.18 4.32v-.04Z"/></svg><svg aria-hidden="true" class="auto astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21 14h-1V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v7H3a1 1 0 0 0-1 1v2a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-2a1 1 0 0 0-1-1ZM6 7a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v7H6V7Zm14 10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-1h16v1Z"/></svg></template><link rel="stylesheet" href="/pr/173/docs/_astro/print.ehPL0gv-.css" media="print"><link rel="stylesheet" href="/pr/173/docs/_astro/common.Uvfwwubp.css"><style>@layer starlight.components{svg:where(.astro-hkc32dio){color:var(--sl-icon-color);font-size:var(--sl-icon-size,1em);width:1em;height:1em;overflow:visible}}
+</style><script type="module" src="/pr/173/docs/_astro/page.cNngjUgL.js"></script></head><body class="astro-g5ptsecz"><a class="sl-skip-link astro-qb7clj6f" href="#_top">Skip to content</a><div class="page sl-flex astro-yntsjkba"><header class="header astro-yntsjkba"><div class="header astro-by6fddyj"><div class="title-wrapper sl-flex astro-by6fddyj"><div class="cx-title"><a href="/pr/173/docs/" class="site-title sl-flex astro-6rvad3va"><img class="astro-6rvad3va" alt src="/pr/173/docs/_astro/mark.CX-KwK2K.png" width="192" height="192"><span class="astro-6rvad3va" translate="no">chromosomix</span></a><span class="cx-docs" aria-hidden="true">docs</span><span class="cx-version cx-version-preview" title="A preview of pull request #173">#173</span></div><script type="module">for(let e of document.querySelectorAll(`select[data-cx-versions]`)){let t=e.dataset.current??`dev`,n=e.dataset.base??`/`,r=e.dataset.manifest??`/versions.json`;fetch(r,{cache:`no-cache`}).then(e=>e.ok?e.json():null).then(n=>{if(n===null||!Array.isArray(n.releases))return;let r=[];for(let e of n.releases){let i=e.version===n.latest;r.push({value:i?`/`:e.path,label:i?`${e.version} · latest`:e.version,selected:e.version===t})}n.dev!==null&&r.push({value:n.dev.path,label:`dev · unreleased`,selected:t===`dev`}),r.some(e=>e.selected)&&e.replaceChildren(...r.map(e=>{let t=document.createElement(`option`);return t.value=e.value,t.textContent=e.label,t.selected=e.selected,t}))}).catch(()=>{}),e.addEventListener(`change`,()=>{let t=e.value,r=`${t}${location.pathname.startsWith(n)?location.pathname.slice(n.length):``}`;fetch(r,{method:`HEAD`}).then(e=>location.assign(e.ok?`${r}${location.hash}`:t)).catch(()=>location.assign(t))})}</script></div><div class="sl-flex print:hidden astro-by6fddyj"><site-search class="astro-by6fddyj astro-b5kgnn7o" data-translations="{&quot;placeholder&quot;:&quot;Search the docs…&quot;}"><button data-open-modal disabled aria-label="Search the docs…" aria-keyshortcuts="Control+K" class="astro-b5kgnn7o"><svg aria-hidden="true" class="astro-b5kgnn7o astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M21.71 20.29 18 16.61A9 9 0 1 0 16.61 18l3.68 3.68a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.39ZM11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14Z"/></svg><span class="sl-hidden md:sl-block astro-b5kgnn7o" aria-hidden="true">Search the docs…</span><kbd class="sl-hidden md:sl-flex astro-b5kgnn7o" style="display: none;"><kbd class="astro-b5kgnn7o">Ctrl</kbd><kbd class="astro-b5kgnn7o">K</kbd></kbd></button><dialog style="padding:0" aria-label="Search the docs…" class="astro-b5kgnn7o"><div class="dialog-frame sl-flex astro-b5kgnn7o"><button data-close-modal class="sl-flex md:sl-hidden astro-b5kgnn7o">Cancel</button><div class="search-container astro-b5kgnn7o"><div id="starlight__search" class="astro-b5kgnn7o"></div></div></div></dialog></site-search><script>
+	(() => {
+		const openBtn = document.querySelector('button[data-open-modal]');
+		const shortcut = openBtn?.querySelector('kbd');
+		if (!openBtn || !(shortcut instanceof HTMLElement)) return;
+		const platformKey = shortcut.querySelector('kbd');
+		if (platformKey && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)) {
+			platformKey.textContent = '⌘';
+			openBtn.setAttribute('aria-keyshortcuts', 'Meta+K');
+		}
+		shortcut.style.display = '';
+	})();
+</script><script type="module" src="/pr/173/docs/_astro/Search.astro_astro_type_script_index_0_lang.XfhMBq7H.js"></script></div><div class="sl-hidden md:sl-flex print:hidden right-group astro-by6fddyj"><div class="sl-flex social-icons astro-by6fddyj"><a class="cx-open-app" href="https://chromosomix.app/pr/173/">Open chromosomix #173</a><a class="cx-icon-button" href="https://github.com/js2264/chromosomix" aria-label="chromosomix on GitHub"><svg aria-hidden="true" class=" astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-rapide-theme-select class="astro-xgdtbcdp"><button aria-label="Select theme" aria-live="polite" class="sl-flex astro-xgdtbcdp" title="Select theme"><svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16" class="astro-xgdtbcdp"><mask class="moon astro-xgdtbcdp" id="moon-mask-170053b9"><rect x="0" y="0" width="100%" height="100%" fill="white" class="astro-xgdtbcdp"></rect><circle cx="24" cy="10" r="6" fill="black" class="astro-xgdtbcdp"></circle></mask><circle class="sun astro-xgdtbcdp" cx="12" cy="12" r="6" mask="url(#moon-mask-170053b9)"></circle><g class="sun-beams astro-xgdtbcdp" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="3" class="astro-xgdtbcdp"></line><line x1="12" y1="21" x2="12" y2="23" class="astro-xgdtbcdp"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" class="astro-xgdtbcdp"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" class="astro-xgdtbcdp"></line><line x1="1" y1="12" x2="3" y2="12" class="astro-xgdtbcdp"></line><line x1="21" y1="12" x2="23" y2="12" class="astro-xgdtbcdp"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" class="astro-xgdtbcdp"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" class="astro-xgdtbcdp"></line></g></svg></button></starlight-rapide-theme-select><script>
+  StarlightThemeProvider.updatePickers()
+</script><script type="module">var e=`starlight-theme`;function t(e){return e===`auto`||e===`dark`||e===`light`?e:`auto`}function n(){return t(typeof localStorage<`u`&&localStorage.getItem(e))}function r(t){typeof localStorage<`u`&&localStorage.setItem(e,t===`light`||t===`dark`?t:``)}function i(){return matchMedia(`(prefers-color-scheme: light)`).matches?`light`:`dark`}function a(e){StarlightThemeProvider.updatePickers(e),document.documentElement.dataset.theme=e===`auto`?i():e,r(e)}matchMedia(`(prefers-color-scheme: light)`).addEventListener(`change`,()=>{n()===`auto`&&a(`auto`)}),customElements.define(`starlight-rapide-theme-select`,class extends HTMLElement{constructor(){super(),a(n());let e=this.querySelector(`button`);e?.addEventListener(`click`,()=>{let n=t(document.documentElement.dataset.theme),r=n===`dark`?`light`:n===`light`?`dark`:`auto`;a(r),e?.setAttribute(`aria-label`,`${r} theme`)})}});</script></div></div></header><nav class="sidebar print:hidden astro-yntsjkba" aria-label="Main"><button popovertarget="starlight__sidebar" class="sl-menu-button sl-flex md:sl-hidden print:hidden astro-r2osgdlg"><svg aria-hidden="true" class="open-menu astro-r2osgdlg astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="M3 8h18a1 1 0 1 0 0-2H3a1 1 0 0 0 0 2Zm18 8H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Zm0-5H3a1 1 0 0 0 0 2h18a1 1 0 0 0 0-2Z"/></svg><svg aria-hidden="true" class="close-menu astro-r2osgdlg astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1em;"><path d="m13.41 12 6.3-6.29a1.004 1.004 0 1 0-1.42-1.42L12 10.59l-6.29-6.3a1.004 1.004 0 0 0-1.42 1.42l6.3 6.29-6.3 6.29a1 1 0 0 0 0 1.42.998.998 0 0 0 1.42 0l6.29-6.3 6.29 6.3a.999.999 0 0 0 1.42 0 1 1 0 0 0 0-1.42L13.41 12Z"/></svg><span class="sr-only astro-r2osgdlg">Menu</span></button><script type="module">var e=class extends HTMLElement{constructor(){super();let e=matchMedia(`(min-width: 50em)`),t=()=>{this.popover=e.matches?null:`auto`};t(),e.addEventListener(`change`,()=>t()),this.addEventListener(`toggle`,({newState:e})=>this.trapFocus(e===`open`))}trapFocus(e){document.querySelectorAll(`.main-frame, .sl-skip-link`).forEach(t=>{t.toggleAttribute(`inert`,e)})}};customElements.define(`sl-sidebar-pane`,e);</script><sl-sidebar-pane popover id="starlight__sidebar" class="sidebar-pane astro-yntsjkba"><div class="sidebar-content sl-flex astro-yntsjkba"><sl-sidebar-state-persist data-hash="0p98id4" class="astro-ipdry5cl"><script aria-hidden="true">
+		(() => {
+			try {
+				if (!matchMedia('(min-width: 50em)').matches) return;
+				/** @type {HTMLElement | null} */
+				const target = document.querySelector('sl-sidebar-state-persist');
+				const state = JSON.parse(sessionStorage.getItem('sl-sidebar-state') || '0');
+				if (!target || !state || target.dataset.hash !== state.hash) return;
+				window._starlightScrollRestore = state.scroll;
+				customElements.define(
+					'sl-sidebar-restore',
+					class SidebarRestore extends HTMLElement {
+						connectedCallback() {
+							try {
+								const idx = parseInt(this.dataset.index || '');
+								const details = this.closest('details');
+								if (details && typeof state.open[idx] === 'boolean') details.open = state.open[idx];
+							} catch {}
+						}
+					}
+				);
+			} catch {}
+		})();
+	</script><ul class="top-level astro-rmhv4bp6"><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Get started</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="0"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/173/docs/start/introduction/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">What chromosomix is</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/start/ways/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Ways to use it</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/start/first-map/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Your first map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/start/window/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">A tour of the window</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/start/tutorial/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The guided tutorial</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/start/where-to-run/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Web, desktop or one file</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Your files</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="1"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/173/docs/files/opening/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Opening files</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/files/contact-maps/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Contact maps</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/files/tracks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Tracks and features</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/files/interactions/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Interactions</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/files/sequences/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Reference sequences</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/files/structures/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">3D models</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/files/stores/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Data stores</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/files/problems/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">When a file will not open</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Using the browser</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="2"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/173/docs/browse/navigating/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Moving around</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/browse/contact-maps/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Reading a contact map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/browse/comparing/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Comparing two maps</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/browse/turn/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The 45° view</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/browse/genome-browser/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The genome browser</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/browse/deck/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Maps side by side</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/browse/structures/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">3D models beside the map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/browse/annotations/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Annotations and bookmarks</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/browse/sessions-and-links/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Sessions, workspaces and links</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/browse/figures/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Figures and export</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/browse/console/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">The console</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/browse/keyboard/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Keyboard and command palette</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Analyses</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="3"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">How analyses run</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/validation/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">How the results are checked</span></a></li><li class="astro-rmhv4bp6"><details class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">2D tasks</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="4"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/coverage/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Coverage and marginals</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/cistrans/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Cis and trans per sequence</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/cellqc/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Per-cell contact QC</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/expected/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Contact probability P(s)</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/pairsqc/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Pairs QC</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/mapreport/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Map report</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/scalogram/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Scalogram</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/fourc/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">4C profile from an anchor</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/insulation/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Diamond insulation</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/di/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Directionality index</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/hicscore/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">HiC score</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/arrowhead/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">TAD annotation</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/compartments/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Compartments</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/interarm/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Inter-arm alignment</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/loops/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Loop calling</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/chromosight/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Pattern detection</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/hicrep/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Reproducibility</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/apa/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Aggregate peak analysis</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">3D tasks</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="5"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/reconstruct3d/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Model from the map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/structuremap/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Model versus map</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/spatialtracks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Spatial tracks</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">1D tasks</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="6"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/motif/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Find a motif</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/restriction/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Restriction sites</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/peaks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Peak calling</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/composition/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Base composition</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/oriter/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Origin and terminus</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/metaplot/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Metaplot over a feature set</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/trackcorr/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Track correlation</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/frip/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Fraction of signal in features</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/groupsignal/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Signal by group</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/analyses/overlap/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Interval set overlap</span></a></li></ul></details></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Command line</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="7"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/173/docs/cli/install/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Installing it</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/cli/running/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Running a task</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/cli/from-the-app/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">From the app to a script</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/cli/pipelines/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">In a pipeline</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Notebooks and web pages</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="8"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/173/docs/embed/jupyter/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Jupyter notebooks</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/embed/r/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">R, Quarto and Shiny</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/embed/web-page/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Embedding in a web page</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Advanced</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="9"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/173/docs/advanced/hosting/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Hosting your data</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/advanced/data-store/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Your own data store</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/advanced/track-hubs/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">UCSC track hubs</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/advanced/self-hosting/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Running your own copy</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/advanced/privacy/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Privacy</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Reference</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="10"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/173/docs/reference/files-and-stores/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Files, hosts and stores</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/reference/links/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Link keys</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/reference/command-line/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Command line</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/reference/embedding/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Embedding messages</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/glossary/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Glossary</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Release notes</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="11"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/unreleased/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Unreleased</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.21.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.21.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.20.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.20.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.19.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.19.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.18.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.18.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.17.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.17.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.16.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.16.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.15.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.15.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.13.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.13.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.12.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.12.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.11.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.11.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.10.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.10.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.9.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.9.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.8.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.8.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.7.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.7.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.6.1/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.6.1</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.6.0/" aria-current="page" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.6.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.5.1/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.5.1</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.5.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.5.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.4.1/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.4.1</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.4.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.4.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.3.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.3.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.2.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.2.0</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/releases/v0.1.0/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">0.1.0</span></a></li></ul></details></li><li class="astro-rmhv4bp6"><details open class="astro-rmhv4bp6"><summary class="astro-rmhv4bp6"><span class="group-label astro-rmhv4bp6"><span class="large astro-rmhv4bp6">Contributing</span></span><svg aria-hidden="true" class="caret astro-rmhv4bp6 astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></summary><sl-sidebar-restore data-index="12"></sl-sidebar-restore><ul class="astro-rmhv4bp6"><li class="astro-rmhv4bp6"><a href="/pr/173/docs/contributing/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Source code and contributing</span></a></li><li class="astro-rmhv4bp6"><a href="/pr/173/docs/contributing/readers-and-tasks/" class="astro-rmhv4bp6"><span class="astro-rmhv4bp6">Adding a reader or a task</span></a></li></ul></details></li></ul><script aria-hidden="true">
+		(() => {
+			const scroller = document.getElementById('starlight__sidebar');
+			if (!window._starlightScrollRestore || !scroller) return;
+			scroller.scrollTop = window._starlightScrollRestore;
+			delete window._starlightScrollRestore;
+		})();
+	</script></sl-sidebar-state-persist><div class="md:sl-hidden"><div class="mobile-preferences sl-flex astro-p4azlveh"><div class="social-icons astro-p4azlveh"><a class="cx-open-app" href="https://chromosomix.app/pr/173/">Open chromosomix #173</a><a class="cx-icon-button" href="https://github.com/js2264/chromosomix" aria-label="chromosomix on GitHub"><svg aria-hidden="true" class=" astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57L9 21.07c-3.34.72-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.08-.74.09-.73.09-.73 1.2.09 1.83 1.24 1.83 1.24 1.08 1.83 2.81 1.3 3.5 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.28-1.55 3.29-1.23 3.29-1.23.64 1.66.24 2.88.12 3.18a4.65 4.65 0 0 1 1.23 3.22c0 4.61-2.8 5.63-5.48 5.92.42.36.81 1.1.81 2.22l-.01 3.29c0 .31.2.69.82.57A12 12 0 0 0 12 .3Z"/></svg></a></div><starlight-rapide-theme-select class="astro-xgdtbcdp"><button aria-label="Select theme" aria-live="polite" class="sl-flex astro-xgdtbcdp" title="Select theme"><svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16" class="astro-xgdtbcdp"><mask class="moon astro-xgdtbcdp" id="moon-mask-57487936"><rect x="0" y="0" width="100%" height="100%" fill="white" class="astro-xgdtbcdp"></rect><circle cx="24" cy="10" r="6" fill="black" class="astro-xgdtbcdp"></circle></mask><circle class="sun astro-xgdtbcdp" cx="12" cy="12" r="6" mask="url(#moon-mask-57487936)"></circle><g class="sun-beams astro-xgdtbcdp" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="3" class="astro-xgdtbcdp"></line><line x1="12" y1="21" x2="12" y2="23" class="astro-xgdtbcdp"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" class="astro-xgdtbcdp"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" class="astro-xgdtbcdp"></line><line x1="1" y1="12" x2="3" y2="12" class="astro-xgdtbcdp"></line><line x1="21" y1="12" x2="23" y2="12" class="astro-xgdtbcdp"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" class="astro-xgdtbcdp"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" class="astro-xgdtbcdp"></line></g></svg></button></starlight-rapide-theme-select><script>
+  StarlightThemeProvider.updatePickers()
+</script></div></div></div></sl-sidebar-pane></nav><div class="main-frame astro-yntsjkba"><script type="module">var e=document.getElementById(`starlight__sidebar`),t=e?.querySelector(`sl-sidebar-state-persist`),n=`sl-sidebar-state`,r=()=>{let r=[],i=t?.dataset.hash||``;try{let e=sessionStorage.getItem(n),t=JSON.parse(e||`{}`);Array.isArray(t.open)&&t.hash===i&&(r=t.open)}catch{}return{hash:i,open:r,scroll:e?.scrollTop||0}},i=e=>{try{sessionStorage.setItem(n,JSON.stringify(e))}catch{}},a=()=>i(r()),o=(e,t)=>{let n=r();n.open[t]=e,i(n)};t?.addEventListener(`click`,e=>{if(!(e.target instanceof Element))return;let t=e.target.closest(`summary`)?.closest(`details`);if(!t)return;let n=t.querySelector(`sl-sidebar-restore`),r=parseInt(n?.dataset.index||``);isNaN(r)||o(!t.open,r)}),addEventListener(`visibilitychange`,()=>{document.visibilityState===`hidden`&&a()});</script><div class="lg:sl-flex astro-lrzkfocr"><aside class="right-sidebar-container print:hidden astro-lrzkfocr"><div class="right-sidebar astro-lrzkfocr"><div class="lg:sl-hidden astro-qok35upx"><mobile-starlight-toc data-min-h="2" data-max-h="3" class="astro-66cqc7ze"><nav aria-labelledby="starlight__on-this-page--mobile" class="astro-66cqc7ze"><details id="starlight__mobile-toc" class="astro-66cqc7ze"><summary id="starlight__on-this-page--mobile" class="sl-flex astro-66cqc7ze"><span class="toggle sl-flex astro-66cqc7ze">On this page<svg aria-hidden="true" class="caret astro-66cqc7ze astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1rem;"><path d="m14.83 11.29-4.24-4.24a1 1 0 1 0-1.42 1.41L12.71 12l-3.54 3.54a1 1 0 0 0 0 1.41 1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.24-4.24a1.002 1.002 0 0 0 0-1.42Z"/></svg></span><span class="display-current astro-66cqc7ze"></span></summary><div class="dropdown astro-66cqc7ze"><ul class="isMobile astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Overview</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#added" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Added</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#fixed" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Fixed</span></a></li></ul></div></details></nav></mobile-starlight-toc><script type="module" src="/pr/173/docs/_astro/MobileTableOfContents.astro_astro_type_script_index_0_lang.C3fM4Kra.js"></script></div><div class="right-sidebar-panel sl-hidden lg:sl-block astro-qok35upx"><div class="sl-container astro-qok35upx"><starlight-toc data-min-h="2" data-max-h="3"><nav aria-labelledby="starlight__on-this-page"><h2 id="starlight__on-this-page">On this page</h2><ul class="astro-jugkfwgx" style="--depth: 0;"><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#_top" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Overview</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#added" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Added</span></a></li><li style="--depth: 0;" class="astro-jugkfwgx"><a href="#fixed" style="--depth: 0;" class="astro-jugkfwgx"><span style="--depth: 0;" class="astro-jugkfwgx">Fixed</span></a></li></ul></nav></starlight-toc><script type="module" src="/pr/173/docs/_astro/TableOfContents.astro_astro_type_script_index_0_lang.BpJaGz7G.js"></script></div></div></div></aside><div class="main-pane astro-lrzkfocr"><main class="astro-g5ptsecz" lang="en" dir="ltr"><div class="sl-banner cx-version-notice" data-pagefind-ignore>This is a <strong>preview</strong> of <a href="https://github.com/js2264/chromosomix/pull/173">pull request #173</a>, for its review: it is replaced on every push and taken down when the pull request closes. The published documentation is at <a href="https://doc.chromosomix.app/">doc.chromosomix.app</a>.</div><script type="module">for(let e of document.querySelectorAll(`[data-cx-dev]`))fetch(e.dataset.manifest??`/versions.json`,{cache:`no-cache`}).then(e=>e.ok?e.json():null).then(t=>{if(t===null||t.latest===null)return;let n=e.querySelector(`[data-cx-latest-offer]`),r=e.querySelector(`[data-cx-latest-link]`);r!==null&&(r.textContent=`Read ${t.latest}’s`,location.pathname.startsWith(`/dev/`)&&(r.href=`/${location.pathname.slice(5)}`)),n!==null&&(n.hidden=!1)}).catch(()=>{});for(let e of document.querySelectorAll(`[data-cx-older]`)){let t=e.dataset.cxOlder,n=e.dataset.base??`/`;fetch(e.dataset.manifest??`/versions.json`,{cache:`no-cache`}).then(e=>e.ok?e.json():null).then(r=>{if(r===null||r.latest===null||r.latest===t)return;let i=e.querySelector(`[data-cx-latest]`),a=e.querySelector(`[data-cx-latest-link]`);i!==null&&(i.textContent=r.latest),a!==null&&location.pathname.startsWith(n)&&(a.href=`/${location.pathname.slice(n.length)}`),e.hidden=!1}).catch(()=>{})}</script><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><h1 id="_top" class="astro-bebwqqxs">chromosomix 0.6.0</h1></div></div><div class="content-panel astro-a7po4psb"><div class="sl-container astro-a7po4psb"><div class="sl-markdown-content"><p>What changed in chromosomix 0.6.0, released on 5 August 2026.</p>
+<div class="sl-heading-wrapper level-h2"><h2 id="added">Added</h2><a class="sl-anchor-link" href="#added"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Added”</span></a></div>
+<ul>
+<li>
+<p><strong>Tabs, and a real session behind each one.</strong> Several files open at once, each
+with its own reader worker, its own annotation worker, its own stores and its
+own DOM. Switching a tab in re-parents that DOM rather than rebuilding it, so
+a map comes back with its pixels, its zoom and its scroll exactly as they
+were and without a single byte re-read — which is what a tab has to be for it
+to be worth having over a second browser window.</p>
+<p>The address bar names <strong>the active tab and nothing else</strong>, which is what was
+asked for and also the only coherent answer: a hash is one view state, and
+writing several would make every link a description of somebody else’s
+workspace and make the back button walk a history that interleaves three
+files. The rest of the strip lives in <code dir="auto">sessionStorage</code> beside the annotations
+(§8.6), and a restored tab is <em>named</em> rather than opened — the label and the
+view state come back, the worker does not, and clicking is what reads the
+file. Eight remembered tabs therefore cost eight labels. One that named a
+local file comes back to the picker with the explanation a pasted local-file
+link has always given, because no browser re-reads a dropped file without a
+gesture.</p>
+<p>Two tabs on one file now share nothing: the per-session memory is keyed on the
+session as well as the URI, so the second view starts with no tracks, no
+filters and no marks rather than adopting the first one’s.</p>
+</li>
+<li>
+<p><strong>A second cooler in the lower-left triangle.</strong> A contact matrix is symmetric,
+so half of every square on screen is a mirror of the other half and carries no
+information at all. That is the room this uses: the second file fills it, the
+picture stops being symmetric, and a broken symmetry is read far faster than
+two maps side by side.</p>
+<p>The split is the <strong>matrix</strong> diagonal, not the viewport’s, which is what makes
+panning off the diagonal need no rule of its own — the far corner of a trans
+block is entirely above the line and shows the first file alone, and its
+transpose shows the second. Zoom, selection and every other gesture are
+untouched, because the merge happens once per read and hands the renderer an
+ordinary block.</p>
+<p>Dropped on a card in the Annotations column, where everything else that is
+laid over a map already lives. Refused <em>by name</em>: a metacool (§8.5’s argument,
+applied to a whole matrix), a different bin size (one grid cannot be two
+resolutions), or a chromosome list differing in count, order, spelling or
+length (every coordinate is an index into one such list). An <code dir="auto">.mcool</code> dropped
+at its root opens its finest resolution, as it does on the picker.</p>
+<p>GENERAL becomes File 1 and File 2, each with the mark of its own triangle and
+a close button: closing the second returns to one map, closing the first
+promotes the second, so either is reversible and what remains is an ordinary
+one-file map. <code dir="auto">uri2</code> is in the hash, so a comparison is a link.</p>
+<p>One scale by default, because the same colour meaning the same count is the
+stronger claim. <strong>Match depth</strong> scales the second file so its 99th percentile
+meets the first’s — the same order statistic §7.1 picks <code dir="auto">vmax</code> with — for the
+case that motivates it: two libraries of different depth, where the shallower
+is otherwise a pale triangle telling you only that it was sequenced less. Two
+colourbars then read the same colours in each file’s own counts, and the
+tooltip and the status line carry both numbers at every cell.</p>
+</li>
+<li>
+<p><strong>A genome browser that needs no contact map.</strong> Until now a bigWig could only
+be looked at beside a cooler of the same assembly, and that was never a
+property of the tracks — it was a property of the coordinate model, which
+started from a matrix and had no way to describe a genome that was not one.</p>
+<p>So there is a second starting point. A <code dir="auto">chrom.sizes</code>, a bigWig, a bigBed or a
+feature file declares the assembly — outright in the first three cases, and as
+a lower bound in the fourth, which is marked as inferred wherever the genome
+is described — and the axis becomes the whole genome laid end to end at one
+unit per base pair. Everything drawn on it is drawn by the code that draws the
+lanes beside a heatmap, through the same <code dir="auto">LocusAxis</code> §8.4 already made the
+only one: a track cannot be at two positions because only one thing knows
+where a base pair is.</p>
+<p>The gestures are the map’s, deliberately. A drag pans, Option-drag selects a
+range to zoom into, the wheel zooms about the pointer, a double click fits, a
+lane’s border resizes it and its body reorders the stack — every one of them
+the gesture that already meant that. The one that is the browser’s own is
+⌘-scroll over a lane, which moves <em>that</em> track’s ceiling from whatever it is
+currently resolved to; it is the adjustment a genome browser is asked for
+constantly and a map has no analogue for it.</p>
+<p>With it: a locus box that accepts <code dir="auto">chrI:1,000-20,000</code>, a bare sequence name or
+<code dir="auto">*</code>, and shows back exactly what it would accept; a feature search over every
+loaded gene model and peak set; click a gene to zoom to it and a sequence name
+to go there; a ruler that draws sequence bands zoomed out and base pairs
+zoomed in, because at those two extremes they are different questions; arcs
+for a BEDPE, which is what a loop call looks like in one dimension; range and
+group editors on each lane, revealed by pointing at it; autoscale groups that
+stack or share a single lane; and PDF/PNG export redrawn at the export scale.</p>
+<p>The two shapes of browser are one session. Drop a <code dir="auto">.cool</code> anywhere on the
+tracks and the tab becomes its map, tracks and all; close the map from the
+File card and it falls back to a browser on the cooler’s own <code dir="auto">/chroms</code>, with
+the same tracks still loaded. A file whose name says nothing is opened as a
+map and, if that fails, identified by its bytes and re-routed rather than
+reported as broken.</p>
+</li>
+<li>
+<p><strong>bigBed is read.</strong> Whole, and parsed as the BED it holds, so a bigBed12 draws
+its exons exactly as the text file would — one parser, one set of rules, one
+place where BED’s quirks live. Not windowed, because a <code dir="auto">FeatureSet</code> lives on
+the main thread precisely so that a pan redraws with no round trip (§8.4). A
+file past a million intervals is cut off and says so.</p>
+</li>
+<li>
+<p><strong>The 1D browser exports a vector PDF</strong>, and it is the drawing rather than a
+photograph of it. Nothing in that view is a raster — every mark is a
+rectangle, a polyline or a word — so a 300 dpi image of it is a figure nobody
+can restyle, recolour or scale, in a file fifty times the size of the drawing
+it contains. The page is produced by handing the <em>same</em> renderers a context
+that emits PDF operators instead of pixels, so there is no second drawing of
+the view to keep in step: <code dir="auto">render/features.ts</code>, <code dir="auto">render/tracks.ts</code>,
+<code dir="auto">render/lane.ts</code> and <code dir="auto">render/browser.ts</code> do not know which one they are
+talking to. Text is Helvetica, one of the fourteen fonts every reader has, so
+nothing is embedded; the halo behind each track name survives as PDF’s own
+stroked text mode; and the content stream is deflated, which on a whole-genome
+gene model is the difference between a twelve-megabyte figure and a
+seven-hundred-kilobyte one. A vector page has no resolution, so the DPI
+control is disabled while it is chosen rather than quietly ignored. The
+heatmap’s PDF is unchanged and stays a raster, because a contact map <em>is</em> one.</p>
+</li>
+<li>
+<p><strong>The tracks answer to a hand, and the panel answers to a list.</strong> Rows
+reorder by their grip or by the arrow keys, and a lane reorders by dragging
+its body; a tick box on each row opens a batch bar that puts several tracks in
+one autoscale group, gives them one colour, one height, or removes them
+together — six tracks from one experiment were six trips through six rows. A
+colour swatch sits beside each name and <em>is</em> the colour input, so changing a
+track’s colour is one click rather than a menu. Every track’s name is larger
+and its controls smaller: colour, limits, a ceiling slider and its group, laid
+out under the name where a reader is already looking, revealed by pointing at
+the lane and drawn over the top of it rather than across its data.</p>
+</li>
+<li>
+<p><strong>A drag on the ruler zooms, with no modifier.</strong> The coordinate strip is where
+a reader points to say “this much”, and it is the one gesture whose meaning
+its position already settles — so spending a keystroke on it bought nothing.
+Option-drag still selects on the tracks themselves, where a drag means pan.</p>
+</li>
+<li>
+<p><strong>Fit every track into the space there is</strong>, in the proportions they are
+already in rather than equally: a reader who gave the gene model three times
+the height of a coverage track meant it, and “fit” is a request about the
+stack running off the bottom of the window. Equal heights is the other thing,
+and the Groups card still offers it per group.</p>
+</li>
+<li>
+<p><strong>A file dropped anywhere in the middle of the window is imported.</strong> The drop
+zones in the Annotations column say what each kind of file becomes and are
+still there, but a reader with a bigWig in hand and a browser on screen means
+one thing by dropping it, and asking them to find the right box first is a
+step that answers a question nobody had.</p>
+</li>
+<li>
+<p><strong>Gene names sit under the features</strong>, in a band of their own, so a name never
+covers the exon structure it belongs to; below the height where that band
+would leave no room for a glyph they go back inside, which is what a lane
+dragged very short should do.</p>
+</li>
+<li>
+<p><strong>Aesthetics can turn every word off.</strong> One toggle hides track names, value
+ranges and feature names together, leaving the ink — which is what a figure
+destined for a caption usually wants, and what a screenshot of six tracks
+usually does not. Shared with the heatmap’s own panel and the command palette,
+so all three agree.</p>
+</li>
+<li>
+<p><strong>Chromosome boundaries are drawn</strong>, as a full-height rule between sequences,
+and the ruler bands alternate by the sequence’s position in the assembly
+rather than by its position on screen — so a boundary does not change shade
+when a pan brings a new sequence into view.</p>
+</li>
+<li>
+<p><strong>The tabs are shaped like tabs</strong>, with tilted sides, the active one raised
+and lit along its top edge, and the pointer is the same black-filled arrowhead
+over the tracks that it is over the map. The × appears on the tab under the
+pointer and on no other — including the active one, which used to be an
+exception — and it lost the bordered box that was most of what the corner of a
+tab showed. One session is a title rather than a tab: the strip stays, because
+the way to a second session is the button on it, but a lone trapezoid with an
+accent bar is machinery announcing a choice nobody has been offered.</p>
+</li>
+<li>
+<p><strong>Every sequence in the genome, with its length, under the Genome card.</strong> The
+first question a genome browser is asked, and until now the only answer was a
+count. Each row is a click that goes there, which is also the fastest way to
+navigate — a chromosome <em>is</em> a locus, and the locus box is for the case where
+you already know the coordinate. The bar behind each row is its length against
+the longest, which costs a gradient and turns a column of numbers into the
+shape of an assembly: sixteen bars in a staircase is a yeast, one bar with a
+thousand slivers under it is a draft. A filter appears above a dozen
+sequences, and at most three hundred rows are built at once, because forty
+thousand scaffolds is a second of layout for a list nobody scrolled to the end
+of.</p>
+</li>
+<li>
+<p><strong>A track’s range is under its name, and you can type in it.</strong> Two changes
+that are one change. A number at the far end of a lane from the name it
+belongs to has to be paired up by eye every time, and with four tracks stacked
+that is four crossings of the window — so it moved under the name. And a
+number that is under its name is a number you can put a caret in: hovering
+either end gives a text cursor, and clicking opens a box exactly where the
+number was drawn, so nothing moves when it becomes editable. Typing a bound
+turns autoscale off, because that is what typing a bound means. The two boxes
+that used to live in the lane’s hover row are gone with it — the range is
+edited where it is read now, and what is left there is <code dir="auto">auto</code>, the ceiling
+slider, the colour and the group.</p>
+</li>
+<li>
+<p><strong>A toggle for the shading under a track’s line.</strong> The pale envelope that says
+what a zoomed-out mean hid, and the fill an area track carries: one switch,
+because they are one thing to the eye. Both are <em>context</em> for the line, and
+context is the first thing to go when three tracks share a lane or a figure is
+going into a caption. Shared with the heatmap’s own panel and the command
+palette, like the track-text toggle beside it.</p>
+</li>
+<li>
+<p><strong>The Plot card is marks rather than sentences.</strong> Fit across, fit down, words
+on or off, shading on or off — four things a reader does over and over while
+reading, in a row of four icons instead of a column of full-width buttons
+spelling each of them out. The same two fit marks are on the toolbar above the
+tracks, because they are the same two actions. And the export controls are one
+line again: a vector page has no resolution, so the resolution is <em>absent</em>
+exactly when the long format name needs the width.</p>
+</li>
+<li>
+<p><strong>Memory and CPU on the status bar</strong>, after what has been read and whether the
+file checks out. Per <em>browser tab</em> rather than per session, because the memory
+a gene model holds and the core a scan is burning are shared by every tab in
+the window.</p>
+<p>Both are weaker than what a task manager shows, and the tooltips say so
+outright. A page cannot see its own process — a precise figure would read
+across origins — so memory is the JavaScript heap and its ceiling where that
+is all Chromium offers, and the whole-agent measurement where a build is
+cross-origin isolated. CPU has no API at all, so it is measured from the
+inside: every thread in the tab times its own event loop, and the share of the
+last three seconds they could not answer in, summed against the machine’s
+cores, is the number. Work too brief to delay anything never appears, so the
+reading is a floor rather than an estimate. The workers report their own, which
+is the point — a whole-genome scan pins a worker for minutes while the main
+thread sits idle.</p>
+</li>
+<li>
+<p><strong>Drop a file on the map itself to make it a track</strong>, on the edge you aim at:
+a strip along its bottom for the horizontal stack, one down its side for the
+vertical one. Two rectangles appear while a drag carrying files is over it and
+are inert the rest of the time, because the map’s own gestures — pan, the
+Option-drag selection, the click that opens a cell — live in the same pixels.
+What the file <em>is</em> is still decided by its bytes (§8.3): a <code dir="auto">.cool</code> aimed at
+the bottom of the map is a map, not a track drawn along the bottom.</p>
+</li>
+<li>
+<p><strong><code dir="auto">/</code> puts the caret in the box, in every view.</strong> It was the genome browser’s
+alone, so the same key that found a gene did nothing the moment a <code dir="auto">.cool</code> was
+dropped in the same tab. Each view now answers it with its own box: the region
+box on a region, the filter above a table, and a new one in the heading of the
+whole-genome, genome, pair and scan views — which is also the only way to
+leave those pictures by typing rather than by aiming, and a genome of one
+metagenome’s four thousand is a quarter of a pixel to aim at. The key is
+printed in the box and steps out of the way when the caret arrives.</p>
+</li>
+<li>
+<p><strong>Every shortcut is on the button that performs it.</strong> Tooltips name their key
+— the panel folds, the theme, the tab strip, both Plot cards, every overlay
+toggle, the breadcrumb’s landing views — and the two <code dir="auto">whole genome →</code> buttons
+and the breadcrumb menu print theirs as a badge. The bindings come from two
+tables (<code dir="auto">ui/commands.ts</code> and <code dir="auto">ui/plotOptions.ts</code>) that the key handler, the
+palette, the shortcuts dialog and every one of those tooltips now share, and a
+test asserts no two actions claim the same key.</p>
+</li>
+<li>
+<p><strong>A mark before every card title</strong> in the three panels, so a column of five
+cards is recognised by shape before it is read.</p>
+</li>
+<li>
+<p><strong>A height for every track, and the button that gives it to them</strong>, in the
+browser’s Plot card beside the stretch mark. Stretching answers “use the space
+I have”; this answers “I know what a track should look like” — ninety pixels
+is where a yeast ATAC track starts showing the shape of a promoter — and it is
+also the way <em>out</em> of a stretch, which on a tall screen with two tracks leaves
+two four-hundred-pixel lanes and nothing to bring them down with. The box is a
+number and nothing happens as it is typed; Enter and the button are the
+instruction, so it keeps what you last applied and the next file is one press
+away from it.</p>
+</li>
+<li>
+<p><strong>Drag a track onto the other edge of the map to move it there.</strong> The two
+rectangles that take a dropped file take a <em>loaded</em> track as well: pick a row
+up by its grip in the Tracks card, and both rectangles appear the moment it is
+over the map — drop on one and the track is drawn there instead.</p>
+<p>The gesture is on the row rather than on the lane’s <em>body</em>, and that is the
+second attempt. Dragging the body is what a reader reaches for and there is no
+room for it there: a lane already answers three drags — its border resizes,
+along the axis pans, across reorders — so a fourth had to be read out of one
+of them, and the trip from the bottom stack to the right-hand rectangle is
+mostly sideways, which is a bottom lane’s <em>pan</em>. It worked from one stack and
+fought the other. The row carries no such freight, and it is where the track’s
+other settings are. (The lane got the gesture back in the end, on a handle of
+its own — see below.)</p>
+<p>A row now has a grip beside a map even when it is the only one, since there it
+has something to do besides reorder. The drag carries its own MIME type, so
+the rectangles can tell it from a dropped file and from a dragged word while
+the drag is still in the air, and the whole content area no longer lights up
+for it. It is the same state as the <code dir="auto">location</code> setting on the row, because it
+is the same field.</p>
+</li>
+<li>
+<p><strong><code dir="auto">S</code> saves the plot.</strong> Whichever view is mounted exports itself — the map or
+the browser — in the format and at the resolution its own Plot card is set to,
+because a shortcut that saved something other than the button beside it would
+be a second export to keep in step. It is one letter from <code dir="auto">⌘S</code>, which saves
+the <em>session</em>, and that is the pairing: two things a reader means by “save
+this”, told apart by the modifier. Stretching the tracks moves to <code dir="auto">H</code>, for
+height.</p>
+</li>
+<li>
+<p><strong><code dir="auto">location</code>, in the row’s settings, rather than <code dir="auto">B</code>/<code dir="auto">R</code> tick boxes on its
+head.</strong> Two buttons with the words on them — <code dir="auto">bottom</code> and <code dir="auto">right</code>, and not a
+choice between each other, since a track can be on both — drawn as one
+segmented control below <code dir="auto">height</code>. The initials were standing furniture in
+six-point type between a track’s name and its eye, for a decision taken once
+per track and now also takeable by dragging the lane itself. The last edge a
+track is on cannot be switched off: a lane on neither edge is drawn nowhere
+while still calling itself visible, and the eye beside the name is what hides
+a track.</p>
+</li>
+<li>
+<p><strong>The drop zone is what lights up</strong>, not the card around it. A card that asks
+for a file still takes one anywhere on it — a reader whose pointer is over the
+eighth row when they let go meant to load it — but what reacts is the dashed
+box, which is the element already drawn as the target. The whole card going
+blue around an inert rectangle said the rectangle was not the one. Tracks,
+Compare and the browser’s Contact map card all behave this way now, and a
+<em>row</em> dragged within the Tracks card lights nothing, because a drag carrying
+no files is a reorder.</p>
+</li>
+<li>
+<p><strong>Plot before Groups</strong> in the browser’s Aesthetics column. Plot acts on this
+picture and is there whatever the file is; Groups is empty until a reader has
+made one, and a column that opens with an empty card reads as a column with
+nothing in it. The browser’s toolbar also gives up its autoscale button, which
+was the sixth control in a row that then wrapped, orphaning one button on a
+line of its own — it is in the Plot card, on <code dir="auto">Y</code>, where the height box is.</p>
+</li>
+<li>
+<p><strong>A track lands under the map, not beside it.</strong> The bottom edge is where a
+track is read — under a ruler, left to right — and a coverage profile turned
+on its side has to be read with your head tilted. The right-hand stack is
+still there and is now something you choose: the <code dir="auto">B</code>/<code dir="auto">R</code> boxes on the row, or
+the edge you drop the file on.</p>
+</li>
+<li>
+<p><strong><code dir="auto">S</code> stretches the tracks</strong> to fill the height, all of them to one height,
+which is the thing a reader reaches for several times a session. Autoscale,
+which had <code dir="auto">S</code>, is now <code dir="auto">Y</code> — the axis it acts on — and works beside a map as
+well as under a browser, since they are the same tracks in the same store.</p>
+</li>
+<li>
+<p><strong>The status bar is one line, always.</strong> It is the bottom edge every view is
+measured against, and it grew a second line exactly when the pointer was over
+a stack of tracks — when the reader is least interested in it. So <code dir="auto">read</code> is
+bytes and keeps the request count in the panel it already opens on hover,
+<code dir="auto">memory</code> is bytes and keeps the share of the ceiling there too, and the
+coordinate readout is the item that gives way, being the one thing here that
+is re-said a moment later.</p>
+</li>
+<li>
+<p><strong>The standing <code dir="auto">read in place · nothing is sent</code> line is gone from the bar.</strong>
+The claim is not: the picker states it where a file is about to be opened, and
+About states it in full. It was a sentence you finish reading once, permanently
+occupying a corner of a bar whose other three items are numbers that change.</p>
+</li>
+<li>
+<p><strong>The shortcuts dialog has no Help group</strong>, so the two gesture tables — what a
+drag, a wheel and a double click do on a map, against what they do on the
+tracks — sit side by side, which is how they are read. <code dir="auto">⌘/</code> was the only bound
+command in Help and is now beside the palette in App, where it belongs. Both
+tables also gained the gestures they had been missing: the lane resize, the
+edge drops, and dropping a file on the browser’s tracks.</p>
+</li>
+<li>
+<p><strong>The Compare card and the browser’s Contact map card wear the Tracks card’s
+load zone</strong> — a thin unshaded box with a bold line and a quiet one, then the
+URL behind a fold. All three ask the reader for a file, and three shaded
+variations of one gesture in one column read as three applications. The
+Contact map card can now take a URL, which it could not before.</p>
+</li>
+<li>
+<p><strong>One box in the browser’s toolbar</strong>, not two. <code dir="auto">chrIV:1,000-2,000</code>, <code dir="auto">chrIV</code>
+and <code dir="auto">GAL4</code> are three spellings of “where do I want to be”, and asking which of
+two boxes each spelling belonged in was a taxonomy the reader had to learn in
+order to type a word. Coordinates win when the text is coordinates; anything
+else falls to the list of names under the box. Clicking it selects what is
+there, because what is there is where you already are, and <code dir="auto">/</code> still lands in
+it.</p>
+</li>
+<li>
+<p><strong>Loading a track is at the top of the Tracks card</strong>, rather than in a card of
+its own below it. The two questions are asked of the same thing, and with
+eight tracks loaded the way to load a ninth was to scroll past the eight.</p>
+</li>
+<li>
+<p>The app was one object holding a worker, a store, a file and a view, and it
+bound itself to the address bar in its constructor. It is now <code dir="auto">app/Session.ts</code>
+— a file and the views of it — and <code dir="auto">app/App.ts</code> — the window around them —
+with <code dir="auto">main.ts</code> as three lines of bootstrap. <code dir="auto">ViewStore</code> stops owning the hash,
+because there is one address bar and there may be six stores.</p>
+</li>
+<li>
+<p>The sample cache that keeps pan and zoom free of I/O moved out of
+<code dir="auto">AnnotationLanes</code> into <code dir="auto">annotations/samples.ts</code>. Two widgets need that rule now
+and its arithmetic — the padded window, the power-of-two bucket, keeping the
+old data on screen until the new data lands — is fiddly enough that two copies
+would drift.</p>
+</li>
+<li>
+<p>A <code dir="auto">chrom.sizes</code> dropped on a browser whose lengths were <em>inferred</em> replaces
+them, and replaces only them: the URI, the session memory and every loaded
+track stay exactly as they were, because the genome did not change — only what
+is known about it. A <code dir="auto">samtools faidx</code> <code dir="auto">.fai</code> counts as one, decided by its
+name, which is the tiebreak <code dir="auto">sniffFormat</code> already uses for the two cases its
+columns cannot settle.</p>
+</li>
+<li>
+<p>The colour swatch beside a track’s name in the Annotations panel appears when
+the row is pointed at or has the focus, like the drag handle it sits next to.
+A column of coloured squares down the panel is a second legend for something
+the picture already says where it matters — the lane is drawn in that colour,
+and where two share a lane so is each name. It keeps its space while it is
+invisible, so reaching for it is one movement rather than a hunt.</p>
+</li>
+<li>
+<p><strong>Every lane has a grip, in both views.</strong> Six dots beside the track’s own
+name — the same glyph the Tracks card puts at the head of every row, because
+it is the same gesture on the same thing. Dragging it moves the track through
+the stack; beside a map, dragging it out onto either rectangle draws the track
+on that edge instead. Reordering a track was something you could only do to
+the picture from the <em>list</em> beside it, or by learning that a drag across a
+lane means one thing and along it means another.</p>
+<p>It is a fourth <em>surface</em> rather than a fourth reading of one, which is what
+makes it possible at all: a press that starts on the handle is not ambiguous
+in any direction, so it can mean “move this track” everywhere the pointer
+goes, and the three drags the lane’s body already answers keep their pixels
+untouched. Drawn on the canvas rather than laid over it, for the reason every
+affordance here is: the pointer is an arrowhead pointing at a base pair, and a
+handle that lived in the cursor would not exist until you were on it. It takes
+the open hand as its cursor — the one thing the arrowhead cannot say — and is
+never on a saved figure, because what a reader points at is not part of the
+picture.</p>
+<p><strong>It is the only way to move a track.</strong> The lane’s body used to reorder as
+well, by reading the direction of the first movement — along the axis a pan,
+across it a reorder. Two meanings for one surface is a rule you have to know
+before your first drag does what you meant, and it was paid for on every pan
+that wandered a few pixels off the horizontal: the track jumped a slot,
+because a gesture that has to be performed <em>carefully</em> had been asked for.
+With a surface of its own for moving, the body goes back to meaning one thing.</p>
+<p>It hangs <strong>outside</strong> its lane, in the margin just before the data starts, and
+that is what lets every lane show one at all times. Inside, it had to be paid
+for twice: a slot cut out of the front of each label, which moved every track
+name along, and a glyph that could only appear on hover — because a permanent
+one would have been sitting on the signal. Outside, it costs the picture
+nothing, so the names went back against the start of their own track and the
+handles stopped being something to discover. Each one is on its name’s line
+and keeps its distance from it, wherever the layout put that name: at the top
+over the data, centred in a column, down at the floor on a flipped track. The
+faint one is a handle; the solid one is the lane the pointer is on.</p>
+<p>The 1D browser keeps a thirteen-pixel strip at its left for them, since
+outside its first lane is off the edge of the canvas otherwise. Beside a map
+no strip is needed — the plot’s own margin is where they go. Which end of a
+lane that is depends on which way the lane reads: the left of a bottom lane,
+and the <em>bottom</em> of a right-hand one, which turns a quarter turn and reads
+upward from there. A handle at the far end of a track from its own name is a
+handle belonging to nothing in particular.</p>
+<p>A grip drag raises the <strong>other</strong> edge’s rectangle and only that one. A track
+taken out of the bottom stack cannot be moved to the bottom — it is already
+there — so offering it that target is offering a gesture with no outcome, and
+a rectangle that lights under the pointer and then does nothing when you let
+go reads as the drag having failed. The rectangle that is not offered is not a
+drop target either, decided in one place, so what lights up and what lands
+cannot disagree. A file dragged in from the desktop still gets both, since it
+is on neither edge yet.</p>
+<p>The right-hand stack makes its own room. Its handles hang past the end of the
+data, where the space available is whatever the heatmap left under its plot —
+a couple of pixels in a view with no column labels — so rather than back the
+handle into the signal, the stack adds the few pixels it is short to the end
+of its own canvas. After the data, so no coordinate moves and the map is not
+touched, and only when the margin is not already enough.</p>
+</li>
+<li>
+<p><strong>Loop anchors moved off the last track.</strong> The triangle that says “this
+coordinate” was drawn over the last seven pixels of the last lane in the
+stack — on a coverage track that is the busiest part of it, and on a full one
+the mark is invisible. It now has a band of its own past the stack, on both
+edges, which is the only place a glyph about the axis can go without being ink
+on somebody’s data. The band is nine pixels and exists only while a loop is
+marked, so a session that never places one keeps those pixels for the map.</p>
+</li>
+<li>
+<p><strong>The map’s two drop rectangles moved inside the map, and became strips.</strong>
+They covered the bottom quarter and the right fifth of the whole plot area —
+which is where the lane stacks are — so a track dragged towards the end of its
+own stack met a drop target instead of the gap it was aiming for, and the last
+slot in the order could not be reached at all. Inside the map they overlap
+nothing that can be dragged, and they still name the edge they stand for: the
+bottom of the picture means below it, the right of the picture means beside
+it.</p>
+<p>Narrow, too, and <strong>centred on the edge they name</strong>: thirty pixels thick, four
+fifths of the map long, each in the middle of its own side. A quarter of the
+map’s height and a fifth of its width is a lot of a picture to cover in order
+to say “this edge”, and at that size the two rectangles hid the corner of the
+matrix a reader is usually aiming past on the way to them. Centring at four
+fifths is also what keeps them apart — each stops a tenth of the map short of
+the corner they share — so a drop in the corner lands on neither, which is the
+honest answer to a gesture aimed between two targets. Down the side the label
+turns the same quarter turn as the track names in the stack it is naming. All three
+gestures that aim at them — a file from the desktop, a row from the Tracks
+card, a lane by its handle — now arm them, and while a lane is being carried
+the tooltip stays down rather than following the pointer across the map with a
+reading from where the drag started.</p>
+</li>
+</ul>
+<div class="sl-heading-wrapper level-h2"><h2 id="fixed">Fixed</h2><a class="sl-anchor-link" href="#fixed"><span aria-hidden="true" class="sl-anchor-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="m12.11 15.39-3.88 3.88a2.52 2.52 0 0 1-3.5 0 2.47 2.47 0 0 1 0-3.5l3.88-3.88a1 1 0 1 0-1.42-1.42l-3.88 3.89a4.48 4.48 0 0 0 6.33 6.33l3.89-3.88a1 1 0 0 0-1.42-1.42m8.58-12.08a4.49 4.49 0 0 0-6.33 0l-3.89 3.88a1 1 0 1 0 1.42 1.42l3.88-3.88a2.52 2.52 0 0 1 3.5 0 2.47 2.47 0 0 1 0 3.5l-3.88 3.88a1 1 0 0 0 0 1.42 1 1 0 0 0 1.42 0l3.88-3.89a4.49 4.49 0 0 0 0-6.33M8.83 15.17a1 1 0 0 0 .71.29 1 1 0 0 0 .71-.29l4.92-4.92a1 1 0 1 0-1.42-1.42l-4.92 4.92a1 1 0 0 0 0 1.42"></path></svg></span><span class="sr-only" data-pagefind-ignore>Section titled “Fixed”</span></a></div>
+<ul>
+<li>
+<p><strong>The service worker would have answered a pinned URL with the newest build.</strong>
+It is registered at the site root, so every archived build’s address is inside
+its scope, and its navigation handler answered <em>everything</em> in scope from the
+precached shell — the right URL, the wrong code, and no symptom to notice it
+by. Navigations under <code dir="auto">&lt;scope&gt;v/</code> now go to the network untouched.</p>
+<p>A worker only updates when a page it controls is loaded, so the fix cannot
+reach a reader who is already carrying an older one — and that reader is
+exactly who follows a pinned link. <code dir="auto">recoverPinnedNavigation()</code> catches the
+case from the page itself: a document built for the site root, at an address
+under the archive prefix, is a pair of facts that cannot both be true of a
+correctly served page. It unregisters and reloads, once per tab, because the
+second attempt at that would be a reload loop.</p>
+</li>
+<li>
+<p><strong>A cooler rendered nothing.</strong> <code dir="auto">MatrixPanel</code>’s new edge-drop watcher read
+<code dir="auto">this.el</code> from the constructor, where it does not exist yet, so the panel threw
+on the way up — for every file that <em>has</em> annotations, which is every cooler,
+while a <code dir="auto">.metacool</code> (which has none, §8.5) was unaffected. Clicking a contig or
+opening the whole-genome view produced no map at all. The listeners go on the
+grid instead, which exists by then and is the honest scope anyway: it holds the
+map, its lanes and the two zones, while <code dir="auto">this.el</code> reaches the colourbar and the
+header, where a drag means nothing.</p>
+<p>It survived a type check, 697 unit tests and a code read, because none of them
+run the constructor. What catches this class of defect is opening the app, so
+the working file now gets opened: a genuine <code dir="auto">.cool</code> built by the public cooler
+API, served over range requests, driven through the contigs table, the
+whole-genome view, a region, and a browser session with a track in it.</p>
+</li>
+<li>
+<p><strong>The labels overlay could not be toggled in a genome browser session.</strong> <code dir="auto">L</code>
+was bound twice — the overlay, and “go to a locus” — and the command list is
+searched in order, so in a browser the locus box always won. The browser has
+one box that is both a locus bar and a search field, and it now has one key
+for it (<code dir="auto">/</code>), which is the key every other view answers too.</p>
+</li>
+<li>
+<p>The icon generator dropped every SVG attribute whose name contained a digit,
+so every <code dir="auto">&lt;line&gt;</code> was emitted with no coordinates and drew nothing. It had
+been latent because no icon used one; the magnifiers added here came out as
+bare circles.</p>
+</li>
+<li>
+<p>A lane’s hover controls took presses while they were invisible. <code dir="auto">opacity: 0</code>
+hides a control but does not stop it being clicked, so every track carried a
+band across it — three hundred pixels wide and thirty tall — where a drag
+started on a <code dir="auto">&lt;select&gt;</code> and the view silently refused to pan. They are now
+transparent to the pointer until the lane they belong to is the one being
+pointed at, and the pointer moving onto them no longer counts as leaving the
+view: without that the row goes untouchable, the pointer lands back on the
+canvas, the row is revealed again, and the control under the hand is never
+there long enough to be clicked.</p>
+</li>
+<li>
+<p>“Fit tracks to the space” measured the element it was about to resize, which
+is sized by its own contents — so it compared the tracks against themselves,
+found them already fitted, and did nothing at all. It now measures the column
+the view was mounted in, walking past the <code dir="auto">display: contents</code> wrapper that
+gives a session’s panels to the shell’s grid and reports every rectangle as
+zero.</p>
+</li>
+<li>
+<p>Every control that appears on hover — a tab’s ×, a track’s colour swatch — is
+now inert while it is invisible, and shown outright where there is no pointer
+to hover with (<code dir="auto">@media (hover: none)</code>). Both halves matter: <code dir="auto">opacity: 0</code> hides
+a button and does not stop it taking a click, and a control revealed by
+pointing is a control that appears never on a touch screen. Each appears with
+no transition and fades only on the way out, so there is no moment in which
+one is clickable and barely drawn.</p>
+</li>
+<li>
+<p>Moving the caret from one lane’s limit straight to another’s kept the first
+number. The press that lands on a second limit is handled on <code dir="auto">pointerdown</code> and
+calls <code dir="auto">preventDefault</code>, so it never produces the focus change that would have
+committed the first — and the editor was being <em>cancelled</em> on the way out. The
+natural gesture for setting the same bound on two tracks was therefore the one
+gesture that silently threw the first value away, while clicking anywhere else
+on the canvas committed it.</p>
+</li>
+<li>
+<p>With the words switched off, the lane’s two limit boxes were seeded once and
+never refreshed, and committing either one wrote <em>both</em> — so typing a floor
+republished whatever ceiling the row happened to be built with, silently
+undoing a zoom or a drag of the ceiling slider. Each box now commits its own
+bound and takes the other from the axis on screen, exactly as the drawn range
+does, and the untouched box follows the lane it is beside.</p>
+</li>
+<li>
+<p>Choosing PNG collapsed the export row: the resolution select inherits
+<code dir="auto">width: 100%</code> from the controls card, and a <code dir="auto">flex-basis: auto</code> resolves to it,
+so a control that must not shrink claimed the whole line — crushing the format
+select to nothing and pushing Save off the card.</p>
+</li>
+<li>
+<p>A click in the Sequences card now moves the view directly rather than through
+the view state. A patch that serialises to what is already stored is dropped
+without notifying, so clicking the sequence the hash already named could do
+nothing at all.</p>
+</li>
+<li>
+<p><code dir="auto">fmt.int</code> groups digits in the <em>viewer’s</em> locale, and half of Europe groups
+them with a space WinAnsi has no byte for — so a figure exported in French
+read <code dir="auto">7?071 in view</code>, every grouped number corrupted by the app’s own
+formatter, in the one place nobody would look for a locale bug. Those spaces
+now fold onto the non-breaking space WinAnsi does have.</p>
+</li>
+<li>
+<p>Ticking a track did not open the batch bar until the focus left the list. The
+rebuild is deferred while a control in the list is being edited — a colour
+picker closes and a half-typed name is lost otherwise — and a checkbox was
+being counted as one, which deferred the very rebuild the tick was asking
+for. It commits on the click that focuses it, so there is nothing to protect;
+the focus is put back on the same box afterwards, so a second tick needs no
+second aim.</p>
+</li>
+</ul>
+</div><footer class="sl-flex astro-ddtxxk7k"><div class="meta sl-flex astro-ddtxxk7k"></div><div class="pagination-links print:hidden astro-g3wxxdym" dir="ltr"><a href="/pr/173/docs/releases/v0.6.1/" rel="prev" class="astro-g3wxxdym"><span class="link-label sl-flex astro-g3wxxdym"><svg aria-hidden="true" class="astro-g3wxxdym astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="M17 11H9.41l3.3-3.29a1.004 1.004 0 1 0-1.42-1.42l-5 5a1 1 0 0 0-.21.33 1 1 0 0 0 0 .76 1 1 0 0 0 .21.33l5 5a1.002 1.002 0 0 0 1.639-.325 1 1 0 0 0-.219-1.095L9.41 13H17a1 1 0 0 0 0-2Z"/></svg>Previous</span><span class="link-title astro-g3wxxdym">0.6.1</span></a><a href="/pr/173/docs/releases/v0.5.1/" rel="next" class="astro-g3wxxdym"><span class="link-label sl-flex astro-g3wxxdym">Next<svg aria-hidden="true" class="astro-g3wxxdym astro-hkc32dio" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="--sl-icon-size: 1.25rem;"><path d="M17.92 11.62a1.001 1.001 0 0 0-.21-.33l-5-5a1.003 1.003 0 1 0-1.42 1.42l3.3 3.29H7a1 1 0 0 0 0 2h7.59l-3.3 3.29a1.002 1.002 0 0 0 .325 1.639 1 1 0 0 0 1.095-.219l5-5a1 1 0 0 0 .21-.33 1 1 0 0 0 0-.76Z"/></svg></span><span class="link-title astro-g3wxxdym">0.5.1</span></a></div></footer><script type="module" src="/pr/173/docs/_astro/LiveViews.astro_astro_type_script_index_0_lang.IJNGwHXs.js"></script><script type="module">var e={ArrowLeft:`prev`,ArrowRight:`next`};for(let[t,n]of Object.entries(e)){let e=document.querySelector(`.pagination-links a[rel="${n}"]`);e!==null&&(e.setAttribute(`aria-keyshortcuts`,t),e.title=`${n===`prev`?`Previous`:`Next`} page (${t===`ArrowLeft`?`←`:`→`})`)}document.addEventListener(`keydown`,t=>{if(t.defaultPrevented||t.altKey||t.ctrlKey||t.metaKey||t.shiftKey)return;let n=e[t.key];if(n===void 0)return;let r=t.target;if(r instanceof Element&&r.closest(`input, textarea, select, [contenteditable]:not([contenteditable="false"]), dialog, pre, .expressive-code, .cx-table-wrap, [role="slider"], [role="listbox"], [role="menu"], .cx-live-grip`)!==null||document.querySelector(`dialog[open]`)!==null)return;let i=document.querySelector(`.pagination-links a[rel="${n}"]`);i!==null&&(t.preventDefault(),window.location.assign(i.href))});</script><p class="cx-build">Documentation of chromosomix, a preview of pull request #173 · <a href="https://github.com/js2264/chromosomix/pull/173/files">source</a></p></div></div></main></div></div></div></div></body></html>

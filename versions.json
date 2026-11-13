@@ -256,6 +256,13 @@
   ],
   "pulls": [
     {
+      "number": 173,
+      "commit": "e57064e",
+      "title": "Draw the app's mark as an X with red tracks on all four sides",
+      "branch": "ccr-19c5363f-prgj41",
+      "date": "2026-11-13T10:41:43Z"
+    },
+    {
       "number": 168,
       "commit": "bf0eeff",
       "title": "Draw a metagenome's map as a circle or as two lines, a dev feature (§7.6)",
