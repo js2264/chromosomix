@@ -256,6 +256,13 @@
   ],
   "pulls": [
     {
+      "number": 172,
+      "commit": "ce2cdff",
+      "title": "Stores: ask a host again when it does not answer, and keep a failed portal's shelf (§24.3)",
+      "branch": "ccr-2f6357e9-rgo9xi",
+      "date": "2026-11-13T09:55:56Z"
+    },
+    {
       "number": 168,
       "commit": "bf0eeff",
       "title": "Draw a metagenome's map as a circle or as two lines, a dev feature (§7.6)",
