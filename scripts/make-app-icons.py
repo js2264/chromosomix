@@ -23,11 +23,13 @@ What this writes, and who reads it:
                                  every macOS, Windows and Linux icon from
     index.html                   the `<link rel="icon">` data URI, rewritten in
                                  place from the constants below
+    src/ui/mark.generated.ts     the mark as data, which the landing page draws
+                                 inline beside the name and in its margin
 
     out/icon_{dark,light}_NNNN.png   the full ladder, for anything that wants a
                                      PNG by hand. Read by nothing; not committed.
 
-All five are *committed*, because they are build inputs rather than build
+All six are *committed*, because they are build inputs rather than build
 output: a fresh clone builds the site and packs an installer without a Python
 interpreter anywhere near it. Rerun this after changing anything above the
 fold, and commit what it changes.
@@ -593,6 +595,112 @@ def write_favicon(path):
     print(f"wrote {path.name} (favicon data URI, {len(tag)} bytes)")
 
 
+# ------------------------------------------------------------ the inline mark
+def _hex(rgb):
+    return "#%02x%02x%02x" % tuple(rgb[:3])
+
+
+def _path(points):
+    """A closed SVG path through `points`, at a precision the eye cannot see past."""
+    head, *rest = points
+    return (f"M{head[0]:.1f} {head[1]:.1f}"
+            + "".join(f"L{x:.1f} {y:.1f}" for x, y in rest) + "Z")
+
+
+def mark_module():
+    """The mark as data, for the page to draw itself: `src/ui/mark.generated.ts`.
+
+    The landing page draws the mark twice that a PNG cannot serve: beside the
+    name, where its cells move when the pointer is over it, and as the half
+    mark in the page's right margin, whose colours follow the theme. Both are
+    built by `ui/markSvg.ts` from what this writes — the same cells, lanes,
+    plate and colours every PNG above is rendered from, in the favicon's
+    full-bleed frame of `OUT` units a side — so there is still one description
+    of the mark, and a TypeScript copy of it would be the second.
+
+    The plate is the squircle itself, as a path, rather than the favicon's
+    `rx` rectangle: at the size the landing page draws it the difference
+    between the two corners shows, and a sixteen-pixel tab is where it did not.
+    """
+    span, pitch, ox, oy = layout(OUT)
+    half = OUT / 2
+    rim_w = OUT * RIM_W
+    plate = _path(squircle(half, half, half, steps=24))
+    rim = _path(squircle(half, half, half - rim_w / 2, steps=24))
+    (plate_hi, plate_lo) = VARIANTS["dark"]["plate"]
+    (rim_hi, rim_lo) = VARIANTS["dark"]["rim"]
+    cells = ",".join(f"[{i},{j},{_num(a)}]" for i, j, a in field_cells())
+    lanes = []
+    for which, spec in TRACKS.items():
+        rects = ",".join(
+            f"[{x0:.1f},{y0:.1f},{x1 - x0:.1f},{y1 - y0:.1f},{_num(level)}]"
+            for x0, y0, x1, y1, level in lane_geometry(which, ox, oy, span, pitch)
+        )
+        lanes.append(
+            f"  {{ track: '{which}', dark: '{_hex(track_rgb(which, 'dark'))}',"
+            f" light: '{_hex(track_rgb(which, 'light'))}', rects: [{rects}] }},"
+        )
+    return f"""/**
+ * The app's mark, as data: what `ui/markSvg.ts` draws the landing page's two
+ * inline marks from.
+ *
+ * Generated — run `npm run icons:app` after editing
+ * `scripts/make-app-icons.py`, which renders every PNG of the mark and the
+ * favicon from the same constants. Coordinates are in a square of
+ * `MARK_VIEW` units, full bleed: the plate is the whole square.
+ */
+
+export const MARK_VIEW = {OUT}
+
+/** The plate and its rim, on the dark variant, which is the one that ships. */
+export const MARK_PLATE = {{
+  path: '{plate}',
+  top: '{_hex(plate_hi)}',
+  bottom: '{_hex(plate_lo)}',
+  rim: '{rim}',
+  rimWidth: {_num(rim_w)},
+  rimTop: '{_hex(rim_hi)}',
+  rimTopOpacity: {_num(rim_hi[3] / 255)},
+  rimBottom: '{_hex(rim_lo)}',
+  rimBottomOpacity: {_num(rim_lo[3] / 255)},
+}}
+
+/** The map: its top-left corner and pitch, and each cell's inset and corner. */
+export const MARK_MAP = {{
+  x: {_num(ox)},
+  y: {_num(oy)},
+  pitch: {_num(pitch)},
+  inset: {_num(CELL_GAP)},
+  round: {_num(CELL_ROUND)},
+  /** The cells' colour on each plate. */
+  dark: '{_hex(VARIANTS["dark"]["cells"])}',
+  light: '{_hex(VARIANTS["light"]["cells"])}',
+}}
+
+/** Every drawn cell as `[row, column, intensity]`, row 0 at the top. */
+export const MARK_CELLS: readonly (readonly [number, number, number])[] = [{cells}]
+
+/** Each lane's colour on each plate, and its slivers as `[x, y, width, height, level]`. */
+export const MARK_LANES: readonly {{
+  readonly track: string
+  readonly dark: string
+  readonly light: string
+  readonly rects: readonly (readonly [number, number, number, number, number])[]
+}}[] = [
+{chr(10).join(lanes)}
+]
+
+/** A lane sliver's corner radius, in the same units. */
+export const MARK_LANE_RADIUS = {_num(pitch * LANE_W * LANE_ROUND)}
+"""
+
+
+def write_mark_module(path):
+    path.write_text(mark_module(), encoding="utf-8")
+    print(f"wrote {path.relative_to(ROOT)}")
+
+
+
 def main():
     dark, light = build("dark"), build("light")
     bleed = build("dark", bleed=True)
@@ -612,6 +720,7 @@ def main():
         print(f"wrote {name} ({px} px{', full bleed' if wants_bleed else ''})")
 
     write_favicon(ROOT / "index.html")
+    write_mark_module(ROOT / "src" / "ui" / "mark.generated.ts")
 
 
 if __name__ == "__main__":

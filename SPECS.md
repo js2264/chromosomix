@@ -14085,6 +14085,28 @@ any a workspace file holds, and its test reads it back through `parseWorkspaceFi
 every such file meets. Each carries the reader's own overlay preferences and no column layout, so
 opening it changes neither.
 
+### 24.12 The mark on the landing page
+
+**The masthead is the mark and the name**, the mark's plate 1.17em of a name whose size is
+`clamp`ed to the window — near the name's own height, where the 192 px icon at 1em drew a plate four
+fifths of it. It is drawn **inline** (`ui/markSvg.ts`), not as that icon, for two reasons: it is
+sharp at the size the masthead sets it on any screen, and its cells are elements. **Over the mark or
+the name, the X draws itself**: the anti-diagonal's corners light, its arms run in to the centre a
+step at a time, the six other cells of the diagonal step back while the cross is whole, and the map
+settles again, in under a second. Nothing happens on a press, and nothing moves at all for a reader
+whose system asks for less motion.
+
+**Half the mark stands in the right margin**, where the margin can hold it clear of the page: the map
+and its lanes without the plate, 640 px tall, cut down its middle by the window's edge, at 40% in the
+light theme and 26% in the dark, in the colours of the light and the dark plate respectively. Only on
+the page with the store tiles (§24.2), not in a dialog's picker; only on a window at least 1560 px
+wide and 820 px tall; never a target, and hidden from a screen reader, as the masthead's mark is.
+
+**Both are one drawing with every other picture of the mark.** `scripts/make-app-icons.py` renders
+the icons, writes the favicon and writes `ui/mark.generated.ts`, the cells, lanes, plate and colours
+as data, from the same constants; the page builds its two SVGs from that data with
+`createElementNS` and attributes alone, because the page's policy allows no inline `style` (§11).
+
 ## 25. A 3D structure beside the map
 
 A chromatin model — one chromosome or several, one haplotype or two — read from a file of beads

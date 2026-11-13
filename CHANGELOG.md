@@ -38,6 +38,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the margin round the mark is unchanged. The favicon, the install and home-screen icons, the desktop
   icon, the header, the landing page and the *Add a custom store* tile all carry it
   (`scripts/make-app-icons.py`, `npm run icons:app`).
+- **The landing page carries the mark larger, draws its X on hover, and stands half of it in the
+  margin (§24.12).** The mark beside the name is drawn inline and its plate is near the name's own
+  height, where it was four fifths of it. With the pointer over the mark or the name, the
+  anti-diagonal lights from the corners in while the diagonal steps back, and settles again — not
+  for a reader who asks for less motion. On a window at least 1560 px wide and 820 px tall, half the
+  mark's map and lanes stands faint against the right edge, in the theme's colours. Both are built
+  from `src/ui/mark.generated.ts`, which the icon script now writes beside the icons.
 - **A map opens at the screen's resolution and sharpens as you zoom, down to the finest resolution the
   file stores: *Refine on zoom* is on by default (§2, §7.2, §12).** With nothing picked, a view's
   first read is the stored rung nearest a cell to each pixel of the plot, so a chromosome opens quickly
