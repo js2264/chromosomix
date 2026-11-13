@@ -1,0 +1,765 @@
+{
+  "kind": "chromosomix.workspace",
+  "version": 1,
+  "createdAt": "2026-10-15T14:17:07Z",
+  "producer": "chromosomix make_store.py",
+  "active": 0,
+  "tabs": [
+    {
+      "version": 1,
+      "createdAt": "2026-10-15T14:17:07Z",
+      "producer": "chromosomix make_store.py",
+      "name": "4DN 4DNES3QAGOZZ (GRCh38)",
+      "state": {
+        "uri": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/1f211d9f-bcb7-436f-8831-9d3a96a78655/4DNFID4T1I5S.mcool",
+        "view": "genomes"
+      },
+      "tracks": [
+        {
+          "id": "store-0",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFI6I5ZKFN (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI6I5ZKFN.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/017c3190-1500-46cf-802f-11048eccdee7/4DNFI6I5ZKFN.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-1",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIBKY9EG9 (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIBKY9EG9.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/08a38f52-aa33-43b1-9ea1-f857ddcd7b4f/4DNFIBKY9EG9.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-2",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIG7IAGU1 (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIG7IAGU1.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/2fba80c6-fa65-414d-8ec4-af72b02573e1/4DNFIG7IAGU1.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-3",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIY55AIH1 (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIY55AIH1.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/32ec31fc-49db-41b3-9b40-6593f95aaf74/4DNFIY55AIH1.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-4",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIFSBB79Q (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIFSBB79Q.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/3d0a0672-9195-46f5-b3b0-117c350e982e/4DNFIFSBB79Q.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-5",
+          "card": "linear",
+          "kind": "track",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIGKFF445 (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIGKFF445.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/41b7499d-efa6-4191-abf1-fca6e291d9bf/4DNFIGKFF445.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#e69f00",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-6",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIRN5UPHT (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIRN5UPHT.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/4439d289-1b06-47b3-9f40-f4a5c13cb311/4DNFIRN5UPHT.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#56b4e9",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-7",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFII9QTBG9 (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFII9QTBG9.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/524c9d28-5af6-4f70-a931-3a9d71d815e5/4DNFII9QTBG9.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#8c6d31",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-8",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIYFNJMGC (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIYFNJMGC.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/56fa3731-6226-4d0d-8ff6-198f356305ad/4DNFIYFNJMGC.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-9",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIYUD46OF (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIYUD46OF.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/5b0f3eac-6b53-4db9-89bf-3ad89e02d77f/4DNFIYUD46OF.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-10",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIDJJIKPB (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIDJJIKPB.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/5d3bb339-37b1-46ca-bdc7-bc85df79c4bd/4DNFIDJJIKPB.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-11",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFI5FX9GPO (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI5FX9GPO.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/6f320df9-bf36-470b-a729-55c3696f33dd/4DNFI5FX9GPO.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-12",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIUO349KY (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIUO349KY.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/75626d59-d649-46f9-b587-0c6ef48b95f4/4DNFIUO349KY.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-13",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFI68II2NG (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI68II2NG.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/7d000eff-0212-48ea-b21e-10eb2c778921/4DNFI68II2NG.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#e69f00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-14",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIV3BHV4H (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIV3BHV4H.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/7d81cb19-547e-48ac-a06a-cc8d51ca49ac/4DNFIV3BHV4H.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#56b4e9",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-15",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFICW3RXXO (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFICW3RXXO.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/88e28ceb-a9e8-473f-a662-fe0d8a59259d/4DNFICW3RXXO.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#8c6d31",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-16",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIUB8KT79 (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIUB8KT79.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/9712c1a2-892a-4bb6-a1f0-5881b6f1c7b8/4DNFIUB8KT79.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#0072b2",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-17",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIOSQIGXF (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIOSQIGXF.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/9af3023f-3932-46fd-88a5-60bfaf731143/4DNFIOSQIGXF.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#d55e00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-18",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFI11ZH8TX (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI11ZH8TX.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/a241fa3b-a7fc-4204-a8f0-6d7f4d9a09df/4DNFI11ZH8TX.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#009e73",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-19",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIWDX8IX7 (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIWDX8IX7.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/adafba4c-8a8b-45fa-900a-d1f4c4b8f39c/4DNFIWDX8IX7.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#cc79a7",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-20",
+          "card": "linear",
+          "kind": "track",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIZHT1Y8P (bw)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIZHT1Y8P.bw",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/b6e8bd86-9749-4c3a-90fd-3814e521786c/4DNFIZHT1Y8P.bw"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#7b3294",
+            "size": 78,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-21",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFIS2COHEB (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFIS2COHEB.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/bfc8491a-ce11-45e8-ad8d-bad8e674416c/4DNFIS2COHEB.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#e69f00",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-22",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFISD6FTMY (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFISD6FTMY.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/c6abdd33-b391-493e-8c75-fe906edd4494/4DNFISD6FTMY.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#56b4e9",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        },
+        {
+          "id": "store-23",
+          "card": "linear",
+          "kind": "segments",
+          "label": "Hi-C on RAD21-AID tagged HCT-116 — 4DNFI1ZWIAOY (bed.gz)",
+          "source": {
+            "kind": "remote",
+            "name": "4DNFI1ZWIAOY.bed.gz",
+            "url": "https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/d1a3b298-d3eb-453d-bf1a-ee863ce957f4/4DNFI1ZWIAOY.bed.gz"
+          },
+          "visible": true,
+          "placement": {
+            "bottom": true,
+            "right": false
+          },
+          "style": {
+            "colour": "#8c6d31",
+            "size": 34,
+            "mode": "area",
+            "limits": {
+              "auto": true,
+              "min": 0,
+              "max": 1
+            },
+            "group": "",
+            "shape": "element",
+            "radius": 7,
+            "opacity": 1,
+            "flip": false
+          }
+        }
+      ]
+    }
+  ]
+}

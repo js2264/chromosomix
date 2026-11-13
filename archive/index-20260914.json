@@ -1,0 +1,143 @@
+{
+  "generatedAt": "2026-09-14T08:12:45Z",
+  "stores": [
+    {
+      "id": "4dn-sessions",
+      "file": "4dn-sessions.json",
+      "name": "4DN sessions",
+      "entries": 796,
+      "bytes": 369138,
+      "generatedAt": "2026-09-14T08:11:24Z"
+    },
+    {
+      "id": "4dn",
+      "file": "4dn.json",
+      "name": "4DN open data",
+      "entries": 25664,
+      "bytes": 14959429,
+      "generatedAt": "2026-09-14T08:11:23Z"
+    },
+    {
+      "id": "encode-GRCh38-alignment",
+      "file": "encode-GRCh38-alignment.json",
+      "name": "ENCODE \u2014 GRCh38 alignments",
+      "entries": 19675,
+      "bytes": 12730838,
+      "generatedAt": "2026-09-14T08:12:36Z"
+    },
+    {
+      "id": "encode-GRCh38-annotation",
+      "file": "encode-GRCh38-annotation.json",
+      "name": "ENCODE \u2014 GRCh38 peaks and annotations",
+      "entries": 51800,
+      "bytes": 30306311,
+      "generatedAt": "2026-09-14T08:12:36Z"
+    },
+    {
+      "id": "encode-GRCh38-signal",
+      "file": "encode-GRCh38-signal.json",
+      "name": "ENCODE \u2014 GRCh38 signal",
+      "entries": 55237,
+      "bytes": 28831609,
+      "generatedAt": "2026-09-14T08:12:35Z"
+    },
+    {
+      "id": "encode-hg19-alignment",
+      "file": "encode-hg19-alignment.json",
+      "name": "ENCODE \u2014 hg19 alignments",
+      "entries": 8357,
+      "bytes": 5487144,
+      "generatedAt": "2026-09-14T08:12:37Z"
+    },
+    {
+      "id": "encode-hg19-annotation",
+      "file": "encode-hg19-annotation.json",
+      "name": "ENCODE \u2014 hg19 peaks and annotations",
+      "entries": 16136,
+      "bytes": 9802416,
+      "generatedAt": "2026-09-14T08:12:36Z"
+    },
+    {
+      "id": "encode-hg19-signal",
+      "file": "encode-hg19-signal.json",
+      "name": "ENCODE \u2014 hg19 signal",
+      "entries": 28355,
+      "bytes": 14028411,
+      "generatedAt": "2026-09-14T08:12:36Z"
+    },
+    {
+      "id": "encode-mm10-alignment",
+      "file": "encode-mm10-alignment.json",
+      "name": "ENCODE \u2014 mouse alignments",
+      "entries": 6704,
+      "bytes": 3636921,
+      "generatedAt": "2026-09-14T08:12:37Z"
+    },
+    {
+      "id": "encode-mm10-annotation",
+      "file": "encode-mm10-annotation.json",
+      "name": "ENCODE \u2014 mouse peaks and annotations",
+      "entries": 6810,
+      "bytes": 3980032,
+      "generatedAt": "2026-09-14T08:12:37Z"
+    },
+    {
+      "id": "encode-mm10-signal",
+      "file": "encode-mm10-signal.json",
+      "name": "ENCODE \u2014 mouse signal",
+      "entries": 3527,
+      "bytes": 2188334,
+      "generatedAt": "2026-09-14T08:12:37Z"
+    },
+    {
+      "id": "encode-other-alignment",
+      "file": "encode-other-alignment.json",
+      "name": "ENCODE \u2014 other assemblies alignments",
+      "entries": 4314,
+      "bytes": 4094562,
+      "generatedAt": "2026-09-14T08:12:37Z"
+    },
+    {
+      "id": "encode-other-annotation",
+      "file": "encode-other-annotation.json",
+      "name": "ENCODE \u2014 other assemblies peaks and annotations",
+      "entries": 4417,
+      "bytes": 4374300,
+      "generatedAt": "2026-09-14T08:12:37Z"
+    },
+    {
+      "id": "encode-other-signal",
+      "file": "encode-other-signal.json",
+      "name": "ENCODE \u2014 other assemblies signal",
+      "entries": 4075,
+      "bytes": 3997659,
+      "generatedAt": "2026-09-14T08:12:37Z"
+    },
+    {
+      "id": "encode-sessions",
+      "file": "encode-sessions.json",
+      "name": "ENCODE sessions",
+      "entries": 854,
+      "bytes": 323812,
+      "generatedAt": "2026-09-14T08:12:42Z"
+    },
+    {
+      "id": "igv-sessions",
+      "file": "igv-sessions.json",
+      "name": "IGV genome sessions",
+      "entries": 35,
+      "bytes": 14581,
+      "generatedAt": "2026-09-14T08:10:32Z"
+    },
+    {
+      "id": "igv",
+      "file": "igv.json",
+      "name": "IGV genomes",
+      "entries": 64,
+      "bytes": 35562,
+      "generatedAt": "2026-09-14T08:10:32Z"
+    }
+  ],
+  "sessions": 1685,
+  "entries": 236820
+}

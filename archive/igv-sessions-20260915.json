@@ -1,0 +1,487 @@
+{
+  "kind": "metacooler.store",
+  "version": 1,
+  "name": "IGV genome sessions",
+  "description": "Pre-configured sessions: a genome or a dataset with its tracks already placed, opened through the same road as a shared session link. One click puts the sequence, the genes and the signal on screen together instead of a file at a time.",
+  "generatedAt": "2026-09-15T22:44:54Z",
+  "source": "igv, one session per genome or dataset",
+  "columns": [
+    {
+      "key": "assembly",
+      "label": "Assembly"
+    },
+    {
+      "key": "subject",
+      "label": "Genome or dataset"
+    },
+    {
+      "key": "tracks",
+      "label": "Tracks"
+    },
+    {
+      "key": "source",
+      "label": "Source"
+    },
+    {
+      "key": "dataset",
+      "label": "Group"
+    }
+  ],
+  "entries": [
+    {
+      "label": "S. pombe (ASM294v2) — IGV genome and its 2 tracks",
+      "uri": "sessions/igv-asm294v2.metacooler.json",
+      "kind": "workspace",
+      "note": "ASM294v2 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "ASM294v2",
+        "subject": "S. pombe (ASM294v2)",
+        "tracks": "3",
+        "source": "IGV",
+        "dataset": "ASM294v2"
+      }
+    },
+    {
+      "label": "Sars-CoV-2 (ASM985889v3) — IGV genome and its 1 track",
+      "uri": "sessions/igv-asm985889v3.metacooler.json",
+      "kind": "workspace",
+      "note": "ASM985889v3 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "ASM985889v3",
+        "subject": "Sars-CoV-2 (ASM985889v3)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "ASM985889v3"
+      }
+    },
+    {
+      "label": "Peanut (GCA_003086295.2) — IGV genome and its 1 track",
+      "uri": "sessions/igv-gca_003086295.2.metacooler.json",
+      "kind": "workspace",
+      "note": "GCA_003086295.2 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "GCA_003086295.2",
+        "subject": "Peanut (GCA_003086295.2)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "GCA_003086295.2"
+      }
+    },
+    {
+      "label": "Macaca fascicularis 6.0 (GCA_011100615.1) — IGV genome and its 2 tracks",
+      "uri": "sessions/igv-gca_011100615.1.metacooler.json",
+      "kind": "workspace",
+      "note": "GCA_011100615.1 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "GCA_011100615.1",
+        "subject": "Macaca fascicularis 6.0 (GCA_011100615.1)",
+        "tracks": "3",
+        "source": "IGV",
+        "dataset": "GCA_011100615.1"
+      }
+    },
+    {
+      "label": "O. sativa IRGSP-1.0 (GCF_001433935.1) — IGV genome and its 1 track",
+      "uri": "sessions/igv-gcf_001433935.1.metacooler.json",
+      "kind": "workspace",
+      "note": "GCF_001433935.1 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "GCF_001433935.1",
+        "subject": "O. sativa IRGSP-1.0 (GCF_001433935.1)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "GCF_001433935.1"
+      }
+    },
+    {
+      "label": "Cow (UMD_3.1.1/bosTau8) — IGV genome and its 1 track",
+      "uri": "sessions/igv-bostau8.metacooler.json",
+      "kind": "workspace",
+      "note": "bosTau8 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "bosTau8",
+        "subject": "Cow (UMD_3.1.1/bosTau8)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "bosTau8"
+      }
+    },
+    {
+      "label": "Cow (ARS-UCD1.2/bosTau9) — IGV genome and its 1 track",
+      "uri": "sessions/igv-bostau9.metacooler.json",
+      "kind": "workspace",
+      "note": "bosTau9 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "bosTau9",
+        "subject": "Cow (ARS-UCD1.2/bosTau9)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "bosTau9"
+      }
+    },
+    {
+      "label": "Dog (Broad CanFam3.1/canFam3) — IGV genome and its 1 track",
+      "uri": "sessions/igv-canfam3.metacooler.json",
+      "kind": "workspace",
+      "note": "canFam3 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "canFam3",
+        "subject": "Dog (Broad CanFam3.1/canFam3)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "canFam3"
+      }
+    },
+    {
+      "label": "Dog (UU_Cfam_GSD_1.0/canFam4) — IGV genome and its 0 tracks",
+      "uri": "sessions/igv-canfam4.metacooler.json",
+      "kind": "workspace",
+      "note": "canFam4 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "canFam4",
+        "subject": "Dog (UU_Cfam_GSD_1.0/canFam4)",
+        "tracks": "1",
+        "source": "IGV",
+        "dataset": "canFam4"
+      }
+    },
+    {
+      "label": "Dog (canFam5) — IGV genome and its 1 track",
+      "uri": "sessions/igv-canfam5.metacooler.json",
+      "kind": "workspace",
+      "note": "canFam5 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "canFam5",
+        "subject": "Dog (canFam5)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "canFam5"
+      }
+    },
+    {
+      "label": "C. elegans (ce11) — IGV genome and its 0 tracks",
+      "uri": "sessions/igv-ce11.metacooler.json",
+      "kind": "workspace",
+      "note": "ce11 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "ce11",
+        "subject": "C. elegans (ce11)",
+        "tracks": "1",
+        "source": "IGV",
+        "dataset": "ce11"
+      }
+    },
+    {
+      "label": "Human (T2T CHM13-v1.1) — IGV genome and its 2 tracks",
+      "uri": "sessions/igv-chm13v1.1.metacooler.json",
+      "kind": "workspace",
+      "note": "chm13v1.1 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "chm13v1.1",
+        "subject": "Human (T2T CHM13-v1.1)",
+        "tracks": "3",
+        "source": "IGV",
+        "dataset": "chm13v1.1"
+      }
+    },
+    {
+      "label": "Zebrafish (GRCZ10/danRer10) — IGV genome and its 1 track",
+      "uri": "sessions/igv-danrer10.metacooler.json",
+      "kind": "workspace",
+      "note": "danRer10 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "danRer10",
+        "subject": "Zebrafish (GRCZ10/danRer10)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "danRer10"
+      }
+    },
+    {
+      "label": "Zebrafish (GRCZ11/danRer11) — IGV genome and its 1 track",
+      "uri": "sessions/igv-danrer11.metacooler.json",
+      "kind": "workspace",
+      "note": "danRer11 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "danRer11",
+        "subject": "Zebrafish (GRCZ11/danRer11)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "danRer11"
+      }
+    },
+    {
+      "label": "D. melanogaster (dm3) — IGV genome and its 0 tracks",
+      "uri": "sessions/igv-dm3.metacooler.json",
+      "kind": "workspace",
+      "note": "dm3 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "dm3",
+        "subject": "D. melanogaster (dm3)",
+        "tracks": "1",
+        "source": "IGV",
+        "dataset": "dm3"
+      }
+    },
+    {
+      "label": "D. melanogaster (dm6) — IGV genome and its 0 tracks",
+      "uri": "sessions/igv-dm6.metacooler.json",
+      "kind": "workspace",
+      "note": "dm6 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "dm6",
+        "subject": "D. melanogaster (dm6)",
+        "tracks": "1",
+        "source": "IGV",
+        "dataset": "dm6"
+      }
+    },
+    {
+      "label": "D. melanogaster (dmel_r5.9) — IGV genome and its 1 track",
+      "uri": "sessions/igv-dmel_r5.9.metacooler.json",
+      "kind": "workspace",
+      "note": "dmel_r5.9 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "dmel_r5.9",
+        "subject": "D. melanogaster (dmel_r5.9)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "dmel_r5.9"
+      }
+    },
+    {
+      "label": "Chicken (galGal6) — IGV genome and its 0 tracks",
+      "uri": "sessions/igv-galgal6.metacooler.json",
+      "kind": "workspace",
+      "note": "galGal6 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "galGal6",
+        "subject": "Chicken (galGal6)",
+        "tracks": "1",
+        "source": "IGV",
+        "dataset": "galGal6"
+      }
+    },
+    {
+      "label": "Gorilla (gorGor4.1/gorGor4) — IGV genome and its 0 tracks",
+      "uri": "sessions/igv-gorgor4.metacooler.json",
+      "kind": "workspace",
+      "note": "gorGor4 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "gorGor4",
+        "subject": "Gorilla (gorGor4.1/gorGor4)",
+        "tracks": "1",
+        "source": "IGV",
+        "dataset": "gorGor4"
+      }
+    },
+    {
+      "label": "Gorilla (Kamilah_GGO_v0/gorGor6) — IGV genome and its 1 track",
+      "uri": "sessions/igv-gorgor6.metacooler.json",
+      "kind": "workspace",
+      "note": "gorGor6 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "gorGor6",
+        "subject": "Gorilla (Kamilah_GGO_v0/gorGor6)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "gorGor6"
+      }
+    },
+    {
+      "label": "Human (hg18) — IGV genome and its 0 tracks",
+      "uri": "sessions/igv-hg18.metacooler.json",
+      "kind": "workspace",
+      "note": "hg18 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "hg18",
+        "subject": "Human (hg18)",
+        "tracks": "1",
+        "source": "IGV",
+        "dataset": "hg18"
+      }
+    },
+    {
+      "label": "Human (hg38 1kg/GATK) — IGV genome and its 0 tracks",
+      "uri": "sessions/igv-hg38_1kg.metacooler.json",
+      "kind": "workspace",
+      "note": "hg38_1kg · 1000genomes.s3.amazonaws.com",
+      "fields": {
+        "assembly": "hg38_1kg",
+        "subject": "Human (hg38 1kg/GATK)",
+        "tracks": "1",
+        "source": "IGV",
+        "dataset": "hg38_1kg"
+      }
+    },
+    {
+      "label": "Human (T2T CHM13-v2.0/hs1) — IGV genome and its 3 tracks",
+      "uri": "sessions/igv-hs1.metacooler.json",
+      "kind": "workspace",
+      "note": "hs1 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "hs1",
+        "subject": "Human (T2T CHM13-v2.0/hs1)",
+        "tracks": "4",
+        "source": "IGV",
+        "dataset": "hs1"
+      }
+    },
+    {
+      "label": "Macaca fascicularis (macFas5) — IGV genome and its 1 track",
+      "uri": "sessions/igv-macfas5.metacooler.json",
+      "kind": "workspace",
+      "note": "macFas5 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "macFas5",
+        "subject": "Macaca fascicularis (macFas5)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "macFas5"
+      }
+    },
+    {
+      "label": "Mouse (GRCm38/mm10) — IGV genome and its 0 tracks",
+      "uri": "sessions/igv-mm10.metacooler.json",
+      "kind": "workspace",
+      "note": "mm10 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "mm10",
+        "subject": "Mouse (GRCm38/mm10)",
+        "tracks": "1",
+        "source": "IGV",
+        "dataset": "mm10"
+      }
+    },
+    {
+      "label": "Mouse (GRCm39/mm39) — IGV genome and its 0 tracks",
+      "uri": "sessions/igv-mm39.metacooler.json",
+      "kind": "workspace",
+      "note": "mm39 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "mm39",
+        "subject": "Mouse (GRCm39/mm39)",
+        "tracks": "1",
+        "source": "IGV",
+        "dataset": "mm39"
+      }
+    },
+    {
+      "label": "Mouse (NCBI37/mm9) — IGV genome and its 1 track",
+      "uri": "sessions/igv-mm9.metacooler.json",
+      "kind": "workspace",
+      "note": "mm9 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "mm9",
+        "subject": "Mouse (NCBI37/mm9)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "mm9"
+      }
+    },
+    {
+      "label": "Bonobo (MPI-EVA panpan1.1/panPan2) — IGV genome and its 1 track",
+      "uri": "sessions/igv-panpan2.metacooler.json",
+      "kind": "workspace",
+      "note": "panPan2 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "panPan2",
+        "subject": "Bonobo (MPI-EVA panpan1.1/panPan2)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "panPan2"
+      }
+    },
+    {
+      "label": "Chimp (SAC 2.1.4/panTro4) — IGV genome and its 1 track",
+      "uri": "sessions/igv-pantro4.metacooler.json",
+      "kind": "workspace",
+      "note": "panTro4 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "panTro4",
+        "subject": "Chimp (SAC 2.1.4/panTro4)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "panTro4"
+      }
+    },
+    {
+      "label": "Chimp (panTro5) (panTro5) — IGV genome and its 1 track",
+      "uri": "sessions/igv-pantro5.metacooler.json",
+      "kind": "workspace",
+      "note": "panTro5 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "panTro5",
+        "subject": "Chimp (panTro5) (panTro5)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "panTro5"
+      }
+    },
+    {
+      "label": "Chimp (panTro6) (panTro6) — IGV genome and its 1 track",
+      "uri": "sessions/igv-pantro6.metacooler.json",
+      "kind": "workspace",
+      "note": "panTro6 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "panTro6",
+        "subject": "Chimp (panTro6) (panTro6)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "panTro6"
+      }
+    },
+    {
+      "label": "Rat (rn7) — IGV genome and its 1 track",
+      "uri": "sessions/igv-rn7.metacooler.json",
+      "kind": "workspace",
+      "note": "rn7 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "rn7",
+        "subject": "Rat (rn7)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "rn7"
+      }
+    },
+    {
+      "label": "S. cerevisiae (sacCer3) — IGV genome and its 0 tracks",
+      "uri": "sessions/igv-saccer3.metacooler.json",
+      "kind": "workspace",
+      "note": "sacCer3 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "sacCer3",
+        "subject": "S. cerevisiae (sacCer3)",
+        "tracks": "1",
+        "source": "IGV",
+        "dataset": "sacCer3"
+      }
+    },
+    {
+      "label": "Pig (SGSC Sscrofa11.1/susScr11) — IGV genome and its 1 track",
+      "uri": "sessions/igv-susscr11.metacooler.json",
+      "kind": "workspace",
+      "note": "susScr11 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "susScr11",
+        "subject": "Pig (SGSC Sscrofa11.1/susScr11)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "susScr11"
+      }
+    },
+    {
+      "label": "A. thaliana (TAIR 10) — IGV genome and its 1 track",
+      "uri": "sessions/igv-tair10.metacooler.json",
+      "kind": "workspace",
+      "note": "tair10 · s3.amazonaws.com",
+      "fields": {
+        "assembly": "tair10",
+        "subject": "A. thaliana (TAIR 10)",
+        "tracks": "2",
+        "source": "IGV",
+        "dataset": "tair10"
+      }
+    }
+  ]
+}
