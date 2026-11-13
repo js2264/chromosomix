@@ -1,0 +1,1762 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/ui/MapBox.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/ui</a> MapBox.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">76.68% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>171/223</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">95% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>57/60</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">66.66% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>18/27</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">76.68% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>171/223</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line medium'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a>
+<a name='L288'></a><a href='#L288'>288</a>
+<a name='L289'></a><a href='#L289'>289</a>
+<a name='L290'></a><a href='#L290'>290</a>
+<a name='L291'></a><a href='#L291'>291</a>
+<a name='L292'></a><a href='#L292'>292</a>
+<a name='L293'></a><a href='#L293'>293</a>
+<a name='L294'></a><a href='#L294'>294</a>
+<a name='L295'></a><a href='#L295'>295</a>
+<a name='L296'></a><a href='#L296'>296</a>
+<a name='L297'></a><a href='#L297'>297</a>
+<a name='L298'></a><a href='#L298'>298</a>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a>
+<a name='L309'></a><a href='#L309'>309</a>
+<a name='L310'></a><a href='#L310'>310</a>
+<a name='L311'></a><a href='#L311'>311</a>
+<a name='L312'></a><a href='#L312'>312</a>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a>
+<a name='L332'></a><a href='#L332'>332</a>
+<a name='L333'></a><a href='#L333'>333</a>
+<a name='L334'></a><a href='#L334'>334</a>
+<a name='L335'></a><a href='#L335'>335</a>
+<a name='L336'></a><a href='#L336'>336</a>
+<a name='L337'></a><a href='#L337'>337</a>
+<a name='L338'></a><a href='#L338'>338</a>
+<a name='L339'></a><a href='#L339'>339</a>
+<a name='L340'></a><a href='#L340'>340</a>
+<a name='L341'></a><a href='#L341'>341</a>
+<a name='L342'></a><a href='#L342'>342</a>
+<a name='L343'></a><a href='#L343'>343</a>
+<a name='L344'></a><a href='#L344'>344</a>
+<a name='L345'></a><a href='#L345'>345</a>
+<a name='L346'></a><a href='#L346'>346</a>
+<a name='L347'></a><a href='#L347'>347</a>
+<a name='L348'></a><a href='#L348'>348</a>
+<a name='L349'></a><a href='#L349'>349</a>
+<a name='L350'></a><a href='#L350'>350</a>
+<a name='L351'></a><a href='#L351'>351</a>
+<a name='L352'></a><a href='#L352'>352</a>
+<a name='L353'></a><a href='#L353'>353</a>
+<a name='L354'></a><a href='#L354'>354</a>
+<a name='L355'></a><a href='#L355'>355</a>
+<a name='L356'></a><a href='#L356'>356</a>
+<a name='L357'></a><a href='#L357'>357</a>
+<a name='L358'></a><a href='#L358'>358</a>
+<a name='L359'></a><a href='#L359'>359</a>
+<a name='L360'></a><a href='#L360'>360</a>
+<a name='L361'></a><a href='#L361'>361</a>
+<a name='L362'></a><a href='#L362'>362</a>
+<a name='L363'></a><a href='#L363'>363</a>
+<a name='L364'></a><a href='#L364'>364</a>
+<a name='L365'></a><a href='#L365'>365</a>
+<a name='L366'></a><a href='#L366'>366</a>
+<a name='L367'></a><a href='#L367'>367</a>
+<a name='L368'></a><a href='#L368'>368</a>
+<a name='L369'></a><a href='#L369'>369</a>
+<a name='L370'></a><a href='#L370'>370</a>
+<a name='L371'></a><a href='#L371'>371</a>
+<a name='L372'></a><a href='#L372'>372</a>
+<a name='L373'></a><a href='#L373'>373</a>
+<a name='L374'></a><a href='#L374'>374</a>
+<a name='L375'></a><a href='#L375'>375</a>
+<a name='L376'></a><a href='#L376'>376</a>
+<a name='L377'></a><a href='#L377'>377</a>
+<a name='L378'></a><a href='#L378'>378</a>
+<a name='L379'></a><a href='#L379'>379</a>
+<a name='L380'></a><a href='#L380'>380</a>
+<a name='L381'></a><a href='#L381'>381</a>
+<a name='L382'></a><a href='#L382'>382</a>
+<a name='L383'></a><a href='#L383'>383</a>
+<a name='L384'></a><a href='#L384'>384</a>
+<a name='L385'></a><a href='#L385'>385</a>
+<a name='L386'></a><a href='#L386'>386</a>
+<a name='L387'></a><a href='#L387'>387</a>
+<a name='L388'></a><a href='#L388'>388</a>
+<a name='L389'></a><a href='#L389'>389</a>
+<a name='L390'></a><a href='#L390'>390</a>
+<a name='L391'></a><a href='#L391'>391</a>
+<a name='L392'></a><a href='#L392'>392</a>
+<a name='L393'></a><a href='#L393'>393</a>
+<a name='L394'></a><a href='#L394'>394</a>
+<a name='L395'></a><a href='#L395'>395</a>
+<a name='L396'></a><a href='#L396'>396</a>
+<a name='L397'></a><a href='#L397'>397</a>
+<a name='L398'></a><a href='#L398'>398</a>
+<a name='L399'></a><a href='#L399'>399</a>
+<a name='L400'></a><a href='#L400'>400</a>
+<a name='L401'></a><a href='#L401'>401</a>
+<a name='L402'></a><a href='#L402'>402</a>
+<a name='L403'></a><a href='#L403'>403</a>
+<a name='L404'></a><a href='#L404'>404</a>
+<a name='L405'></a><a href='#L405'>405</a>
+<a name='L406'></a><a href='#L406'>406</a>
+<a name='L407'></a><a href='#L407'>407</a>
+<a name='L408'></a><a href='#L408'>408</a>
+<a name='L409'></a><a href='#L409'>409</a>
+<a name='L410'></a><a href='#L410'>410</a>
+<a name='L411'></a><a href='#L411'>411</a>
+<a name='L412'></a><a href='#L412'>412</a>
+<a name='L413'></a><a href='#L413'>413</a>
+<a name='L414'></a><a href='#L414'>414</a>
+<a name='L415'></a><a href='#L415'>415</a>
+<a name='L416'></a><a href='#L416'>416</a>
+<a name='L417'></a><a href='#L417'>417</a>
+<a name='L418'></a><a href='#L418'>418</a>
+<a name='L419'></a><a href='#L419'>419</a>
+<a name='L420'></a><a href='#L420'>420</a>
+<a name='L421'></a><a href='#L421'>421</a>
+<a name='L422'></a><a href='#L422'>422</a>
+<a name='L423'></a><a href='#L423'>423</a>
+<a name='L424'></a><a href='#L424'>424</a>
+<a name='L425'></a><a href='#L425'>425</a>
+<a name='L426'></a><a href='#L426'>426</a>
+<a name='L427'></a><a href='#L427'>427</a>
+<a name='L428'></a><a href='#L428'>428</a>
+<a name='L429'></a><a href='#L429'>429</a>
+<a name='L430'></a><a href='#L430'>430</a>
+<a name='L431'></a><a href='#L431'>431</a>
+<a name='L432'></a><a href='#L432'>432</a>
+<a name='L433'></a><a href='#L433'>433</a>
+<a name='L434'></a><a href='#L434'>434</a>
+<a name='L435'></a><a href='#L435'>435</a>
+<a name='L436'></a><a href='#L436'>436</a>
+<a name='L437'></a><a href='#L437'>437</a>
+<a name='L438'></a><a href='#L438'>438</a>
+<a name='L439'></a><a href='#L439'>439</a>
+<a name='L440'></a><a href='#L440'>440</a>
+<a name='L441'></a><a href='#L441'>441</a>
+<a name='L442'></a><a href='#L442'>442</a>
+<a name='L443'></a><a href='#L443'>443</a>
+<a name='L444'></a><a href='#L444'>444</a>
+<a name='L445'></a><a href='#L445'>445</a>
+<a name='L446'></a><a href='#L446'>446</a>
+<a name='L447'></a><a href='#L447'>447</a>
+<a name='L448'></a><a href='#L448'>448</a>
+<a name='L449'></a><a href='#L449'>449</a>
+<a name='L450'></a><a href='#L450'>450</a>
+<a name='L451'></a><a href='#L451'>451</a>
+<a name='L452'></a><a href='#L452'>452</a>
+<a name='L453'></a><a href='#L453'>453</a>
+<a name='L454'></a><a href='#L454'>454</a>
+<a name='L455'></a><a href='#L455'>455</a>
+<a name='L456'></a><a href='#L456'>456</a>
+<a name='L457'></a><a href='#L457'>457</a>
+<a name='L458'></a><a href='#L458'>458</a>
+<a name='L459'></a><a href='#L459'>459</a>
+<a name='L460'></a><a href='#L460'>460</a>
+<a name='L461'></a><a href='#L461'>461</a>
+<a name='L462'></a><a href='#L462'>462</a>
+<a name='L463'></a><a href='#L463'>463</a>
+<a name='L464'></a><a href='#L464'>464</a>
+<a name='L465'></a><a href='#L465'>465</a>
+<a name='L466'></a><a href='#L466'>466</a>
+<a name='L467'></a><a href='#L467'>467</a>
+<a name='L468'></a><a href='#L468'>468</a>
+<a name='L469'></a><a href='#L469'>469</a>
+<a name='L470'></a><a href='#L470'>470</a>
+<a name='L471'></a><a href='#L471'>471</a>
+<a name='L472'></a><a href='#L472'>472</a>
+<a name='L473'></a><a href='#L473'>473</a>
+<a name='L474'></a><a href='#L474'>474</a>
+<a name='L475'></a><a href='#L475'>475</a>
+<a name='L476'></a><a href='#L476'>476</a>
+<a name='L477'></a><a href='#L477'>477</a>
+<a name='L478'></a><a href='#L478'>478</a>
+<a name='L479'></a><a href='#L479'>479</a>
+<a name='L480'></a><a href='#L480'>480</a>
+<a name='L481'></a><a href='#L481'>481</a>
+<a name='L482'></a><a href='#L482'>482</a>
+<a name='L483'></a><a href='#L483'>483</a>
+<a name='L484'></a><a href='#L484'>484</a>
+<a name='L485'></a><a href='#L485'>485</a>
+<a name='L486'></a><a href='#L486'>486</a>
+<a name='L487'></a><a href='#L487'>487</a>
+<a name='L488'></a><a href='#L488'>488</a>
+<a name='L489'></a><a href='#L489'>489</a>
+<a name='L490'></a><a href='#L490'>490</a>
+<a name='L491'></a><a href='#L491'>491</a>
+<a name='L492'></a><a href='#L492'>492</a>
+<a name='L493'></a><a href='#L493'>493</a>
+<a name='L494'></a><a href='#L494'>494</a>
+<a name='L495'></a><a href='#L495'>495</a>
+<a name='L496'></a><a href='#L496'>496</a>
+<a name='L497'></a><a href='#L497'>497</a>
+<a name='L498'></a><a href='#L498'>498</a>
+<a name='L499'></a><a href='#L499'>499</a>
+<a name='L500'></a><a href='#L500'>500</a>
+<a name='L501'></a><a href='#L501'>501</a>
+<a name='L502'></a><a href='#L502'>502</a>
+<a name='L503'></a><a href='#L503'>503</a>
+<a name='L504'></a><a href='#L504'>504</a>
+<a name='L505'></a><a href='#L505'>505</a>
+<a name='L506'></a><a href='#L506'>506</a>
+<a name='L507'></a><a href='#L507'>507</a>
+<a name='L508'></a><a href='#L508'>508</a>
+<a name='L509'></a><a href='#L509'>509</a>
+<a name='L510'></a><a href='#L510'>510</a>
+<a name='L511'></a><a href='#L511'>511</a>
+<a name='L512'></a><a href='#L512'>512</a>
+<a name='L513'></a><a href='#L513'>513</a>
+<a name='L514'></a><a href='#L514'>514</a>
+<a name='L515'></a><a href='#L515'>515</a>
+<a name='L516'></a><a href='#L516'>516</a>
+<a name='L517'></a><a href='#L517'>517</a>
+<a name='L518'></a><a href='#L518'>518</a>
+<a name='L519'></a><a href='#L519'>519</a>
+<a name='L520'></a><a href='#L520'>520</a>
+<a name='L521'></a><a href='#L521'>521</a>
+<a name='L522'></a><a href='#L522'>522</a>
+<a name='L523'></a><a href='#L523'>523</a>
+<a name='L524'></a><a href='#L524'>524</a>
+<a name='L525'></a><a href='#L525'>525</a>
+<a name='L526'></a><a href='#L526'>526</a>
+<a name='L527'></a><a href='#L527'>527</a>
+<a name='L528'></a><a href='#L528'>528</a>
+<a name='L529'></a><a href='#L529'>529</a>
+<a name='L530'></a><a href='#L530'>530</a>
+<a name='L531'></a><a href='#L531'>531</a>
+<a name='L532'></a><a href='#L532'>532</a>
+<a name='L533'></a><a href='#L533'>533</a>
+<a name='L534'></a><a href='#L534'>534</a>
+<a name='L535'></a><a href='#L535'>535</a>
+<a name='L536'></a><a href='#L536'>536</a>
+<a name='L537'></a><a href='#L537'>537</a>
+<a name='L538'></a><a href='#L538'>538</a>
+<a name='L539'></a><a href='#L539'>539</a>
+<a name='L540'></a><a href='#L540'>540</a>
+<a name='L541'></a><a href='#L541'>541</a>
+<a name='L542'></a><a href='#L542'>542</a>
+<a name='L543'></a><a href='#L543'>543</a>
+<a name='L544'></a><a href='#L544'>544</a>
+<a name='L545'></a><a href='#L545'>545</a>
+<a name='L546'></a><a href='#L546'>546</a>
+<a name='L547'></a><a href='#L547'>547</a>
+<a name='L548'></a><a href='#L548'>548</a>
+<a name='L549'></a><a href='#L549'>549</a>
+<a name='L550'></a><a href='#L550'>550</a>
+<a name='L551'></a><a href='#L551'>551</a>
+<a name='L552'></a><a href='#L552'>552</a>
+<a name='L553'></a><a href='#L553'>553</a>
+<a name='L554'></a><a href='#L554'>554</a>
+<a name='L555'></a><a href='#L555'>555</a>
+<a name='L556'></a><a href='#L556'>556</a>
+<a name='L557'></a><a href='#L557'>557</a>
+<a name='L558'></a><a href='#L558'>558</a>
+<a name='L559'></a><a href='#L559'>559</a>
+<a name='L560'></a><a href='#L560'>560</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">172x</span>
+<span class="cline-any cline-yes">172x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">172x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">172x</span>
+<span class="cline-any cline-yes">172x</span>
+<span class="cline-any cline-yes">172x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">560x</span>
+<span class="cline-any cline-yes">560x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1343x</span>
+<span class="cline-any cline-yes">1343x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">233x</span>
+<span class="cline-any cline-yes">233x</span>
+<span class="cline-any cline-yes">233x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">308x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-yes">18x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">1304x</span>
+<span class="cline-any cline-yes">1304x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">652x</span>
+<span class="cline-any cline-yes">652x</span>
+<span class="cline-any cline-yes">652x</span>
+<span class="cline-any cline-yes">652x</span>
+<span class="cline-any cline-yes">652x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">652x</span>
+<span class="cline-any cline-yes">634x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">652x</span>
+<span class="cline-any cline-yes">652x</span>
+<span class="cline-any cline-yes">652x</span>
+<span class="cline-any cline-yes">652x</span>
+<span class="cline-any cline-yes">652x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">179x</span>
+<span class="cline-any cline-yes">179x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">716x</span>
+<span class="cline-any cline-yes">716x</span>
+<span class="cline-any cline-yes">672x</span>
+<span class="cline-any cline-yes">672x</span>
+<span class="cline-any cline-yes">44x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">716x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">172x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">172x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">32x</span>
+<span class="cline-any cline-yes">32x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">246x</span>
+<span class="cline-any cline-yes">246x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-yes">407x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">234x</span>
+<span class="cline-any cline-yes">234x</span>
+<span class="cline-any cline-yes">234x</span>
+<span class="cline-any cline-yes">214x</span>
+<span class="cline-any cline-yes">214x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">214x</span>
+<span class="cline-any cline-yes">214x</span>
+<span class="cline-any cline-yes">214x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">234x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">214x</span>
+<span class="cline-any cline-yes">214x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">156x</span>
+<span class="cline-any cline-yes">156x</span>
+<span class="cline-any cline-yes">156x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1420x</span>
+<span class="cline-any cline-yes">1420x</span>
+<span class="cline-any cline-yes">1420x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-yes">688x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+ * The box a map is drawn in, and the four handles on its edges (§17.2).
+ *
+ * A square map's box is one number, its side (`ui/mapSize.ts`); a turned band's
+ * is two, its width and its depth (`ui/turnBox.ts`). Both are the session's, so
+ * that a deck of maps is one shape, and both are clamped on the way out to the
+ * room this panel has — measured against the panel rather than against the grid
+ * the box is in, which would follow the box down. This writes the box onto the
+ * grid as the custom properties the stylesheet lays the map and its lanes out
+ * from, lays the handles along the picture on every frame, and turns a drag or
+ * a key on one of them into a new size in the store.
+ *
+ * Out of `ui/MatrixPanel.ts` because it is layout and not data: it reads which
+ * presentation is on screen, and two rectangles off the renderer, and nothing
+ * of the block. How deep a band is cut to fill the box stays with the panel —
+ * `MatrixPanel.syncTurnDepth` re-cuts the turned block the panel holds and the
+ * axes measured from it, and asks this only how tall the box is.
+ */
+&nbsp;
+import type { HeatmapView } from '../render/heatmap'
+import type { RotatedBlock } from '../render/rotate'
+import type { AnnotationLanes } from './AnnotationLanes'
+import { el } from './dom'
+import { fitMapSize, getMapSize, setMapSize, subscribeMapSize } from './mapSize'
+import type { MatrixPanel } from './MatrixPanel'
+import {
+  MIN_TURN_HEIGHT,
+  MIN_TURN_WIDTH,
+  fitTurnBox,
+  getTurnBox,
+  setTurnBox as rememberTurnBox,
+  subscribeTurnBox,
+  type TurnBox,
+} from './turnBox'
+&nbsp;
+/**
+ * What the box needs of the panel: the renderer and the lane stacks it is laid
+ * out with, the two elements its size is written onto and read back from, and
+ * which presentation is on screen.
+ */
+export interface BoxHost {
+  /** The renderer: the rectangles the handles lie along, and a canvas to tell when its box changes. */
+  readonly heatmap: HeatmapView
+  /** The lane stacks, whose columns beside the map come out of the width a box has. */
+  readonly lanes: AnnotationLanes
+  /** The grid holding the map and its lanes, where the box is written; built after this is. */
+  grid(): HTMLElement
+  /** The map's own box inside the grid, whose `max-height` is the height a square map claims. */
+  wrap(): HTMLElement
+  /** The turned band on screen, or `null` for a square map: which picture's box this is. */
+  turned(): RotatedBlock | null
+  /** The grid's last measured size, which the room falls back on before the panel is laid out. */
+  hostSize(): { width: number; height: number }
+  /** Ask the panel for a frame. */
+  schedule(): void
+}
+&nbsp;
+/** The box one map is drawn in, its handles, and the room it has. */
+export class MapBox {
+  /**
+   * The four edges of the picture, as things a hand can take hold of.
+   *
+   * Bars rather than strips of live canvas, and visible on approach rather than
+   * only under the pointer, because how big the picture is drawn is a decision
+   * the reader has to be able to *find* — a gesture nobody can see is a gesture
+   * nobody uses.
+   *
+   * Which of them are shown, and what a drag on one means, is the whole of the
+   * difference between the two presentations:
+   *
+   * - **A square map** shows all four, and every one sets the same number — the
+   *   side of the box (`ui/mapSize.ts`). A square block has no shape to choose,
+   *   so a box of another shape would be paper down two sides of the picture.
+   * - **A band** shows three. Its width and its depth are separate numbers
+   *   (`ui/turnBox.ts`), and its fourth edge is the diagonal itself: the band
+   *   stands on the axis, so there is nothing to drag there. Which of the
+   *   horizontal pair is the far edge follows the direction the band grows in —
+   *   up on an ordinary turn, down on the mirrored half of a comparison.
+   */
+  readonly grips: Record&lt;PlotEdge, HTMLElement&gt; = {
+    top: plotGrip('top'),
+    bottom: plotGrip('bottom'),
+    left: plotGrip('left'),
+    right: plotGrip('right'),
+  }
+  /** Which presentation the grips are labelled for; see {@link placeGrips}. */
+  private gripMode: 'square' | 'band' | null = null
+  /** The room the box has, measured once per resize. See {@link measureRoom}. */
+  private room: { width: number; height: number } | null = null
+  private readonly unsubscribeTurnBox: () =&gt; void
+  private readonly unsubscribeMapSize: () =&gt; void
+  private readonly heatmap: HeatmapView
+  private readonly lanes: AnnotationLanes
+&nbsp;
+  constructor(private readonly host: BoxHost) {
+    this.heatmap = host.heatmap
+    this.lanes = host.lanes
+    // Every panel, not only the one whose handle was dragged: the box is the
+    // session's, so a deck of bands is one shape (§17.3).
+    this.unsubscribeTurnBox = subscribeTurnBox(() =&gt; this.applyTurnBox())
+    // The square map's own size, on the same terms and through the same call: one
+    // reader, one shape, however many pictures are drawn from it.
+    this.unsubscribeMapSize = subscribeMapSize(() =&gt; this.applyTurnBox())
+    this.watchGrips()
+  }
+&nbsp;
+  /** The turned band on screen, as the panel holds it now. */
+  private get turned(): RotatedBlock | null {
+    return this.host.turned()
+  }
+&nbsp;
+  /** The grid the box is written onto. */
+  private get grid(): HTMLElement {
+    return this.host.grid()
+  }
+&nbsp;
+  /** The map's own box, which the room's height is read back off. */
+  private get wrap(): HTMLElement {
+    return this.host.wrap()
+  }
+&nbsp;
+  /**
+   * Take the room again, and redraw the box in it.
+   *
+   * Every road into this panel from a change of *space* ends here, and there are
+   * four of them: the shell folding a column ({@link MatrixPanel.remeasure}),
+   * the view's own `ResizeObserver` for a window resize or a lane appearing, a
+   * turn arriving or leaving, and a deck relaying out. They used to end in
+   * different places and only some of them redrew the box, so a turned band
+   * kept the width of the window it was first drawn in: folding two columns gave
+   * the map three hundred pixels it never took, and adding a track under it left
+   * the band as wide as it was before the stack was there.
+   *
+   * A square map needs none of this — its canvas is sized by the stylesheet, and
+   * `HeatmapView.resize` reads that — which is exactly why the turned one was
+   * missed: it is the one picture in the app whose size is a number this class
+   * computes.
+   *
+   * The band's *depth* follows on the next frame with nothing to arrange:
+   * {@link MatrixPanel.syncTurnDepth} runs before every draw and re-cuts the
+   * band whenever the box it has to fill has changed shape.
+   *
+   * Idempotent, and it has to be: writing the box resizes the grid, which is what
+   * the observer is watching. The room is measured against the *panel* and never
+   * against the grid the box is in ({@link measureRoom}), so a second pass over
+   * the same window computes the same numbers and the loop stops on the first
+   * repeat.
+   */
+  refit(): void {
+    this.measureRoom()
+    this.writeTurnBox()
+  }
+&nbsp;
+  /**
+   * Lay the size handles along the edges of the picture.
+   *
+   * Placed from the measured rectangles on every frame, exactly as the key is, so
+   * they follow a pan and a zoom with nothing to keep in step.
+   *
+   * The **plot** frame for a square map, on all four edges: the plot is what a
+   * reader sees as the map — the canvas around it is the gutter its axis labels
+   * live in — and the box being dragged is the canvas, so a handle on the frame
+   * is the honest place to take hold of it.
+   *
+   * The band keeps the rectangle each of its own handles was always on. Its far
+   * edge follows the **data**, because a band is as wide as its block while the
+   * plot is as wide as the panel, and a bar across the plot would run out past
+   * the picture at every zoom that does not fill it. Its two ends follow the
+   * *plot*'s height for the opposite reason: a band fills its box vertically by
+   * construction, so a handle that stopped at the last column would sit in the
+   * middle of the picture pointing at nothing.
+   */
+  placeGrips(): void {
+    const turned = this.turned
+    const plot = this.heatmap.plotRect
+    const data = this.heatmap.dataRect
+    // `down` is the mirrored half of a comparison, where separation grows towards
+    // the bottom of the picture and the far edge is the bottom one. The other
+    // horizontal edge is the diagonal the band stands on, and is not a handle.
+    //
+    // A **mirrored pair** has no idle edge at all: the diagonal is in the middle
+    // of the picture, both horizontal edges are far edges, and each of them sets
+    // the same one number — how tall the box is — from its own side.
+    const idle: PlotEdge | null =
+      turned === null || turned.fold !== undefined
+        ? null
+        : turned.direction === 'up'
+          ? <span class="branch-0 cbranch-no" title="branch not covered" >'bottom'</span>
+<span class="cstat-no" title="statement not covered" >          : 'top'</span>
+    for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
+      this.grips[edge].classList.toggle('hidden', edge === idle)
+    }
+    this.labelGrips(turned === null ? 'square' : 'band')
+&nbsp;
+    for (const edge of ['left', 'right'] as const) {
+      const grip = this.grips[edge]
+      grip.style.top = `${Math.round(plot.y)}px`
+      grip.style.height = `${Math.round(plot.height)}px`
+      grip.style.left = `${Math.round(edge === 'left' ? plot.x : plot.x + plot.width)}px`
+    }
+    for (const edge of ['top', 'bottom'] as const) {
+      if (edge === idle) continue
+      const grip = this.grips[edge]
+      // The band's far edge sits on the data; a square map's edges are the frame.
+      const box = turned === null ? plot : data
+      grip.style.top = `${Math.round(edge === 'top' ? box.y : box.y + box.height)}px`
+      grip.style.left = `${Math.round(box.x)}px`
+      grip.style.width = `${Math.round(box.width)}px`
+    }
+  }
+&nbsp;
+  /**
+   * What the handles say they do, which is not the same thing in the two
+   * presentations.
+   *
+   * Written when the presentation changes rather than on every frame: a title is
+   * a DOM write, and {@link placeGrips} runs before every draw.
+   */
+  private labelGrips(mode: 'square' | 'band'): void {
+    if (mode === this.gripMode) return
+    this.gripMode = mode
+    const same = 'Double-click for as much room as there is.'
+    for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
+      this.grips[edge].title =
+        mode === 'square'
+          ? `Drag to set how big this map is drawn — every edge sets the same size, because a ` +
+            `square block has no shape to choose. ${same}`
+          : edgeAxis(edge) === 'y'
+            ? `Drag to set how tall this band is drawn. The distance from the diagonal it ` +
+              `reaches follows from the zoom — the box keeps its shape and the picture fills ` +
+              `it. ${same}`
+            : `Drag to set how wide this band is drawn. Both ends move, so the box stays ` +
+              `centred, and the tracks under it follow. ${same}`
+    }
+  }
+&nbsp;
+  /**
+   * A drag on a handle sets how big the picture is drawn.
+   *
+   * Pixels, straight through: a handle is on the edge of a box measured in them,
+   * so the edge goes exactly where the hand puts it. What each of the four edges
+   * *means* is read at the moment of the drag rather than wired once, because the
+   * same edge belongs to two pictures — the left edge of a band is one end of its
+   * width, and the left edge of a square map is one side of its size — and a
+   * panel changes between them under the reader's hand.
+   *
+   * The **band** keeps the numbers it always had (`ui/turnBox.ts`): its far
+   * horizontal edge is the depth, its two ends are the width, and the width moves
+   * at twice the hand because the box is centred — the edge under the pointer has
+   * to stay under it, so the far end goes out by the same amount.
+   *
+   * A **square map** has one number and every edge sets it (`ui/mapSize.ts`). The
+   * two ends move it at twice the hand, for the same centring reason. The two
+   * horizontal edges move it at once: the picture hangs from the stack above it,
+   * so its top is where the panel starts and a taller box grows downward. The top
+   * handle therefore reads as *out is bigger* rather than as an edge that follows
+   * the pointer — which is what an edge handle means anyway, and the alternative
+   * is a picture that floats in the middle of a reserved column with its tracks
+   * detached from it.
+   *
+   * Keyboard too, because this is the only way to reach the number without a
+   * pointer and a `role="separator"` that answers no keys is a control that says
+   * it is one.
+   */
+  private watchGrips(): void {
+    for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
+      const axis = edgeAxis(edge)
+      // Out of the box: left and up are negative on screen, right and down are
+      // positive, and "out" is whichever of them leaves the picture's middle.
+      const away = edge === 'left' || edge === 'top' ? -1 : 1
+      this.dragEdge(this.grips[edge], {
+        axis,
+        away: <span class="fstat-no" title="function not covered" >() =&gt; away,</span>
+        held: <span class="fstat-no" title="function not covered" >() =&gt;</span>
+<span class="cstat-no" title="statement not covered" >          this.turned === null</span>
+<span class="cstat-no" title="statement not covered" >            ? this.mapSize()</span>
+<span class="cstat-no" title="statement not covered" >            : axis === 'x'</span>
+<span class="cstat-no" title="statement not covered" >              ? this.turnBox().width</span>
+<span class="cstat-no" title="statement not covered" >              : this.turnBox().height,</span>
+        // Both ends of a centred box move; one horizontal edge moves alone.
+        gain: axis === 'x' ? 2 : 1,
+        set: <span class="fstat-no" title="function not covered" >(value) =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >          if (this.turned === null) setMapSize(value)</span>
+<span class="cstat-no" title="statement not covered" >          else if (axis === 'x') this.setTurnBox({ width: value })</span>
+<span class="cstat-no" title="statement not covered" >          else this.setTurnBox({ height: value })</span>
+<span class="cstat-no" title="statement not covered" >        },</span>
+        reset: <span class="fstat-no" title="function not covered" >() =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >          if (this.turned === null) setMapSize(null)</span>
+<span class="cstat-no" title="statement not covered" >          else if (axis === 'x') this.setTurnBox({ width: null })</span>
+<span class="cstat-no" title="statement not covered" >          else this.setTurnBox({ height: null })</span>
+<span class="cstat-no" title="statement not covered" >        },</span>
+      })
+    }
+  }
+&nbsp;
+  /**
+   * One edge of the box, as something a hand or a keyboard can move.
+   *
+   * The four handles differ in three numbers and nothing else — which axis they
+   * travel on, which way out of the box is, and how much the box grows per pixel
+   * travelled — so they are one gesture parameterised rather than four listeners
+   * that have to be kept saying the same thing.
+   */
+  private dragEdge(
+    grip: HTMLElement,
+    rule: {
+      axis: 'x' | 'y'
+      away: () =&gt; number
+      held: () =&gt; number
+      gain: number
+      set(value: number): void
+      reset(): void
+    },
+  ): void {
+    let from: { at: number; size: number } | null = null
+    const onDown = <span class="fstat-no" title="function not covered" >(event: PointerEvent): void =&gt; {</span>
+      // No guard on the presentation any more: both of them have a size for this
+      // handle to move, and the one edge that has none — the diagonal a band
+      // stands on — is hidden rather than inert ({@link placeGrips}).
+<span class="cstat-no" title="statement not covered" >      if (event.button !== 0) return</span>
+<span class="cstat-no" title="statement not covered" >      event.preventDefault()</span>
+<span class="cstat-no" title="statement not covered" >      event.stopPropagation()</span>
+<span class="cstat-no" title="statement not covered" >      from = { at: rule.axis === 'x' ? event.clientX : event.clientY, size: rule.held() }</span>
+<span class="cstat-no" title="statement not covered" >      grip.setPointerCapture(event.pointerId)</span>
+<span class="cstat-no" title="statement not covered" >      grip.classList.add('is-dragging')</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+    const onMove = <span class="fstat-no" title="function not covered" >(event: PointerEvent): void =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >      if (from === null) return</span>
+<span class="cstat-no" title="statement not covered" >      const now = rule.axis === 'x' ? event.clientX : event.clientY</span>
+<span class="cstat-no" title="statement not covered" >      rule.set(from.size + (now - from.at) * rule.away() * rule.gain)</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+    const onUp = <span class="fstat-no" title="function not covered" >(event: PointerEvent): void =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >      if (from === null) return</span>
+<span class="cstat-no" title="statement not covered" >      from = null</span>
+<span class="cstat-no" title="statement not covered" >      grip.releasePointerCapture(event.pointerId)</span>
+<span class="cstat-no" title="statement not covered" >      grip.classList.remove('is-dragging')</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+    const onKey = <span class="fstat-no" title="function not covered" >(event: KeyboardEvent): void =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >      const size = rule.held()</span>
+      // A tenth of the box per press, a half with Shift — the step the map's own
+      // arrow keys pan by, so one hand learns one rule.
+<span class="cstat-no" title="statement not covered" >      const step = Math.max(1, Math.round(size * (event.shiftKey ? 0.5 : 0.1)))</span>
+<span class="cstat-no" title="statement not covered" >      const grow = rule.axis === 'x' ? 'ArrowRight' : 'ArrowUp'</span>
+<span class="cstat-no" title="statement not covered" >      const shrink = rule.axis === 'x' ? 'ArrowLeft' : 'ArrowDown'</span>
+<span class="cstat-no" title="statement not covered" >      if (event.key === grow) rule.set(size + step)</span>
+<span class="cstat-no" title="statement not covered" >      else if (event.key === shrink) rule.set(size - step)</span>
+<span class="cstat-no" title="statement not covered" >      else if (event.key === 'Home' || event.key === '0') rule.reset()</span>
+<span class="cstat-no" title="statement not covered" >      else return</span>
+<span class="cstat-no" title="statement not covered" >      event.preventDefault()</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+&nbsp;
+    grip.addEventListener('pointerdown', onDown)
+    grip.addEventListener('pointermove', onMove)
+    grip.addEventListener('pointerup', onUp)
+    grip.addEventListener('pointercancel', onUp)
+    grip.addEventListener('keydown', onKey)
+    // A double-click puts the default back, which is the way out of an edge
+    // dragged somewhere useless.
+    grip.addEventListener('dblclick', () =&gt; rule.reset())
+  }
+&nbsp;
+  /**
+   * The box a turned map is drawn in, in CSS pixels.
+   *
+   * The reader's, where they have said (`ui/turnBox.ts`), and otherwise a
+   * default expressed against the width — a third of it, which is the shape of
+   * the figures this is a viewer for. A rule and not a number, which is why what
+   * the store holds on an untouched axis is `null`: "as wide as there is room
+   * for" cannot be written down as a width, since the room changes with the
+   * window and the number would not.
+   *
+   * Clamped on the way **out** rather than only where the reader drags. What is
+   * stored is one box for the session and the panels drawing from it need not
+   * have the same room — a deck of four is four narrower panels — so a box the
+   * reader shaped beside one map has to be readable as "and as much of that as
+   * fits" beside the next. Which is also what makes the size survive a window
+   * resize: it is remembered whole and drawn to fit.
+   */
+  turnBox(): { width: number; height: number } {
+    return fitTurnBox(getTurnBox(), this.turnRoom())
+  }
+&nbsp;
+  /**
+   * How much room there is to draw the box in, in CSS pixels.
+   *
+   * Measured against the **panel**, and never against the grid the box is in.
+   * The grid is sized by its contents, so a box narrowed by a drag narrows the
+   * grid with it — and a ceiling read from there is a ceiling that follows the
+   * box down. That is what made the ends of the band a one-way control: every
+   * drag inwards lowered the limit to wherever the edge had just got to, so the
+   * width could be given away and never taken back.
+   *
+   * Both numbers are the room a *map* has, which is not the room the panel has:
+   * a stack of tracks beside or under the picture is drawn out of the same
+   * budget, and a box sized to the whole of it would push its own tracks off the
+   * edge. What is left after them is the difference between the grid and the
+   * map's own box, which is a fact about the tracks and does not move when the
+   * box does.
+   *
+   * The height is the one a square map would have claimed — `--map-budget`, read
+   * back off the grid's `min-height`, which §17.2 already reserves so that
+   * turning the map does not resize the panel. Growing past it would push the
+   * page down, and the panel would grow again on the next drag: a ceiling that
+   * rises as you press on it is not a ceiling.
+   */
+  private turnRoom(): { width: number; height: number } {
+    return this.room ?? this.measureRoom()
+  }
+&nbsp;
+  /**
+   * Measure it, and keep the answer.
+   *
+   * Cached because {@link turnBox} is read on every frame — the depth the band
+   * is cut to is a function of the box and the zoom — and this is four layout
+   * reads and a `getComputedStyle`, which is a synchronous relayout of the
+   * document per frame of every pan. Refreshed where the room can actually have
+   * changed, which is a resize of the panel, and it is the resize observer that
+   * says so.
+   */
+  measureRoom(): { width: number; height: number } {
+    const body = this.grid.parentElement
+    // The stacks themselves, rather than whatever is left of the grid once the
+    // map is taken out of it: the grid is held open at the height a square map
+    // would have claimed, so "the grid less the map" is mostly *slack*, and a
+    // ceiling computed from it would shrink by exactly as much as the box grew.
+    // Nothing to subtract on the vertical, where `--map-budget` has already
+    // taken the stacks out of the window for itself — subtracting them again is
+    // how a map with ten tracks under it got a ceiling below its own floor, and
+    // every drag of the top edge collapsed the band to the minimum.
+    const beside =
+      this.lanes.canvasFor('left').clientWidth + this.lanes.canvasFor('right').clientWidth
+    const width = (body?.<span class="branch-0 cbranch-no" title="branch not covered" >clientWidth ?? this.host.hostSize().width) - b</span>eside
+    // The wrap's `max-height` rather than the custom property it is written
+    // from: a custom property comes back as the `clamp()` that was written,
+    // unresolved, and the number wanted here is the one the browser worked out
+    // from it. It is the height a square map would have claimed, which is the
+    // point past which a band has stopped being one.
+    const budget = Number.parseFloat(getComputedStyle(this.wrap).maxHeight)
+    const height = Number.isFinite(budget<span class="branch-0 cbranch-no" title="branch not covered" >) ? budget : t</span>his.host.hostSize().height
+    this.room = {
+      width: Math.max(MIN_TURN_WIDTH, Math.round(width)),
+      height: Math.max(MIN_TURN_HEIGHT, Math.round(height)),
+    }
+    return this.room
+  }
+&nbsp;
+  /**
+   * Write the box onto the grid, and put the handles where its edges are.
+   *
+   * The size lives in CSS custom properties rather than in inline widths so that
+   * the map, the lane stacks under it and the centring are one layout decided in
+   * one place — the stacks take their width from the map's canvas, so a box that
+   * narrowed only the map would leave the tracks pointing at the wrong base
+   * pairs (`ui/AnnotationLanes.ts`).
+   */
+  private writeTurnBox(): void {
+    const turned = this.turned !== null
+    this.grid.classList.toggle('is-turned', turned)
+    if (!turned) {
+      this.grid.style.removeProperty('--turn-width')
+      this.grid.style.removeProperty('--turn-height')
+      // A square map's side, on the same terms: one number, written where the
+      // stylesheet's own default sits so that the default is what an unset size
+      // falls back to (`--map-size` defaults to `--map-budget` in `styles.css`).
+      // Written on every refit rather than only on a drag, because "as much as
+      // there is" is a rule and the room moves under it.
+      this.grid.style.setProperty('--map-size', `${Math.round(this.mapSize())}px`)
+      return
+    }
+    this.grid.style.removeProperty('--map-size')
+    const box = this.turnBox()
+    this.grid.style.setProperty('--turn-width', `${Math.round(box.width)}px`)
+    this.grid.style.setProperty('--turn-height', `${Math.round(box.height)}px`)
+  }
+&nbsp;
+  /**
+   * The side a square map is drawn at, in CSS pixels.
+   *
+   * {@link turnBox}'s counterpart, and clamped on the way out for the same
+   * reasons: what is stored is one number for the session, the panels drawing
+   * from it need not have the same room, and "as much as there is" is a rule that
+   * has to be re-read whenever the room changes rather than a width remembered
+   * from another window.
+   */
+  private mapSize(): number {
+    return fitMapSize(getMapSize(), this.turnRoom())
+  }
+&nbsp;
+  /**
+   * Resize the box, in CSS pixels. `null` on either axis puts the default back.
+   *
+   * Written to the store rather than to a field here, so it outlives this panel:
+   * a change of resolution or of chromosome destroys the panel and builds
+   * another, and a box held on the instance is one the reader loses the first
+   * time they go and look at something in it (`ui/turnBox.ts`).
+   *
+   * Clamped against the panel rather than against the block — the box is a fact
+   * about the figure, so what bounds it is how much room there is to draw in —
+   * and against *this* panel's room, which is the one the hand is in. Reading it
+   * back clamps again, for the panels the hand is not in.
+   */
+  private <span class="fstat-no" title="function not covered" >setTurnBox(next: { width?: number | null; height?: number | null }): void {</span>
+<span class="cstat-no" title="statement not covered" >    const room = this.turnRoom()</span>
+<span class="cstat-no" title="statement not covered" >    const fit = (value: number, low: number, high: number): number =&gt;</span>
+<span class="cstat-no" title="statement not covered" >      Math.max(low, Math.min(high, Math.round(value)))</span>
+<span class="cstat-no" title="statement not covered" >    const asked: Partial&lt;TurnBox&gt; = {}</span>
+<span class="cstat-no" title="statement not covered" >    if (next.width !== undefined) {</span>
+<span class="cstat-no" title="statement not covered" >      asked.width = next.width === null ? null : fit(next.width, MIN_TURN_WIDTH, room.width)</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    if (next.height !== undefined) {</span>
+<span class="cstat-no" title="statement not covered" >      asked.height = next.height === null ? null : fit(next.height, MIN_TURN_HEIGHT, room.height)</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    rememberTurnBox(asked)</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+&nbsp;
+  /**
+   * Draw the box at whatever size it now is.
+   *
+   * The subscription's half of the resize, and every panel runs it — the one the
+   * hand is in and the others of a deck, which is what keeps a deck of bands one
+   * shape (§17.3). Both presentations arrive here: a square map has a size to be
+   * drawn at too, and the panel the hand is *not* in has to follow it.
+   */
+  private applyTurnBox(): void {
+    this.writeTurnBox()
+    // The canvas has a new CSS size, and nothing else will tell the view: the
+    // resize observer watches the *grid*, whose own size need not have changed.
+    this.heatmap.resize()
+    this.host.schedule()
+  }
+&nbsp;
+  /** Stop following the session's two sizes: the panel is going away. */
+  destroy(): void {
+    this.unsubscribeTurnBox()
+    this.unsubscribeMapSize()
+  }
+}
+&nbsp;
+/** One edge of the picture; see {@link MapBox.grips}. */
+type PlotEdge = 'top' | 'bottom' | 'left' | 'right'
+&nbsp;
+/** Whether an edge is dragged along x or along y. */
+function edgeAxis(edge: PlotEdge): 'x' | 'y' {
+  return edge === 'left' || edge === 'right' ? 'x' : 'y'
+}
+&nbsp;
+/** One end of the turned band's box, as a bar a hand can take hold of. */
+function plotGrip(edge: PlotEdge): HTMLElement {
+  const axis = edgeAxis(edge)
+  return el('div', {
+    class: `plot-grip plot-grip-${axis} plot-grip-${edge} hidden`,
+    attrs: {
+      role: 'separator',
+      // Which way the *separator* lies, which is across the axis it travels on.
+      'aria-orientation': axis === 'x' ? 'vertical' : 'horizontal',
+      tabindex: '0',
+    },
+  })
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-11-13T16:14:32.811Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

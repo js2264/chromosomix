@@ -1,0 +1,742 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/annotations/cytoband.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/annotations</a> cytoband.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">93.51% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>101/108</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">84.28% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>59/70</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>8/8</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">93.51% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>101/108</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line high'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1051x</span>
+<span class="cline-any cline-yes">1051x</span>
+<span class="cline-any cline-yes">1051x</span>
+<span class="cline-any cline-yes">1051x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">39x</span>
+<span class="cline-any cline-yes">39x</span>
+<span class="cline-any cline-yes">39x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">39x</span>
+<span class="cline-any cline-yes">83x</span>
+<span class="cline-any cline-yes">83x</span>
+<span class="cline-any cline-yes">83x</span>
+<span class="cline-any cline-yes">83x</span>
+<span class="cline-any cline-yes">83x</span>
+<span class="cline-any cline-yes">83x</span>
+<span class="cline-any cline-yes">83x</span>
+<span class="cline-any cline-yes">83x</span>
+<span class="cline-any cline-yes">83x</span>
+<span class="cline-any cline-yes">83x</span>
+<span class="cline-any cline-yes">46x</span>
+<span class="cline-any cline-yes">46x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">980x</span>
+<span class="cline-any cline-yes">980x</span>
+<span class="cline-any cline-yes">392x</span>
+<span class="cline-any cline-yes">392x</span>
+<span class="cline-any cline-yes">391x</span>
+<span class="cline-any cline-yes">392x</span>
+<span class="cline-any cline-yes">392x</span>
+<span class="cline-any cline-yes">127x</span>
+<span class="cline-any cline-yes">127x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1127x</span>
+<span class="cline-any cline-yes">1127x</span>
+<span class="cline-any cline-yes">1127x</span>
+<span class="cline-any cline-yes">1127x</span>
+<span class="cline-any cline-yes">1127x</span>
+<span class="cline-any cline-yes">1127x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">37x</span>
+<span class="cline-any cline-yes">37x</span>
+<span class="cline-any cline-yes">37x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">973x</span>
+<span class="cline-any cline-yes">973x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">973x</span>
+<span class="cline-any cline-yes">973x</span>
+<span class="cline-any cline-yes">973x</span>
+<span class="cline-any cline-yes">973x</span>
+<span class="cline-any cline-yes">973x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">44x</span>
+<span class="cline-any cline-yes">44x</span>
+<span class="cline-any cline-yes">44x</span>
+<span class="cline-any cline-yes">44x</span>
+<span class="cline-any cline-yes">44x</span>
+<span class="cline-any cline-yes">941x</span>
+<span class="cline-any cline-yes">939x</span>
+<span class="cline-any cline-yes">939x</span>
+<span class="cline-any cline-yes">42x</span>
+<span class="cline-any cline-yes">42x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+ * Chromosome ideograms: UCSC's cytoBand and cytoBandIdeo (§8.22).
+ *
+ * Five columns — `chrom chromStart chromEnd name gieStain` — and the fifth is
+ * the whole of the format: the Giemsa stain a metaphase chromosome takes over
+ * that stretch. `gneg` is a light band, `gpos25` to `gpos100` dark ones by how
+ * dark, `acen` the centromere, `gvar` variable heterochromatin and `stalk` the
+ * narrow stalk of an acrocentric's short arm, which is where its rDNA is. IGV
+ * reads the same file for its ideogram, and every UCSC assembly publishes one:
+ * `cytoBandIdeo` is the same five columns with a row per unplaced sequence too,
+ * its name left empty.
+ *
+ * It is a {@link FeatureSet} — one band per row — for §8.14's reason, which is
+ * stronger here than anywhere: a band is an interval with a name, and the
+ * search, the export, the hit test and every task that reads intervals are the
+ * code a peak set already uses. What makes it a kind of its own is the glyph.
+ * A band is not a box on a row: it is a stretch of *one* shape, the chromosome,
+ * whose outline pinches at the centromere and narrows at a stalk, and the
+ * packing, the strand bands, the colour picker and the arrowheads every other
+ * feature lane has are questions a karyotype is never asked.
+ *
+ * ## Where the stain goes
+ *
+ * Into the detail, as `stain gpos50`, so the card and the tooltip say it the
+ * way the file does — and into the **score**, as the darkness the stain names:
+ * `gneg` 0, `gposN` N, a bare `gpos` 100. That is a number the file states
+ * rather than one this invents, and it is what lets a task read the bands as
+ * light and dark: *Signal by group* split by score is compartment E1 in G-light
+ * against G-dark bands, with no code of its own. `acen`, `gvar` and `stalk` are
+ * not a darkness and score `NaN`.
+ *
+ * ## What the file says about the genome
+ *
+ * UCSC's bands **tile** each chromosome, from its first base to its last, so a
+ * cytoBand is a `chrom.sizes` with a picture on it: the end of the last band is
+ * the chromosome's length. That is checked rather than assumed — a file whose
+ * bands start at 0 and leave no gap is taken at its word ({@link cytoBandLengths}),
+ * and one that does not gives the lower bound every other feature file gives.
+ */
+&nbsp;
+import { FeatureBuilder } from './featureset'
+import { forEachRow, isInteger } from './parse'
+import { type FeatureSet } from './types'
+import { fmt } from '../units'
+&nbsp;
+/**
+ * The stains a cytoBand's fifth column holds. `gpos` with or without its
+ * darkness: UCSC writes `gpos25` to `gpos100`, a few assemblies `gpos33` and
+ * `gpos66`, and some older files a bare `gpos`.
+ */
+const STAIN = /^(gneg|gpos\d{0,3}|acen|gvar|stalk)$/
+&nbsp;
+/** The detail key a band's stain is written under. */
+export const BAND_FIELD_STAIN = 'stain'
+&nbsp;
+/** How many rows {@link sniffCytoBand} checks before it is satisfied. */
+const ENOUGH_ROWS = 8
+&nbsp;
+/**
+ * One row as a band, or `null`.
+ *
+ * Five columns, the fourth possibly empty — cytoBandIdeo's unplaced sequences
+ * have no band name — or **four**, where a whitespace-separated file has
+ * collapsed that empty name away and left the stain in column 4. A stain in the
+ * last column is the test either way.
+ */
+function bandOf(columns: string[]): { name: string; stain: string } | null {
+  if (!isInteger(columns[1]) || !isInteger(columns[2])) return null
+  if (columns.length === 5 &amp;&amp; STAIN.test(columns[4])) return { name: columns[3], stain: columns[4] }
+  if (columns.length === 4 &amp;&amp; STAIN.test(columns[3])) return { name: '', stain: columns[3] }
+  return null
+}
+&nbsp;
+/**
+ * Whether these lines are a cytoBand.
+ *
+ * Every row inspected must end in a stain. That is a word no other format in
+ * the BED family puts in its fifth column — a BED5's is a score, a number — so
+ * the test cannot capture a BED, and nothing that is a cytoBand fails it. Asked
+ * before `sniffFormat` for the reason every sniffer in that block is: that
+ * function's last line is `return 'bed'`, and a cytoBand read as a BED is a lane
+ * of grey boxes whose one column anybody opened the file for was never read.
+ */
+export function sniffCytoBand(text: string): boolean {
+  let rows = 0
+  let index = 0
+  const length = text.length
+  // Its own walk rather than `forEachRow`, for `sniffBarChart`'s reason: this is
+  // asked of every dropped file before anything knows what it is, and a walk
+  // that cannot stop splits every line of a large one to answer a question eight
+  // rows settle.
+  while (index &lt; length &amp;&amp; rows &lt; ENOUGH_ROWS) {
+    let end = text.indexOf('\n', index)
+    if (end &lt; 0) end = length
+    let stop = end
+    if (stop &gt; index &amp;&amp; text.charCodeAt(stop - 1) === 13) <span class="branch-0 cbranch-no" title="branch not covered" >stop-- // CRLF</span>
+    const line = text.slice(index, stop)
+    index = end + 1
+    if (line === '' || line.charCodeAt(0) === 35) continue // '#'
+    if (line.startsWith('track ') || line.startsWith('browser ')) continue
+    const columns = line.includes('\t') ? line.split('\t') : line.trim().split(/\s+/)
+    if (bandOf(columns) === null) return false
+    rows++
+  }
+  return rows &gt; 0
+}
+&nbsp;
+/**
+ * How dark a stain is, as the file names it: `0` to `100`, or `NaN` for the
+ * three stains that are not a darkness.
+ */
+export function stainDarkness(stain: string): number {
+  if (stain === 'gneg') return 0
+  if (stain.startsWith('gpos')) {
+    const rest = stain.slice(4)
+    if (rest === '') return 100
+    const value = Number(rest)
+    return Number.isFinite(value) ? Math.max(0, Math.min(100, value)<span class="branch-0 cbranch-no" title="branch not covered" >) : 100</span>
+  }
+  return Number.NaN
+}
+&nbsp;
+/** A band's stain, read back out of the detail the parser wrote. */
+export function stainOf(detail: string): string {
+  const at = detail.indexOf(`${BAND_FIELD_STAIN} `)
+  if (at &lt; 0) <span class="branch-0 cbranch-no" title="branch not covered" >return ''</span>
+  const from = at + BAND_FIELD_STAIN.length + 1
+  const space = detail.indexOf(' ', from)
+  return space &lt; 0 ? detail.slice(from<span class="branch-0 cbranch-no" title="branch not covered" >) : detail.slice(from, space)</span>
+}
+&nbsp;
+/**
+ * A band's name in ISCN, chromosome first — `Xq28`, `1p36.33`.
+ *
+ * What a cytogeneticist writes and what the lane's caption says; the file
+ * writes the band alone, since its first column says whose it is. A UCSC `chr`
+ * prefix is not part of it. A band with no name — an unplaced sequence's one
+ * band — is its chromosome.
+ */
+export function iscnName(contig: string, band: string): string {
+  const chromosome = /^chr/i.test(contig) ? contig.slice(3) : contig
+  return band === '' ? chromosome : `${chromosome}${band}`
+}
+&nbsp;
+/** Parse a cytoBand or cytoBandIdeo into one feature per band. */
+export function parseCytoBand(text: string): FeatureSet {
+  const builder = new FeatureBuilder()
+  let skipped = 0
+  forEachRow(text, (columns) =&gt; {
+    const band = bandOf(columns)
+    if (band === null) <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
+<span class="cstat-no" title="statement not covered" >      skipped++</span>
+<span class="cstat-no" title="statement not covered" >      return</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+    builder.add(columns[0], Number(columns[1]), Number(columns[2]), {
+      name: band.name,
+      score: stainDarkness(band.stain),
+      detail: `${BAND_FIELD_STAIN} ${band.stain}`,
+    })
+  })
+  if (builder.length === <span class="branch-0 cbranch-no" title="branch not covered" >0 &amp;&amp; skipped &gt; 0) <span class="branch-0 cbranch-no" title="branch not covered" >{</span></span>
+<span class="cstat-no" title="statement not covered" >    throw new Error(</span>
+<span class="cstat-no" title="statement not covered" >      `No usable rows: all ${skipped} lines failed the "sequence, start, end, band, stain" test a ` +</span>
+        'cytoBand is made of.',
+<span class="cstat-no" title="statement not covered" >    )</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+  return builder.finish()
+}
+&nbsp;
+/**
+ * Each sequence's length, when the bands say it — else `null`.
+ *
+ * They say it when they **tile** it: the first band starts at 0 and every band
+ * starts where the one before it ended. Then the last band's end is the
+ * chromosome's end, which is how UCSC writes every cytoBand and what makes one
+ * a declaration of the genome rather than a set of features on it (§8.22). One
+ * sequence with a gap or an overlap and the whole file falls back to the lower
+ * bound, because a file that tiles some chromosomes and not others is not
+ * making the claim this reads it as making.
+ */
+export function cytoBandLengths(set: FeatureSet): Array&lt;{ name: string; length: number }&gt; | null {
+  const out: Array&lt;{ name: string; length: number }&gt; = []
+  for (let c = 0; c &lt; set.contigs.length; c++) {
+    const from = set.contigAt[c]
+    const to = set.contigAt[c + 1]
+    if (to &lt;= from) <span class="branch-0 cbranch-no" title="branch not covered" >continue</span>
+    let expected = 0
+    for (let i = from; i &lt; to; i++) {
+      if (set.start[i] !== expected) return null
+      expected = set.end[i]
+    }
+    out.push({ name: set.contigs[c], length: expected })
+  }
+  return out.length &gt; 0 ? <span class="branch-0 cbranch-no" title="branch not covered" >out : null</span>
+}
+&nbsp;
+/** One line for under the label: `862 bands · 24 sequences · 48 centromeric`. */
+export function cytoBandSummary(set: FeatureSet): string {
+  let centromere = 0
+  let named = 0
+  for (let i = 0; i &lt; set.length; i++) {
+    if (stainOf(set.detail[i]) === 'acen') centromere++
+    if (set.name[i] !== '') named++
+  }
+  const sequences = set.contigAt.reduce(
+    (count, _, c) =&gt; (c &lt; set.contigs.length &amp;&amp; set.contigAt[c + 1] &gt; set.contigAt[c] ? count + 1 : count),
+    0,
+  )
+  const parts = [
+    `${fmt.int(set.length)} band${set.length === <span class="branch-0 cbranch-no" title="branch not covered" >1 ? '' : '</span>s'}`,
+    `${fmt.int(sequences)} sequence${sequences === <span class="branch-0 cbranch-no" title="branch not covered" >1 ? '' : '</span>s'}`,
+  ]
+  // cytoBandIdeo's unplaced sequences are one unnamed band each, and a file
+  // that is *only* those is a chrom.sizes in five columns: saying how many are
+  // real bands keeps that from reading as a karyotype.
+  if (named &lt; set.length) parts.push(`${fmt.int(named)} named`)
+  if (centromere &gt; 0) parts.push(`${fmt.int(centromere)} centromeric`)
+  return parts.join(' · ')
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-11-13T16:14:32.811Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

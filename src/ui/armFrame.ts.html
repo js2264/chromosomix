@@ -1,0 +1,430 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/ui/armFrame.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/ui</a> armFrame.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>51/51</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">87.17% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>34/39</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>6/6</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>51/51</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line high'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">193x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">193x</span>
+<span class="cline-any cline-yes">193x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">155x</span>
+<span class="cline-any cline-yes">155x</span>
+<span class="cline-any cline-yes">155x</span>
+<span class="cline-any cline-yes">155x</span>
+<span class="cline-any cline-yes">155x</span>
+<span class="cline-any cline-yes">155x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">155x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">2320x</span>
+<span class="cline-any cline-yes">2320x</span>
+<span class="cline-any cline-yes">2320x</span>
+<span class="cline-any cline-yes">2320x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">155x</span>
+<span class="cline-any cline-yes">155x</span>
+<span class="cline-any cline-yes">155x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+ * The arms of a circular chromosome, as the map reads them (§8.15).
+ *
+ * A bacterial chromosome folds along two diagonals — the main one, and a second
+ * through its origin, where the two arms meet — and the arm-frame O/E divides by
+ * the decay along both. The panel offers it as a toggle, `arms`, with an action
+ * beside it, `ori`; the session owns the setting, and the panel is handed it on
+ * every render as a presentation ({@link ArmsPresentation}).
+ *
+ * What is here is the arithmetic of reading that presentation against a block:
+ * where each row and column of the block stands on the arms, carried over to
+ * whatever grid the block was read on; whether the origin is in the middle of
+ * the picture; which arms are in force under the `arm decay` score; and the key
+ * a derivation's caches are held under, so that an origin moved under them is a
+ * change of what is drawn. Pure, and out of `ui/MatrixPanel.ts` for that reason:
+ * the tests that pin it build a block and a frame, not a panel.
+ */
+&nbsp;
+import type { Derivation } from '../render/derive'
+import { bpAt, locusAxisFrom } from '../render/locus'
+import type { AxisGroup, MatrixResult } from '../worker/protocol'
+import type { ArmsPresentation, DerivePresentation } from './MatrixPanel'
+&nbsp;
+/** The window the arms control turns on at, in bins — the compartments task's default. */
+export const DEFAULT_ARM_WINDOW = 50
+&nbsp;
+/** What identifies an arms setting, for the caches a derivation is keyed on. */
+export function armsKey(arms: ArmsPresentation | undefined): string {
+  if (arms === undefined || arms.window === undefined || arms.frame === null) return ''
+  const { startBin, n, origin, circular } = arms.frame
+  return `${arms.window}:${startBin}:${n}:${origin}:${circular ? <span class="branch-0 cbranch-no" title="branch not covered" >'o' : '-'}</span>`
+}
+&nbsp;
+/**
+ * The arms a derivation is read against: the presentation's own, and under
+ * `arm decay` the same frame at the window `arms` turns on at while the toggle
+ * is off — that baseline is read along the arms whatever the toggle says
+ * (§8.15).
+ *
+ * One function for the read and for every key it is cached on, so an origin
+ * moved under that baseline with the toggle off is a change of what is drawn:
+ * keyed on the presentation's own arms, it was `''` before and after, and the
+ * map kept the arms of the old origin.
+ */
+export function armsInForce(derive: DerivePresentation | undefined): ArmsPresentation | undefined {
+  const arms = derive?.arms
+  if (arms === undefined || derive?.baseline !== true || derive.alongArms !== true) return arms
+  return arms.window === undefined ? { ...arms, window: DEFAULT_ARM_WINDOW <span class="branch-0 cbranch-no" title="branch not covered" >} : arms</span>
+}
+&nbsp;
+/**
+ * Whether a circle's origin is in the middle of the picture, to within
+ * `tolerance` base pairs — what lights `ori` (§8.15).
+ *
+ * `middle` is the locus at the centre of the visible domain, read off the scale
+ * rather than off the window the view note prints: that window is widened to
+ * whole bins at both ends, which moves its middle by up to a bin however exactly
+ * the picture is centred. Measured round the circle, so an origin a few
+ * kilobases before the sequence's first base is in the middle of a view that
+ * crosses the junction there.
+ */
+export function originInMiddle(
+  middle: { contig: string; bp: number } | null,
+  frame: { circular: boolean; length: number; originBp: number },
+  tolerance: number,
+): boolean {
+  if (middle === null || !frame.circular || !(frame.length &gt; 0)) return false
+  const apart = Math.abs(middle.bp - frame.originBp) % frame.length
+  return Math.min(apart, frame.length - apart) &lt;= tolerance
+}
+&nbsp;
+/**
+ * The arm frame for this block, where the arms are on and there is one.
+ *
+ * **In the block's own cells**, which are not the open map's bins in general: a
+ * pooled read sums several of them, and a read from a sibling rung of an
+ * `.mcool` is on another grid altogether, with extents in that grid's bins.
+ * Each row is placed by where it is *in base pairs* — through the same axis
+ * runs the ticks are placed by, which is also what folds a block read round a
+ * circle (`worker/wrap.ts`) back onto the sequence — and the frame and its
+ * window are carried over to the block's resolution. A frame kept at the open
+ * rung placed a coarse block's rows as the first stretch of a longer sequence,
+ * all on one arm, and sized its tables for a resolution nobody was drawing.
+ */
+export function armsFor(
+  data: MatrixResult,
+  arms: ArmsPresentation | undefined,
+  bpPerCell: number,
+): Derivation['arms'] | undefined {
+  if (arms === undefined || arms.window === undefined || arms.frame === null) return undefined
+  if (arms.refusal !== null || data.level !== 'bin') return undefined
+  const { n, origin, circular, binsize, length } = arms.frame
+  if (!(n &gt; 0) || !(binsize &gt; 0) || !(bpPerCell &gt; 0) || !(length &gt; 0)) <span class="branch-0 cbranch-no" title="branch not covered" >return undefined</span>
+  const cells = Math.max(1, Math.ceil(length / bpPerCell))
+  const originCell = Math.min(cells - 1, Math.floor(((origin + 0.5) * binsize) / bpPerCell))
+  const place = (runs: AxisGroup[], blockStart: number, count: number): Int32Array =&gt; {
+    const axis = locusAxisFrom({ runs, blockStart, level: 'bin', binsize: bpPerCell, contigLength: () =&gt; length })
+    const out = new Int32Array(count)
+    for (const segment of axis?.<span class="branch-0 cbranch-no" title="branch not covered" >segments ?? []) {</span>
+      for (let i = Math.max(0, segment.unitStart); i &lt; Math.min(count, segment.unitEnd); i++) {
+        const bp = bpAt(segment, i + 0.5)
+        const cell = Math.floor(bp / bpPerCell)
+        out[i] = ((cell % cells) + cells) % cells
+      }
+    }
+    return out
+  }
+  return {
+    frame: { n: cells, origin: originCell, circular },
+    rowBins: place(data.rowGroups, data.rowExtent[0], data.nrows),
+    colBins: place(data.colGroups, data.colExtent[0], data.ncols),
+    // The same stretch of the arms, counted in the block's cells.
+    window: arms.window &gt; 0 ? Math.max(1, Math.round((arms.window * binsize) / bpPerCell)<span class="branch-0 cbranch-no" title="branch not covered" >) : 0,</span>
+  }
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-11-13T16:14:32.811Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

@@ -1,0 +1,1651 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/metacooler/boost.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/metacooler</a> boost.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">98.75% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>318/322</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">83.47% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>96/115</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>16/16</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">98.75% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>318/322</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line high'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a>
+<a name='L288'></a><a href='#L288'>288</a>
+<a name='L289'></a><a href='#L289'>289</a>
+<a name='L290'></a><a href='#L290'>290</a>
+<a name='L291'></a><a href='#L291'>291</a>
+<a name='L292'></a><a href='#L292'>292</a>
+<a name='L293'></a><a href='#L293'>293</a>
+<a name='L294'></a><a href='#L294'>294</a>
+<a name='L295'></a><a href='#L295'>295</a>
+<a name='L296'></a><a href='#L296'>296</a>
+<a name='L297'></a><a href='#L297'>297</a>
+<a name='L298'></a><a href='#L298'>298</a>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a>
+<a name='L309'></a><a href='#L309'>309</a>
+<a name='L310'></a><a href='#L310'>310</a>
+<a name='L311'></a><a href='#L311'>311</a>
+<a name='L312'></a><a href='#L312'>312</a>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a>
+<a name='L332'></a><a href='#L332'>332</a>
+<a name='L333'></a><a href='#L333'>333</a>
+<a name='L334'></a><a href='#L334'>334</a>
+<a name='L335'></a><a href='#L335'>335</a>
+<a name='L336'></a><a href='#L336'>336</a>
+<a name='L337'></a><a href='#L337'>337</a>
+<a name='L338'></a><a href='#L338'>338</a>
+<a name='L339'></a><a href='#L339'>339</a>
+<a name='L340'></a><a href='#L340'>340</a>
+<a name='L341'></a><a href='#L341'>341</a>
+<a name='L342'></a><a href='#L342'>342</a>
+<a name='L343'></a><a href='#L343'>343</a>
+<a name='L344'></a><a href='#L344'>344</a>
+<a name='L345'></a><a href='#L345'>345</a>
+<a name='L346'></a><a href='#L346'>346</a>
+<a name='L347'></a><a href='#L347'>347</a>
+<a name='L348'></a><a href='#L348'>348</a>
+<a name='L349'></a><a href='#L349'>349</a>
+<a name='L350'></a><a href='#L350'>350</a>
+<a name='L351'></a><a href='#L351'>351</a>
+<a name='L352'></a><a href='#L352'>352</a>
+<a name='L353'></a><a href='#L353'>353</a>
+<a name='L354'></a><a href='#L354'>354</a>
+<a name='L355'></a><a href='#L355'>355</a>
+<a name='L356'></a><a href='#L356'>356</a>
+<a name='L357'></a><a href='#L357'>357</a>
+<a name='L358'></a><a href='#L358'>358</a>
+<a name='L359'></a><a href='#L359'>359</a>
+<a name='L360'></a><a href='#L360'>360</a>
+<a name='L361'></a><a href='#L361'>361</a>
+<a name='L362'></a><a href='#L362'>362</a>
+<a name='L363'></a><a href='#L363'>363</a>
+<a name='L364'></a><a href='#L364'>364</a>
+<a name='L365'></a><a href='#L365'>365</a>
+<a name='L366'></a><a href='#L366'>366</a>
+<a name='L367'></a><a href='#L367'>367</a>
+<a name='L368'></a><a href='#L368'>368</a>
+<a name='L369'></a><a href='#L369'>369</a>
+<a name='L370'></a><a href='#L370'>370</a>
+<a name='L371'></a><a href='#L371'>371</a>
+<a name='L372'></a><a href='#L372'>372</a>
+<a name='L373'></a><a href='#L373'>373</a>
+<a name='L374'></a><a href='#L374'>374</a>
+<a name='L375'></a><a href='#L375'>375</a>
+<a name='L376'></a><a href='#L376'>376</a>
+<a name='L377'></a><a href='#L377'>377</a>
+<a name='L378'></a><a href='#L378'>378</a>
+<a name='L379'></a><a href='#L379'>379</a>
+<a name='L380'></a><a href='#L380'>380</a>
+<a name='L381'></a><a href='#L381'>381</a>
+<a name='L382'></a><a href='#L382'>382</a>
+<a name='L383'></a><a href='#L383'>383</a>
+<a name='L384'></a><a href='#L384'>384</a>
+<a name='L385'></a><a href='#L385'>385</a>
+<a name='L386'></a><a href='#L386'>386</a>
+<a name='L387'></a><a href='#L387'>387</a>
+<a name='L388'></a><a href='#L388'>388</a>
+<a name='L389'></a><a href='#L389'>389</a>
+<a name='L390'></a><a href='#L390'>390</a>
+<a name='L391'></a><a href='#L391'>391</a>
+<a name='L392'></a><a href='#L392'>392</a>
+<a name='L393'></a><a href='#L393'>393</a>
+<a name='L394'></a><a href='#L394'>394</a>
+<a name='L395'></a><a href='#L395'>395</a>
+<a name='L396'></a><a href='#L396'>396</a>
+<a name='L397'></a><a href='#L397'>397</a>
+<a name='L398'></a><a href='#L398'>398</a>
+<a name='L399'></a><a href='#L399'>399</a>
+<a name='L400'></a><a href='#L400'>400</a>
+<a name='L401'></a><a href='#L401'>401</a>
+<a name='L402'></a><a href='#L402'>402</a>
+<a name='L403'></a><a href='#L403'>403</a>
+<a name='L404'></a><a href='#L404'>404</a>
+<a name='L405'></a><a href='#L405'>405</a>
+<a name='L406'></a><a href='#L406'>406</a>
+<a name='L407'></a><a href='#L407'>407</a>
+<a name='L408'></a><a href='#L408'>408</a>
+<a name='L409'></a><a href='#L409'>409</a>
+<a name='L410'></a><a href='#L410'>410</a>
+<a name='L411'></a><a href='#L411'>411</a>
+<a name='L412'></a><a href='#L412'>412</a>
+<a name='L413'></a><a href='#L413'>413</a>
+<a name='L414'></a><a href='#L414'>414</a>
+<a name='L415'></a><a href='#L415'>415</a>
+<a name='L416'></a><a href='#L416'>416</a>
+<a name='L417'></a><a href='#L417'>417</a>
+<a name='L418'></a><a href='#L418'>418</a>
+<a name='L419'></a><a href='#L419'>419</a>
+<a name='L420'></a><a href='#L420'>420</a>
+<a name='L421'></a><a href='#L421'>421</a>
+<a name='L422'></a><a href='#L422'>422</a>
+<a name='L423'></a><a href='#L423'>423</a>
+<a name='L424'></a><a href='#L424'>424</a>
+<a name='L425'></a><a href='#L425'>425</a>
+<a name='L426'></a><a href='#L426'>426</a>
+<a name='L427'></a><a href='#L427'>427</a>
+<a name='L428'></a><a href='#L428'>428</a>
+<a name='L429'></a><a href='#L429'>429</a>
+<a name='L430'></a><a href='#L430'>430</a>
+<a name='L431'></a><a href='#L431'>431</a>
+<a name='L432'></a><a href='#L432'>432</a>
+<a name='L433'></a><a href='#L433'>433</a>
+<a name='L434'></a><a href='#L434'>434</a>
+<a name='L435'></a><a href='#L435'>435</a>
+<a name='L436'></a><a href='#L436'>436</a>
+<a name='L437'></a><a href='#L437'>437</a>
+<a name='L438'></a><a href='#L438'>438</a>
+<a name='L439'></a><a href='#L439'>439</a>
+<a name='L440'></a><a href='#L440'>440</a>
+<a name='L441'></a><a href='#L441'>441</a>
+<a name='L442'></a><a href='#L442'>442</a>
+<a name='L443'></a><a href='#L443'>443</a>
+<a name='L444'></a><a href='#L444'>444</a>
+<a name='L445'></a><a href='#L445'>445</a>
+<a name='L446'></a><a href='#L446'>446</a>
+<a name='L447'></a><a href='#L447'>447</a>
+<a name='L448'></a><a href='#L448'>448</a>
+<a name='L449'></a><a href='#L449'>449</a>
+<a name='L450'></a><a href='#L450'>450</a>
+<a name='L451'></a><a href='#L451'>451</a>
+<a name='L452'></a><a href='#L452'>452</a>
+<a name='L453'></a><a href='#L453'>453</a>
+<a name='L454'></a><a href='#L454'>454</a>
+<a name='L455'></a><a href='#L455'>455</a>
+<a name='L456'></a><a href='#L456'>456</a>
+<a name='L457'></a><a href='#L457'>457</a>
+<a name='L458'></a><a href='#L458'>458</a>
+<a name='L459'></a><a href='#L459'>459</a>
+<a name='L460'></a><a href='#L460'>460</a>
+<a name='L461'></a><a href='#L461'>461</a>
+<a name='L462'></a><a href='#L462'>462</a>
+<a name='L463'></a><a href='#L463'>463</a>
+<a name='L464'></a><a href='#L464'>464</a>
+<a name='L465'></a><a href='#L465'>465</a>
+<a name='L466'></a><a href='#L466'>466</a>
+<a name='L467'></a><a href='#L467'>467</a>
+<a name='L468'></a><a href='#L468'>468</a>
+<a name='L469'></a><a href='#L469'>469</a>
+<a name='L470'></a><a href='#L470'>470</a>
+<a name='L471'></a><a href='#L471'>471</a>
+<a name='L472'></a><a href='#L472'>472</a>
+<a name='L473'></a><a href='#L473'>473</a>
+<a name='L474'></a><a href='#L474'>474</a>
+<a name='L475'></a><a href='#L475'>475</a>
+<a name='L476'></a><a href='#L476'>476</a>
+<a name='L477'></a><a href='#L477'>477</a>
+<a name='L478'></a><a href='#L478'>478</a>
+<a name='L479'></a><a href='#L479'>479</a>
+<a name='L480'></a><a href='#L480'>480</a>
+<a name='L481'></a><a href='#L481'>481</a>
+<a name='L482'></a><a href='#L482'>482</a>
+<a name='L483'></a><a href='#L483'>483</a>
+<a name='L484'></a><a href='#L484'>484</a>
+<a name='L485'></a><a href='#L485'>485</a>
+<a name='L486'></a><a href='#L486'>486</a>
+<a name='L487'></a><a href='#L487'>487</a>
+<a name='L488'></a><a href='#L488'>488</a>
+<a name='L489'></a><a href='#L489'>489</a>
+<a name='L490'></a><a href='#L490'>490</a>
+<a name='L491'></a><a href='#L491'>491</a>
+<a name='L492'></a><a href='#L492'>492</a>
+<a name='L493'></a><a href='#L493'>493</a>
+<a name='L494'></a><a href='#L494'>494</a>
+<a name='L495'></a><a href='#L495'>495</a>
+<a name='L496'></a><a href='#L496'>496</a>
+<a name='L497'></a><a href='#L497'>497</a>
+<a name='L498'></a><a href='#L498'>498</a>
+<a name='L499'></a><a href='#L499'>499</a>
+<a name='L500'></a><a href='#L500'>500</a>
+<a name='L501'></a><a href='#L501'>501</a>
+<a name='L502'></a><a href='#L502'>502</a>
+<a name='L503'></a><a href='#L503'>503</a>
+<a name='L504'></a><a href='#L504'>504</a>
+<a name='L505'></a><a href='#L505'>505</a>
+<a name='L506'></a><a href='#L506'>506</a>
+<a name='L507'></a><a href='#L507'>507</a>
+<a name='L508'></a><a href='#L508'>508</a>
+<a name='L509'></a><a href='#L509'>509</a>
+<a name='L510'></a><a href='#L510'>510</a>
+<a name='L511'></a><a href='#L511'>511</a>
+<a name='L512'></a><a href='#L512'>512</a>
+<a name='L513'></a><a href='#L513'>513</a>
+<a name='L514'></a><a href='#L514'>514</a>
+<a name='L515'></a><a href='#L515'>515</a>
+<a name='L516'></a><a href='#L516'>516</a>
+<a name='L517'></a><a href='#L517'>517</a>
+<a name='L518'></a><a href='#L518'>518</a>
+<a name='L519'></a><a href='#L519'>519</a>
+<a name='L520'></a><a href='#L520'>520</a>
+<a name='L521'></a><a href='#L521'>521</a>
+<a name='L522'></a><a href='#L522'>522</a>
+<a name='L523'></a><a href='#L523'>523</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">1255x</span>
+<span class="cline-any cline-yes">1255x</span>
+<span class="cline-any cline-yes">1255x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">1154x</span>
+<span class="cline-any cline-yes">1154x</span>
+<span class="cline-any cline-yes">1154x</span>
+<span class="cline-any cline-yes">1154x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">118540x</span>
+<span class="cline-any cline-yes">118540x</span>
+<span class="cline-any cline-yes">118540x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">118540x</span>
+<span class="cline-any cline-yes">118540x</span>
+<span class="cline-any cline-yes">118540x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">536x</span>
+<span class="cline-any cline-yes">536x</span>
+<span class="cline-any cline-yes">66400x</span>
+<span class="cline-any cline-yes">66400x</span>
+<span class="cline-any cline-yes">66400x</span>
+<span class="cline-any cline-yes">536x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">210x</span>
+<span class="cline-any cline-yes">210x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">210x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">210x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">210x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">11540x</span>
+<span class="cline-any cline-yes">210x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">1154x</span>
+<span class="cline-any cline-yes">58693x</span>
+<span class="cline-any cline-yes">58693x</span>
+<span class="cline-any cline-yes">58693x</span>
+<span class="cline-any cline-yes">58693x</span>
+<span class="cline-any cline-yes">1154x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">205x</span>
+<span class="cline-any cline-yes">205x</span>
+<span class="cline-any cline-yes">21311x</span>
+<span class="cline-any cline-yes">21311x</span>
+<span class="cline-any cline-yes">21311x</span>
+<span class="cline-any cline-yes">21311x</span>
+<span class="cline-any cline-yes">2508826x</span>
+<span class="cline-any cline-yes">2508826x</span>
+<span class="cline-any cline-yes">2508826x</span>
+<span class="cline-any cline-yes">21295x</span>
+<span class="cline-any cline-yes">205x</span>
+<span class="cline-any cline-yes">205x</span>
+<span class="cline-any cline-yes">14x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">27x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">37x</span>
+<span class="cline-any cline-yes">37x</span>
+<span class="cline-any cline-yes">37x</span>
+<span class="cline-any cline-yes">37x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">1888x</span>
+<span class="cline-any cline-yes">1888x</span>
+<span class="cline-any cline-yes">1888x</span>
+<span class="cline-any cline-yes">1888x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">1859x</span>
+<span class="cline-any cline-yes">1859x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-yes">29x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">42x</span>
+<span class="cline-any cline-yes">42x</span>
+<span class="cline-any cline-yes">42x</span>
+<span class="cline-any cline-yes">42x</span>
+<span class="cline-any cline-yes">1928x</span>
+<span class="cline-any cline-yes">1928x</span>
+<span class="cline-any cline-yes">1928x</span>
+<span class="cline-any cline-yes">2308x</span>
+<span class="cline-any cline-yes">2308x</span>
+<span class="cline-any cline-yes">2308x</span>
+<span class="cline-any cline-yes">1928x</span>
+<span class="cline-any cline-yes">1928x</span>
+<span class="cline-any cline-yes">42x</span>
+<span class="cline-any cline-yes">42x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">1154x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1154x</span>
+<span class="cline-any cline-yes">1154x</span>
+<span class="cline-any cline-yes">59847x</span>
+<span class="cline-any cline-yes">59847x</span>
+<span class="cline-any cline-yes">59847x</span>
+<span class="cline-any cline-yes">59847x</span>
+<span class="cline-any cline-yes">59847x</span>
+<span class="cline-any cline-yes">1154x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-yes">21x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">1460x</span>
+<span class="cline-any cline-yes">1460x</span>
+<span class="cline-any cline-yes">1460x</span>
+<span class="cline-any cline-yes">1460x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">547x</span>
+<span class="cline-any cline-yes">547x</span>
+<span class="cline-any cline-yes">547x</span>
+<span class="cline-any cline-yes">547x</span>
+<span class="cline-any cline-yes">547x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">44x</span>
+<span class="cline-any cline-yes">44x</span>
+<span class="cline-any cline-yes">44x</span>
+<span class="cline-any cline-yes">415x</span>
+<span class="cline-any cline-yes">415x</span>
+<span class="cline-any cline-yes">242x</span>
+<span class="cline-any cline-yes">415x</span>
+<span class="cline-any cline-yes">44x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">24x</span>
+<span class="cline-any cline-yes">44x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">23x</span>
+<span class="cline-any cline-yes">1455x</span>
+<span class="cline-any cline-yes">1455x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">38079x</span>
+<span class="cline-any cline-yes">38079x</span>
+<span class="cline-any cline-yes">38079x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">38079x</span>
+<span class="cline-any cline-yes">38079x</span>
+<span class="cline-any cline-yes">38079x</span>
+<span class="cline-any cline-yes">38079x</span>
+<span class="cline-any cline-yes">25979x</span>
+<span class="cline-any cline-yes">25979x</span>
+<span class="cline-any cline-yes">25979x</span>
+<span class="cline-any cline-yes">219553x</span>
+<span class="cline-any cline-yes">219553x</span>
+<span class="cline-any cline-yes">219553x</span>
+<span class="cline-any cline-yes">219553x</span>
+<span class="cline-any cline-yes">25979x</span>
+<span class="cline-any cline-yes">38079x</span>
+<span class="cline-any cline-yes">1430x</span>
+<span class="cline-any cline-yes">12100x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">10670x</span>
+<span class="cline-any cline-yes">10670x</span>
+<span class="cline-any cline-yes">10670x</span>
+<span class="cline-any cline-yes">10670x</span>
+<span class="cline-any cline-yes">10670x</span>
+<span class="cline-any cline-yes">272700x</span>
+<span class="cline-any cline-yes">272700x</span>
+<span class="cline-any cline-yes">272700x</span>
+<span class="cline-any cline-yes">272700x</span>
+<span class="cline-any cline-yes">272700x</span>
+<span class="cline-any cline-yes">272700x</span>
+<span class="cline-any cline-yes">272700x</span>
+<span class="cline-any cline-yes">272700x</span>
+<span class="cline-any cline-yes">272700x</span>
+<span class="cline-any cline-yes">272700x</span>
+<span class="cline-any cline-yes">10670x</span>
+<span class="cline-any cline-yes">10670x</span>
+<span class="cline-any cline-yes">38079x</span>
+<span class="cline-any cline-yes">38079x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+ * Boost-HiC (Carron et al., *Bioinformatics* 2019), ported from its Python
+ * (`github.com/LeopoldC/Boost-HiC`: `main.py`'s `BoostHiC` and the four
+ * `HiCutils` functions it calls) — what a resampled map is **oversampled** with
+ * (§6.5).
+ *
+ * The method reads a contact map as a graph whose edge lengths are contacts
+ * turned into distances, `d = 1/cᵅ`, and replaces every length by the shortest
+ * path between its two ends. A contact the library was too shallow to see
+ * directly is then inferred from the contacts it *did* see around it — the
+ * triangle inequality doing what depth would have — and the map comes back with
+ * its long-range signal filled in. The paper's use for it is the one this app
+ * has: a shallow library made to read like a deep one.
+ *
+ * Step by step, as `main.py` runs it on one chromosome:
+ *
+ * 1. `get_outliers` — bins whose coverage is off either end of a kernel density
+ *    estimate of the coverage (5 % and 99.5 %, a bandwidth of 2,000 contacts)
+ *    are taken out, and so is every bin with none.
+ * 2. `SCN` — ten rounds of dividing each column, then each row, by its sum
+ *    (when that sum is above one), then the mean with the transpose.
+ * 3. `fastFloyd` — Floyd–Warshall on `1/SCNᵅ`, back to contacts with
+ *    `d^(−1/α)`.
+ * 4. `adjustPdS` — the boosted map's contact probability by distance put back
+ *    to the SCN map's, window by window, the windows growing by 1 % a diagonal.
+ *
+ * `alpha` is **0.2**, the value `main.py` runs with (its comment calls 0.24 "a
+ * good and safe compromise"). A resample names another through
+ * `ResampleSpec.alpha`; nothing on screen or in the shell offers one.
+ *
+ * Two things are added, and both are about using the answer rather than
+ * computing it. The SCN biases are kept, so the boosted map can be returned **in
+ * the file's own counts** — `main.py` stops in SCN units, which have no depth to
+ * speak of. And the one piece of `get_outliers` that is not arithmetic, the
+ * kernel density on a grid of every integer up to the largest coverage, is
+ * evaluated through the normal CDF: the grid is summed exactly as scikit-learn's
+ * `score_samples` would sum it, a bandwidth of 2,000 being two thousand grid
+ * steps wide, without the billion kernel evaluations the literal form costs on a
+ * deep map.
+ */
+&nbsp;
+import { FLOYD_WASM_BASE64 } from './wasm/floyd.generated'
+&nbsp;
+/** `main.py`'s `alpha`. */
+export const BOOST_ALPHA = 0.2
+&nbsp;
+/**
+ * The most bins one sequence may have and be boosted.
+ *
+ * Floyd–Warshall is cubic in them: yeast's chromosome IV at 1 kb is 1,532 bins
+ * and about a second and a half in the WebAssembly kernel (§6.5), so 3,000 is
+ * about eleven — and four and thirty where there is no SIMD and the JavaScript
+ * loop runs it. Past that the wait is a refusal better said than suffered — a
+ * coarser resolution is a fraction of the bins.
+ */
+export const BOOST_MAX_BINS = 3000
+&nbsp;
+/** `get_outliers`' thresholds and `kde_outliers`' bandwidth, in contacts. */
+const OUTLIER_BELOW = 0.05
+const OUTLIER_ABOVE = 0.995
+const OUTLIER_BANDWIDTH = 2000
+&nbsp;
+/** `SCN`'s `max_iter`. */
+const SCN_ROUNDS = 10
+&nbsp;
+/** What {@link boostHiC} returns for one sequence. */
+export interface Boosted {
+  /**
+   * Bins that survived `get_outliers`, in order; the map below is over these.
+   */
+  kept: Int32Array
+  /**
+   * The boosted map over the kept bins, `kept.length²`, row-major and symmetric,
+   * **in the file's counts**: `adjustPdS`'s output with the SCN scaling taken
+   * back out of it, cell by cell.
+   */
+  counts: Float64Array
+}
+&nbsp;
+/** Boost-HiC's steps as `main.py` takes them, before the answer goes back to counts. */
+export interface BoostSteps {
+  /** Bins that survived `get_outliers`, in order; the maps below are over these. */
+  kept: Int32Array
+  /** `normmat`: the SCN map, `kept.length²`, row-major, symmetric. */
+  scn: Float64Array
+  /** `boostedmat`: `adjustPdS(normmat, FFmat)`, in SCN units. */
+  boosted: Float64Array
+  /** What SCN divided each row and each column by, all rounds together. */
+  rows: Float64Array
+  cols: Float64Array
+}
+&nbsp;
+/**
+ * `main.py`'s `BoostHiC` on one sequence, after its `get_outliers`: every step,
+ * in SCN units, as its Python leaves them.
+ *
+ * `matrix` is dense, `n × n`, symmetric, raw counts. `null` where there is
+ * nothing to boost — fewer than two bins survive the outlier filter, which is
+ * also where `windowssize2` stops being defined.
+ */
+export function boostSteps(
+  matrix: Float64Array,
+  n: number,
+  alpha: number = BOOST_ALPHA,
+  onRound?: (done: number, total: number) =&gt; void,
+): BoostSteps | null {
+  if (n &lt; 2) <span class="branch-0 cbranch-no" title="branch not covered" >return null</span>
+  const coverage = new Float64Array(n)
+  for (let i = 0; i &lt; n; i++) {
+    const row = i * n
+    for (let j = 0; j &lt; n; j++) coverage[j] += matrix[row + j]
+  }
+  const outlier = kdeOutliers(coverage)
+  let size = 0
+  for (let i = 0; i &lt; n; i++) if (outlier[i] === 0) size++
+  if (size &lt; 2) <span class="branch-0 cbranch-no" title="branch not covered" >return null</span>
+  const kept = new Int32Array(size)
+  for (let i = 0, at = 0; i &lt; n; i++) if (outlier[i] === 0) kept[at++] = i
+&nbsp;
+  // `basemat[np.ix_(~pos_out, ~pos_out)]`.
+  const scn = new Float64Array(size * size)
+  for (let a = 0; a &lt; size; a++) {
+    const from = kept[a] * n
+    const to = a * size
+    for (let b = 0; b &lt; size; b++) scn[to + b] = matrix[from + kept[b]]
+  }
+  const { rows, cols } = sequentialComponentNormalise(scn, size)
+&nbsp;
+  // `1/np.power(normmat, alpha)`: a zero is no edge at all.
+  const distance = new Float64Array(size * size)
+  for (let i = 0; i &lt; distance.length; i++) {
+    const value = scn[i]
+    distance[i] = value &gt; 0 ? 1 / Math.pow(value, alpha) : Number.POSITIVE_INFINITY
+  }
+  floydWarshall(distance, size, onRound)
+  // `np.power(shortest, -1/alpha)`: an unreachable pair is no contact.
+  const inverse = -1 / alpha
+  for (let i = 0; i &lt; distance.length; i++) {
+    const value = distance[i]
+    distance[i] = Number.isFinite(value) ? Math.pow(value, inverse<span class="branch-0 cbranch-no" title="branch not covered" >) : 0</span>
+  }
+  const boosted = adjustContactProbability(scn, distance, size)
+  return { kept, scn, boosted, rows, cols }
+}
+&nbsp;
+/**
+ * Boost one sequence's contact map, and return it in the file's counts.
+ *
+ * SCN left `normmat[i,j] = raw[i,j] · (rᵢcⱼ + rⱼcᵢ)/2`; a boosted cell divided
+ * by the same factor is a count again, with the coverage of the bins it joins.
+ */
+export function boostHiC(
+  matrix: Float64Array,
+  n: number,
+  alpha: number = BOOST_ALPHA,
+  onRound?: (done: number, total: number) =&gt; void,
+): Boosted | null {
+  const steps = boostSteps(matrix, n, alpha, onRound)
+  if (steps === null) <span class="branch-0 cbranch-no" title="branch not covered" >return null</span>
+  const { kept, boosted, rows, cols } = steps
+  const size = kept.length
+  for (let i = 0; i &lt; size; i++) {
+    const row = i * size
+    for (let j = 0; j &lt; size; j++) {
+      const factor = (rows[i] * cols[j] + rows[j] * cols[i]) / 2
+      boosted[row + j] = factor &gt; 0 ? boosted[row + j] / <span class="branch-0 cbranch-no" title="branch not covered" >factor : 0</span>
+    }
+  }
+  return { kept, counts: boosted }
+}
+&nbsp;
+// ---------------------------------------------------------------------------
+// The four steps
+// ---------------------------------------------------------------------------
+&nbsp;
+/**
+ * `SCN`, in place, returning the product of what each row and each column was
+ * divided by.
+ *
+ * `D /= np.maximum(1, D.sum(axis=0))` then the same by rows, ten times, then
+ * `(D + D.T)/2`. The `maximum(1, …)` means a sum already below one is left
+ * alone, which is what `HiCutils` does and so what this does.
+ */
+export function sequentialComponentNormalise(
+  matrix: Float64Array,
+  n: number,
+  rounds: number = SCN_ROUNDS,
+): { rows: Float64Array; cols: Float64Array } {
+  const rows = new Float64Array(n).fill(1)
+  const cols = new Float64Array(n).fill(1)
+  const sums = new Float64Array(n)
+  for (let round = 0; round &lt; rounds; round++) {
+    sums.fill(0)
+    for (let i = 0; i &lt; n; i++) {
+      const row = i * n
+      for (let j = 0; j &lt; n; j++) sums[j] += matrix[row + j]
+    }
+    for (let j = 0; j &lt; n; j++) {
+      const divisor = Math.max(1, sums[j])
+      sums[j] = divisor
+      cols[j] /= divisor
+    }
+    for (let i = 0; i &lt; n; i++) {
+      const row = i * n
+      for (let j = 0; j &lt; n; j++) matrix[row + j] /= sums[j]
+    }
+    for (let i = 0; i &lt; n; i++) {
+      const row = i * n
+      let sum = 0
+      for (let j = 0; j &lt; n; j++) sum += matrix[row + j]
+      const divisor = Math.max(1, sum)
+      rows[i] /= divisor
+      for (let j = 0; j &lt; n; j++) matrix[row + j] /= divisor
+    }
+  }
+  for (let i = 0; i &lt; n; i++) {
+    for (let j = i + 1; j &lt; n; j++) {
+      const mean = (matrix[i * n + j] + matrix[j * n + i]) / 2
+      matrix[i * n + j] = mean
+      matrix[j * n + i] = mean
+    }
+  }
+  return { rows, cols }
+}
+&nbsp;
+/** Which arithmetic runs Floyd–Warshall: the SIMD kernel where it loads, or JavaScript. */
+export type FloydEngine = 'wasm' | 'js'
+&nbsp;
+/**
+ * `fastFloyd`: every distance replaced by the shortest path, in place.
+ *
+ * In place is the same answer as numpy's step-by-step copy: at step `k` neither
+ * row `k` nor column `k` can shorten, because `d[k][k]` is positive. Run by the
+ * WebAssembly kernel (`wasm/floyd.c`) where this engine has SIMD — four times
+ * the speed, and the same numbers to the bit — and by the same loop in
+ * JavaScript where it has not.
+ */
+export function floydWarshall(
+  distance: Float64Array,
+  n: number,
+  onRound?: (done: number, total: number) =&gt; void,
+  engine: FloydEngine | 'auto' = 'auto',
+): FloydEngine {
+  if (engine !== 'js' &amp;&amp; floydInWasm(distance, n, onRound)) return 'wasm'
+  for (let k = 0; k &lt; n; k++) {
+    const rowK = k * n
+    for (let i = 0; i &lt; n; i++) {
+      const rowI = i * n
+      const viaK = distance[rowI + k]
+      if (viaK === Number.POSITIVE_INFINITY) continue
+      for (let j = 0; j &lt; n; j++) {
+        const path = viaK + distance[rowK + j]
+        if (path &lt; distance[rowI + j]) distance[rowI + j] = path
+      }
+    }
+    if (onRound !== <span class="branch-0 cbranch-no" title="branch not covered" >undefined &amp;&amp; (k &amp; 63) === 63) <span class="branch-0 cbranch-no" title="branch not covered" >o</span>nRound(k + 1, n)</span>
+  }
+<span class="branch-0 cbranch-no" title="branch not covered" >  onRound?.(n, n)</span>
+  return 'js'
+}
+&nbsp;
+/** The kernel, compiled once per thread; `null` where this engine cannot run it. */
+let floydModule: WebAssembly.Module | null | undefined
+&nbsp;
+/** Where the matrix goes in the kernel's memory: past the 64 KiB its stack may use. */
+const FLOYD_DATA_AT = 131072
+&nbsp;
+const WASM_PAGE = 65536
+&nbsp;
+/** Floyd–Warshall steps per call into the kernel, between progress reports. */
+const FLOYD_SLICE = 64
+&nbsp;
+function floydKernel(): WebAssembly.Module | null {
+  if (floydModule !== undefined) return floydModule
+  floydModule = null
+  try {
+    if (typeof WebAssembly === 'undefined') <span class="branch-0 cbranch-no" title="branch not covered" >return null</span>
+    const text = atob(FLOYD_WASM_BASE64)
+    const bytes = new Uint8Array(text.length)
+    for (let i = 0; i &lt; text.length; i++) bytes[i] = text.charCodeAt(i)
+    // `validate` is false on an engine without SIMD, which is the one way the
+    // module can fail to load where WebAssembly exists.
+    if (WebAssembly.validate(bytes)) floydModule = new WebAssembly.Module(bytes)
+<span class="branch-0 cbranch-no" title="branch not covered" >  } catch {</span>
+<span class="cstat-no" title="statement not covered" >    floydModule = null</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+  return floydModule
+}
+&nbsp;
+/** Whether the SIMD kernel runs here — for the tests. */
+export function floydKernelAvailable(): boolean {
+  return floydKernel() !== null
+}
+&nbsp;
+/**
+ * Floyd–Warshall through the kernel, or `false` — no kernel here, or no memory
+ * the size of the matrix in one piece — for the JavaScript loop to do it.
+ *
+ * A memory per call and none kept: a sequence at the limit is seventy
+ * megabytes, which a worker should not hold between maps.
+ */
+function floydInWasm(
+  distance: Float64Array,
+  n: number,
+  onRound?: (done: number, total: number) =&gt; void,
+): boolean {
+  const module = floydKernel()
+  if (module === null) <span class="branch-0 cbranch-no" title="branch not covered" >return false</span>
+  let run: (at: number, n: number, k0: number, k1: number) =&gt; void
+  let view: Float64Array
+  try {
+    const memory = new WebAssembly.Memory({
+      initial: Math.ceil((FLOYD_DATA_AT + distance.length * 8) / WASM_PAGE),
+    })
+    const instance = new WebAssembly.Instance(module, { env: { memory } })
+    run = instance.exports.floyd as typeof run
+    view = new Float64Array(memory.buffer, FLOYD_DATA_AT, distance.length)
+<span class="branch-0 cbranch-no" title="branch not covered" >  } catch {</span>
+<span class="cstat-no" title="statement not covered" >    return false</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+  view.set(distance)
+  for (let k0 = 0; k0 &lt; n; k0 += FLOYD_SLICE) {
+    const k1 = Math.min(n, k0 + FLOYD_SLICE)
+    run(FLOYD_DATA_AT, n, k0, k1)
+<span class="branch-0 cbranch-no" title="branch not covered" >    onRound?.(k1, n)</span>
+  }
+  distance.set(view)
+  return true
+}
+&nbsp;
+/**
+ * `windowssize2`: the diagonals each contact-probability window pools.
+ *
+ * Window `w` holds `floor(1.01^w)` diagonals — seventy windows of one, then
+ * twos — until the matrix runs out; the last is trimmed to fit and folded into
+ * the one before it. `VdT` maps a diagonal to its window. Ported with its
+ * quirks, since the windows are part of what the adjustment *is*.
+ */
+export function contactWindows(n: number): { window: Int32Array; sizes: number[] } {
+  const raw = new Float64Array(n)
+  raw[0] = 1
+  for (let i = 1; i &lt; n; i++) raw[i] = raw[i - 1] * 1.01
+  const sizes: number[] = []
+  let covered = 0
+  for (let i = 0; i &lt; n &amp;&amp; covered &lt; n; i++) {
+    const size = Math.floor(raw[i])
+    sizes.push(size)
+    covered += size
+  }
+  const last = sizes.length - 1
+  sizes[last] -= covered - n
+  sizes[last - 1] += sizes[last]
+  sizes.length = last
+  const window = new Int32Array(n)
+  let diagonal = 0
+  for (let w = 0; w &lt; sizes.length; w++) {
+    for (let j = 0; j &lt; sizes[w]; j++) window[diagonal++] = w
+  }
+  return { window, sizes }
+}
+&nbsp;
+/** `contactprobability`: the mean of every cell on each window's diagonals. */
+function contactProbability(matrix: Float64Array, n: number, sizes: readonly number[]): Float64Array {
+  const out = new Float64Array(sizes.length)
+  let diagonal = 0
+  for (let w = 0; w &lt; sizes.length; w++) {
+    let sum = 0
+    let cells = 0
+    for (let j = 0; j &lt; sizes[w]; j++, diagonal++) {
+      for (let r = 0; r + diagonal &lt; n; r++) sum += matrix[r * n + r + diagonal]
+      cells += n - diagonal
+    }
+    out[w] = cells &gt; 0 ? sum / <span class="branch-0 cbranch-no" title="branch not covered" >cells : 0</span>
+  }
+  return out
+}
+&nbsp;
+/**
+ * `adjustPdS`: each diagonal of the boosted map scaled so its window's mean
+ * contact probability is the SCN map's again. A new array.
+ */
+export function adjustContactProbability(
+  base: Float64Array,
+  boosted: Float64Array,
+  n: number,
+): Float64Array {
+  const { window, sizes } = contactWindows(n)
+  const wanted = contactProbability(base, n, sizes)
+  const have = contactProbability(boosted, n, sizes)
+  const out = new Float64Array(boosted)
+  for (let offset = 0; offset &lt; n; offset++) {
+    const w = window[offset]
+    // Boosting never lowers a contact (a path is at most the direct edge), so
+    // a window the boosted map has nothing in is one the SCN map had nothing
+    // in either; numpy would write NaN there, and nothing is what it holds.
+    const adjust = have[w] &gt; 0 ? wanted[w] / have[w<span class="branch-0 cbranch-no" title="branch not covered" >] : 0</span>
+    for (let j = offset; j &lt; n; j++) {
+      const upper = (j - offset) * n + j
+      const lower = j * n + (j - offset)
+      out[upper] = boosted[upper] * adjust
+      out[lower] = boosted[lower] * adjust
+    }
+  }
+  return out
+}
+&nbsp;
+// ---------------------------------------------------------------------------
+// get_outliers
+// ---------------------------------------------------------------------------
+&nbsp;
+/**
+ * `get_outliers` → `kde_outliers`: `1` for every bin to leave out.
+ *
+ * scikit-learn's Gaussian KDE of the non-zero coverages, evaluated on
+ * `linspace(0, max, int(max) + 1)`, normalised over the grid and summed; each
+ * limit is the grid point whose running sum is nearest its threshold, and a bin
+ * below the lower or above the upper is out — a bin with no coverage always is.
+ * The running sum is the normal CDF's difference across each grid step, which is
+ * the sum of the kernel over the steps it covers to far below a grid step's
+ * worth.
+ */
+export function kdeOutliers(
+  coverage: Float64Array,
+  below: number = OUTLIER_BELOW,
+  above: number = OUTLIER_ABOVE,
+  bandwidth: number = OUTLIER_BANDWIDTH,
+): Uint8Array {
+  const n = coverage.length
+  const out = new Uint8Array(n)
+  const cleaned: number[] = []
+  let max = 0
+  for (let i = 0; i &lt; n; i++) {
+    const value = coverage[i]
+    if (value &gt; 0) cleaned.push(value)
+    if (value &gt; max) max = value
+  }
+  if (cleaned.length === 0) {
+    out.fill(1)
+    return out
+  }
+  const points = Math.floor(max) + 1
+  const step = points &gt; 1 ? max / (points - <span class="branch-0 cbranch-no" title="branch not covered" >1) : 0</span>
+  // The kernel's mass left of grid point `g`'s cell, summed over every read.
+  const massTo = (g: number): number =&gt; {
+    const edge = g * step + step / 2
+    let sum = 0
+    for (const read of cleaned) sum += normalCdf((edge - read) / bandwidth)
+    return sum
+  }
+  const start = massTo(-1)
+  const whole = massTo(points - 1) - start
+  const cumulative = (g: number): number =&gt; (whole &gt; 0 ? (massTo(g) - start) / <span class="branch-0 cbranch-no" title="branch not covered" >whole : 1)</span>
+  const limitFor = (threshold: number): number =&gt; {
+    // The running sum only grows, so the nearest point is the first at or past
+    // the threshold or the one before it; `argmin` keeps the earlier on a tie.
+    let lo = 0
+    let hi = points - 1
+    while (lo &lt; hi) {
+      const mid = (lo + hi) &gt;&gt;&gt; 1
+      if (cumulative(mid) &gt;= threshold) hi = mid
+      else lo = mid + 1
+    }
+    if (lo &gt; 0 &amp;&amp; Math.abs(cumulative(lo - 1) - threshold) &lt;= Math.abs(cumulative(lo) - threshold)) {
+      return lo - 1
+    }
+    return lo
+  }
+  // Compared as `kde_outliers` compares them: the coverage against the grid
+  // *index*, which is the grid value itself on the integer grid a map of whole
+  // contacts always has.
+  const lower = limitFor(below)
+  const upper = limitFor(above)
+  for (let i = 0; i &lt; n; i++) {
+    if (coverage[i] &lt; lower || coverage[i] &gt; upper) out[i] = 1
+  }
+  return out
+}
+&nbsp;
+/** `Φ(x)`, through `erfc` so neither tail cancels. */
+function normalCdf(x: number): number {
+  return 0.5 * erfc(-x / Math.SQRT2)
+}
+&nbsp;
+/**
+ * `erfc` to a few units in the last place: the positive series below 2, where
+ * `1 − erf` would not yet cancel, and the continued fraction past it.
+ */
+function erfc(x: number): number {
+  const z = Math.abs(x)
+  let value: number
+  if (z &lt; 2) {
+    let term = z
+    let sum = z
+    for (let k = 1; k &lt; 200; k++) {
+      term *= (2 * z * z) / (2 * k + 1)
+      sum += term
+      if (term &lt; Math.abs(sum) * 1e-17) break
+    }
+    value = 1 - (2 / Math.sqrt(Math.PI)) * Math.exp(-z * z) * sum
+  } else if (z &gt; 27) {
+    value = 0
+  } else {
+    // Modified Lentz on e^{−z²}/√π · 1/(z + ½/(z + 1/(z + 3/2/(z + …)))).
+    const tiny = 1e-300
+    let d = 1 / z
+    let c = 1e300
+    let h = d
+    for (let i = 1; i &lt; 300; i++) {
+      const a = i / 2
+      d = z + a * d
+      if (d === 0) <span class="branch-0 cbranch-no" title="branch not covered" >d = tiny</span>
+      c = z + a / c
+      if (c === 0) <span class="branch-0 cbranch-no" title="branch not covered" >c = tiny</span>
+      d = 1 / d
+      const delta = c * d
+      h *= delta
+      if (Math.abs(delta - 1) &lt; 1e-16) break
+    }
+    value = (Math.exp(-z * z) / Math.sqrt(Math.PI)) * h
+  }
+  return x &gt;= 0 ? value : 2 - value
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-11-13T16:14:32.811Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    
