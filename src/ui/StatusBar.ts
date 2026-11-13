@@ -56,6 +56,13 @@ export class StatusBar {
   private readonly unsubscribeReadout: () => void
   /** The running deep validation, if any; clicking again stops it. */
   private validation: Cancellable<DeepValidation> | null = null
+  /** A counters request out to the reader, so a slow one is not asked again on top of itself. */
+  private polling: ReaderClient | null = null
+  /**
+   * What the reader on the bar said it holds, at its last count: added to the
+   * main thread's heap, which is all a page can otherwise measure of itself.
+   */
+  private readerMemory: { wasm: number | null; cache: number | null } | null = null
 
   /**
    * What this browser tab is costing the machine.
@@ -135,8 +142,14 @@ export class StatusBar {
     // redraw the same number, and slower would lag behind the pan that caused
     // it. Skipped outright while the tab is hidden — nobody is reading it, and
     // the numbers there describe timer throttling rather than work.
+    // **And the reader's counters with it**, so the bytes and requests move
+    // while the map is being pulled about rather than when the next link is
+    // written: a zoom or a drag reads blocks without a navigation, and the bar
+    // used to be asked only on one (§12).
     this.usageTimer = setInterval(() => {
-      if (document.visibilityState === 'visible') this.renderUsage()
+      if (document.visibilityState !== 'visible') return
+      this.poll()
+      this.renderUsage()
     }, USAGE_TICK_MS)
     this.renderUsage()
   }
@@ -157,7 +170,13 @@ export class StatusBar {
    */
   private renderUsage(): void {
     const device = deviceBytes()
-    const memory = this.usage.memory()
+    const measured = this.usage.memory()
+    // The reader's own, where what was measured is only the main thread's heap:
+    // the blocks are read, decompressed and cached in the reader worker, which
+    // that number never sees — it stood still through a zoom that read a
+    // hundred megabytes. A whole-tab measurement already counts it.
+    const reader = measured?.scope === 'heap' ? readerBytes(this.readerMemory) : 0
+    const memory = measured === null ? null : { ...measured, used: measured.used + reader }
     // Hidden rather than dashed on an engine that has no answer: an em dash that
     // never fills in reads as a number that failed to load.
     this.memoryItem.classList.toggle('hidden', memory === null)
@@ -176,7 +195,8 @@ export class StatusBar {
         el(
           'div',
           { class: 'kv' },
-          ...keyValue(memory.scope === 'tab' ? 'this tab' : 'JavaScript heap', fmt.bytes(memory.used)),
+          ...keyValue(memory.scope === 'tab' ? 'this tab' : 'JavaScript heap', fmt.bytes(memory.used - reader)),
+          ...(reader > 0 ? keyValue('reader: HDF5 and its cache', fmt.bytes(reader)) : []),
           ...(memory.ceiling === null ? [] : keyValue(memory.ceilingLabel, fmt.bytes(memory.ceiling))),
           // A decimal below a tenth, because the honest answer usually is a
           // fraction of a percent — a tab is small against the memory a machine
@@ -226,6 +246,7 @@ export class StatusBar {
     this.validationItem.classList.toggle('hidden', client === null)
     if (client === null) {
       this.reader = null
+      this.readerMemory = null
       this.readsSummary.textContent = '—'
       this.readsDetail.replaceChildren()
       this.clearValidation()
@@ -233,8 +254,25 @@ export class StatusBar {
     }
     if (client !== this.reader) {
       this.reader = client
+      this.readerMemory = null
       this.clearValidation()
     }
+    this.ask(client)
+  }
+
+  /**
+   * The counters again, once a tick — unless the last ask has not come back:
+   * the reader answers between the pieces of a read, and a second ask queued
+   * behind the first would only paint the same numbers twice.
+   */
+  private poll(): void {
+    const client = this.props.client()
+    if (client === null || client !== this.reader || this.polling === client) return
+    this.ask(client)
+  }
+
+  private ask(client: ReaderClient): void {
+    this.polling = client
     void client
       .request<'stats'>({ kind: 'stats' })
       .then((stats) => {
@@ -244,6 +282,9 @@ export class StatusBar {
       })
       .catch(() => {
         /* counters are diagnostics; never let them break a view */
+      })
+      .finally(() => {
+        if (this.polling === client) this.polling = null
       })
   }
 
@@ -268,13 +309,16 @@ export class StatusBar {
   }
 
   private renderStats(stats: StatsResult): void {
-    // Bytes alone. The request count is the more interesting number to whoever
-    // is tuning the reader and the less interesting one to everybody else, and
-    // spelling it out on the bar cost a phrase — "589.0 MB in 589 requests" —
-    // wide enough to wrap the item onto a second line. It is the first row of
-    // the panel this item opens on hover, which is where the other four
-    // counters have always been.
-    this.readsSummary.textContent = fmt.bytes(stats.total.bytes)
+    this.readerMemory = stats.memory ?? null
+    // Bytes and requests, each in its shortest form: what a zoom costs is both
+    // numbers — a read that is a few large requests and one that is many small
+    // ones are different reads over a bucket's latency (§12) — and they now
+    // move as the map is pulled about, which is when a reader watches them.
+    // "589.0 MB in 589 requests" wrapped the item onto a second line; `589 req`
+    // does not. The panel under it spells them out, with the other counters.
+    const requests = stats.total.requests
+    const text = `${fmt.bytes(stats.total.bytes)} · ${fmt.int(requests)} req`
+    if (this.readsSummary.textContent !== text) this.readsSummary.textContent = text
     this.readsDetail.replaceChildren(
       ...keyValue('requests, total', fmt.int(stats.total.requests)),
       ...keyValue('bytes, total', fmt.bytes(stats.total.bytes)),
@@ -339,6 +383,12 @@ export class StatusBar {
       )
     }
   }
+}
+
+/** What a reader said it holds, in bytes: its HDF5 memory and its byte cache. */
+function readerBytes(memory: { wasm: number | null; cache: number | null } | null): number {
+  if (memory === null) return 0
+  return Math.max(0, memory.wasm ?? 0) + Math.max(0, memory.cache ?? 0)
 }
 
 function keyValue(key: string, value: string): HTMLElement[] {
@@ -410,10 +460,11 @@ const MEMORY_NOTE: Record<'tab' | 'heap', string> = {
     'hold. Measured by the browser on request; it can lag a few seconds behind a large file ' +
     'being released.',
   heap:
-    'The main thread’s JavaScript heap. It is not the tab’s whole memory: the reader and ' +
-    'annotations workers have heaps of their own, and canvases, decoded images and the file ' +
-    'being read are outside all of them. A browser cannot tell a page its process size — that ' +
-    'figure would leak across origins — so this is the closest one available here.',
+    'The main thread’s JavaScript heap, and what the reader holds for the open file — its ' +
+    'HDF5 memory and the chunks of the file it keeps — counted again every second. It is not ' +
+    'the tab’s whole memory: the workers’ own heaps, canvases and decoded images are outside ' +
+    'it. A browser cannot tell a page its process size — that figure would leak across ' +
+    'origins — so this is the closest one available here.',
 }
 
 /**

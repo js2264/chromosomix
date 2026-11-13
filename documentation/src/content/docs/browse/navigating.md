@@ -25,25 +25,34 @@ change the range.
 
 ## Zoom into a region
 
-- <kbd>⌥ Option</kbd>-drag (<kbd>Alt</kbd> on Windows and Linux) a box: on the diagonal it opens as
-  a window, off it as the block between its two stretches. Add <kbd>Shift</kbd> to keep it square on
-  the diagonal.
-- <kbd>Shift</kbd>-drag along either axis to zoom the picture to that stretch, on the diagonal.
-  While <kbd>Shift</kbd> is down, the readout and the crosshair snap to the diagonal.
+- <kbd>Shift</kbd>-drag along either axis to **zoom**: the picture fills with that stretch, on the
+  diagonal, in place. While <kbd>Shift</kbd> is down, the readout and the crosshair snap to the
+  diagonal.
+- <kbd>⌥ Option</kbd>-drag (<kbd>Alt</kbd> on Windows and Linux) a box to **refocus**: it opens as a
+  view of its own, read at its own resolution — on the diagonal as a window, off it as the block
+  between its two stretches. Add <kbd>Shift</kbd> to keep it square on the diagonal.
+- While the pointer is over the map, its corner says which is which: *⇧ + drag to zoom*, *⌥ + drag
+  to refocus on a region*, *⇧ + ⌥ + drag to refocus along the diagonal*.
 - Both copy what they framed, counted from 1 without separators: `chrIV:500001-510000`, or
   `chrI:1-10000|chrII:40001-50000` for a box, rows then columns.
 - A click on a window of one sequence opens all of it. On the whole genome, a click opens the
   chromosome under the pointer or, off the diagonal, the block between two.
 
-![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb with the pointer over it, and under the key in its top-right corner the lines "⌥ + drag to zoom into a region", "⇧ + ⌥ + drag to zoom along the diagonal" and "click to see the whole of IV".](../../../assets/screens/browse/navigating-zoom-hint.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&balance=true&transform=log10")
+![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb with the pointer over it, and under the key in its top-right corner the lines "⇧ + drag to zoom", "⌥ + drag to refocus along the diagonal" and "click to see the whole of IV".](../../../assets/screens/browse/navigating-zoom-hint.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&balance=true&transform=log10")
 
 ## Stay on the diagonal
 
-<kbd>Space</kbd>, or the diagonal button in the **picture** row, slides the view onto the diagonal
-and keeps every drag, scroll, arrow key and <kbd>⌥ Option</kbd>-drag box on it until you press
-again. The lock holds from one sequence to the next and on every map of a [deck](/browse/deck/), and
-this browser remembers it. It is greyed on a block the diagonal does not cross, and on a [turned
-map](/browse/turn/).
+Every map opens held on its diagonal: every drag, scroll, arrow key and <kbd>⌥ Option</kbd>-drag
+box runs along it. <kbd>Space</kbd>, or the diagonal button in the **picture** row, lets go, so a
+drag goes where your hand does; press again to slide the view back onto the diagonal and hold it
+there. The lock holds from one sequence to the next and on every map of a [deck](/browse/deck/); let
+go, it stays let go until you reload the page, and the app opens held again. It is greyed on a block
+the diagonal does not cross, and on a [turned map](/browse/turn/).
+
+Off the diagonal, contacts are orders of magnitude fainter than on it, so a map you drag away from
+the line has its automatic colour range measured on what is in view once you stop; back on the
+line, it gets the range it had there before. A bound you typed is kept
+([Contact maps](/browse/contact-maps/)).
 
 ## Type a place
 
@@ -111,8 +120,12 @@ at: while you go on zooming in, nothing is read, and the moment you pause, the s
 is. The map never stops following the scroll or the drag while it reads: for a moment its cells are
 larger and a small spinner turns in its top right corner, then it sharpens where you are. The
 slider follows, greyed, its thumb moving from slot to slot. The line under the heading says what one
-cell is worth at any moment, `785 × 785 bins · effective resolution: 250 kb` on a whole chromosome.
-As you pan, the stretch ahead of the edge of what was read is read before you reach it.
+cell is worth at any moment, `785 × 785 bins · effective resolution: 250 kb` on a whole chromosome,
+and the key in the map's corner names the same resolution under its title.
+As you pan, the stretch ahead of the edge of what was read is read before you reach it. With
+**balanced** counts, the zoom stops at the finest resolution the file has weights for: a file whose
+finest resolution was never balanced, such as an `.mcool` stored down to 10 bp and balanced from
+100 bp, comes to rest at 100 bp; on **counts** it goes on to 10 bp.
 
 Untick it to pick the resolution yourself — a slot, the box, <kbd>-</kbd> or <kbd>+</kbd> — and the
 map is drawn at it wherever you zoom; unticking keeps the resolution on screen as your pick, so

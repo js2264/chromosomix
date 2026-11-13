@@ -144,7 +144,9 @@ map stays live while it is open; <kbd>Esc</kbd> puts it away ([The console](/bro
 
 ## The status bar
 
-From the left: the coordinates under the pointer; **read**, how much of the file has been read;
-**validation**, a deeper check of the file's stored pixels, **never run** until you press it; and
-**memory** and **cpu**, what this tab costs your machine. *read* and *validation* appear only while a
-file is open; hover any of them for its detail.
+From the left: the coordinates under the pointer; **read**, how much of the file has been read and
+in how many requests (`25.3 MB · 30 req`); **validation**, a deeper check of the file's stored
+pixels, **never run** until you press it; and **memory** and **cpu**, what this tab costs your
+machine — the memory counts what the reader holds for the open file as well as the page's own. All
+four are counted again every second, so *read* and *memory* climb as a zoom reads its blocks. *read*
+and *validation* appear only while a file is open; hover any of them for its detail.

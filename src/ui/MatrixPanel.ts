@@ -1380,6 +1380,18 @@ export class MatrixPanel {
    * is too wide for is measured when the reader zooms in far enough to see it.
    */
   private measureAt: number | null = null
+  /**
+   * Whether the colour range in force was last measured on a view **off** the
+   * diagonal — see {@link followOffDiagonal}.
+   */
+  private measuredOff = false
+  /** The wait for a moved view to settle before its range is followed; see {@link followOffDiagonal}. */
+  private offDiagonalTimer: ReturnType<typeof setTimeout> | null = null
+  /**
+   * The range's gauge as it was on the diagonal, kept while the view is off it
+   * so that coming back puts it back — see {@link followOffDiagonal}.
+   */
+  private keptOnLine: { spanBp: number; cellBp: number; dense: DenseMatrix } | null = null
   /** The open map's own bin size — see {@link openBinsize}. */
   private readonly baseBinsize: number
   /** The plot's wider side, as the resize observer last measured it — see {@link screenWidth}. */
@@ -2637,29 +2649,39 @@ export class MatrixPanel {
   }
 
   /**
-   * Say how to zoom into a region from here — the words under the key while
-   * the pointer is over the map (§7.2).
+   * Say what a drag with a key held does from here — the words under the key
+   * while the pointer is over the map (§7.2).
    *
-   * Option and a drag is the gesture, and nothing on the picture says so: a
-   * reader who has not opened the shortcuts dialog pans, wheels and gives up on
-   * the one gesture that opens a stretch at its own resolution. So it is said in
-   * the corner, small and with no box round it — a halo of the page for
+   * Two gestures, and nothing on the picture says so: a reader who has not
+   * opened the shortcuts dialog pans, wheels and gives up on both. So they are
+   * said in the corner, small and with no box round it — a halo of the page for
    * legibility over cells — and only while the hand is over the map, which is
-   * when the question is asked. In the reader's own modifiers, and saying what a
-   * drag will do *now*: under the diagonal lock Option alone draws on the
-   * diagonal, under a turn the box is a stretch of the genome, and Shift's line
-   * only where there is a diagonal for it to pin a box to. On a window of one
-   * sequence a third line says how to leave it: a click opens the whole sequence.
+   * when the question is asked. In the reader's own modifiers, and by what each
+   * does: **Shift zooms** — the band it names fills the picture, in place — and
+   * **Option refocuses**, opening the box as a view of its own, read at its own
+   * resolution (where the view has nowhere to open it, Option zooms too, and
+   * says so). Saying what a drag will do *now*: under the diagonal lock Option
+   * alone draws on the diagonal, under a turn the box is a stretch of the
+   * genome, and Shift with Option only where there is a diagonal to pin a box
+   * to. On a window of one sequence a last line says how to leave it: a click
+   * opens the whole sequence.
    */
   private paintReframeHint(turned: boolean = this.turned !== null): void {
     const opt = optionKey()
-    const lines = turned
-      ? [`${opt} + drag to zoom into a stretch`]
-      : !this.diagonalPossible
-        ? [`${opt} + drag to zoom into a region`]
-        : diagonalLocked()
-          ? [`${opt} + drag to zoom along the diagonal`]
-          : [`${opt} + drag to zoom into a region`, `${shiftKey()} + ${opt} + drag to zoom along the diagonal`]
+    const shift = shiftKey()
+    const opens = this.options.onSelectRegion !== undefined
+    const region = opens ? 'refocus on a region' : 'zoom into a region'
+    const diagonal = opens ? 'refocus along the diagonal' : 'zoom along the diagonal'
+    const lines = [
+      `${shift} + drag to zoom`,
+      ...(turned
+        ? [`${opt} + drag to ${opens ? 'refocus on a stretch' : 'zoom into a stretch'}`]
+        : !this.diagonalPossible
+          ? [`${opt} + drag to ${region}`]
+          : diagonalLocked()
+            ? [`${opt} + drag to ${diagonal}`]
+            : [`${opt} + drag to ${region}`, `${shift} + ${opt} + drag to ${diagonal}`]),
+    ]
     // The way back out, under the two ways in: a window has no other control on
     // the picture that says a click leaves it.
     const click = turned ? null : (this.options.clickHint?.() ?? null)
@@ -2862,6 +2884,8 @@ export class MatrixPanel {
 
   destroy(): void {
     this.markFirstData()
+    if (this.offDiagonalTimer !== null) clearTimeout(this.offDiagonalTimer)
+    this.offDiagonalTimer = null
     this.stopRefineWatch?.()
     this.stopRefineWatch = null
     // A wait's grace period outlives nothing: its spinner is going away.
@@ -3955,6 +3979,8 @@ export class MatrixPanel {
     // has to keep them.
     this.gaugeBlock = null
     this.gaugeShown = gauge ?? null
+    this.measuredOff = false
+    this.keptOnLine = null
     this.heatmap.setMatrix(
       dense,
       turned === null ? separatorsFor(data) : { rows: [], cols: [] },
@@ -4192,7 +4218,17 @@ export class MatrixPanel {
     const outgoingBinsize = this.options.binsize
     this.data = data
     this.setResolution(binsize)
-    const { dense, gauge, presentationMoved, lowerMoved, turned } = this.derive(data, second)
+    // A turned band is cut to the rows the box holds **in the incoming block's
+    // cells**: the zoom on screen is still the outgoing block's, and a band cut
+    // at it for a block five times finer was a fifth as deep as the box, cut
+    // again on the next frame — two rotations and two rasters for every block
+    // a zoom landed (§2).
+    const { dense, gauge, presentationMoved, lowerMoved, turned } = this.derive(
+      data,
+      second,
+      undefined,
+      outgoingBinsize / Math.max(1, binsize),
+    )
 
     const axes = this.locusAxesOf(data, turned)
     const cols = spanOnAxis(axes.drawn.cols, want.cols, dense.ncols)
@@ -4263,6 +4299,10 @@ export class MatrixPanel {
     this.setBusy(false)
     this.schedule()
     this.announceResolution()
+    // A block that lands after the view settled is measured as the view was:
+    // the range followed off the diagonal on a coarser block's cells is a range
+    // for larger numbers than this one holds.
+    if (this.measuredOff) this.settleOffDiagonal()
     return true
   }
 
@@ -4317,6 +4357,10 @@ export class MatrixPanel {
       // picture is a band cut out of it.
       const dense = this.square ?? { ...toDense(data), values: data.values }
       this.gaugeBlock = { spanBp, cellBp, dense }
+      // Off the diagonal, a wider block is the line's range from now on too: the
+      // reader pulled back past the one kept, and coming back puts this one back
+      // ({@link followOffDiagonal}).
+      if (this.measuredOff) this.keptOnLine = this.gaugeBlock
       this.gaugeShown = own ?? null
       return this.gaugeShown
     }
@@ -4360,6 +4404,71 @@ export class MatrixPanel {
     const cellBp = Math.max(1, this.options.binsize)
     this.gaugeBlock = { spanBp: Math.max(data.nrows, data.ncols) * cellBp, cellBp, dense: seen }
     this.gaugeShown = seen
+  }
+
+  /**
+   * Follow the view off the diagonal, once it has stood still for
+   * {@link OFF_DIAGONAL_SETTLE_MS} — from every frame that moves the window and
+   * every block that lands (§7.1).
+   */
+  private settleOffDiagonal(): void {
+    if (this.offDiagonalTimer !== null) clearTimeout(this.offDiagonalTimer)
+    this.offDiagonalTimer = setTimeout(() => {
+      this.offDiagonalTimer = null
+      this.followOffDiagonal()
+    }, OFF_DIAGONAL_SETTLE_MS)
+  }
+
+  /**
+   * **An automatic range follows a view off the diagonal** (§7.1): measured on
+   * the cells in view ({@link measureInView}) while the middle of the view is
+   * off the line, and put back as it was on the line on the way back onto it.
+   *
+   * The range is otherwise kept across every pan and refine, and that is right
+   * along the diagonal, where it was measured: a drag along the line meets the
+   * same population of contacts it was measured on. Off it, it is not the same
+   * population. Contacts fall by orders of magnitude with distance, so a range
+   * measured round the line is a floor most of the field away from it is
+   * under: dragged sideways off chr7 at 25 kb, ten megabases from the diagonal
+   * drew white at K562's −3.3, though every block had been read — and a reader
+   * looking at white after a drag concludes, reasonably, that nothing loaded.
+   * Measured on the view, the same window draws its compartments.
+   *
+   * Back on the line, the range it had there is put back rather than measured
+   * again: along the diagonal the colours hold still across pans and zooms
+   * (§7.1), and an excursion off it is no reason for the diagonal to come back
+   * a different colour. Measured on a view a zoom made after leaving, the same
+   * stretch came back several times paler.
+   *
+   * Only an automatic range: a bound typed, here or in the key, is a decision,
+   * and the panel never moves one. Not on a turned map, whose picture is a band
+   * along the diagonal by construction, nor on a block the diagonal does not
+   * cross, which a range measured for itself already describes.
+   */
+  private followOffDiagonal(): void {
+    if (this.data === null || this.turned !== null) return
+    if (this.manualVmin !== undefined || this.manualVmax !== undefined) return
+    const through = this.heatmap.diagonalThroughView()
+    if (through === null) return
+    const off = !through
+    if (!off && !this.measuredOff) return
+    if (off) {
+      if (!this.measuredOff) this.keptOnLine = this.gaugeBlock
+      this.measuredOff = true
+      this.measureInView()
+    } else {
+      this.measuredOff = false
+      const kept = this.keptOnLine
+      this.keptOnLine = null
+      if (kept === null) this.measureInView()
+      else {
+        this.gaugeBlock = kept
+        this.gaugeShown = kept.dense
+        this.heatmap.setGauge(kept.dense)
+      }
+    }
+    this.heatmap.setScale(this.scale())
+    this.schedule()
   }
 
   /**
@@ -4695,6 +4804,12 @@ export class MatrixPanel {
      * Absent, the depth is the box's, which is right for a block being read.
      */
     depth?: number,
+    /**
+     * How many of this block's cells one cell of the zoom on screen holds, for a
+     * block that lands under a zoom made for another grid ({@link regrid}):
+     * what the box's rows are scaled by before the band is cut. `1` otherwise.
+     */
+    cellsPerRow = 1,
   ): {
     dense: DenseMatrix
     /**
@@ -4805,7 +4920,7 @@ export class MatrixPanel {
         ? rotateBlock(
             { ...data, values: lowerValues === null ? dense.values : mine.values },
             {
-              maxSeparation: depth ?? this.turnDepth(data, mirror),
+              maxSeparation: depth ?? this.turnDepth(data, mirror, cellsPerRow),
               ...(this.options.turn.direction === undefined
                 ? {}
                 : { direction: this.options.turn.direction }),
@@ -4933,7 +5048,7 @@ export class MatrixPanel {
    * it is about the geometry rather than about this panel, and so is the clamp:
    * a band cannot be deeper than the block has cells to fill.
    */
-  private turnDepth(data: MatrixResult, mirror = false): number {
+  private turnDepth(data: MatrixResult, mirror = false, cellsPerRow = 1): number {
     // A deck's distance, where a deck has set one. Every panel of a deck cuts
     // the *same* band or the pictures are not comparable, and the box is the one
     // input that cannot deliver that: the cells of a grid are laid out over
@@ -4949,7 +5064,8 @@ export class MatrixPanel {
     // gets half of it each. Without this the two bands are cut for the whole
     // height, drawn to twice it, and the picture leaves its own rectangle —
     // taking the tracks under it with it.
-    const rows = this.plotRows()
+    const scale = Number.isFinite(cellsPerRow) && cellsPerRow > 0 ? cellsPerRow : 1
+    const rows = Math.ceil(this.plotRows() * scale)
     return turnDepthFor(data, separationForRows(mirror ? Math.floor(rows / 2) : rows) - 1)
   }
 
@@ -5992,6 +6108,7 @@ export class MatrixPanel {
       // outside this panel cares about has moved.
       if (phrase !== this.framedAt) {
         this.framedAt = phrase
+        this.settleOffDiagonal()
         this.options.onViewMoved?.()
         // A pan moves the origin off the middle and a zoom about it does not.
         this.paintCentre()
@@ -6234,6 +6351,20 @@ export class MatrixPanel {
     if ((data.contigsPerCell ?? 1) > 1) return null
     const k = Math.max(1, data.binsPerCell ?? 1)
     const window = this.heatmap.cellWindow()
+    // **A turned map's window in the square block's cells**, before anything
+    // else is asked of it: its drawn columns are half-cells of the rotation
+    // (`render/rotate.ts`) and its rows are distance from the diagonal rather
+    // than a place, so the honest window is the on-diagonal square of its
+    // columns. Asked after the rung below, as it was, a turned map read from a
+    // sibling rung — which with *Refine on zoom* is every map after its first
+    // block — reported its band's rows as loci and its half-cells as cells: the
+    // ladder was told a window twice as wide as the view, pinned to wherever the
+    // band's row count fell, read blocks that did not cover what was on screen,
+    // and read again on the next notch. That was the triangle's lag (§2).
+    const turned = this.turned !== null
+    const cellCols: readonly [number, number] = turned
+      ? [window.cols[0] * BIN_FRACTION, window.cols[1] * BIN_FRACTION]
+      : window.cols
     // A block read from a sibling rung describes itself on *that* rung's grid,
     // and the caller of this is deciding what to ask for next in the space it
     // asks in — the open map's. `source` is the window that was asked for, so
@@ -6256,12 +6387,12 @@ export class MatrixPanel {
         const hi = Math.ceil(into[0] + view[1] * per)
         return [Math.max(into[0], Math.min(lo, into[1])), Math.min(into[1], Math.max(hi, into[0]))]
       }
-      const rows = spanOf(window.rows, data.nrows, source.rows)
-      const cols = spanOf(window.cols, data.ncols, source.cols)
+      const cols = spanOf(cellCols, data.ncols, source.cols)
+      const rows = turned ? cols : spanOf(window.rows, data.nrows, source.rows)
       return { rows, cols, ...this.screenOf() }
     }
-    if (this.turned !== null) {
-      const span = binsOf(window.cols, data.colExtent, k * BIN_FRACTION)
+    if (turned) {
+      const span = binsOf(cellCols, data.colExtent, k)
       return { rows: span, cols: span, ...this.screenOf() }
     }
     return {
@@ -7523,6 +7654,14 @@ const KEY_INSET = 6
  * real one is announced before the reader wonders.
  */
 const WAIT_SHOWS_AFTER_MS = 140
+
+/**
+ * How long a moved view stands still before an automatic range follows it off
+ * the diagonal ({@link MatrixPanel.followOffDiagonal}): past the gaps between
+ * a drag's frames and a wheel's notches, so a range is measured once per
+ * gesture rather than under a reader's hand.
+ */
+const OFF_DIAGONAL_SETTLE_MS = 250
 
 /**
  * The narrowest picture the key may stand on, in CSS pixels.

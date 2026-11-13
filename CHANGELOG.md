@@ -26,6 +26,24 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The diagonal lock is on whenever the app opens (§8.9).** Every map is held on its diagonal until
+  the reader lets go — Space, the toggle beside the turn, or the palette's *Diagonal lock* — and a
+  release lasts as long as the page rather than being kept by the browser, so the next visit starts
+  held again. An unlock kept by an earlier version is forgotten.
+- **The hint in the map's corner says what each drag does (§8.9).** *⇧ + drag to zoom* — the band
+  fills the picture in place — then *⌥ + drag to refocus on a region* and *⇧ + ⌥ + drag to refocus
+  along the diagonal*, which open the box as a view of its own; both used to be called *zoom*. The 1D
+  browser's hint leads with Shift too: *⇧ + drag to zoom into a stretch*.
+- **An automatic colour range follows a view off the diagonal (§7.1).** With the lock let go, a map
+  dragged away from its diagonal is measured on what is in view once it stands still, and given its
+  range on the line back when it returns. The range measured round the diagonal is a floor most of the field
+  away from it is under, so a drag sideways off chr7 drew white where every block had been read. A
+  range typed is never moved.
+- **The status bar's *read* and *memory* move as the map does (§12).** Both are counted again every
+  second rather than when a view is built, so a zoom's reads show as they land; *read* shows the
+  requests beside the bytes (`25.3 MB · 30 req`), and *memory* adds what the reader holds for the open
+  file — its HDF5 memory and the chunks it keeps — to the main thread's heap. The note under a
+  status panel's numbers wraps inside the panel, where it ran on past its edge in one line.
 - **The lab's store is called *Example datasets*, no longer *RSG lab data* (§24.2).** The first tile
   of the landing page's *Connect to a data store*, the drawer it opens and the credit under the example
   sessions that open its figures say so; what it holds is unchanged. Its tile's mark is still a
@@ -333,6 +351,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The map's key names the resolution the line above it does (§7.1).** On the whole-genome view, a
+  zoom that landed on the rung the file was opened at was keyed at the whole genome's pooled grid
+  times its own: K562 chr7 at 10 kb said `760 kb` in the corner under a line reading `10 kb`, and
+  E. coli at 200 bp said `1.2 kb`. The view gave its map the pooled grid where the open map's bin size
+  belonged.
+- **A balanced zoom stops at the finest rung that is balanced (§2).** A ladder whose finest rung has
+  no weights — the lab's E. coli micro-C `.mcool` stores 10 bp unbalanced — refused the zoom there with
+  *This file has no /bins/weight column*, in place of the map. The read is answered by the nearest
+  coarser balanced rung, 100 bp, and the zoom asks nothing more of the unbalanced one; on raw counts
+  it zooms on to 10 bp as before.
+- **The turned map keeps up with *Refine on zoom* (§2, §17).** A turned map read from a sibling rung
+  told the zoom its band's rows as loci and its half-cells as cells, so it read blocks that did not
+  cover the view and read again on the next notch; and a band landing under a coarser block's zoom
+  was cut too shallow and cut again on the next frame. The triangle was laggy with the preference on
+  and smooth with it off; it now reads around the view it shows, as the square map does.
 - **The built-in stores are refreshed again while a portal is down (§24.3).** The weekly Stores run
   failed on 2026-10-26 (ENCODE answered `504 Gateway Time-out`), 2026-11-02 and 2026-11-09, and again
   when run by hand on 2026-11-13 (4DN's portal dropped the connection during its TLS handshake), and

@@ -132,7 +132,14 @@ show. The properties that keep this inside §2 rather than beside it:
   is gone before the view reaches it; and the last step, onto the finest rung, is taken whenever
   the view can show it, factor of two or not. A view showing its whole block reads nothing for the
   block's edges — it is pressed against every one of them because it shows all of it — until the
-  reader pulls back past them;
+  reader pulls back past them. **A turned map's window is the on-diagonal square of its columns**
+  (§17), in the square block's cells: its drawn columns are half-cells of the rotation and its rows
+  distance from the diagonal, not a place. A block read from a sibling rung — every block after the
+  first, with the preference on — used to be asked for its window as a square map's is, its band's
+  rows read as loci and its half-cells as cells, so the ladder was told of a window the view was not
+  showing, read blocks that did not cover it, and read again on the next notch; and a band landing
+  under a zoom made for a coarser block was cut as deep as that block's cells, a fraction of the box,
+  and cut again on the next frame. Both made the triangle stutter where the square map did not;
 - **one block, never tiles.** The picture is always exactly one bounded read, drawn whole. Up to eight
   are *retained*, within 160 MB, so that zooming back out is a swap rather than a request, which is a
   small bounded cache of blocks and not a tile cache: nothing is evicted mid-picture and nothing is
@@ -147,7 +154,18 @@ show. The properties that keep this inside §2 rather than beside it:
   zoom doubles, ending on those bins. It used to end on the rung the file was opened at, which made
   the finest data a reader could zoom to depend on which entry a link happened to name. A MAG of no
   more bins than the plot can show is the finest data in its file from the first read, so §2's own
-  case reads nothing more; a larger one reads its own bins once a zoom can show them;
+  case reads nothing more; a larger one reads its own bins once a zoom can show them. **With balanced
+  counts on, the finest rung is the finest that is balanced.** A ladder need not carry weights at
+  every rung — the lab's E. coli micro-C `.mcool` balanced 100 bp to 10 kb and not its 10 bp — and a
+  zoom that came down to an unbalanced rung was refused there, its refusal (*no /bins/weight
+  column*) taking the place of a map that had been fine a notch before. A balanced read of a rung
+  with no weights is answered by the nearest coarser rung that has them, with the pooling asked for
+  carried onto its bins (`weighedRung`, `worker/reader.worker.ts`), and the block names the rungs it
+  went round (`MatrixResult.unweighted`); the ladder takes them off its rungs on the first such
+  block, so the zoom comes to rest on the 100 bp rung and asks nothing more of the 10 bp one, and a
+  resolution picked at an unbalanced rung is drawn from the one above it (§3.4). Learnt from the
+  blocks rather than asked of the file at open, which would walk every rung's `/bins` before the
+  first picture; and per view, so the same map on raw counts zooms on to 10 bp;
 - **it is bounded by the view.** A zoom can never widen past the domain the view was entered on, so
   it cannot become the full pixel scan §7.3 gates. **And the domain is what a refit puts back** — a
   double click, a double tap, Home, `0`, *Fit the view* (`BlockLadder.whole`): the finest retained
@@ -2480,10 +2498,30 @@ diverges from what a reader reproduces locally.
   the view.** A range kept across a zoom is still automatic but no longer the view's own — after a
   zoom from a whole chromosome to a domain, a range for cells many times the size of the ones on
   screen — so *auto* is never greyed, and a press measures the stretch of the block in view, by the
-  same rule, and keeps it as the range the next refine holds (`MatrixPanel.measureInView`)
+  same rule, and keeps it as the range the next refine holds (`MatrixPanel.measureInView`).
+  **An automatic range follows a view off the diagonal.** Kept is right along the line, where it was
+  measured: a drag along it meets the population of contacts it was measured on. Off it, it is not
+  that population — contacts fall by orders of magnitude with distance, so a range measured round the
+  diagonal is a floor most of the field away from it is under. Dragged sideways off K562 chr7 at
+  25 kb, everything ten megabases from the line drew white at −3.3, though every block had been read,
+  and a reader looking at white after a drag concluded that nothing had loaded. So while the middle
+  of the view — the half of it a quarter in from each edge — is off the diagonal, the range is
+  measured on the cells in view, as *auto* measures it, once the view has stood still for 250 ms and
+  again on every block that lands there; and on the way back onto the line the range it had there
+  is put back — or the range of a wider block read meanwhile, by the rule above — so the diagonal is
+  neither drawn on the far field's range nor comes back another colour from the one it left
+  (`MatrixPanel.followOffDiagonal`). Measured again on the way back instead, yeast IV at 1 kb came
+  back at −3.0 to −0.3 where it had left at −4.2 to −1.1. The same window then draws its
+  compartments, at −4.6 to −3.5. Only an automatic range: a bound typed is a decision
+  and the panel never moves it. Not on a turned map, whose picture is a band along the diagonal by
+  construction, nor on a block the diagonal does not cross, whose range is already its own
 - the **cell size** is named in the key, on its own line under the scale's name, and in the exported
   key as well — it is the one fact about a refining map that cannot be recovered from the pixels, and
-  a figure that carries it needs no caption to say it
+  a figure that carries it needs no caption to say it. It is the line under the heading's number, to
+  the base pair, from the same block: a block read from the open rung names no bin size of its own,
+  and is measured from the open map's — which the whole-genome view used to give its panel as the
+  whole file's pooled grid, so chr7 zoomed to the 10 kb rung a K562 map was opened at was keyed
+  `760 kb` under a line reading `10 kb`, and E. coli at its open 200 bp `1.2 kb`
 - separators at genome or contig boundaries, in `metacooler show`'s two greys — and **heavier than its
   0.5 and 1**: 1.5 CSS pixels between sequences and 2 between genomes or selection blocks, in every
   picture, since drawn at the larger of the CLI's width and one device pixel a line between two
@@ -4306,7 +4344,13 @@ turned, where the picture already is one — lit and greyed together on a block 
 cross, a lock waiting for the next one that it does. It is **every map's**: a deck's maps move as one
 (§16.2), and one held on its diagonal beside one that was not would be dragged off it by its own
 neighbour. It outlives a navigation, so a reader stepping along a genome on its diagonal stays on it
-at the next sequence, and like *Refine on zoom* (§2) it is kept by the browser, not the hash.
+at the next sequence, and it is not in the hash. **It is on whenever the app opens**: a contact map is
+read along its diagonal, and a drag that drifts off the line is the commonest way a reader loses
+their place in one. It was off until pressed and the press was kept by the browser, so a reader who
+let go once to look at a contact off the line found every map unlocked in every later visit; a
+release now lasts as long as the page — every map, every navigation — and the next visit starts
+held. The key it used to be kept under is cleared on the first read, so an unlock stored before
+this does not outlive it.
 
 **Space presses it**, from anywhere the keyboard is not already a control's: the one key a hand finds
 without looking. It stands down wherever Space already has a job: a focused button it presses, a
@@ -4332,12 +4376,17 @@ picture's own bottom edge and whose gestures name stretches of the genome, nor o
 diagonal does not cross; and with the lock on, every zoom is about the line's nearest point, near
 or not, as above.
 
-**The corner says how to zoom into a region**, while the pointer is over the map: under the key —
-or in its place when the legend is off — a line or two of plain text, small and in no box, in the
-reader's own modifiers: *⌥ + drag to zoom into a region* and *⇧ + ⌥ + drag to zoom along the
-diagonal* on a Mac, *Alt* and *Shift* elsewhere. It says what a drag will do **now**: one line under
-the diagonal lock, where ⌥ alone already pins the box; *a stretch* under a turn, whose box is a
-stretch of the genome; and Shift's line only where there is a diagonal to pin a box to. **On a
+**The corner says what a drag with a key held does**, while the pointer is over the map: under the
+key — or in its place when the legend is off — a few lines of plain text, small and in no box, in
+the reader's own modifiers, and named by what each gesture does. **Shift zooms**: *⇧ + drag to
+zoom*, the band it names filling the picture in place. **Option refocuses**: *⌥ + drag to refocus
+on a region* and *⇧ + ⌥ + drag to refocus along the diagonal* — the box opened as a view of its own,
+read at its own resolution — on a Mac, *Alt* and *Shift* elsewhere. Both used to be called *zoom*,
+which left a reader no way to tell from the corner that one moves the picture and the other opens a
+new one. It says what a drag will do **now**: Option's one line under the diagonal lock, where ⌥
+alone already pins the box; *a stretch* under a turn, whose box is a stretch of the genome; Shift
+with Option only where there is a diagonal to pin a box to; and, on a map whose view has nowhere to
+open a box, *zoom into* where it would say *refocus on*, since Option then zooms too. **On a
 window of one sequence a last line says the way back out** — *click to see the whole of IV* — since
 a click on a cell there opens the sequence the window is on, and nothing else on the picture says
 so; not on a whole sequence, a pair of windows or a turned map. Nobody finds
@@ -4346,7 +4395,9 @@ is where the hand already is, gone the moment it leaves the map, and drawn in no
 the page's colour keeps it legible over cells without covering them, and its ink is the picture's —
 paper in both themes. Not on a screen with no pointer to hover, nor where the plot is too narrow for
 the key (§7.1). The 1D browser says the same under its ruler while the pointer is over its tracks:
-*⌥ + drag to zoom into a stretch*, *or drag along the ruler*.
+*⇧ + drag to zoom into a stretch*, *or drag along the ruler* — Shift first, as on the map; Option
+does the same there, as it always has, since the browser has no view of its own to open a stretch
+in.
 
 The same gesture is on the **lane stacks** and in the **1D browser**, and it is the same gesture in
 the strict sense — `HeatmapView.bandAt` is the one pixels-to-cells conversion, because §8.4 glues the
@@ -6510,7 +6561,17 @@ down a blank page. The package's description and keywords say the same to npm's 
 ## 12. Performance budgets
 
 Instrumented from the first commit and surfaced on the status bar — *read*, whose panel gives the
-requests and bytes in total and for the last view; these are also paper figures.
+requests and bytes in total and for the last view; these are also paper figures. **They are counted
+again every second**, with the memory and CPU beside them, so they move while the map is pulled
+about: the bar used to ask the reader only when a view was built, and a zoom or a drag reads its
+blocks without one, so *read* sat at the first picture's figure through a hundred megabytes of
+refines. The bar shows bytes and requests together — `25.3 MB · 30 req`, short enough to stay on its
+one line — and does not ask again while an ask is out; the ask is no call of the worker's own and no
+reason for the census to stand aside. *Memory* adds what the reader holds for the open file — the
+HDF5 runtime's memory and the chunks its byte source keeps (`StatsResult.memory`) — to the main
+thread's heap, which is all a page that is not cross-origin isolated can measure of itself and which
+never sees a block being read; a whole-tab measurement, where the browser offers one, already counts
+it.
 
 | Operation | Budget |
 |---|---|

@@ -2391,6 +2391,10 @@ p {
   border-radius: var(--radius);
   box-shadow: var(--shadow-up);
   color: var(--text);
+  /* The item it hangs from is one line by `nowrap`, and the panel inherited it:
+     its note ran on past its right edge in one line, cut off where the panel
+     ended. A panel is paragraphs. */
+  white-space: normal;
   /* `visibility` rather than `display`, so the panel keeps its size and the bar
      does not reflow the instant the pointer arrives. */
   visibility: hidden;
@@ -2408,6 +2412,11 @@ p {
    mean. Without this they touch, and the sentence reads as another row. */
 .status-pop > .kv + .hint {
   margin: 0.5rem 0 0;
+}
+
+/* …but its rows are one line each, a name and a number, as they always were. */
+.status-pop > .kv {
+  white-space: nowrap;
 }
 
 /* Drawn icons, not glyphs: one weight and one box, whatever the OS fonts do. */

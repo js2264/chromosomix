@@ -100,7 +100,9 @@ automatic. The automatic range is measured on the block that was read, and kept 
 so the colours hold still: from 0 to the 99th percentile of the non-zero counts, or for balanced
 values from the 1st to the 99th percentile of the cells that hold a contact. ⇅ is always there, and
 measures the range again on what is on screen, by the same rule — after a zoom from a whole
-chromosome into a few domains, the range of those domains.
+chromosome into a few domains, the range of those domains. A view dragged off the diagonal is
+measured on what is in view without asking, once it stands still: the range from the diagonal would
+draw the contacts away from it white.
 
 The key, in the map's top-right corner, names the score and the transform, gives one cell's size and
 shows the two bounds: click either to type it, and empty it for automatic. **legend**, under

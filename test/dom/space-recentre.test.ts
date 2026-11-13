@@ -116,17 +116,18 @@ describe('what it does', () => {
     return panel
   }
 
-  it('locks, and puts a map with a diagonal onto it; a second press lets go', () => {
+  it('is held from the start; a press lets go, and a second puts a map with a diagonal back onto it', () => {
     const centre = vi.spyOn(HeatmapView.prototype, 'centreOnDiagonal')
     const held = vi.spyOn(HeatmapView.prototype, 'setDiagonalLock')
     const panel = map([0, 40], [0, 40])
     expect(panel.canCentreOnDiagonal).toBe(true)
-    expect(diagonalLocked()).toBe(false)
-    expect(toggleDiagonalLock()).toBe(true)
+    expect(diagonalLocked()).toBe(true)
     expect(held).toHaveBeenLastCalledWith(true)
-    expect(centre).toHaveBeenCalledTimes(1)
     expect(toggleDiagonalLock()).toBe(false)
     expect(held).toHaveBeenLastCalledWith(false)
+    centre.mockClear()
+    expect(toggleDiagonalLock()).toBe(true)
+    expect(held).toHaveBeenLastCalledWith(true)
     expect(centre).toHaveBeenCalledTimes(1)
   })
 
@@ -147,12 +148,16 @@ describe('what it does', () => {
     expect(centre).not.toHaveBeenCalled()
   })
 
-  it('is remembered by the browser, as Refine on zoom is', () => {
-    setDiagonalLocked(true)
+  it('is held whenever the app opens, whatever an earlier visit left it at', () => {
+    // An unlock an earlier version kept in the browser.
+    window.localStorage.setItem('chromosomix:diagonal-lock', 'off')
     resetDiagonalLock()
     expect(diagonalLocked()).toBe(true)
+    expect(window.localStorage.getItem('chromosomix:diagonal-lock')).toBeNull()
+    // A release lasts as long as the page, and a fresh one starts held.
     setDiagonalLocked(false)
-    resetDiagonalLock()
     expect(diagonalLocked()).toBe(false)
+    resetDiagonalLock()
+    expect(diagonalLocked()).toBe(true)
   })
 })

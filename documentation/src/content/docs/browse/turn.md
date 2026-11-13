@@ -71,9 +71,10 @@ A call further from the diagonal than the band reaches is not drawn.
 On a turned map, every drag works along the bottom axis:
 
 - a plain **drag** pans along the axis;
+- <kbd>Shift</kbd>-drag, in either direction, zooms to the stretch and copies its coordinates; the
+  map's corner says *⇧ + drag to zoom*;
 - <kbd>⌥ Option</kbd>-drag (<kbd>Alt</kbd> on Windows and Linux) selects a full-height band and
-  opens that stretch as a window; the map's corner says *⌥ + drag to zoom into a stretch*;
-- <kbd>Shift</kbd>-drag, in either direction, zooms to the stretch and copies its coordinates.
+  opens that stretch as a window of its own; the corner says *⌥ + drag to refocus on a stretch*.
 
 **draw on map**, on the **Manual annotations** card, is the exception: it reads both ends of the
 drag in the square, so press over one contact and let go over another to draw the rectangle they
