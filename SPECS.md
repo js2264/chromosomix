@@ -13276,7 +13276,10 @@ why one table for all of them was the wrong shape and is gone:
   Fig. 2's GM12878 map on chr19 with two labs' CTCF and ATAC-seq and nothing computed, each task of its
   chain — insulation at four scales, peaks on both CTCF tracks, the APA between consecutive peaks, the
   metaplots — opening on the figure's recipe (`analysis`, §18.2), and Fig. S3a–c's bacteria read along their arms — and Meneu et al. 2025's bacterial
-  chromosomes in yeast. Inline, so it costs no request; where its files live is §24.3.
+  chromosomes in yeast. Inline, so it costs no request; where its files live is §24.3. Its mark is
+  a Hi-C map 100 bins square in the viewer's own ramp — decay, domains, loops and the A/B plaid —
+  with nothing written on it (`scripts/make-rsg-mark.mjs`); the letters behind it, shown while it
+  loads, are *EX*. It used to spell *RSG* down its diagonal, which went with the store's old name.
 - **DNA Bacterial Zoo** — a dev feature (§29), published with the multi-genome format: switched
   off, it has no tile. The genome gallery's cards over **one** file: a card a species, whose
   button is the species' session, with its sample and its replicon count as chips and its map, its
@@ -13291,7 +13294,7 @@ why one table for all of them was the wrong shape and is gone:
   (§24.1), fixed here in the registry as a shipped store's page is — `group: species`, no
   `sessions` file, which is what tells the gallery to read the one file rather than IGV's two.
   Read from the lab's bucket on the gesture that opens it (§24.3). Its mark is drawn by the script
-  that draws RSG's, over a map a bacterium would make: a circle, whose far corners are warm, with
+  that draws *Example datasets*', over a map a bacterium would make: a circle, whose far corners are warm, with
   the X its arms, zipped from the origin, draw across the diagonal *DBZ* stands on.
 - **IGV genomes** — a *genome gallery* (`GenomesView`): one card per genome, whose button is its
   pre-configured session — the FASTA with every track IGV ships for it, in the 1D browser — and

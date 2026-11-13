@@ -73,8 +73,8 @@ export interface StoreMark {
    * An image to draw over the letters.
    *
    * Set for every shipped store, and from two places. The lab's two are
-   * *drawn*, the lab's own marks being the lab's to draw: a Hi-C map whose
-   * diagonal spells *RSG*, and a bacterial one — circular, its arms zipped into
+   * *drawn*, the lab's own marks being the lab's to draw: a Hi-C map with
+   * nothing written on it, and a bacterial one — circular, its arms zipped into
    * an X — whose diagonal spells *DBZ* (`scripts/make-rsg-mark.mjs`). The
    * others are the projects' own published logos, carried here because this viewer was given them to
    * carry, and fitted to a square by `scripts/make-store-logos.mjs`. The icon
@@ -349,7 +349,7 @@ export function builtinStores(): StoreFront[] {
       blurb: 'Demos of the viewer and the figures of the lab’s papers, over yeast, human, chicken, mouse and bacterial data, one click each.',
       tagline: 'Demos, and the lab’s papers, one click each.',
       kind: 'gallery',
-      mark: { text: 'RSG', colour: COLOURS.rsg, image: RSG_MARK_IMAGE },
+      mark: { text: 'EX', colour: COLOURS.rsg, image: RSG_MARK_IMAGE },
       builtin: true,
       // Inline: the one store that costs no request and is certainly there.
       rows: { id: 'rsg', label: 'Example datasets', inline: demosStore(), builtin: true },

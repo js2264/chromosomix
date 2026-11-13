@@ -28,7 +28,9 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The lab's store is called *Example datasets*, no longer *RSG lab data* (§24.2).** The first tile
   of the landing page's *Connect to a data store*, the drawer it opens and the credit under the example
-  sessions that open its figures say so; what it holds is unchanged.
+  sessions that open its figures say so; what it holds is unchanged. Its tile's mark is still a
+  contact map in the viewer's own colours, but no longer spells *RSG* down its diagonal: the diagonal
+  is a plain Hi-C diagonal, and the letters shown while the picture loads are *EX*.
 - **A map opens at the screen's resolution and sharpens as you zoom, down to the finest resolution the
   file stores: *Refine on zoom* is on by default (§2, §7.2, §12).** With nothing picked, a view's
   first read is the stored rung nearest a cell to each pixel of the plot, so a chromosome opens quickly
