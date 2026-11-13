@@ -256,6 +256,13 @@
   ],
   "pulls": [
     {
+      "number": 174,
+      "commit": "6358192",
+      "title": "Refine on zoom: follow range off diagonal, fix turned window",
+      "branch": "js/fervent-dirac-2kv2o3",
+      "date": "2026-11-13T15:19:43Z"
+    },
+    {
       "number": 168,
       "commit": "bf0eeff",
       "title": "Draw a metagenome's map as a circle or as two lines, a dev feature (§7.6)",
