@@ -1,6 +1,13 @@
 {
-  "latest": "70e566a",
+  "latest": "83f4b7f",
   "versions": [
+    {
+      "commit": "83f4b7f",
+      "version": "0.21.0",
+      "date": "2026-11-13T17:01:36+01:00",
+      "subject": "Hold maps on the diagonal from the start, name each drag, and fix five things Refine on zoom got wrong (#174)",
+      "tag": ""
+    },
     {
       "commit": "70e566a",
       "version": "0.21.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "a0ae389",
-      "version": "0.19.0",
-      "date": "2026-11-04T09:59:58+01:00",
-      "subject": "ci: update laptop notebook to report peak RAM + RAM from task itself",
-      "tag": ""
-    },
-    {
       "commit": "9731db4",
       "version": "0.19.0",
       "date": "2026-11-01T19:24:42+01:00",
@@ -255,13 +255,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 174,
-      "commit": "6358192",
-      "title": "Refine on zoom: follow range off diagonal, fix turned window",
-      "branch": "js/fervent-dirac-2kv2o3",
-      "date": "2026-11-13T15:19:43Z"
-    },
     {
       "number": 168,
       "commit": "bf0eeff",
