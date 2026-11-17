@@ -52,6 +52,8 @@ const KEY = 'deck-lead-test'
 function leadPanel() {
   const state = { listened: 0, released: 0 }
   const panel = {
+    setRegridListener: () => {},
+    reachViewport: () => {},
     setViewportListener: (listener: unknown) => {
       if (listener === null) state.released++
       else state.listened++

@@ -245,6 +245,28 @@ export interface LockMember {
    * that no report is recorded as owed for a report that will never come.
    */
   show(rows: CellSpan, cols: CellSpan): boolean
+  /**
+   * What this panel is showing now, in its own cells — which after {@link show}
+   * can be more than it was told on one axis, where the window's shape is not
+   * its box's. Optional: absent, the lock takes the panel to show exactly what
+   * it was told.
+   */
+  viewport?(): { rows: CellSpan; cols: CellSpan } | null
+  /**
+   * Read what this panel holds too little of to show: the deck's window, in its
+   * own cells, where it reaches past the block on screen (§16.3) — a zoom read a
+   * stretch of the region and the deck went wider, or went on past its end.
+   * Optional: a panel that cannot read more is shown the window clamped, as
+   * every panel was before.
+   *
+   * Counted from the block's first cell as {@link show}'s spans are, and **not**
+   * clamped to it: below zero and past the last cell is what is being asked
+   * for. The panel may put a block it already holds on screen before it
+   * returns, which the lock then shows the window on; or start a read and
+   * return at once, and say when its block lands ({@link ViewportLock.landed}),
+   * when the lock shows the window again on that.
+   */
+  reach?(rows: CellSpan, cols: CellSpan): void
 }
 
 /**
@@ -262,6 +284,38 @@ function stepOf(member: LockMember): number {
 /** Where a member's block begins, in the currency it locks in: zero counting cells. */
 function originOf(member: LockMember): { rows: number; cols: number } {
   return member.unit() === 'cell' ? { rows: 0, cols: 0 } : (member.origin?.() ?? { rows: 0, cols: 0 })
+}
+
+/**
+ * Which block a member holds, as far as the lock can tell: its currency, its
+ * grid, its size and where it begins. A block a read landed differs in one of
+ * them from the block before it.
+ */
+function blockOf(member: LockMember): string {
+  const extent = member.cells()
+  const origin = originOf(member)
+  return `${member.unit()}|${stepOf(member)}|${extent.rows}×${extent.cols}|${origin.rows},${origin.cols}`
+}
+
+/**
+ * The deck's window in a member's own cells, unclamped, where it reaches more
+ * than half a cell past the member's block on either axis; `null` where the
+ * block holds all of it, and above bin level, where a cell is a whole sequence
+ * and there is nothing finer or further to read.
+ */
+function beyondBlock(member: LockMember, window: LockWindow): { rows: CellSpan; cols: CellSpan } | null {
+  if (window.unit !== 'bp' || member.unit() !== 'bp') return null
+  const step = stepOf(member)
+  const extent = member.cells()
+  const origin = originOf(member)
+  const raw = (axis: AxisWindow, at: number): CellSpan => [
+    (Math.min(axis.lo, axis.hi) - at) / step,
+    (Math.max(axis.lo, axis.hi) - at) / step,
+  ]
+  const rows = raw(window.rows, origin.rows)
+  const cols = raw(window.cols, origin.cols)
+  const past = (span: CellSpan, cells: number): boolean => span[0] < -0.5 || span[1] > cells + 0.5
+  return past(rows, extent.rows) || past(cols, extent.cols) ? { rows, cols } : null
 }
 
 /** A window moved along its axis by `by`. */
@@ -303,6 +357,16 @@ export class ViewportLock {
    * because the files are not identical.
    */
   private pending = new Set<string>()
+  /**
+   * Where the lock last put each panel, in base pairs — as it then showed it,
+   * {@link LockMember.viewport} — and on which block; forgotten when the panel
+   * moves itself.
+   *
+   * A panel still where it was put, on the block it had, is redrawing rather
+   * than moving ({@link report}); one a block has gone in under since is shown
+   * the deck's window again on that block ({@link landed}).
+   */
+  private placed = new Map<string, { window: LockWindow; block: string }>()
 
   join(member: LockMember): void {
     this.leave(member.id)
@@ -312,6 +376,7 @@ export class ViewportLock {
   leave(id: string): void {
     this.members = this.members.filter((member) => member.id !== id)
     this.pending.delete(id)
+    this.placed.delete(id)
   }
 
   /** Where the deck is looking, for a panel that has just finished loading. */
@@ -336,6 +401,7 @@ export class ViewportLock {
   reset(): void {
     this.current = null
     this.pending.clear()
+    this.placed.clear()
   }
 
   /**
@@ -364,11 +430,12 @@ export class ViewportLock {
       }
       if (cellsAgree(pushed.rows, rows) && cellsAgree(pushed.cols, cols)) return
     }
-    const window: LockWindow = {
-      rows: shifted(cellsToBp(rows, step), origin.rows),
-      cols: shifted(cellsToBp(cols, step), origin.cols),
-      unit: source.unit(),
-    }
+    const window = this.windowOf(source, rows, cols)
+    // **Still where the deck put it** (`placed`), on the block it was put there
+    // on: a redraw, not a movement — and one that can differ from the deck's
+    // window by more than the clamp above, where the box is not the window's
+    // shape and the panel shows paper beside a block narrower than it.
+    if (this.stillPut(source, window)) return
     // Half a cell of the *reporting* panel: the report is quantised to this
     // panel's grid, so anything finer than that is not a movement it could have
     // expressed deliberately. Compared only against a window in the same
@@ -381,8 +448,59 @@ export class ViewportLock {
     ) {
       return
     }
+    // The panel is the deck's window now, rather than somewhere it was put.
+    this.placed.delete(id)
     this.current = window
     this.pushTo(this.members.filter((member) => member.id !== id))
+  }
+
+  /** A report in base pairs, from where the reporting panel's block sits. */
+  private windowOf(source: LockMember, rows: CellSpan, cols: CellSpan): LockWindow {
+    const step = stepOf(source)
+    const origin = originOf(source)
+    return {
+      rows: shifted(cellsToBp(rows, step), origin.rows),
+      cols: shifted(cellsToBp(cols, step), origin.cols),
+      unit: source.unit(),
+    }
+  }
+
+  /**
+   * Whether a panel reporting `window` is still where the lock last put it
+   * ({@link placed}), on the block it was put there on, half a cell of its
+   * grid either way. Asked in the same currency only: a level toggle is a move.
+   */
+  private stillPut(source: LockMember, window: LockWindow): boolean {
+    const placed = this.placed.get(source.id)
+    if (this.current === null || placed === undefined || placed.window.unit !== window.unit) return false
+    return placed.block === blockOf(source) && windowsAgree(placed.window, window, stepOf(source) / 2)
+  }
+
+  /**
+   * A block went in under a panel: a read it was asked for landing
+   * ({@link LockMember.reach}), or one its own zoom read.
+   *
+   * A panel still where the lock last put it ({@link placed}) is shown the
+   * deck's window again, on a block that may hold more of it — now, before the
+   * redraw the block makes, so that redraw is the echo of the push and not a
+   * report. It used to be the report: the place the panel had been clamped to,
+   * on a block that could show more, differing from the deck's window and so
+   * taken for a gesture that dragged every other map back onto the clamp. Not
+   * found by comparing windows, since the block going in can move the window
+   * itself — a box the window's shape is not, showing paper beside the old
+   * block, has the paper taken away by the new one.
+   *
+   * A panel that has moved itself since is the deck's window, or will be with
+   * its next report, and is left alone; so is one inside a push, which shows
+   * the window on whatever block it ends with ({@link pushTo}).
+   */
+  landed(id: string): void {
+    if (this.driving || this.current === null) return
+    const member = this.members.find((candidate) => candidate.id === id)
+    const placed = this.placed.get(id)
+    if (member === undefined || placed === undefined || !member.locked()) return
+    if (placed.block === blockOf(member)) return
+    this.pushTo([member])
   }
 
   /**
@@ -455,21 +573,56 @@ export class ViewportLock {
         // between two levels — and standing still is the only honest thing to
         // do with a number that means something else in its grid.
         if (member.unit() !== window.unit) continue
-        const step = stepOf(member)
-        const extent = member.cells()
-        const origin = originOf(member)
         // A report is owed only where the panel actually moved. A panel whose
         // block has not arrived cannot, and never reports — so recording the
         // debt anyway left it owed forever and threw away that panel's first
         // real gesture once its block landed.
-        const moved = member.show(
-          bpToCells(shifted(window.rows, -origin.rows), step, extent.rows),
-          bpToCells(shifted(window.cols, -origin.cols), step, extent.cols),
-        )
+        let moved = this.place(member, window)
+        // **What the panel holds too little of, it is asked to read.** Every
+        // block was once read whole, and the clamp was the honest answer for a
+        // file that was shorter; since a zoom reads a window inside the region
+        // (§2) the block is usually a stretch of it, and the clamp left a map
+        // that had been zoomed showing that stretch beside one showing the whole
+        // chromosome — after Fit the view on the other map, or a zoom out past
+        // the stretch — with nothing ever reading the rest: a view showing its
+        // whole block asks the ladder for nothing (`ui/refine.ts`, `edgeWanted`).
+        // After the clamp is shown, so a read is planned against the window on
+        // screen; a block the panel already held can go in at once, and the
+        // window is shown again on that.
+        const asked = member.reach === undefined ? null : beyondBlock(member, window)
+        if (asked !== null) {
+          const before = blockOf(member)
+          member.reach?.(asked.rows, asked.cols)
+          if (blockOf(member) !== before) moved = this.place(member, window) || moved
+        }
         if (moved) this.pending.add(member.id)
       }
     } finally {
       this.driving = false
     }
+  }
+
+  /**
+   * Show one panel the deck's window, as its block can — clamped or slid where
+   * the block is shorter (`bpToCells`) — and remember where it was put, as what
+   * it then shows ({@link LockMember.viewport}).
+   */
+  private place(member: LockMember, window: LockWindow): boolean {
+    const step = stepOf(member)
+    const extent = member.cells()
+    const origin = originOf(member)
+    const rows = bpToCells(shifted(window.rows, -origin.rows), step, extent.rows)
+    const cols = bpToCells(shifted(window.cols, -origin.cols), step, extent.cols)
+    if (!member.show(rows, cols)) return false
+    const shown = member.viewport?.() ?? { rows, cols }
+    this.placed.set(member.id, {
+      window: {
+        rows: shifted(cellsToBp(shown.rows, step), origin.rows),
+        cols: shifted(cellsToBp(shown.cols, step), origin.cols),
+        unit: window.unit,
+      },
+      block: blockOf(member),
+    })
+    return true
   }
 }

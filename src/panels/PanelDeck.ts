@@ -1068,6 +1068,7 @@ export class PanelDeck {
     if (this.lead !== null && this.lead !== panel) {
       this.lead.setDeckExport(null)
       this.lead.setViewportListener(null)
+      this.lead.setRegridListener(null)
       this.lead.setLaneListener(null)
       this.lead.setHoverListener(null)
       this.lead.setLaneHoverListener(null)
@@ -1095,7 +1096,12 @@ export class PanelDeck {
       origin: () => panel.lockOrigin(),
       locked: () => this.leadLocked,
       show: (rows, cols) => panel.showViewport(rows, cols),
+      viewport: () => panel.viewport(),
+      reach: (rows, cols) => panel.reachViewport(rows, cols),
     })
+    // A block landing under it — the rest of the deck's window it was asked to
+    // read, or its own zoom's — puts it back on the deck's window (§16.3).
+    panel.setRegridListener(() => this.lock.landed(LEAD))
     panel.setViewportListener((rows, cols) => {
       this.lock.report(LEAD, rows, cols)
       // A report is also the first word that a new block is drawn.
@@ -1447,6 +1453,7 @@ export class PanelDeck {
     // mounted view, so a listener left on it would go on reporting into a lock
     // nothing can reach, once per frame, for as long as that view is on screen.
     this.lead?.setViewportListener(null)
+    this.lead?.setRegridListener(null)
     this.lead?.setLaneListener(null)
     this.lead?.setHoverListener(null)
     this.lead?.setLaneHoverListener(null)
@@ -2046,7 +2053,10 @@ export class PanelDeck {
       origin: () => map.lockOrigin(),
       locked: () => this.lockNote(slot) === null,
       show: (rows, cols) => map.showViewport(rows, cols),
+      viewport: () => map.viewport(),
+      reach: (rows, cols) => map.reachViewport(rows, cols),
     })
+    map.setRegridListener(() => this.lock.landed(slot.id))
     map.setViewportListener((rows, cols) => {
       // Only a map drawing the deck's place speaks for its window: one still
       // drawing the place just left redraws while its new block is on its way,

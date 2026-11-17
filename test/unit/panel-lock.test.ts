@@ -644,3 +644,198 @@ describe('a window counted from where each block sits', () => {
     expect(other.state.rows).toEqual([340, 740])
   })
 })
+
+/**
+ * A map holding too little of the deck's window (§16.3).
+ *
+ * The clamp was the honest answer while every block was read whole: a map
+ * whose file was shorter stopped at its own end. Since a zoom reads a window
+ * inside the region (§2), the block is usually a stretch of the sequence, and
+ * the clamp left a map that had been zoomed on its stretch beside one showing
+ * the whole chromosome — after Fit the view on the first map, or a zoom out
+ * past the stretch — because nothing asked it to read the rest.
+ */
+describe('a map holding too little of the deck’s window', () => {
+  /**
+   * A panel whose block can change under it: what a read landing does. The
+   * view stays over the same base pairs as the block goes in, as
+   * `MatrixPanel.regrid` keeps it, so what it reports next is the same place in
+   * the new block's cells.
+   */
+  function reading(id: string, bpPerCell: number, cells: number, from: number) {
+    const p = panel(id, bpPerCell, cells)
+    const block = { bpPerCell, cells, from }
+    const reached: Array<{ rows: CellSpan; cols: CellSpan }> = []
+    p.member.bpPerCell = () => block.bpPerCell
+    p.member.cells = () => ({ rows: block.cells, cols: block.cells })
+    p.member.origin = () => ({ rows: block.from, cols: block.from })
+    p.member.reach = (rows, cols) => {
+      reached.push({ rows, cols })
+    }
+    const land = (next: { bpPerCell: number; cells: number; from: number }): void => {
+      const carried = (span: CellSpan): CellSpan => {
+        const lo = block.from + span[0] * block.bpPerCell
+        const hi = block.from + span[1] * block.bpPerCell
+        return [(lo - next.from) / next.bpPerCell, (hi - next.from) / next.bpPerCell]
+      }
+      p.state.rows = carried(p.state.rows)
+      p.state.cols = carried(p.state.cols)
+      Object.assign(block, next)
+    }
+    return { ...p, reached, land }
+  }
+
+  /** The yeast deck: chromosome IV at 2 kb on the first map, which Fit the view put back… */
+  const leadOnIV = () => panel('lead', 2_000, 766)
+  /** …beside a map holding the region it opened on, IV:1.0–1.4 Mb at 1 kb. */
+  const onRegion = () => reading('region', 1_000, 400, 1_000_000)
+
+  it('is asked to read the deck’s window where its block holds only part of it', () => {
+    const lock = new ViewportLock()
+    const lead = leadOnIV()
+    const other = onRegion()
+    lock.join(lead.member)
+    lock.join(other.member)
+
+    lock.report('lead', [0, 766], [0, 766])
+    // Shown what it holds, as before…
+    expect(other.state.rows).toEqual([0, 400])
+    // …and asked for the rest, in its own cells and past both ends of them.
+    expect(other.reached).toHaveLength(1)
+    expect(other.reached[0].rows).toEqual([-1_000, 532])
+    expect(other.reached[0].cols).toEqual([-1_000, 532])
+  })
+
+  it('is asked nothing where its block holds the deck’s window', () => {
+    const lock = new ViewportLock()
+    const lead = leadOnIV()
+    const other = onRegion()
+    lock.join(lead.member)
+    lock.join(other.member)
+    // IV:1.1–1.3 Mb, inside the region.
+    lock.report('lead', [550, 650], [550, 650])
+    expect(other.state.rows).toEqual([100, 300])
+    expect(other.reached).toHaveLength(0)
+  })
+
+  it('is shown the deck’s window on the block that lands, without dragging the first map back', () => {
+    const lock = new ViewportLock()
+    const lead = leadOnIV()
+    const other = onRegion()
+    lock.join(lead.member)
+    lock.join(other.member)
+    lock.report('lead', [0, 766], [0, 766])
+    frame(lock, other)
+
+    // The read lands: the whole chromosome at 2 kb, under a view still over
+    // the region. Reported as it was, that is a window the deck is not looking
+    // at, taken for a gesture; told as a landing, before the redraw, it is not.
+    other.land({ bpPerCell: 2_000, cells: 766, from: 0 })
+    expect(other.state.rows).toEqual([500, 700])
+    lock.landed('region')
+    expect(other.state.rows, 'put on the deck’s window').toEqual([0, 766])
+    expect(other.state.cols).toEqual([0, 766])
+
+    // The redraw the block makes is the echo, and moves nobody; nor do the next.
+    frame(lock, other, lead)
+    frame(lock, other, lead)
+    expect(lead.state.shown, 'the first map left where it is').toBe(0)
+    expect(other.state.rows).toEqual([0, 766])
+  })
+
+  it('leaves a map the reader has moved since on its own window when a block lands', () => {
+    const lock = new ViewportLock()
+    const lead = leadOnIV()
+    const other = onRegion()
+    lock.join(lead.member)
+    lock.join(other.member)
+    lock.report('lead', [0, 766], [0, 766])
+    frame(lock, other)
+    drag(lock, other, [100, 200], [100, 200])
+    expect(lead.state.rows, 'which the deck follows').toEqual([550, 600])
+    other.land({ bpPerCell: 2_000, cells: 766, from: 0 })
+    lock.landed('region')
+    expect(other.state.rows, 'IV:1.1–1.2 Mb, on the block that landed').toEqual([550, 600])
+  })
+
+  it('is shown the deck’s window on a block that landed before its first redraw', () => {
+    const lock = new ViewportLock()
+    const lead = leadOnIV()
+    const other = onRegion()
+    lock.join(lead.member)
+    lock.join(other.member)
+    lock.report('lead', [0, 766], [0, 766])
+    // Landed within the frame: the redraw that is the push's echo is already
+    // on the new block, and is swallowed as one — so the landing has to say so.
+    other.land({ bpPerCell: 2_000, cells: 766, from: 0 })
+    lock.landed('region')
+    expect(other.state.rows).toEqual([0, 766])
+    frame(lock, other)
+    frame(lock, other)
+    expect(lead.state.shown).toBe(0)
+  })
+
+  it('is shown the window at once on a block it already held', () => {
+    const lock = new ViewportLock()
+    const lead = leadOnIV()
+    const other = onRegion()
+    // A block of the whole chromosome kept from before the zoom goes in before
+    // the ask returns.
+    other.member.reach = () => other.land({ bpPerCell: 2_000, cells: 766, from: 0 })
+    lock.join(lead.member)
+    lock.join(other.member)
+    lock.report('lead', [0, 766], [0, 766])
+    expect(other.state.rows).toEqual([0, 766])
+    frame(lock, other)
+    expect(lead.state.shown).toBe(0)
+  })
+
+  it('still drives the deck with a gesture of its own', () => {
+    const lock = new ViewportLock()
+    const lead = leadOnIV()
+    const other = onRegion()
+    lock.join(lead.member)
+    lock.join(other.member)
+    lock.report('lead', [0, 766], [0, 766])
+    frame(lock, other)
+    // Dragged to IV:1.1–1.2 Mb on its own block, before anything landed.
+    drag(lock, other, [100, 200], [100, 200])
+    expect(lead.state.rows).toEqual([550, 600])
+  })
+
+  it('is not taken for a gesture where its box shows more of its block than the window', () => {
+    // A map drawn as a rectangle (§7.2), shown a square window clamped to its
+    // block: it fits the window and shows paper either side of it, and every
+    // redraw reports that wider window. Only the first was the echo the lock
+    // expected; the next dragged the first map onto the clamp.
+    const lock = new ViewportLock()
+    const lead = leadOnIV()
+    const wide = panel('wide', 1_000, 400)
+    wide.member.origin = () => ({ rows: 1_000_000, cols: 1_000_000 })
+    const show = wide.member.show
+    wide.member.show = (rows, cols) => show(rows, [cols[0] - 120, cols[1] + 120])
+    wide.member.viewport = () => ({ rows: wide.state.rows, cols: wide.state.cols })
+    lock.join(lead.member)
+    lock.join(wide.member)
+    lock.report('lead', [0, 766], [0, 766])
+    frame(lock, wide)
+    frame(lock, wide)
+    frame(lock, wide)
+    expect(lead.state.shown).toBe(0)
+  })
+
+  it('is asked nothing above bin level, where a cell is a whole sequence', () => {
+    const lock = new ViewportLock()
+    const twenty = panel('twenty', 1, 20, 'cell')
+    const sixteen = panel('sixteen', 1, 16, 'cell')
+    let asked = 0
+    sixteen.member.reach = () => {
+      asked += 1
+    }
+    lock.join(twenty.member)
+    lock.join(sixteen.member)
+    lock.report('twenty', [0, 20], [0, 20])
+    expect(sixteen.state.rows).toEqual([0, 16])
+    expect(asked).toBe(0)
+  })
+})

@@ -363,6 +363,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The maps of a deck go wider together (§16.3).** On a deck opened on a region and zoomed, *Fit the
+  view* on the first map — its button, `0`, a double click — put it back on its whole chromosome and
+  left the map beside it on the region; so did a zoom out past the region. The yeast deck on
+  IV:1.0–1.4 Mb showed micro-C over the whole of IV beside Hi-C still on 1.0–1.4 Mb. A companion's zoom
+  was held to the block it had read, the region, and the deck's window clamped to that block asked it
+  for nothing. Its zoom now reaches the whole sequence, as the first map's always has, and a map shown
+  less of the deck's window than it asks for reads the rest and is put on the window when it lands.
 - **A track grown under the map no longer leaves it a stale rectangle (§7.2).** Growing a track drawn
   only above or below the map took the map's height and left its width, a rectangle the map's handles
   did not know about, which the next drag on a side snapped back to a smaller square; a track drawn

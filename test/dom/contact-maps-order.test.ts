@@ -187,6 +187,8 @@ describe('the Contact maps card’s order (§16.9)', () => {
 
 function leadPanel(): MatrixPanel {
   return {
+    setRegridListener: () => {},
+    reachViewport: () => {},
     setViewportListener: () => {},
     setDeckExport: () => {},
     setCardFor: () => {},
