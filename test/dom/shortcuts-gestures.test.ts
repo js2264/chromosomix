@@ -67,6 +67,19 @@ describe('the map’s gestures', () => {
     expect(gestures.get('drag across a lane')).toMatch(/ceiling/)
   })
 
+  it('draws the map as a rectangle by its edges, and square again by a double click', () => {
+    // The bars on the picture's edges are found only by approaching them, so
+    // the table is where a reader learns they size the map one side at a time.
+    const gestures = mapGestures()
+    expect(gestures.get('drag an edge of the map')).toMatch(/rectangle/)
+    const shift = [...gestures].find(([keys]) => /^(⇧|Shift) \+ drag an edge of the map$/.test(keys))
+    expect(shift?.[1]).toMatch(/keep(ing)? its shape/)
+    expect(gestures.get('double click an edge of the map')).toMatch(/square/)
+    // Fit the view gives back the whole square, which a double click on the plot is.
+    expect(gestures.get('double click')).toMatch(/square again/)
+    expect(gestures.get('Home')).toMatch(/square again/)
+  })
+
   it('takes a file on any edge, and sends a lane’s grip to a tracks cell too', () => {
     const gestures = mapGestures()
     expect(gestures.has('drop a file on an edge of the map')).toBe(true)

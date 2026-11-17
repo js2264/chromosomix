@@ -60,7 +60,9 @@ other maps a comparison such as Reproducibility reads.
 ## What is shared, and what is not
 
 - Shared: the region, the sequence or selection, the level, the resolution, pan and zoom (unless a
-  map is off the chain) and the [45° turn](/browse/turn/).
+  map is off the chain), the [45° turn](/browse/turn/) and the
+  [size of the maps](/browse/navigating/#the-size-of-the-map): drag an edge of any map, and every map
+  takes the size and shape.
 - Each map's own, starting as the first map's: the score, O/E, smoothing, arms, transform, colours
   and clip.
 

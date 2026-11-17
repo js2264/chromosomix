@@ -126,7 +126,7 @@ try {
   await settled()
   await sleep(2500)
   // A square map: the demo may open turned.
-  const square = await page.$('button[title*="square" i]')
+  const square = await page.$('button[title^="Draw this map square again"]')
   if (square) { await square.click(); await settled(); await sleep(2000) }
   await mapCard().scrollIntoViewIfNeeded()
   await report('opened: balanced log10, one reading')
@@ -183,7 +183,7 @@ try {
   await report('turned: two bands')
   await withCard('lr08-turned-bands')
   if (turn) {
-    const back = await page.$('button[title*="square" i]')
+    const back = await page.$('button[title^="Draw this map square again"]')
     if (back) { await back.click(); await settled(); await sleep(2500) }
   }
 

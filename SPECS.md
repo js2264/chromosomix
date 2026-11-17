@@ -2601,10 +2601,44 @@ colormap is selectable; keyboard pan and zoom are supported — on the focused m
 Page Up and Page Down zoom about the centre a wheel notch at a time, and Home refits — and from
 anywhere in the window `0` refits (*Fit the view*, by its place, so AZERTY's bare `à` does), as a
 double click on the plot does: the whole of the view's domain — the chromosome, region or genome it
-was opened on — at the resolution that fits the screen, never only the block a zoom last read (§2) — and
+was opened on — at the resolution that fits the screen, never only the block a zoom last read (§2),
+in the square the map opens as (below) — and
 Space locks the map onto its diagonal (§8.9). `−` and `+` are not a zoom on a map: they step its
 resolution (§5.5), and the wheel, a pinch, the paging keys and the boxes zoom. In the 1D browser `0`
 is the whole genome, as a double click is.
+
+**The map's box is the reader's, a square until they draw it otherwise.** Bars on its four edges,
+faint until approached, size the box the picture is drawn in: the two ends set its width, both
+moving about its middle so the edge under the hand stays under it, and the top and the bottom set its
+height, the picture hanging from the stack above it. A square block does not need a square box. The
+zoom is one scalar for both axes (§8.9), so every cell stays square inside a box of any shape, and a
+box twice as wide as it is tall is a stretch of the diagonal twice as long at the same magnification
+— the shape for reading along a diagonal past its domains, and the shape a stack of tracks under the
+map leaves room for. **With Shift held, any edge resizes the box in proportion**, which is how a
+square is made bigger and stays one; a double click on a bar gives that side back to the square's;
+and *Fit the view* — `0`, a double click or a double tap on the plot, Home on a focused map, the
+first button of the picture row — gives back the whole square, because the whole block fitted into a
+rectangle is the block with paper down two sides of it. A turned map's box is its own (§17.2), and
+*Fit the view* leaves it alone.
+
+The square is as much room as there is: the height the window can spare after the stacks above and
+below the map, capped by the width the columns leave after the stacks beside it. **A side nobody has
+set is that square's**, and follows the room as the square does — so a track grown under the map
+takes its room out of both sides of a square, and out of the height alone of a box whose width the
+reader chose. It used to be one number, every edge setting the side, on the argument that a square
+block has no shape to choose — an argument about the block, not about the window onto it. And a track
+grown under the map left the box at its old width under a ceiling that had come down, because the
+grid's own box does not move when the map gives up exactly the height a lane took, and nothing else
+fitted the box again: a rectangle nobody had drawn, which the next touch of a bar snapped back to a
+square. Every change to the room the stacks leave now fits the box again
+(`MatrixPanel.writeLaneMetrics`).
+
+The box is a preference about the window, like the band's (§17.2): kept in this browser's storage
+(`ui/mapSize.ts`) rather than in a link, shared by every map on screen — the maps of a deck are one
+shape, the first map's measured box being pushed to the others (§16.5) — and fitted to each panel on
+the way out, so a box drawn beside a wide map is as much of it as fits beside a narrow one and comes
+back whole when the room does. A phone draws its whole width square, whatever a laptop chose. A size
+kept by a version from before the box had two sides is read as the square it was.
 
 **The wheel's two axes mean two different things.** Up and down is the zoom, about the pointer — or,
 where the pointer is within four pixels of the diagonal, about the diagonal's nearest point, so a
@@ -8093,7 +8127,10 @@ they go and look at something in it, which is the gesture shaping a band is *for
 (`ui/turnBox.ts`), kept in this browser's storage on `ui/plotOptions.ts`'s rule — how tall somebody
 likes their bands is a preference, not what is being looked at (§5.5) — so it is the same in every
 tab and survives a reload. Shared as well as remembered: the turn is the deck's rather than one
-map's (§17.3), and a deck of bands at four heights is not a comparison.
+map's (§17.3), and a deck of bands at four heights is not a comparison. A square map's box keeps the
+same rules with a store of its own (§7.2), and *Fit the view* puts that one back to a square and
+leaves this one as it is: a band's box is the shape of a figure, and a reader who widened a band and
+pressed it to see the whole chromosome asked for the chromosome, not for a narrower band.
 
 What is stored is what the reader dragged, and it is fitted to each panel **on the way out** rather
 than clamped on the way in. The panels drawing from it need not have the same room — a deck of four

@@ -26,6 +26,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A map can be drawn as a rectangle (§7.2).** The bars on its edges size it one side at a time: the
+  two ends set the width, about the map's middle, and the top and bottom the height, and the tracks
+  beside and under the map follow. Cells stay square, so a box wider than it is tall shows a longer
+  stretch of the diagonal at the same magnification. With Shift held, any edge resizes the map and
+  keeps its shape; a double click on a bar gives that side back to the square's; *Fit the view* —
+  `0`, a double click on the plot or the first button of the picture row — puts the whole square
+  back, and says so in its tooltip. A side not dragged follows the room as the square does, so a
+  track grown under the map takes height from both sides of a square and from the height alone of a
+  map whose width was set. Every edge used to set one size, the square's side; a size kept by an
+  earlier version is read as that square. Every map of a deck draws the first map's box; a phone
+  draws its whole width square; a turned map's band keeps its own box, which *Fit the view* leaves
+  alone.
 - **The diagonal lock is on whenever the app opens (§8.9).** Every map is held on its diagonal until
   the reader lets go — Space, the toggle beside the turn, or the palette's *Diagonal lock* — and a
   release lasts as long as the page rather than being kept by the browser, so the next visit starts
@@ -351,6 +363,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A track grown under the map no longer leaves it a stale rectangle (§7.2).** Growing a track drawn
+  only above or below the map took the map's height and left its width, a rectangle the map's handles
+  did not know about, which the next drag on a side snapped back to a smaller square; a track drawn
+  under and beside the map shrank the square instead. Both now give the map's box the room that is
+  left, by the box's own rule.
 - **The map's key names the resolution the line above it does (§7.1).** On the whole-genome view, a
   zoom that landed on the rung the file was opened at was keyed at the whole genome's pooled grid
   times its own: K562 chr7 at 10 kb said `760 kb` in the corner under a line reading `10 kb`, and

@@ -17,11 +17,33 @@ new block, the address follows, and the back button undoes them.
   move it in any direction.
 - **Double-click** (a double tap), <kbd>0</kbd>, or the first button of the **picture** row on the
   **Map** card (in the **Aesthetics** panel) undoes every pan and zoom: the whole sequence, range or
-  genome you opened, at the resolution that fits the screen, however far in you had zoomed.
+  genome you opened, at the resolution that fits the screen, however far in you had zoomed, and the
+  map square again if you had made it a rectangle ([The size of the map](#the-size-of-the-map)).
 
 Panning and zooming reach as far as the sequence the range is on, or the genome on the whole
 genome: near the edge of what was read, the map reads on ahead of you. To see another sequence,
 change the range.
+
+## The size of the map
+
+A map opens square and as large as the window allows. Point near an edge of the map for a bar you
+can drag:
+
+- the **left or right** edge sets how **wide** the map is; it stays centred, and the tracks above
+  and below it follow;
+- the **top or bottom** edge sets how **tall** it is, and the tracks beside it follow;
+- with <kbd>Shift</kbd> held, any edge makes the map bigger or smaller and **keeps its shape**.
+
+A map can be a rectangle. Its cells stay square, so a wide map shows a longer stretch of the
+diagonal across than down, at the same zoom. Double-click a bar to give that side back to the
+square's; **double-click the map**, press <kbd>0</kbd> or the first button of the **picture** row
+for the whole square back. A side you have not dragged follows the window as the square does: make
+a track under the map taller and a square map shrinks, while a map you widened keeps its width and
+gives up height.
+
+This browser keeps the size for every tab and after a reload, and every map of a
+[deck](/browse/deck/) has the same one. On a phone the map is as wide as the screen and square. A
+[turned map](/browse/turn/) has a size of its own.
 
 ## Zoom into a region
 

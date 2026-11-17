@@ -100,7 +100,7 @@ In the dialog's order and wording. ⌘ is for a Mac, Ctrl for everything else.
 | <kbd>H</kbd> | **Stretch the tracks to fill the height** | One height for every track, filling the space |
 | <kbd>Y</kbd> | **Autoscale every track** | Every value axis back to what is in view; a group as a group |
 | <kbd>Space</kbd> | **Diagonal lock** | Every drag, scroll and box runs along the diagonal until pressed again. On a map |
-| <kbd>0</kbd> | **Fit the view** | On a map, every pan and zoom undone, as a double click does. In the 1D browser, the whole genome |
+| <kbd>0</kbd> | **Fit the view** | On a map, every pan and zoom undone and the map square again, as a double click does. In the 1D browser, the whole genome |
 | <kbd>E</kbd> | **Observed over expected** | Each cell over what its distance from the diagonal predicts: the Map card's O/E toggle. On a map |
 | <kbd>−</kbd> | **Coarser resolution** | One rung on the resolution row. On a map, with *refine on zoom* unticked |
 | <kbd>+</kbd> | **Finer resolution** | One rung on the resolution row. On a map, with *refine on zoom* unticked |
@@ -146,14 +146,17 @@ Only while a 3D model is enlarged; elsewhere these letters keep the meanings abo
 | <kbd>Alt</kbd> + drag (<kbd>⌥</kbd> on a Mac) | Select a square and open it as a region, on the diagonal while it is locked |
 | <kbd>Shift</kbd> + <kbd>Alt</kbd> + drag | The same, pinned to the diagonal from the nearest bin on it |
 | <kbd>Shift</kbd> + drag | Zoom to the stretch it spans, on the diagonal, and copy its locus |
-| double click | The whole sequence, range or genome back on the canvas |
+| double click | The whole sequence, range or genome back on the canvas, and the map square again |
 | wheel | Zoom about the pointer |
 | two fingers sideways | Slide sideways, down the diagonal while it is locked (Space) |
 | <kbd>Win</kbd> + wheel (<kbd>⌘</kbd> on a Mac) | Slide the map up and down, and sideways with it |
 | click | Open what the cell refers to |
 | <kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> | Pan by a tenth of the view (half a view with Shift) |
 | <kbd>Page Up</kbd> / <kbd>Page Down</kbd> | Zoom in and out about the centre |
-| <kbd>Home</kbd> | Fit the block to the canvas |
+| <kbd>Home</kbd> | Fit the block to the canvas, and the map square again |
+| drag an edge of the map | Make it wider or taller: a map can be drawn as a rectangle |
+| <kbd>Shift</kbd> + drag an edge of the map | Make it bigger or smaller and keep its shape |
+| double click an edge of the map | That side back to the square the map opens as |
 | drag a lane's far edge | Resize that track |
 | drag across a lane | Raise or lower that track's ceiling |
 | drag a lane's grip | Reorder it, or drop it round this map or another, on a + or an empty cell for a cell of its own, or on a tracks cell |
