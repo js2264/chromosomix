@@ -256,6 +256,13 @@
   ],
   "pulls": [
     {
+      "number": 175,
+      "commit": "b692189",
+      "title": "Let a map be drawn as a rectangle, refit it when a track grows, and square it again on Fit the view",
+      "branch": "js/kind-brahmagupta-g9f2vr",
+      "date": "2026-11-17T19:43:53Z"
+    },
+    {
       "number": 168,
       "commit": "bf0eeff",
       "title": "Draw a metagenome's map as a circle or as two lines, a dev feature (§7.6)",
