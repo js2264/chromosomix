@@ -257,10 +257,10 @@
   "pulls": [
     {
       "number": 175,
-      "commit": "6c06d3f",
+      "commit": "e569e74",
       "title": "Keep a map square as its tracks grow, give it its default size on Fit the view, and let a deck's maps go wider together",
       "branch": "js/kind-brahmagupta-g9f2vr",
-      "date": "2026-11-18T10:55:00Z"
+      "date": "2026-11-18T11:11:05Z"
     },
     {
       "number": 168,
