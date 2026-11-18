@@ -1,6 +1,13 @@
 {
-  "latest": "46fbac4",
+  "latest": "51de99a",
   "versions": [
+    {
+      "commit": "51de99a",
+      "version": "0.21.0",
+      "date": "2026-11-18T18:11:13+01:00",
+      "subject": "Run a deck's map tasks on every map at once while no map is starred (#177)",
+      "tag": ""
+    },
     {
       "commit": "46fbac4",
       "version": "0.21.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "14a4afc",
-      "version": "0.19.0",
-      "date": "2026-11-04T14:23:37+01:00",
-      "subject": "Add cell-of-its-own rectangle to Contact maps card (#156)",
-      "tag": ""
-    },
-    {
       "commit": "9731db4",
       "version": "0.19.0",
       "date": "2026-11-01T19:24:42+01:00",
@@ -255,20 +255,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 177,
-      "commit": "70523a1",
-      "title": "Run a deck's map tasks on every map at once while no map is starred",
-      "branch": "js/loving-gates-uj6p1u",
-      "date": "2026-11-18T12:27:30Z"
-    },
-    {
-      "number": 176,
-      "commit": "ab77de0",
-      "title": "CI: build every fixture from PyPI and run the suite once",
-      "branch": "js/tender-keller-3rmk78",
-      "date": "2026-11-18T12:26:38Z"
-    },
     {
       "number": 168,
       "commit": "bf0eeff",
