@@ -351,6 +351,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A deck turned 45° moves as one (§16.4, §17.3).** Two copies of the yeast micro-C zoomed into IV
+  and then turned left the second *not following: this block spans 26.2 kb × 442.6 kb where the first
+  map spans 26.2 kb × 439.8 kb. The same name resolved against different sequences*; stepped on to
+  chrV with `>`, it said *this band reaches 577.6 kb from the diagonal where the first map reaches
+  1.6 kb*; and from then on it stayed put while the first map was zoomed, double-clicked back to the
+  whole chromosome or stepped on — its band changing height under the wheel all the same. The turn
+  took each map's region again from the window its zoom had read, and a turned map's region was the
+  depth its band happened to be cut to on its way in. Each region is now the square the turn rotates,
+  kept through the turn; how deep two bands are cut no longer stops one following the other, a
+  shallower band being shown the window clamped as a shorter square map is; and only a map following
+  the deck is cut to the first map's reach — one moving on its own keeps its own.
 - **Every track grows towards a turned map (§17.4).** Under the 45° turn every track is drawn under the
   band, and one that had been put beside the square map — a computed track, which opens on its left,
   or one moved there — grew downwards, away from the picture. Every track now grows up towards the

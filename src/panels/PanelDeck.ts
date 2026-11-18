@@ -1151,11 +1151,18 @@ export class PanelDeck {
    * through the height of the window they are looking at.
    *
    * Companions are released back to their own boxes when the lead is not turned,
-   * which is what makes this leave a square deck exactly as it was.
+   * which is what makes this leave a square deck exactly as it was — and so is a
+   * companion that is **not following**, at its own zoom over its own window:
+   * the first map's reach is a function of the first map's zoom, and cutting a
+   * band another zoom is drawing to it re-cut that band on every notch of a
+   * wheel over the other map, a picture changing height under nobody's hand.
    */
   private syncTurnReach(): void {
     const reach = this.lead?.turnReach() ?? null
-    for (const slot of this.slots) slot.panel?.map?.setTurnReach(reach)
+    for (const slot of this.slots) {
+      const following = reach !== null && this.leadLocked && this.lockNote(slot) === null
+      slot.panel?.map?.setTurnReach(following ? reach : null)
+    }
   }
 
   /**
@@ -2192,6 +2199,19 @@ export class PanelDeck {
       Math.max(mine.sequences.cols, theirs.sequences.cols),
     )
     if (rows && cols) {
+      // **A band beside a square** has rows that mean two things: distance from
+      // the diagonal up the side of one, a place up the side of the other. The
+      // turn is the deck's (§17.3), so this is a map whose block has no
+      // diagonal to turn on while the first map's has, or one a frame behind a
+      // press — and the frames above are both squares, which is what lets two
+      // bands be compared at all, so they would not have caught it.
+      if (map.isTurned() !== lead.isTurned()) {
+        return (
+          `not following: ${map.isTurned() ? 'this map is turned and the first map is square' : 'the first map is turned and this map is square'}. ` +
+          'Up the side of a band is distance from the diagonal and up the side of a square map ' +
+          'is a place, so one row window would be two different things.'
+        )
+      }
       if (level === null || level === 'bin') return null
       // Above bin level the deck carries the **cell index** ({@link lockUnit}),
       // and that is only honest while cell `i` is the same sequence on both
@@ -2212,28 +2232,17 @@ export class PanelDeck {
       )
     }
 
-    // A turned panel's rows are **separation**, not position, so a row
-    // disagreement there is a different fact from a column one and must not
-    // borrow its sentence. The deck cuts every companion's band to the first
-    // map's reach, in base pairs ({@link syncTurnReach}), so two bands agree by
-    // construction — except where a companion's block does not hold that much,
-    // since a band cannot be deeper than its block has cells
-    // (`render/rotate.ts`'s `turnDepthFor`). That is a real reason not to share
-    // a row window, and is nothing whatever to do with the sequences agreeing.
-    // Telling a reader their files resolved one name against different
-    // sequences when they did not is worse than not telling them anything: it
-    // is a claim they may act on. A cell is half a bin under a turn and height
-    // is half of separation, so the number a reader wants is twice the lock's.
-    if (map.isTurned() && lead.isTurned() && cols) {
-      return (
-        'not following while turned: this band reaches ' +
-        `${fmt.bp(mine.rows * 2)} from the diagonal where the first map ` +
-        `reaches ${fmt.bp(theirs.rows * 2)}. The deck cuts every band to the first map’s reach, ` +
-        'and this map’s block does not hold that much — so one row window would be two ' +
-        'distances. Turning the deck back off puts this panel in step.'
-      )
-    }
-
+    // **No second refusal for a turned pair.** One used to compare how deep the
+    // two bands were cut, and it never had a fact to stand on: the frames it
+    // read were cut at whatever zoom each map held when its block went in, so
+    // a lead stepped on to chrV from deep inside IV said it reached 1.6 kb and
+    // its companion was refused on that until the deck was squared. And the
+    // lock does not need the bands to agree. Up the side the window is base
+    // pairs of separation on both, so one row window is one distance, and a
+    // band its block holds less of is shown the window clamped, as a square
+    // map is beside a longer one (`panels/lock.ts`). Refused, it was never
+    // pushed and so never asked to read the rest — a companion stuck where the
+    // refusal found it while the first map went back to the whole chromosome.
     return (
       'not following: this block spans ' +
       `${fmt.bp(mine.rows)} × ${fmt.bp(mine.cols)} where the ` +
@@ -2266,6 +2275,9 @@ export class PanelDeck {
     // reading somewhere the others are not is two places under one chain.
     if (slot.locked) slot.panel?.clearOwnPlace()
     slot.panel?.syncLock()
+    // A band on the chain is cut to the first map's reach, and one off it to
+    // its own box ({@link syncTurnReach}).
+    this.syncTurnReach()
     // On the chain it reads at the deck's resolution, the zoom's included; off
     // it, at its own zoom's, unless a resolution is picked (§16.2).
     slot.panel?.followResolution()
@@ -3629,6 +3641,7 @@ export class PanelDeck {
     this.leadLocked = !this.leadLocked
     // Kept per file, as a companion's chain is with its look (§16.6).
     this.rememberLead()
+    this.syncTurnReach()
     if (this.leadLocked) {
       this.seedFromLead()
       this.lock.catchUp(LEAD)

@@ -3923,6 +3923,12 @@ export class MatrixPanel {
        * tracks, census and circularity check behind (`firstData`).
        */
       preview?: boolean
+      /**
+       * The block already in hand, re-run from the top because the grid it is
+       * drawn on changed — a turn, or one band becoming two ({@link rederive}).
+       * The region it names has not moved, so neither does {@link frameSpan}.
+       */
+      again?: boolean
     } = {},
   ): void {
     // A stand-in the reader has moved gives way to its block on their window
@@ -4049,7 +4055,20 @@ export class MatrixPanel {
     // compares, whatever window a refine reads inside it later — with the
     // cell it was rounded to, which is the gate's tolerance for it and which a
     // refine changes under it.
-    this.framed = { ...this.blockSpan(), bpPerCell: this.bpPerCell() }
+    //
+    // **Not again for the block in hand.** A turn re-runs this on whatever block
+    // the panel holds, and after a zoom that is a window a refine read inside
+    // the region (§2) — so pressing the turn re-framed each map on its own
+    // refine's window, two windows 800 bp apart on two copies of one file, and
+    // the companion was told the same name had resolved against different
+    // sequences. And as a **square**, turned or not: a band's rows are how far it
+    // was cut from the diagonal, which is the zoom of the moment rather than
+    // anything about the region — a lead stepped on to chrV from deep inside IV
+    // was framed as a band two rows deep, and its companion refused on that for
+    // as long as the deck stayed turned.
+    if (options.again !== true || this.framed === null) {
+      this.framed = { ...this.squareSpan(), bpPerCell: Math.max(1, this.options.binsize) }
+    }
     // The presentation a derivation took over, recorded now that the block it
     // was chosen for is actually in. Announced from here rather than from
     // `syncDivergingScale` so the store is not patched — and the router not
@@ -5584,7 +5603,7 @@ export class MatrixPanel {
       // axes change meaning, and the view has to be refitted around them.
       // Re-run from the top, which is one pass over a block already in memory
       // and still costs no read.
-      this.setData(data, this.lastTitle, this.heldSecond())
+      this.setData(data, this.lastTitle, this.heldSecond(), { again: true })
       return
     }
     this.redraw()
@@ -6898,12 +6917,15 @@ export class MatrixPanel {
    * to 1.6 kb more than it is long, and measured against the 100 bp cell a
    * zoom had since read, a companion first drawn at another grid was told the
    * same name had resolved against a different sequence (§16.4).
+   *
+   * Always the **square**, on a turned map too, and kept through a turn: see
+   * {@link setData}'s `again`.
    */
   frameSpan(): FrameSpan | null {
     return this.framed
   }
 
-  /** See {@link frameSpan}: set by {@link setData}, kept through every {@link regrid}. */
+  /** See {@link frameSpan}: set by {@link setData} for a new block, kept through every {@link regrid} and every turn. */
   private framed: FrameSpan | null = null
 
   /**
@@ -6946,15 +6968,36 @@ export class MatrixPanel {
    */
   blockSpan(): { rows: number; cols: number; sequences: { rows: number; cols: number } } {
     const data = this.data
-    const cells = this.cellCount()
-    const bp = this.bpPerCell()
     // A turn only ever cuts a band out of a bin-level square, and its rows are
     // separation rather than position — both of which the cell arithmetic gets
     // right and the extent arithmetic below would not.
-    if (data === null || data.level === 'bin' || this.turned !== null) {
+    if (this.turned === null) return this.squareSpan()
+    const cells = this.cellCount()
+    const bp = this.bpPerCell()
+    return {
+      rows: cells.rows * bp,
+      cols: cells.cols * bp,
+      sequences: {
+        rows: data?.rowContigs ?? data?.rowGroups.length ?? 1,
+        cols: data?.colContigs ?? data?.colGroups.length ?? 1,
+      },
+    }
+  }
+
+  /**
+   * {@link blockSpan} of the block as read — the square, whether or not it is
+   * drawn turned. Both axes are places along the genome here, which is what
+   * {@link frameSpan} records: the region a view names is the square a turn
+   * rotates, and the depth the band was cut to is a fact about the zoom of the
+   * moment rather than about the region.
+   */
+  private squareSpan(): { rows: number; cols: number; sequences: { rows: number; cols: number } } {
+    const data = this.data
+    if (data === null || data.level === 'bin') {
+      const bp = Math.max(1, this.options.binsize)
       return {
-        rows: cells.rows * bp,
-        cols: cells.cols * bp,
+        rows: (data?.nrows ?? 1) * bp,
+        cols: (data?.ncols ?? 1) * bp,
         sequences: {
           rows: data?.rowContigs ?? data?.rowGroups.length ?? 1,
           cols: data?.colContigs ?? data?.colGroups.length ?? 1,

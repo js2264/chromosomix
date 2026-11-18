@@ -135,6 +135,9 @@ function leadPanel() {
     bp: BINSIZE,
     /** The region as this map first drew it, where that is not the block on screen. */
     frame: null as null | { rows: number; cols: number; sequences: { rows: number; cols: number }; bpPerCell: number },
+    /** Whether this map is drawn turned, and how far its band reaches from the diagonal (§17.3). */
+    turned: false,
+    reach: null as number | null,
   }
   /** The deck's listener, so a test can make this map report. */
   let listener: ((rows: [number, number], cols: [number, number]) => void) | null = null
@@ -151,7 +154,7 @@ function leadPanel() {
     setHoverListener: () => {},
     setLaneHoverListener: () => {},
     showLaneEcho: () => {},
-    turnReach: () => null,
+    turnReach: () => at.reach,
     setLaneFloor: () => {},
     remeasure: () => {},
     bpPerCell: () => at.bp,
@@ -164,7 +167,7 @@ function leadPanel() {
     get hasBlock(): boolean {
       return !at.reading
     },
-    isTurned: () => false,
+    isTurned: () => at.turned,
     showViewport: (rows: [number, number]) => {
       shown.push(rows)
       return !at.reading
@@ -357,5 +360,85 @@ describe('a companion when the first map goes wider than the deck’s place', ()
 
     expect(shownBp(companion)).toEqual([0, 1_000_000])
     expect(lead.shown, 'and the first map is not dragged back onto the region').toEqual([])
+  })
+})
+
+/**
+ * A turned deck (§16.4, §17.3). Two copies of one yeast file, zoomed and then
+ * turned, were refused as two sequences; stepped on to chrV, the companion was
+ * refused because the first map's band had been framed at the 800 bp it was
+ * cut to on its way in; and a refused companion, never pushed, never read the
+ * rest of the chromosome when the first map went back to it. Up the side of a
+ * band the window is base pairs of separation on both maps, so how deep each
+ * band is cut is not a reason for one of them to stand still.
+ */
+describe('a turned deck', () => {
+  /** The companion drawn turned, its band cut `rows` base pairs deep, and what it is told to reach. */
+  function turned(companion: MatrixPanel, rows?: number): Array<number | null> {
+    const told: Array<number | null> = []
+    const cut = companion.setTurnReach.bind(companion)
+    Object.assign(companion, {
+      isTurned: () => true,
+      setTurnReach: (bp: number | null) => {
+        told.push(bp)
+        cut(bp)
+      },
+      ...(rows === undefined ? {} : { blockSpan: () => ({ rows, cols: 400_000, sequences: { rows: 1, cols: 1 } }) }),
+    })
+    return told
+  }
+
+  /** The companion's cell, and the line under its heading when it is not following. */
+  function companionCell(deck: PanelDeck): { cell: HTMLElement | null; note: () => string } {
+    const cell = deck.el.querySelector<HTMLElement>('.deck-grid > .deck-panel:not(.is-lead)')
+    return {
+      cell,
+      note: () => cell?.querySelector('.deck-note.deck-unlocked:not(.deck-res-note)')?.textContent ?? '',
+    }
+  }
+
+  it('follows a band cut shallower than the first map’s, as a square map follows a shorter block', async () => {
+    const { deck, lead, companion } = await deckAt()
+    turned(companion, 50_000)
+    lead.at.turned = true
+    lead.at.reach = 600_000
+    // The region each first drew is a square, whichever way it is drawn now.
+    lead.at.frame = { rows: 400_000, cols: 400_000, sequences: { rows: 1, cols: 1 }, bpPerCell: BINSIZE }
+    lead.lands()
+    await settled()
+    const { cell, note } = companionCell(deck)
+    expect(note()).toBe('')
+    expect(cell?.classList.contains('is-unlocked')).toBe(false)
+  })
+
+  it('cuts a companion to the first map’s reach while it follows, and gives it its own box while it does not', async () => {
+    const { deck, lead, companion } = await deckAt()
+    const told = turned(companion)
+    lead.at.turned = true
+    lead.at.reach = 300_000
+    lead.lands()
+    await settled()
+    expect(told.at(-1)).toBe(300_000)
+    const { cell } = companionCell(deck)
+    cell?.querySelector<HTMLButtonElement>('button[title^="Following the other maps"]')?.click()
+    expect(told.at(-1), 'off the chain, at its own zoom').toBeNull()
+    // The first map zooms: its reach moves, and the band beside it does not.
+    lead.at.reach = 120_000
+    lead.lands()
+    await settled()
+    expect(told.at(-1)).toBeNull()
+    cell?.querySelector<HTMLButtonElement>('button[title^="Moving on its own"]')?.click()
+    expect(told.at(-1), 'back on the chain').toBe(120_000)
+  })
+
+  it('refuses a square map beside a turned first map, in words about the rows and not the sequences', async () => {
+    const { deck, lead } = await deckAt()
+    lead.at.turned = true
+    lead.at.reach = 300_000
+    lead.lands()
+    await settled()
+    const { note } = companionCell(deck)
+    expect(note()).toContain('the first map is turned and this map is square')
+    expect(note()).not.toContain('different sequences')
   })
 })

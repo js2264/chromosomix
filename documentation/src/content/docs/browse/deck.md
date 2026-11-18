@@ -90,8 +90,8 @@ For one depth, use the chevrons after the **contacts** box
 One sequence name at two lengths, differing by more than a cell of the coarser map, is two different
 places: the map that differs is still drawn and exported, but off the lock, with a line under its
 heading saying why. A file with no sequence of that name is refused in its own cell, with the names
-it has. On a turned deck, a map whose block does not reach as far from the diagonal as the first
-map's cannot follow, and says so.
+it has. On a turned deck, a map whose band does not reach as far from the diagonal as the first
+map's still follows, with paper above its band where its block holds no more.
 
 ## Arranging the cells
 
