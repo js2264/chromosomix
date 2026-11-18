@@ -695,16 +695,15 @@ hand, or the next release.
 
 `/coverage/` is the full suite's coverage report, file by file, as the last green run of it on
 `main` measured it, and `/coverage/badge.json` is that run's line coverage as a shields.io
-endpoint, which the README's **Coverage** badge is drawn from. The goldens job of
-`.github/workflows/test.yml` is the only run that has the whole suite — metacooler's fixtures need
-the `METACOOLER_REPO_TOKEN` it checks out with — so it writes both, from
+endpoint, which the README's **Coverage** badge is drawn from. The test job of
+`.github/workflows/test.yml` builds every fixture and runs the whole suite, so it writes both, from
 `npm test -- --coverage` and `node scripts/coverage-summary.mjs --badge`, into its `coverage-full`
 artifact; a job of its own, `coverage`, which runs none of the code under test, force-pushes that
 artifact to the `coverage` branch as one commit and dispatches this deploy, which copies the
 branch's tree into `coverage/` then and on every run after — the stores' and the notebooks'
 arrangement once more. Only a push to `main` publishes, and only when the full suite passed: a
-pull request's coverage is in its run's summary and artifact, and a figure from a red suite or
-from the fixture-free half alone is not the app's.
+pull request's coverage is in its run's summary and artifact, and a figure from a red suite is
+not the app's.
 
 The badge is read from the site rather than from the branch over `raw.githubusercontent.com` for
 the stores' reason, and so that the figure on the badge is always the figure on the page it links

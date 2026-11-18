@@ -337,6 +337,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   page can read where a bucket hides `Content-Range`, as 4DN's does.
 - **`/bins` is listed after the map's first picture (§8.12).** Listing a cooler's bin columns for
   the Metadata card's drop-down was four round trips the map waited for before its view was mounted.
+- **CI builds every fixture from PyPI, and runs the suite once (§29.6).** metacooler is on PyPI, so
+  the Tests workflow installs it beside cooler, cooltools and g3dtools on every push and pull request
+  and builds every fixture, with no token and no checkout of a private repository. metacooler's test
+  data comes from the installed release's sdist (`npm run fixtures:metacooler`,
+  `scripts/fetch_metacooler_data.py`). The two contact lists that sdist leaves out are rewritten by
+  its own seeded generator, and must give the coolers metacooler ships pixel for pixel, at 1 kb and
+  at DpnII fragments. The fixture-free run before the full suite is gone, and so are the steps that
+  ran what they could when the fixtures could not be built. The workflow's jobs are now `build`,
+  `test`, `widgets`, `docs` and, on `main`, `coverage`. The goldens of metacooler's fixtures are
+  rebuilt with 0.2.0; the only change is the version they record.
 
 ### Removed
 

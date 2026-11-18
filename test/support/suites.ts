@@ -16,8 +16,9 @@
  *   gets. `test/unit/dev-tests.test.ts` holds every name here to the registry,
  *   so a feature made public cannot leave its tests out by a line nobody reads.
  * - **`// @fixtures metacooler`** — the file opens what `npm run fixtures`
- *   builds, which needs metacooler, a private repository (`.github/workflows/
- *   test.yml`). **Left out when none of those fixtures is on disk**, as on a
+ *   builds, which needs metacooler (`pip install metacooler`, and its test data
+ *   from `npm run fixtures:metacooler`; CI builds them on every run, in
+ *   `.github/workflows/test.yml`). **Left out when none of those fixtures is on disk**, as on a
  *   fresh clone; run, and failing by name, as soon as any is, so that a half
  *   built set is found rather than skipped.
  *
@@ -91,7 +92,7 @@ export function selectSuites(root: string, dev: boolean): Selection {
   if (fixturesOut.length > 0) {
     lines.push(
       `${fixturesOut.length} test files not run, for want of metacooler's fixtures: \`npm run fixtures\` ` +
-        'builds them, with metacooler installed (a private repository).',
+        'builds them, with metacooler installed and `npm run fixtures:metacooler` run first.',
     )
   }
   return {

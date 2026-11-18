@@ -2327,7 +2327,7 @@ still do not, and `test/unit/bins-guard.test.ts` still proves it for every unbal
 reads it back here against cooler's own `matrix(balance=True)` — whole chromosomes, a window across
 a seam, the whole genome and a block between two sequences after `cooler coarsen` — `NaN` where
 cooler's is and every other cell to Float32's precision, the type the block is held in (in the
-goldens job of `.github/workflows/test.yml`, with the other fixtures cooler builds; nothing compared
+test job of `.github/workflows/test.yml`, with the other fixtures cooler builds; nothing compared
 is committed, §7.5 says how it is made).
 
 ### 6.5 Drawn to a total — subsampled or oversampled
@@ -3129,7 +3129,7 @@ under `ICE` shows the same picture.
 
 **Every normalisation is held to cooler or cooltools, run in CI rather than read from a golden.**
 `scripts/reprocess_with_cooltools.py` (`npm run fixtures:reprocessed`) has the two packages
-reprocess the demo yeast Micro-C into gitignored fixtures, built in the goldens job of
+reprocess the demo yeast Micro-C into gitignored fixtures, built in the test job of
 `.github/workflows/test.yml` with the other fixtures cooler can write, and read by
 `test/unit/normalise-cooler.test.ts`, which normalises the same blocks here through `deriveBlock` —
 three whole chromosomes at 1 kb, and at 16 kb after `cooler coarsen` the whole genome and a block
@@ -16753,7 +16753,8 @@ dev feature is held to its tests on every push all the same. A name the registry
 the default run by file (`test/unit/dev-tests.test.ts`), so a feature made public by deleting its line
 (§29.1) cannot leave its tests out by a marker nobody reads, and neither can a marker written where it
 is not read. The same header carries `// @fixtures metacooler` on the suites that open what
-`npm run fixtures` builds, which needs metacooler, a private repository: while none of those fixtures
+`npm run fixtures` builds, which needs metacooler installed and its test data in place (`pip install
+metacooler`, `npm run fixtures:metacooler`), as CI has them on every run: while none of those fixtures
 is on disk the suites are left out rather than failed, so a fresh clone's `npm test` passes or fails on
 the code and never on a file it cannot have, and once any is there they run and fail by name on what is
 missing. What a run leaves out, and the command that runs it, is one line at its top
