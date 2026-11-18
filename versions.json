@@ -257,10 +257,10 @@
   "pulls": [
     {
       "number": 178,
-      "commit": "5ba6272",
+      "commit": "e046e10",
       "title": "Keep a turned deck in step: frame each map's region as the square, through the turn",
       "branch": "js/modest-lamport-h4akw2",
-      "date": "2026-11-18T12:52:51Z"
+      "date": "2026-11-18T13:43:34Z"
     },
     {
       "number": 177,
