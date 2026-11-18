@@ -1,6 +1,13 @@
 {
-  "latest": "99ed19c",
+  "latest": "46fbac4",
   "versions": [
+    {
+      "commit": "46fbac4",
+      "version": "0.21.0",
+      "date": "2026-11-18T15:49:52+01:00",
+      "subject": "Keep a turned deck in step: frame each map's region as the square, through the turn (#178)",
+      "tag": ""
+    },
     {
       "commit": "99ed19c",
       "version": "0.21.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "bf1beab",
-      "version": "0.19.0",
-      "date": "2026-11-04T14:02:13+01:00",
-      "subject": "Label scaled metaplot axes by feature position, not column (#155)",
-      "tag": ""
-    },
-    {
       "commit": "9731db4",
       "version": "0.19.0",
       "date": "2026-11-01T19:24:42+01:00",
@@ -255,13 +255,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 178,
-      "commit": "e046e10",
-      "title": "Keep a turned deck in step: frame each map's region as the square, through the turn",
-      "branch": "js/modest-lamport-h4akw2",
-      "date": "2026-11-18T13:43:34Z"
-    },
     {
       "number": 177,
       "commit": "70523a1",
