@@ -1129,6 +1129,10 @@ export class MatrixPanel {
   private refineListener: ((view: RefineView) => void) | null = null
   /** Who puts the whole domain in hand before a fit; see {@link setWholeListener}. */
   private wholeListener: (() => void) | null = null
+  /** Who reads a deck's window past the block in hand; see {@link reachViewport}. */
+  private reachListener: ((view: RefineView) => void) | null = null
+  /** Who is told a block went in under the view; see {@link setRegridListener}. */
+  private regridListener: (() => void) | null = null
   /**
    * The second file's block, when one is open.
    *
@@ -3006,6 +3010,25 @@ export class MatrixPanel {
   }
 
   /**
+   * Who reads a window a deck wants shown past the block in hand — the refine
+   * (`ui/refine.ts`, `BlockLadder.reach`). `null` lets go.
+   */
+  setReachListener(listener: ((view: RefineView) => void) | null): void {
+    this.reachListener = listener
+  }
+
+  /**
+   * Be told when a block goes in under the view ({@link regrid}) — the deck's
+   * lock, which shows a map it put somewhere the deck's window again on the
+   * block that lands (`panels/lock.ts`, `ViewportLock.landed`). Before the
+   * redraw the block makes, so that redraw is the echo of where the lock put
+   * it rather than a window the reader moved to. `null` lets go.
+   */
+  setRegridListener(listener: (() => void) | null): void {
+    this.regridListener = listener
+  }
+
+  /**
    * The figure as one canvas, at `dpi` dots per inch, framed as the screen is
    * ({@link MapFigure.exportCanvas}).
    */
@@ -4303,6 +4326,7 @@ export class MatrixPanel {
     // the range followed off the diagonal on a coarser block's cells is a range
     // for larger numbers than this one holds.
     if (this.measuredOff) this.settleOffDiagonal()
+    this.regridListener?.()
     return true
   }
 
@@ -6968,6 +6992,51 @@ export class MatrixPanel {
   }
 
   /**
+   * Read a window the deck's lock wants shown and the block on screen holds
+   * only part of — in this block's cells, counted from its first as
+   * {@link showViewport}'s are, and reaching below zero or past the last cell
+   * (`panels/lock.ts`, `LockMember.reach`).
+   *
+   * Turned into absolute bins of the open map as {@link refineWindow} turns the
+   * window on screen, but carried on past the block's edges rather than held
+   * inside them, and handed to the refine, which clips it to the view's domain
+   * and reads it. Nothing where there is no refine, and nothing above bin
+   * level or where a cell holds whole sequences, as there.
+   */
+  reachViewport(rows: [number, number], cols: [number, number]): void {
+    const listener = this.reachListener
+    const data = this.data
+    if (listener === null || data === null || data.level !== 'bin') return
+    if ((data.contigsPerCell ?? 1) > 1) return
+    // A turned map's columns are half-cells of the rotation and its rows are
+    // distance from the diagonal: the window is the on-diagonal square of its
+    // columns, as on screen.
+    const turned = this.turned !== null
+    const cellCols: [number, number] = turned ? [cols[0] * BIN_FRACTION, cols[1] * BIN_FRACTION] : cols
+    const source = data.source
+    let bins: { rows: Extent; cols: Extent }
+    if (source !== undefined) {
+      // Proportionally inside the window that was asked for, as on screen: a
+      // block read from a sibling rung describes itself on that rung's grid.
+      const along = (view: readonly [number, number], cells: number, into: Extent): Extent => {
+        const per = Math.max(1, into[1] - into[0]) / Math.max(1, cells)
+        return [Math.floor(into[0] + view[0] * per), Math.ceil(into[0] + view[1] * per)]
+      }
+      const across = along(cellCols, data.ncols, source.cols)
+      bins = { rows: turned ? across : along(rows, data.nrows, source.rows), cols: across }
+    } else {
+      const k = Math.max(1, data.binsPerCell ?? 1)
+      const along = (view: readonly [number, number], extent: Extent): Extent => [
+        extent[0] + Math.floor(view[0] * k),
+        extent[0] + Math.ceil(view[1] * k),
+      ]
+      const across = along(cellCols, data.colExtent)
+      bins = { rows: turned ? across : along(rows, data.rowExtent), cols: across }
+    }
+    listener({ ...bins, screen: this.screenWidth(), fit: 1 })
+  }
+
+  /**
    * Put a stretch of genome on screen **on the diagonal**, without re-cutting the
    * block — what a bookmark means by "take me there" (§8.10).
    *
@@ -7253,6 +7322,16 @@ export class MatrixPanel {
       '--lane-bottom',
       `${Math.max(this.roomOn('bottom'), this.laneFloor.bottom)}px`,
     )
+    // **And the box fitted to what they leave** (§7.2). The two stacks above and
+    // under the map are taken out of the height budget the box is fitted to
+    // (`--map-budget`), and the grid's own box does not move when the map gives up
+    // exactly the height a lane took — so the observer is silent and nothing
+    // re-fitted it. A track grown under the map left the map at its old width
+    // under a ceiling that had come down, a rectangle by accident, until the next
+    // touch of an edge measured the room again and snapped it back to a smaller
+    // square. Every change to the budget comes through here, so the square
+    // follows it: it gives up both sides at once.
+    this.box.refit()
   }
 
   /**

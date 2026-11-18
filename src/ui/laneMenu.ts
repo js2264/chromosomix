@@ -186,6 +186,12 @@ export function openLaneMenu(
    * `null` inside where it shows more than one sequence. Absent elsewhere.
    */
   sequence: { stretch: SequenceStretch | null; run(stretch: SequenceStretch): void } | null = null,
+  /**
+   * Whether the map the stack belongs to is turned 45°, where every lane grows
+   * towards the band whatever its flip (§17.4) — so turning one round from
+   * here would be a control with no visible effect.
+   */
+  turned = false,
 ): void {
   const limits = entry.style.limits
   const items: MenuItem[] = []
@@ -306,12 +312,20 @@ export function openLaneMenu(
     // turned round by the flip — not the flip on its own. A lane above the map
     // and one below it with the same `flip` grow in opposite directions
     // relative to the picture, and "flip" is not a word about a picture.
-    const towards = laneGrowsInward(edge ?? 'bottom') !== entry.style.flip
-    items.push({
-      label: towards ? 'Grow away from the map' : 'Grow towards the map',
-      hint: towards ? 'now towards' : 'now away',
-      run: () => store.restyle(entry.id, { flip: !entry.style.flip }),
-    })
+    if (turned && entry.style.mode !== 'heatmap') {
+      // Every lane grows towards a turned map's band (§17.4); the flip is the
+      // square map's, and is kept for it.
+      // A row with nothing to run is a heading (`ui/Menu.ts`): this one is a
+      // control, shown greyed, which a disabled row never runs.
+      items.push({ label: 'Grow away from the map', hint: 'not while turned', disabled: true, run: () => {} })
+    } else {
+      const towards = laneGrowsInward(edge ?? 'bottom') !== entry.style.flip
+      items.push({
+        label: towards ? 'Grow away from the map' : 'Grow towards the map',
+        hint: towards ? 'now towards' : 'now away',
+        run: () => store.restyle(entry.id, { flip: !entry.style.flip }),
+      })
+    }
   }
 
   items.push(

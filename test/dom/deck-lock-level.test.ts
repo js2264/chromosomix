@@ -230,6 +230,8 @@ function leadRollUp() {
     laneHover: null as ((at: { axis: 'rows' | 'cols'; unit: number } | null) => void) | null,
   }
   const panel = {
+    setRegridListener: () => {},
+    reachViewport: () => {},
     setViewportListener: () => {},
     setDeckExport: () => {},
     setCardFor: () => {},

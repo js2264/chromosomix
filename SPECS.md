@@ -2606,6 +2606,27 @@ Space locks the map onto its diagonal (§8.9). `−` and `+` are not a zoom on a
 resolution (§5.5), and the wheel, a pinch, the paging keys and the boxes zoom. In the 1D browser `0`
 is the whole genome, as a double click is.
 
+**The map's box is a square the reader can size, and only a square.** Bars on its four edges, faint
+until approached, size the box the picture is drawn in, and every edge sets the same side: a square
+block in a square box, the two ends moving it about its middle so the edge under the hand stays under
+it. A double click on a bar gives back the size the map opens at: as much room as there is, the
+height the window can spare after the stacks above and below the map, capped by the width the
+columns leave after the stacks beside it. *Fit the view* undoes pan and zoom and leaves the size as it
+is, and a turned map's box is its own (§17.2). A box drawn as a rectangle, each pair of edges setting
+one side, and *Fit the view* putting the size back too, were offered for a while and taken back: a map
+is read as a square, and undoing a zoom is not resizing the map.
+
+A track grown under the map takes its room out of both sides of the square. It used to leave the box
+at its old side under a ceiling that had come down — the grid's own box does not move when the map
+gives up exactly the height a lane took, and nothing else fitted the box again: a rectangle nobody had
+drawn, which the next touch of a bar snapped back to a smaller square. Every change to the room the
+stacks leave now fits the box again (`MatrixPanel.writeLaneMetrics`).
+
+The size is a preference about the window, like the band's (§17.2): kept in this browser's storage
+(`ui/mapSize.ts`) rather than in a link, shared by every map on screen, and fitted to each panel on the
+way out, so a size chosen beside a wide map is as much of it as fits beside a narrow one and comes
+back whole when the room does.
+
 **The wheel's two axes mean two different things.** Up and down is the zoom, about the pointer — or,
 where the pointer is within four pixels of the diagonal, about the diagonal's nearest point, so a
 zoom aimed down the line stays on it (§8.9). Sideways **slides along the picture**, which is what
@@ -7178,7 +7199,7 @@ There is one owner. Panels never speak to each other: each reports where it is a
 With N panels each echoing to N−1 others there are N² conversations and no frame in which the deck is
 in one state.
 
-The feedback loop is real and is guarded four ways, because an echo has four shapes. A panel moved
+The feedback loop is real and is guarded five ways, because an echo has five shapes. A panel moved
 programmatically redraws, and redrawing is how a panel reports — so every push returns as a report
 one frame later, quantised to the receiving panel's grid and possibly slid inside its block.
 
@@ -7196,8 +7217,38 @@ one frame later, quantised to the receiving panel's grid and possibly slid insid
    forgives a slide once, and a panel redraws more often than that: a zoom landing a sharper block on
    it is a redraw, and one that slid because its block held less than the deck's window reported the
    slide again and became the driver, dragging every other map onto the stretch it happened to hold.
+5. A report from a panel **still where the lock last put it**, on the block it was put there on — the
+   window it showed after the push, read back from it (`LockMember.viewport`) — is a redraw however
+   late it comes. A panel whose plot is not the window's shape fits the window and shows more of its
+   block on one axis than it was pushed — paper beside a block narrower than the deck's window — so
+   what it reports is wider than what (4) would push; it was swallowed once, by (2), and its next
+   redraw dragged the other maps onto the clamp.
 
 Without (3) a two-resolution deck drifts one coarse cell per frame until it hits a wall.
+
+**A map holding too little of the deck's window reads the rest.** The clamp above was the honest
+answer while every block was read whole: a file that was shorter stopped at its own end. Since a zoom
+reads a window inside the region (§2), the block a map holds is usually a stretch of its sequence,
+and the clamp kept it there — the yeast deck on IV:1.0–1.4 Mb, zoomed, then the micro-C map fitted to
+the whole of IV by *Fit the view* (§7.2) or zoomed out past the stretch, beside a Hi-C map still on
+1.0–1.4 Mb: clamped to its whole block, which is a fitted view, and a fitted view asks its zoom for
+nothing (§2). So a push that reaches more than half a cell past a map's block also asks that map for
+the deck's window (`LockMember.reach`, `BlockLadder.reach`). A block it still holds that spans the
+window goes in at once and the window is shown on it; otherwise the window is read as the map's own
+view would be, and the read is kept for as long as the view stands where the lock put it, rather than
+called off by a frame of the clamp. A block that goes in under a map the lock last put somewhere —
+that read landing, or one the map's own zoom made — is said to the lock before the redraw it makes
+(`MatrixPanel.regrid` → `ViewportLock.landed`), and the map is shown the deck's window again on it, so
+the redraw is the echo of that push. It used to be a report: the place the map had been clamped to,
+on a block that could show more, differing from the deck's window and so taken for a gesture that
+dragged the first map back onto the region. A map the reader has moved since is left where they put
+it. For any of this to reach past the region, a companion's zoom is held to the **whole sequence**
+its block is on (`MapPanel.sequencesOf`, one `range` request per axis, which reads no pixels), as the
+first map's region view always was (§2) — it was held to the block it read, the region itself, and
+the first map's *Fit the view*, zoom out or pan past the region's edge left every companion on the
+region. A file genuinely shorter than the deck's window is clamped or slid as above, a circle's
+frame is still its own ceiling (§8.15), and so is a window a companion off the lead reads of its own
+(below), which its pill names and **widen 3×** is the way out of.
 
 **A navigation clears the deck's window, and only a map drawing the new place speaks for it.** A
 different region is a different window, so the window is put down when the deck is handed one, and
@@ -8175,6 +8226,17 @@ This is a *presentation* of the placement and not a rewrite of it. The turn is s
 switches on and off, and a track that came back from it on the bottom edge because it happened to be
 turned when they pressed the button would be the picture editing their settings behind them — so
 "back where it came from on the way home" costs nothing, the store never having moved.
+
+**And every lane grows towards the band.** A lane put beside the square map is turned on arrival to
+grow away from it on that side (§8.9) — where a computed track opens (§18.5), or a lane moved there —
+and drawn with that flip in the stack below the band it hung downwards, away from the picture, under
+lanes from above and below that rose to meet it. Under a turn every lane is drawn growing up towards
+the band whatever its flip (`render/lane.ts`, `drawnFlip`), and its labels and its ceiling drag go with
+the drawing. The flip it is stored with is the square map's and is not touched, so a reader turning
+the map and back finds each lane on its side growing the way it did, as each is on the side it was. A
+lane drawn as a heatmap keeps its flip, which reverses its colours rather than its direction; and the
+lane menu's *Grow away from the map* is greyed while the map is turned, where it could change nothing
+on screen.
 
 Marks are placed by the **pair of loci they were always about**, since there is no row axis to ask
 where a locus is:

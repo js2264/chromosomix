@@ -691,6 +691,104 @@ describe('putting the whole domain back (a double click)', () => {
   })
 })
 
+/**
+ * A deck's window past the block in hand (SPECS §16.3).
+ *
+ * A map in a deck is shown the deck's window clamped to the block it holds —
+ * a region, or the stretch a zoom read — and a clamp is a view the ladder never
+ * read for: clamped to the whole block, it is fitted, and asks for nothing
+ * wider. So a deck whose first map was fitted to its whole chromosome left the
+ * map beside it on the region it had opened on, for good.
+ */
+describe('reading a window the deck asked for (§16.3)', () => {
+  /** The region a map opened on, clamped to and fitted, as the lock leaves it. */
+  const REGION: Extent = [20_000, 22_000]
+
+  it('reads the window past the block, clipped to the domain, and keeps the read while the view waits', async () => {
+    const view = seen(REGION, { screen: 500, fit: 1 })
+    const l = ladder({ view: () => view })
+    l.it.adopt(block(REGION, 1))
+    l.it.consider(view)
+    expect(l.asked, 'a fitted view asks for nothing').toHaveLength(0)
+
+    // The deck went to the whole domain and further: the lock's window runs
+    // off both ends of the sequence.
+    l.it.reach({ rows: [-5_000, 60_000], cols: [-5_000, 60_000], screen: 500, fit: 1 })
+    expect(l.asked).toHaveLength(1)
+    expect(l.asked[0].rows, 'never past the domain').toEqual(WHOLE)
+    expect(l.asked[0].cols).toEqual(WHOLE)
+    expect(l.busy.at(-1), 'with the spinner up').toBe(true)
+
+    // Frames of the clamped view go on meanwhile; the read is what it waits for.
+    l.it.consider(view)
+    l.it.consider(view)
+    expect(l.cancels).toBe(0)
+
+    const whole = block(WHOLE, 100)
+    await l.land(whole)
+    await Promise.resolve()
+    expect(l.given.at(-1), 'the block lands under the view').toBe(whole)
+    expect(l.wholes, 'and nothing refits it: the deck shows its window on it').toBe(0)
+  })
+
+  it('lets the read go when the reader moves the map before it lands', () => {
+    const view = seen(REGION, { screen: 500, fit: 1 })
+    const l = ladder({ view: () => view })
+    l.it.adopt(block(REGION, 1))
+    l.it.reach({ rows: [0, 50_000], cols: [0, 50_000], screen: 500, fit: 1 })
+    expect(l.asked).toHaveLength(1)
+    // Zoomed in on, somewhere the read does not cover.
+    l.it.consider(seen([60, 160], { screen: 500, fit: 20 }))
+    expect(l.cancels).toBe(1)
+  })
+
+  it('hands back a block it still holds that holds the window, and reads nothing', async () => {
+    const l = ladder()
+    const whole = block(WHOLE, 13)
+    l.it.adopt(whole)
+    l.it.consider({ rows: [40_000, 46_000], cols: [40_000, 46_000] })
+    const fine = block([37_000, 49_000], 1)
+    await l.land(fine)
+    expect(l.given.at(-1)).toBe(fine)
+
+    const asked = l.asked.length
+    l.it.reach({ rows: [0, 50_000], cols: [0, 50_000], screen: 500, fit: 1 })
+    expect(l.given.at(-1), 'on screen before the call returns').toBe(whole)
+    expect(l.asked).toHaveLength(asked)
+  })
+
+  it('does nothing where the block on screen holds the window, or the window is off the domain', () => {
+    const l = ladder()
+    l.it.adopt(block(WHOLE, 13))
+    l.it.reach({ rows: [10_000, 20_000], cols: [10_000, 20_000] })
+    l.it.reach({ rows: [60_000, 70_000], cols: [60_000, 70_000] })
+    expect(l.asked).toHaveLength(0)
+    expect(l.given).toHaveLength(0)
+  })
+
+  it('reads a window too wide for memory pooled, once, and nothing more for it', async () => {
+    // The deck's resolution as memory allows (a companion following the deck),
+    // and a window ten times what a block at it can hold.
+    const budget = 600 << 20
+    const cap = denseCellCap(budget)
+    const region: Extent = [40_000, 40_000 + Math.floor(cap / 2)]
+    const view = seen(region, { fit: 1 })
+    const l = ladder({ screenSized: false, ceiling: [0, 100_000], budget, view: () => view })
+    l.it.adopt(block(region, 1))
+    l.it.reach({ rows: [0, 100_000], cols: [0, 100_000] })
+    expect(l.asked).toHaveLength(1)
+    const read = l.asked[0]
+    expect(read.rows).toEqual([0, 100_000])
+    expect(read.plan.grid, 'pooled, as a view too wide for its resolution is').toBeGreaterThan(1)
+    await l.land(block(read.rows, read.plan.grid, read.cols))
+    await Promise.resolve()
+    // The deck shows its window on what landed, and asks again on the next push.
+    l.it.reach({ rows: [0, 100_000], cols: [0, 100_000] })
+    l.it.reach({ rows: [-10, 100_010], cols: [-10, 100_010] })
+    expect(l.asked, 'the block in hand holds it').toHaveLength(1)
+  })
+})
+
 /** A view as `MatrixPanel.refineWindow` reports it: square, on a screen `screen` pixels wide. */
 function seen(at: Extent, options: { screen?: number; fit?: number } = {}) {
   return {

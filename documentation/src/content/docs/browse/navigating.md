@@ -23,6 +23,15 @@ Panning and zooming reach as far as the sequence the range is on, or the genome 
 genome: near the edge of what was read, the map reads on ahead of you. To see another sequence,
 change the range.
 
+## The size of the map
+
+A map opens square and as large as the window allows. Point near an edge of the map for a bar you
+can drag: any edge makes the map bigger or smaller, and it stays square. Double-click a bar for the
+size it opens at. Make a track above or below the map taller and the square shrinks to fit.
+
+This browser keeps the size for every tab and after a reload, and every map of a
+[deck](/browse/deck/) has the same one. A [turned map](/browse/turn/) has a size of its own.
+
 ## Zoom into a region
 
 - <kbd>Shift</kbd>-drag along either axis to **zoom**: the picture fills with that stretch, on the

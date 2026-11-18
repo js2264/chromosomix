@@ -53,7 +53,8 @@ band reads the lower file. A ratio or a difference stays one band.
 ## Tracks and marks
 
 Every track is drawn under the band, whichever edge of the square map it was on, and a track on two
-edges appears once. Turn the map back and each track is where you put it.
+edges appears once, and every track grows up towards the band. Turn the map back and each track is
+where you put it, growing the way it did there.
 
 Marks follow the places they name:
 

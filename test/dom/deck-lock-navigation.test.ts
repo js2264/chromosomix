@@ -139,6 +139,8 @@ function leadPanel() {
   /** The deck's listener, so a test can make this map report. */
   let listener: ((rows: [number, number], cols: [number, number]) => void) | null = null
   const panel = {
+    setRegridListener: () => {},
+    reachViewport: () => {},
     setViewportListener: (next: typeof listener) => {
       listener = next
     },
@@ -325,5 +327,35 @@ describe('whether a companion of the same file follows', () => {
     const cell = deck.el.querySelector<HTMLElement>('.deck-grid > .deck-panel:not(.is-lead)')
     const note = cell?.querySelector('.deck-note.deck-unlocked:not(.deck-res-note)')
     expect(note?.textContent ?? '').toContain('resolved against different sequences')
+  })
+})
+
+/**
+ * The first map going wider than the place the deck opened on (§16.3): Fit the
+ * view putting its whole sequence back, or a zoom out past the region's edge.
+ * A companion's zoom was held to the block it had read — the region — so the
+ * lock clamped the deck's window to that block, and a view showing all of its
+ * block asks its zoom for nothing: the map beside a whole chromosome stayed on
+ * the 400 kb it had opened on.
+ */
+describe('a companion when the first map goes wider than the deck’s place', () => {
+  it('reads the rest of the sequence and shows the deck’s window on it', async () => {
+    const { lead, companion, redraw } = await deckAt()
+    expect(shownBp(companion), 'the region it opened on').toEqual([200_000, 600_000])
+    lead.shown.length = 0
+
+    // The first map's whole sequence, 0–1 Mb, in a block of it, reported — the
+    // region it first drew still the 400 kb the deck opened on (§16.4).
+    lead.at.frame = { rows: 400_000, cols: 400_000, sequences: { rows: 1, cols: 1 }, bpPerCell: BINSIZE }
+    lead.at.origin = 0
+    lead.at.cells = BINS
+    lead.lands()
+    await settled()
+    // Its frame, as the block its zoom read for the deck makes one.
+    redraw(companion.viewport()?.rows ?? [0, 0])
+    await settled()
+
+    expect(shownBp(companion)).toEqual([0, 1_000_000])
+    expect(lead.shown, 'and the first map is not dragged back onto the region').toEqual([])
   })
 })
