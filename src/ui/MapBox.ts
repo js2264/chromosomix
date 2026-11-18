@@ -152,15 +152,6 @@ export class MapBox {
   }
 
   /**
-   * Draw a square map at the size it opens at again — as large as there is room
-   * for — forgetting a size its edges were dragged to: what *Fit the view* asks
-   * of it (§7.2). The band's box is another number (`ui/turnBox.ts`), left alone.
-   */
-  reset(): void {
-    setMapSize(null)
-  }
-
-  /**
    * Lay the size handles along the edges of the picture.
    *
    * Placed from the measured rectangles on every frame, exactly as the key is, so

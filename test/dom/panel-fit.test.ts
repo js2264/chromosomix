@@ -292,7 +292,10 @@ describe('a square map', () => {
     expect(sizeOf(fit)).toBe(450)
   })
 
-  it('goes back to the size it opens at on Fit the view, which a double click on the plot also is', () => {
+  it('keeps the size the reader dragged through Fit the view, which undoes pan and zoom alone', () => {
+    // A square map's size and a band's are the reader's, and Fit the view —
+    // its button, `0`, a double click on the plot, Home on the focused map —
+    // gives back the whole domain without touching either (§7.2, §17.2).
     setMapSize(300)
     const fit = harness(false)
     fit.panel.setData(block(64), 'IV')
@@ -300,21 +303,15 @@ describe('a square map', () => {
     fit.paint()
     expect(sizeOf(fit)).toBe(300)
     fit.panel.fit()
-    expect(getMapSize()).toBeNull()
-    // The store tells every panel, so nothing else has to be called here — the
-    // one in the reader's hand and the others of a deck all redraw.
-    expect(sizeOf(fit)).toBe(600)
-  })
+    expect(getMapSize()).toBe(300)
+    expect(sizeOf(fit)).toBe(300)
 
-  it('leaves the band’s box and the square’s size alone when Fit the view is pressed on a band', () => {
-    // A band's box is the shape of a figure, and the square's is not on screen.
     setTurnBox({ width: 500 })
-    setMapSize(420)
-    const fit = harness(true)
-    fit.panel.setData(block(64), 'IV')
-    fit.panel.fit()
+    const band = harness(true)
+    band.panel.setData(block(64), 'IV')
+    band.panel.fit()
     expect(getTurnBox()).toEqual({ width: 500, height: null })
-    expect(getMapSize()).toBe(420)
+    expect(getMapSize()).toBe(300)
   })
 
   it('offers four handles, where a band offers three', () => {

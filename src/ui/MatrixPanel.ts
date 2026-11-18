@@ -1989,10 +1989,7 @@ export class MatrixPanel {
     picture.push(
       iconButton(
         'maximize',
-        withKey(
-          'Undo every pan and zoom, and put the map back to its default size — a double click on the plot does too',
-          KEYS.fit,
-        ),
+        withKey('Undo every pan and zoom — a double click on the plot does too', KEYS.fit),
         () => this.fit(),
         { class: 'btn btn-icon', size: 15 },
       ),
@@ -2992,18 +2989,8 @@ export class MatrixPanel {
    * refine puts a block spanning the domain on screen first, or reads one and
    * fits it when it lands ({@link setWholeListener}). With nothing refining,
    * the block is the domain.
-   *
-   * **And the size back**, on a square map whose edges the reader dragged: the
-   * box is part of what a reader means by the view, so undoing everything is
-   * the square the map opens as, as large as there is room for, and the block
-   * filling it. Before the fit, so the fit is measured on the canvas it is drawn
-   * in. The band's box is left alone: it is the shape of a figure rather than a
-   * window onto one (§17.2), and a reader who widened a band and pressed this to
-   * see the whole chromosome in it asked for the chromosome, not for a narrower
-   * band.
    */
   fit(): void {
-    if (this.turned === null) this.box.reset()
     this.wholeListener?.()
     this.fitBlock()
   }

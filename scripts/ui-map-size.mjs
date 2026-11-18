@@ -3,12 +3,14 @@
  * under and beside the map: the square it opens as; ATAC — a track drawn under
  * the map only — grown taller by its far border, the square giving up both of
  * its sides; the bottom edge dragged up and the right edge dragged out, making
- * the map smaller and then bigger and leaving it square each time; and *Undo
- * every pan and zoom*, which puts back the size the map opens at. The log prints, after
- * each step, the box as drawn and the side the panel wrote for it.
+ * the map smaller and then bigger and leaving it square each time; *Undo every
+ * pan and zoom*, which gives back the whole of IV in the box as it was dragged;
+ * and a double click on a bar, which gives back the size the map opens at. The
+ * log prints, after each step, the box as drawn and the side the panel wrote
+ * for it.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-map-size.mjs [out-dir]     # sz01 … sz05
+ *   node scripts/ui-map-size.mjs [out-dir]     # sz01 … sz06
  */
 
 import { gallery, sleep } from './gallery-lib.mjs'
@@ -111,11 +113,20 @@ await sleep(1200)
 console.log(await state('right edge out 40'))
 await g.shot('sz04-right-edge-out-bigger')
 
-// The button that undoes every pan and zoom: the size the map opens at.
+// The button that undoes every pan and zoom: the whole of IV, in the box the
+// map was dragged to, which it leaves alone.
 await fitButton().click()
 await sleep(2500)
 console.log(await state('Undo every pan and zoom'))
-await g.shot('sz05-fit-default-size')
+await g.shot('sz05-fit-keeps-size')
 console.log(`  the button says: ${await fitButton().getAttribute('title')}`)
+
+// A double click on a bar: the size the map opens at.
+const bar = await grip('right')
+await page.mouse.move(bar.x, bar.y)
+await page.mouse.dblclick(bar.x, bar.y)
+await sleep(1500)
+console.log(await state('a bar double-clicked'))
+await g.shot('sz06-bar-double-clicked')
 
 await g.close()

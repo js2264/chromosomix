@@ -67,14 +67,6 @@ describe('the map’s gestures', () => {
     expect(gestures.get('drag across a lane')).toMatch(/ceiling/)
   })
 
-  it('says a double click and Home put the map back to its default size', () => {
-    // Fit the view forgets a size the map's edges were dragged to (§7.2), which
-    // a double click on the plot and Home on the focused map both are.
-    const gestures = mapGestures()
-    expect(gestures.get('double click')).toMatch(/default size/)
-    expect(gestures.get('Home')).toMatch(/default size/)
-  })
-
   it('takes a file on any edge, and sends a lane’s grip to a tracks cell too', () => {
     const gestures = mapGestures()
     expect(gestures.has('drop a file on an edge of the map')).toBe(true)

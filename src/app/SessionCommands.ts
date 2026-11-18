@@ -363,7 +363,7 @@ export class SessionCommands {
         group: 'View',
         title: 'Fit the view',
         // The first map's, which in a deck is every map's, as Space's is.
-        hint: 'Every pan and zoom undone and the map back to its default size, the block back to its canvas — as a double click on the plot does.',
+        hint: 'Every pan and zoom undone, the block back to its canvas — as a double click on the plot does.',
         keys: KEYS.fit,
         enabled: this.session.current?.panel !== undefined,
         run: () => this.session.current?.panel?.fit(),

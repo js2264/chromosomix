@@ -61,7 +61,7 @@ const CANVAS_KEYS: Array<[string, string]> = [
   // says *pinned*: Shift is the on-diagonal modifier throughout, and a table
   // that listed it only beside Option said Shift alone did nothing.
   ['{shift} + drag', 'Zoom to the stretch it spans, on the diagonal, and copy its locus'],
-  ['double click', 'Fit the block back to the canvas, and the map to its default size'],
+  ['double click', 'Fit the block back to the canvas'],
   ['wheel', 'Zoom about the pointer'],
   // Along the diagonal, rows and columns together, while the view is held on
   // it — `slideSideways` — and the columns alone otherwise (§7.2).
@@ -73,7 +73,7 @@ const CANVAS_KEYS: Array<[string, string]> = [
   // No `+ / −` row and no `0`: on a map the two step the resolution and the
   // `0` refits from anywhere, and all three are commands — *Coarser
   // resolution*, *Finer resolution* and *Fit the view*, in the View block above.
-  ['Home', 'Fit the block to the canvas, and the map to its default size'],
+  ['Home', 'Fit the block to the canvas'],
   // The lanes are part of this picture, and their gestures are the browser's
   // rather than the canvas's — which is exactly the kind of thing that is
   // undiscoverable unless it is written down beside the map it is on.

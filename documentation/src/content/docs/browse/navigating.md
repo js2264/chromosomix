@@ -17,8 +17,7 @@ new block, the address follows, and the back button undoes them.
   move it in any direction.
 - **Double-click** (a double tap), <kbd>0</kbd>, or the first button of the **picture** row on the
   **Map** card (in the **Aesthetics** panel) undoes every pan and zoom: the whole sequence, range or
-  genome you opened, at the resolution that fits the screen, however far in you had zoomed, and the
-  map back to its default size if you had resized it ([The size of the map](#the-size-of-the-map)).
+  genome you opened, at the resolution that fits the screen, however far in you had zoomed.
 
 Panning and zooming reach as far as the sequence the range is on, or the genome on the whole
 genome: near the edge of what was read, the map reads on ahead of you. To see another sequence,
@@ -27,9 +26,8 @@ change the range.
 ## The size of the map
 
 A map opens square and as large as the window allows. Point near an edge of the map for a bar you
-can drag: any edge makes the map bigger or smaller, and it stays square. Double-click a bar,
-**double-click the map**, press <kbd>0</kbd> or the first button of the **picture** row for the size
-it opens at. Make a track above or below the map taller and the square shrinks to fit.
+can drag: any edge makes the map bigger or smaller, and it stays square. Double-click a bar for the
+size it opens at. Make a track above or below the map taller and the square shrinks to fit.
 
 This browser keeps the size for every tab and after a reload, and every map of a
 [deck](/browse/deck/) has the same one. A [turned map](/browse/turn/) has a size of its own.

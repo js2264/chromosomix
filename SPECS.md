@@ -2601,8 +2601,7 @@ colormap is selectable; keyboard pan and zoom are supported — on the focused m
 Page Up and Page Down zoom about the centre a wheel notch at a time, and Home refits — and from
 anywhere in the window `0` refits (*Fit the view*, by its place, so AZERTY's bare `à` does), as a
 double click on the plot does: the whole of the view's domain — the chromosome, region or genome it
-was opened on — at the resolution that fits the screen, never only the block a zoom last read (§2),
-in a square the size the map opens at (below) — and
+was opened on — at the resolution that fits the screen, never only the block a zoom last read (§2) — and
 Space locks the map onto its diagonal (§8.9). `−` and `+` are not a zoom on a map: they step its
 resolution (§5.5), and the wheel, a pinch, the paging keys and the boxes zoom. In the 1D browser `0`
 is the whole genome, as a double click is.
@@ -2610,12 +2609,12 @@ is the whole genome, as a double click is.
 **The map's box is a square the reader can size, and only a square.** Bars on its four edges, faint
 until approached, size the box the picture is drawn in, and every edge sets the same side: a square
 block in a square box, the two ends moving it about its middle so the edge under the hand stays under
-it. A double click on a bar, and *Fit the view* — `0`, a double click or a double tap on the plot,
-Home on a focused map, the first button of the picture row — give back the size the map opens at: as
-much room as there is, the height the window can spare after the stacks above and below the map,
-capped by the width the columns leave after the stacks beside it. A turned map's box is its own
-(§17.2), and *Fit the view* leaves it alone. A box drawn as a rectangle, each pair of edges setting
-one side, was offered for a while and taken back: a map is read as a square.
+it. A double click on a bar gives back the size the map opens at: as much room as there is, the
+height the window can spare after the stacks above and below the map, capped by the width the
+columns leave after the stacks beside it. *Fit the view* undoes pan and zoom and leaves the size as it
+is, and a turned map's box is its own (§17.2). A box drawn as a rectangle, each pair of edges setting
+one side, and *Fit the view* putting the size back too, were offered for a while and taken back: a map
+is read as a square, and undoing a zoom is not resizing the map.
 
 A track grown under the map takes its room out of both sides of the square. It used to leave the box
 at its old side under a ceiling that had come down — the grid's own box does not move when the map
@@ -8145,10 +8144,7 @@ they go and look at something in it, which is the gesture shaping a band is *for
 (`ui/turnBox.ts`), kept in this browser's storage on `ui/plotOptions.ts`'s rule — how tall somebody
 likes their bands is a preference, not what is being looked at (§5.5) — so it is the same in every
 tab and survives a reload. Shared as well as remembered: the turn is the deck's rather than one
-map's (§17.3), and a deck of bands at four heights is not a comparison. A square map's size keeps the
-same rules with a store of its own (§7.2), and *Fit the view* puts that one back to the size the map
-opens at and leaves this one as it is: a band's box is the shape of a figure, and a reader who widened
-a band and pressed it to see the whole chromosome asked for the chromosome, not for a narrower band.
+map's (§17.3), and a deck of bands at four heights is not a comparison.
 
 What is stored is what the reader dragged, and it is fitted to each panel **on the way out** rather
 than clamped on the way in. The panels drawing from it need not have the same room — a deck of four

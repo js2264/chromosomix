@@ -26,10 +26,6 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
-- **Undo every pan and zoom puts the map back to its default size too (§7.2).** The picture row's
-  first button, `0`, a double click on the plot and Home on the focused map now also forget a size the
-  map's edges were dragged to, and draw the square as large as there is room for, as it opens. A
-  turned map's band keeps its own size.
 - **The diagonal lock is on whenever the app opens (§8.9).** Every map is held on its diagonal until
   the reader lets go — Space, the toggle beside the turn, or the palette's *Diagonal lock* — and a
   release lasts as long as the page rather than being kept by the browser, so the next visit starts
