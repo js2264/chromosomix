@@ -43,8 +43,9 @@ P(s). <kbd>Enter</kbd> opens the first task that can run; <kbd>Esc</kbd> empties
 
 **A greyed row is waiting for a file** and says what to load, such as *Load a loop set (BEDPE), or a
 feature set (BED, GTF).* A task that cannot apply to the open file is not listed: per-cell contact QC
-appears only for an `.scool`. With no contact map open, only the 1D tasks run; on a deck with no map
-starred, the map tasks wait until you star one.
+appears only for an `.scool`. With no contact map open, only the 1D tasks run. On a deck with no map
+starred, the map tasks run on every map at once, and the line above the cards says so; on a deck
+with a single map, they wait until you star it.
 
 **The `?`** after a task's state marks one that re-implements a published method. Point at it, or tap it,
 for the method, the paper's DOI and how the task came out in [the validation](/analyses/validation/):
@@ -55,6 +56,8 @@ green if identical or equivalent, in the text's colour if not compared yet.
 - **The map**: the open one. On a [deck of maps side by side](/browse/deck/), the **starred** one, and
   the button reads **run on ★**. **run on all N maps** runs once per map and gives each map a tab; the
   **all maps** tab draws the curves on one figure and the tables as one, its first column naming the map.
+  It takes the window, the score and the form's numbers from the starred map, or from the first map
+  when none is starred, which is when **run on ★** is greyed and **run on all N maps** is the only run.
   Every map of a deck is read at the first map's resolution for the task, from its own file, as it is
   drawn.
 - **The tracks**: a 1D task reads the loaded tracks, feature sets and sequences, never a map, and runs

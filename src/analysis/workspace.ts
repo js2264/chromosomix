@@ -137,13 +137,21 @@ export interface AnalysisWorkspaceHost {
    */
   targetMap?(): MapId
   /**
-   * Why no task that reads a map can run right now, or `null` — a deck where
-   * the reader has left no map starred (§18.1). Such a task reads one file and
-   * there is none named, so its row is greyed under this sentence and Run
-   * refuses with it, rather than guessing a file on the reader's behalf. A task
-   * that reads only the tracks (`readsMap`) names no file, and is let by.
+   * Why no task that reads a map can run right now, or `null` — a deck of one
+   * map where the reader has left it unstarred (§18.1). Such a task reads one
+   * file and there is none named, so its row is greyed under this sentence and
+   * Run refuses with it, rather than guessing a file on the reader's behalf. A
+   * task that reads only the tracks (`readsMap`) names no file, and is let by.
    */
   blocked?(): string | null
+  /**
+   * Why a task that reads a map can only run on **every** map at once right
+   * now, or `null` — a deck of two maps or more with none starred (§18.1). The
+   * plain Run names one map and there is none named, so it refuses with this
+   * sentence; *run on all* names every map, so it runs, and the rows are not
+   * greyed. The column says it once, above its cards.
+   */
+  batchOnly?(): string | null
   /**
    * Per-cell numbers a run measured, on their way to the Cells table (§3.8).
    *
@@ -305,6 +313,7 @@ export class AnalysisWorkspace {
       runner: this.runner,
       context: () => this.host.context(),
       blocked: () => this.host.blocked?.() ?? null,
+      batchOnly: () => this.host.batchOnly?.() ?? null,
       onOpen: (task) => this.show(task),
       active: () => this.open?.id ?? null,
     })
@@ -314,6 +323,7 @@ export class AnalysisWorkspace {
       runner: this.runner,
       context: (task) => this.host.context(task),
       blocked: () => this.host.blocked?.() ?? null,
+      batchOnly: () => this.host.batchOnly?.() ?? null,
       framing: () => this.host.framing(),
       ...(this.host.resolutions === undefined
         ? {}

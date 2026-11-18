@@ -5,7 +5,8 @@
  * The stars are gestures a gallery of arrivals never makes: which map the
  * Aesthetics column's *Map* card sets moves with the star, a filled star
  * pressed leaves nothing starred — the card then sets every map and the
- * Analysis column greys every task that reads a map — and an empty cell takes
+ * Analysis column says, once, that a task that reads a map runs on every map
+ * at once — and an empty cell takes
  * a track row as readily as a map. Opens the yeast deck demo (a cooler beside
  * a `.hic`), presses each star in turn, changes a setting on the card in each
  * state, and prints what it found to stdout as well as shooting it, so a card
@@ -140,8 +141,8 @@ try {
   )
   console.log('match presses disabled with no star:', JSON.stringify(presses))
 
-  // The Analysis column with nothing starred: every task that reads a map
-  // greyed under one warning, and the 1D card left as its tracks have it.
+  // The Analysis column with nothing starred: one line above the cards saying
+  // the batch is what runs, and no row greyed by it.
   await fold('Fold the Aesthetics panel')
   await fold('Show the Analysis panel')
   await sleep(1200)

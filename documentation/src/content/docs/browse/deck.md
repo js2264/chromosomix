@@ -51,8 +51,10 @@ whole deck, as does a box drawn on a map still on the chain.
 The starred map, the first until you star another, is the one the **Map** card (**Aesthetics**
 panel) sets, the **File** card (**General** panel) describes and the **Analysis** panel's tasks run
 on ([How analyses run](/analyses/)). Press the filled star to star none: the **Map** card then sets
-every map at once, and says so: *every map — all 4*. With no map starred, only the tasks that read
-tracks alone can run.
+every map at once, and says so: *every map — all 4*. With no map starred, a task that reads a map runs
+on every map at once: **run on ★** is greyed and **run on all N maps** runs, with the first map's
+window, score and settings, and its figures open on the **all maps** tab. A deck with only one map
+runs only the tasks that read tracks alone until you star it.
 
 A task reads every map at the first map's resolution for it — the one its **Resolution** row was
 given, else the one picked in the bar above the map, else the one the first map was opened at — each

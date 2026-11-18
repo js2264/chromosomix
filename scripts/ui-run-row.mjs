@@ -8,9 +8,10 @@
  * first map. P(s) is run on the star beside it, and after a pan P(s)'s heading
  * turns stale and offers *recompute here* while the peak call's names the
  * tracks and offers nothing. Last, the star taken off every map: P(s)'s open
- * drawer refuses, the column greys every task that reads a map under one
- * warning and leaves the 1D card as its tracks have it, and Peak calling's Run
- * is live. Prints the run row, the heading, the tabs, the column and the Tracks
+ * drawer greys `run on ★` with the reason on it and keeps `run on all 2 maps`
+ * live, which is pressed and opens on the *all maps* tab; the column greys
+ * nothing and says once, above its cards, that the batch is what runs; and
+ * Peak calling's Run is live. Prints the run row, the heading, the tabs, the column and the Tracks
  * card's computed rows at each step, so a batch button that came back is a line
  * in the log as well as a picture.
  *
@@ -216,10 +217,26 @@ try {
   await openTask('Contact probability P(s)')
   await pressStar(false)
   await say('P(s), no map starred')
-  await shot('rr07-no-star-map-task-refused')
+  await shot('rr07-no-star-run-on-all-only')
+  // The batch: one run per map, its figures opening on the all-maps tab.
+  await page.locator('.analysis-run button', { hasText: /^run on all/ }).first().click()
+  await page
+    .waitForFunction(
+      () =>
+        document.querySelectorAll('.analysis-maps:not(.hidden) .analysis-map').length > 2 &&
+        ![...document.querySelectorAll('.analysis-run button')].some(
+          (button) => button.textContent.trim() === 'cancel' && !button.classList.contains('hidden'),
+        ),
+      null,
+      { timeout: 300000 },
+    )
+    .catch(() => console.log('no batch result within five minutes'))
+  await sleep(2500)
+  await say('P(s), run on all maps with no map starred')
+  await shot('rr07b-no-star-batch-all-maps-tab')
   await closeDrawer()
   console.log('column, no map starred:', JSON.stringify(await column()))
-  // The warning over the greyed map tasks, then further down the 1D card.
+  // The line over the map tasks, none greyed, then further down the 1D card.
   await page.locator('.analysis-blocked').first().scrollIntoViewIfNeeded()
   await sleep(600)
   await shot('rr08-no-star-column-warning')

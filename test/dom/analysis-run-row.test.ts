@@ -11,6 +11,10 @@
  * tracks rather than the view, so a pan neither marks it stale nor offers to
  * *recompute here* the same answer; and a deck with no map starred, which stops
  * every task that reads a map, does not stop it.
+ *
+ * A deck of several maps with none starred stops only the plain run: `run on ★`
+ * names one map and none is named, so it is greyed with the reason on it, while
+ * `run on all N maps` names every one and runs.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -118,10 +122,16 @@ interface Bench {
  *
  * @param held A result already in hand for the task, framed where the view was.
  * @param blocked The deck's refusal while no map is starred, or `null`.
+ * @param batchOnly The same deck's sentence where several maps let the batch run.
  */
 function open(
   shown: AnalysisTask,
-  options: { held?: TaskResult; blocked?: string | null; view?: AnalysisFraming } = {},
+  options: {
+    held?: TaskResult
+    blocked?: string | null
+    batchOnly?: string | null
+    view?: AnalysisFraming
+  } = {},
 ): Bench {
   const runs: string[] = []
   const batches: string[] = []
@@ -146,6 +156,7 @@ function open(
     context: (asked) => contextOf(asked?.venue === 'annotations' ? 'lead.cool' : 'rep2.cool'),
     framing: () => options.view ?? framing(),
     blocked: () => options.blocked ?? null,
+    batchOnly: () => options.batchOnly ?? null,
     onClose: () => {},
     hasLanes: () => true,
     writeProfile: () => Promise.resolve(),
@@ -194,6 +205,41 @@ describe('a task that reads a map, on a deck', () => {
     const { drawer } = open(PS, { blocked: 'No map is starred.' })
     expect(runButton(drawer).disabled).toBe(true)
     expect(drawer.el.querySelector('.analysis-refusal')?.textContent).toBe('No map is starred.')
+    drawer.destroy()
+  })
+
+  it('runs only on every map while none is starred, saying why on the plain run', async () => {
+    const sentence = 'No map is starred, so a task that reads a map runs on every map at once.'
+    const { drawer, runs, batches } = open(PS, { batchOnly: sentence })
+    const run = runButton(drawer)
+    expect(run.disabled).toBe(true)
+    expect((run.textContent ?? '').trim()).toBe('run on')
+    // The reason, and not the runner's fallback: the first map is not starred.
+    expect(run.title).toBe(sentence)
+    expect(run.title).not.toContain('the starred map')
+    // Priced as ever, and no refusal in the price's place: the batch can run.
+    expect(drawer.el.querySelector('.analysis-refusal')).toBeNull()
+    expect(drawer.el.querySelector('.analysis-cost')?.textContent).toBe('priced on rep2.cool')
+    const batch = batchButton(drawer)
+    expect(batch.classList.contains('hidden')).toBe(false)
+    expect(batch.disabled).toBe(false)
+    run.click()
+    expect(runs).toEqual([])
+    batch.click()
+    // The batch waits for every map's tables before it is queued.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(batches).toEqual(['expected'])
+    drawer.destroy()
+  })
+
+  it('offers nothing to recompute while no map is starred, the plain run being refused', () => {
+    const { drawer } = open(PS, {
+      held: resultOf('expected', framing()),
+      view: framing([2, 6]),
+      batchOnly: 'No map is starred.',
+    })
+    expect(heading(drawer)).toContain('the view has moved since')
+    expect(recompute(drawer)?.classList.contains('hidden')).toBe(true)
     drawer.destroy()
   })
 
@@ -248,6 +294,15 @@ describe('a task that reads only the tracks, on a deck', () => {
     expect(heading(drawer)).toBe('from the loaded tracks, not the map')
     expect(drawer.el.querySelector('.analysis-framing.is-stale')).toBeNull()
     expect(recompute(drawer)?.classList.contains('hidden')).toBe(true)
+    drawer.destroy()
+  })
+
+  it('runs on a deck of several maps with none starred, as on one', () => {
+    const { drawer, runs } = open(METAPLOT, { batchOnly: 'No map is starred.' })
+    expect(runButton(drawer).disabled).toBe(false)
+    expect(runButton(drawer).title).toContain('the loaded tracks')
+    runButton(drawer).click()
+    expect(runs).toEqual(['metaplot'])
     drawer.destroy()
   })
 
