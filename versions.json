@@ -256,6 +256,13 @@
   ],
   "pulls": [
     {
+      "number": 178,
+      "commit": "5ba6272",
+      "title": "Keep a turned deck in step: frame each map's region as the square, through the turn",
+      "branch": "js/modest-lamport-h4akw2",
+      "date": "2026-11-18T12:52:51Z"
+    },
+    {
       "number": 177,
       "commit": "70523a1",
       "title": "Run a deck's map tasks on every map at once while no map is starred",
