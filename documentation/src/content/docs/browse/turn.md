@@ -19,6 +19,8 @@ icon is the shape a press gives: a triangle, or a square once turned. A link ask
   A circular sequence framed across its origin with **ori** turns like any other.
 - A map opens square unless its link says otherwise, and once turned stays turned as you move around
   the same file.
+- A press keeps the stretch of genome you are looking at: zoomed onto 600–930 kb, the band shows
+  600–930 kb across, and pressed again the map is square on that stretch, on its diagonal.
 - In a [deck](/browse/deck/) it turns every map, and every band following the first map reaches as
   far from the diagonal as the first map's. A map moving on its own keeps its own depth.
 

@@ -3,7 +3,8 @@
  * yeast micro-C (A364A): the same mcool twice, IV picked in the chromosome table,
  * zoomed in square, turned, zoomed, double-clicked back to the whole of IV,
  * zoomed again, stepped on to V with `>` and zoomed, back to IV with `<`,
- * squared, zoomed, turned again; then the second map taken off the chain while
+ * squared, zoomed, turned again, squared and turned once more — each press
+ * keeping the stretch along the diagonal on screen (§17.1); then the second map taken off the chain while
  * the first zooms, and put back. The second map used to stop following at the
  * turn (*the same name resolved against different sequences*) and on V (*this
  * band reaches 577.6 kb from the diagonal where the first map reaches 1.6 kb*),
@@ -12,7 +13,7 @@
  * any line under a map's heading saying it is not following.
  *
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
- *   node scripts/ui-deck-turned.mjs [out-dir]     # td01 … td13
+ *   node scripts/ui-deck-turned.mjs [out-dir]     # td01 … td14
  */
 
 import { gallery, sleep } from './gallery-lib.mjs'
@@ -153,6 +154,13 @@ await shot('iv-square-zoomed')
 await turn()
 await report('turned again')
 await shot('iv-turned-again')
+
+// Square from a zoomed band, and back: the stretch along the diagonal kept both ways.
+await turn()
+await report('squared from the band')
+await shot('iv-squared-from-band')
+await turn()
+await report('turned once more')
 
 await chain().click()
 await sleep(1500)

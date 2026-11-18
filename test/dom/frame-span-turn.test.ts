@@ -97,3 +97,82 @@ describe('the region a map names, across a turn', () => {
     expect(frame(it)).toEqual({ rows: 361 * 1600, cols: 361 * 1600, bpPerCell: 1600 })
   })
 })
+
+/**
+ * What the reader is looking at, across the same press (§17.1: the turn is a
+ * presentation, and a presentation that moved the window would not be one). It
+ * used to refit: pressed on 334 kb of IV after a zoom, the band showed the whole
+ * 1.17 Mb that zoom had read around them.
+ */
+describe('the window across a turn', () => {
+  /** A panel with room to draw in, as the shell measures it (`test/dom/panel-fit.test.ts`). */
+  function roomy(turned: boolean): MatrixPanel {
+    const it = panel(turned)
+    const grid = it.el.querySelector<HTMLElement>('.panel-grid')
+    const body = grid?.parentElement
+    if (grid === null || grid === undefined || body === null || body === undefined) throw new Error('no grid')
+    Object.defineProperty(body, 'clientWidth', { get: () => 800, configurable: true })
+    Object.defineProperty(grid, 'clientHeight', { get: () => 800, configurable: true })
+    it.remeasure()
+    return it
+  }
+
+  /** The stretch along the diagonal on screen, in base pairs of IV. */
+  function along(it: MatrixPanel): [number, number] {
+    const cols = it.viewport()?.cols ?? [0, 0]
+    const from = it.lockOrigin().cols
+    return [Math.round(from + cols[0] * it.bpPerCell()), Math.round(from + cols[1] * it.bpPerCell())]
+  }
+
+  it('keeps the stretch along the diagonal, turned and square again', () => {
+    const it = roomy(false)
+    it.setData(block(0, 958), 'IV')
+    expect(it.showLocus({ contig: 'IV', start: 600_000, end: 930_000 })).toBe(true)
+    // What the square shows of that stretch: all of it, and more across where
+    // the plot is wider than it is tall, as jsdom's is.
+    const [from, to] = along(it)
+    expect(from).toBeLessThanOrEqual(600_000)
+    expect(to).toBeGreaterThanOrEqual(930_000)
+    expect(to - from).toBeLessThan(958 * 1600)
+
+    it.rederive(undefined, undefined, { on: true, onChange: () => {} })
+    expect(it.isTurned()).toBe(true)
+    const turned = along(it)
+    expect(Math.abs(turned[0] - from)).toBeLessThanOrEqual(1600)
+    expect(Math.abs(turned[1] - to)).toBeLessThanOrEqual(1600)
+
+    it.rederive(undefined, undefined, { on: false, onChange: () => {} })
+    expect(it.isTurned()).toBe(false)
+    const square = along(it)
+    expect(Math.abs(square[0] - from)).toBeLessThanOrEqual(1600)
+    expect(Math.abs(square[1] - to)).toBeLessThanOrEqual(1600)
+    // And on the diagonal: the rows centred on the same stretch.
+    const window = it.viewport()
+    if (window === null) throw new Error('no window')
+    const middle = (span: readonly [number, number]): number => (span[0] + span[1]) / 2
+    expect(Math.abs(middle(window.rows) - middle(window.cols))).toBeLessThanOrEqual(1)
+  })
+
+  it('does not widen the window on every turn and back', () => {
+    const it = roomy(false)
+    it.setData(block(0, 958), 'IV')
+    it.showLocus({ contig: 'IV', start: 600_000, end: 930_000 })
+    const first = along(it)
+    for (let i = 0; i < 3; i++) {
+      it.rederive(undefined, undefined, { on: true, onChange: () => {} })
+      it.rederive(undefined, undefined, { on: false, onChange: () => {} })
+    }
+    const last = along(it)
+    expect(Math.abs(last[0] - first[0])).toBeLessThanOrEqual(1600)
+    expect(Math.abs(last[1] - first[1])).toBeLessThanOrEqual(1600)
+  })
+
+  it('leaves a map showing its whole block showing its whole block', () => {
+    const it = roomy(false)
+    it.setData(block(0, 958), 'IV')
+    it.rederive(undefined, undefined, { on: true, onChange: () => {} })
+    const [from, to] = along(it)
+    expect(from).toBeLessThanOrEqual(0)
+    expect(to).toBeGreaterThanOrEqual(958 * 1600 - 1600)
+  })
+})

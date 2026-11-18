@@ -3926,7 +3926,8 @@ export class MatrixPanel {
       /**
        * The block already in hand, re-run from the top because the grid it is
        * drawn on changed — a turn, or one band becoming two ({@link rederive}).
-       * The region it names has not moved, so neither does {@link frameSpan}.
+       * The region it names has not moved, so neither does {@link frameSpan};
+       * nor has the stretch the reader is looking at ({@link alongDiagonal}).
        */
       again?: boolean
     } = {},
@@ -3934,7 +3935,8 @@ export class MatrixPanel {
     // A stand-in the reader has moved gives way to its block on their window
     // (§7.2). Read here, off the axes the stand-in is drawn against and before
     // anything is replaced, then put back once the block's own axes are in.
-    const carried = options.preview !== true && this.previewMoved ? this.shownPlaces() : null
+    const carried = options.preview !== true && options.again !== true && this.previewMoved ? this.shownPlaces() : null
+    const along = options.again === true ? this.alongDiagonal() : null
     this.data = data
     this.standIn = options.preview === true
     if (options.preview !== true) this.markFirstData()
@@ -4090,6 +4092,15 @@ export class MatrixPanel {
     // After every setter that can move the gutters, so the window is placed in
     // the plot it will be drawn in.
     if (carried !== null) this.showPlaces(carried)
+    if (along !== null) {
+      // In the plot the new grid is drawn in, measured now rather than when the
+      // resize observer gets round to it: the box was rewritten for the new
+      // shape above, and a window placed in the band's short plot and then
+      // grown into the square by `resize` — which keeps a window's top edge —
+      // came out 139 kb below the diagonal on IV.
+      this.heatmap.resize()
+      this.showAlong(along)
+    }
     this.heatmap.setScale(this.scale())
     // The block a preview stood in for: the picture is the reader's again.
     if (options.preview !== true) this.endPreview()
@@ -4199,6 +4210,38 @@ export class MatrixPanel {
       rows: viewedPlaces(this.locusAxes.rows, this.heatmap.scaleY.domain),
       cols: viewedPlaces(this.locusAxes.cols, this.heatmap.scaleX.domain),
     }
+  }
+
+  /**
+   * The stretch along the diagonal on screen, as the places both axes are to
+   * show once the grid has changed under it — a turn pressed, or one band
+   * becoming two — or `null` where the view is fitted to its block, which the
+   * block in hand is again however it is drawn.
+   *
+   * The **columns** alone: the columns are the one axis that means the same on
+   * a band and a square, a stretch of genome. A band's rows
+   * are distance from the diagonal and name no place, and a square's rows off
+   * the diagonal are a place the band has nowhere to put. So a band turned
+   * square opens on the square that stretch cuts from its own sequence, and a
+   * square turned opens its band on the stretch across it. The turn used to
+   * refit instead: pressed on 334 kb of IV after a zoom, it showed the whole
+   * 1.17 Mb that zoom had read around them — neither the reader's window nor
+   * the chromosome, and the next zoom started from there.
+   */
+  private alongDiagonal(): ViewedPlaces | null {
+    if (this.heatmap.fitted) return null
+    return viewedPlaces(this.locusAxes.cols, this.heatmap.scaleX.domain)
+  }
+
+  /**
+   * Show {@link alongDiagonal}'s stretch on the grid now installed: across a
+   * band, or as the square it cuts from its own sequence — its width setting
+   * the zoom either way (`HeatmapView.showCellSpan`). Where it cannot be placed
+   * the block stays fitted, as it would have landed anyway.
+   */
+  private showAlong(along: ViewedPlaces): void {
+    const cols = unitsOfPlaces(this.locusAxes.cols, along)
+    if (cols !== null) this.heatmap.showCellSpan(cols)
   }
 
   /**
@@ -5600,9 +5643,10 @@ export class MatrixPanel {
     if (turnMoved || bandsMoved) {
       // A turn is a different *grid*, not different numbers in the same one, so
       // the cheap in-place swap cannot serve it: the block changes shape, its
-      // axes change meaning, and the view has to be refitted around them.
-      // Re-run from the top, which is one pass over a block already in memory
-      // and still costs no read.
+      // axes change meaning, and the view has to be placed again on them — on
+      // the stretch along the diagonal the reader was looking at, not on the
+      // whole block ({@link alongDiagonal}). Re-run from the top, which is one
+      // pass over a block already in memory and still costs no read.
       this.setData(data, this.lastTitle, this.heldSecond(), { again: true })
       return
     }

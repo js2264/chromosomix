@@ -3011,6 +3011,13 @@ export class HeatmapView {
    * One scalar still serves both axes, `clampView` stands the band back on its
    * anchor, and what the caller gets is the stretch it asked for at as much
    * magnification as the picture allows.
+   *
+   * On a **square** block the rows are centred on the same stretch, on the
+   * diagonal where it has one — {@link zoomToBand}'s rule, for the same reason:
+   * a stretch of one axis means *this stretch, against itself*. A band turned
+   * square opens on that square (`MatrixPanel.alongDiagonal`), and a plot wider
+   * than it is tall still shows the stretch across it rather than the rows'
+   * fit, which would widen the window on every turn and back.
    */
   showCellSpan(cols: [number, number]): void {
     const plot = this.plotRect
@@ -3021,7 +3028,12 @@ export class HeatmapView {
       this.minZoom(),
       this.maxZoom(),
     )
-    this.originX = (cols[0] + cols[1]) / 2 - plot.width / this.zoom / 2
+    const centre = (cols[0] + cols[1]) / 2
+    this.originX = centre - plot.width / this.zoom / 2
+    // `row = col − offset`. A band's rows are pinned to its anchor by the clamp
+    // below whatever this says.
+    const offset = this.diagonalOffset()
+    if (offset !== null) this.originY = centre - offset - plot.height / this.zoom / 2
     this.clampView()
     this.syncScales()
     this.changed()

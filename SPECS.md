@@ -8093,6 +8093,18 @@ So the turn is a reading, like `O/E` and the smoothing beside it: one press, and
 down. The hash of an ordinary view stays short because only the reader's "yes" is in it, and a link
 with no `flip` in it opens the way this viewer opens.
 
+**A press keeps the stretch on screen** (§17.1: a presentation that moved the window would not be
+one). What is carried is the stretch along the diagonal — the columns, the one axis that is a
+stretch of genome on a band and a square alike: a square turned opens its band on that stretch, and a
+band turned square opens on the square that stretch cuts from its own sequence, on the diagonal,
+its width setting the zoom (`MatrixPanel.alongDiagonal`). A square's rows off the diagonal are a
+place the band has nowhere to put, and a band's rows name no place at all, so neither is carried. A
+view fitted to its block stays fitted. The press used to refit to the block in hand, and after a zoom
+that block is the window the zoom read around the view (§2): on 334 kb of IV it showed the 1.17 Mb
+read around them, neither the reader's window nor the chromosome. The window is placed in the plot
+the new shape is drawn in, measured at the press — placed in the band's short plot and grown into
+the square afterwards, it came out 139 kb below the diagonal.
+
 A block with no diagonal draws square and **writes nothing back**. Recording the refusal would let a
 metagenome a reader passed through switch the turn off for every map after it, which is a preference
 edited by a navigation.

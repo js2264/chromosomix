@@ -362,6 +362,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   kept through the turn; how deep two bands are cut no longer stops one following the other, a
   shallower band being shown the window clamped as a shorter square map is; and only a map following
   the deck is cut to the first map's reach — one moving on its own keeps its own.
+- **Turning a map keeps what you are looking at (§17.2).** The turn button refitted the picture: pressed
+  on 334 kb of yeast IV after a zoom, the band showed the 1.17 Mb the zoom had read around them —
+  neither your window nor the chromosome. A press now keeps the stretch along the diagonal: the band
+  opens on it, and turned back square the map is on that stretch, on its diagonal. A map showing its
+  whole block still shows its whole block.
 - **Every track grows towards a turned map (§17.4).** Under the 45° turn every track is drawn under the
   band, and one that had been put beside the square map — a computed track, which opens on its left,
   or one moved there — grew downwards, away from the picture. Every track now grows up towards the
