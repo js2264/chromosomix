@@ -3923,12 +3923,20 @@ export class MatrixPanel {
        * tracks, census and circularity check behind (`firstData`).
        */
       preview?: boolean
+      /**
+       * The block already in hand, re-run from the top because the grid it is
+       * drawn on changed — a turn, or one band becoming two ({@link rederive}).
+       * The region it names has not moved, so neither does {@link frameSpan};
+       * nor has the stretch the reader is looking at ({@link alongDiagonal}).
+       */
+      again?: boolean
     } = {},
   ): void {
     // A stand-in the reader has moved gives way to its block on their window
     // (§7.2). Read here, off the axes the stand-in is drawn against and before
     // anything is replaced, then put back once the block's own axes are in.
-    const carried = options.preview !== true && this.previewMoved ? this.shownPlaces() : null
+    const carried = options.preview !== true && options.again !== true && this.previewMoved ? this.shownPlaces() : null
+    const along = options.again === true ? this.alongDiagonal() : null
     this.data = data
     this.standIn = options.preview === true
     if (options.preview !== true) this.markFirstData()
@@ -4049,7 +4057,20 @@ export class MatrixPanel {
     // compares, whatever window a refine reads inside it later — with the
     // cell it was rounded to, which is the gate's tolerance for it and which a
     // refine changes under it.
-    this.framed = { ...this.blockSpan(), bpPerCell: this.bpPerCell() }
+    //
+    // **Not again for the block in hand.** A turn re-runs this on whatever block
+    // the panel holds, and after a zoom that is a window a refine read inside
+    // the region (§2) — so pressing the turn re-framed each map on its own
+    // refine's window, two windows 800 bp apart on two copies of one file, and
+    // the companion was told the same name had resolved against different
+    // sequences. And as a **square**, turned or not: a band's rows are how far it
+    // was cut from the diagonal, which is the zoom of the moment rather than
+    // anything about the region — a lead stepped on to chrV from deep inside IV
+    // was framed as a band two rows deep, and its companion refused on that for
+    // as long as the deck stayed turned.
+    if (options.again !== true || this.framed === null) {
+      this.framed = { ...this.squareSpan(), bpPerCell: Math.max(1, this.options.binsize) }
+    }
     // The presentation a derivation took over, recorded now that the block it
     // was chosen for is actually in. Announced from here rather than from
     // `syncDivergingScale` so the store is not patched — and the router not
@@ -4071,6 +4092,15 @@ export class MatrixPanel {
     // After every setter that can move the gutters, so the window is placed in
     // the plot it will be drawn in.
     if (carried !== null) this.showPlaces(carried)
+    if (along !== null) {
+      // In the plot the new grid is drawn in, measured now rather than when the
+      // resize observer gets round to it: the box was rewritten for the new
+      // shape above, and a window placed in the band's short plot and then
+      // grown into the square by `resize` — which keeps a window's top edge —
+      // came out 139 kb below the diagonal on IV.
+      this.heatmap.resize()
+      this.showAlong(along)
+    }
     this.heatmap.setScale(this.scale())
     // The block a preview stood in for: the picture is the reader's again.
     if (options.preview !== true) this.endPreview()
@@ -4180,6 +4210,38 @@ export class MatrixPanel {
       rows: viewedPlaces(this.locusAxes.rows, this.heatmap.scaleY.domain),
       cols: viewedPlaces(this.locusAxes.cols, this.heatmap.scaleX.domain),
     }
+  }
+
+  /**
+   * The stretch along the diagonal on screen, as the places both axes are to
+   * show once the grid has changed under it — a turn pressed, or one band
+   * becoming two — or `null` where the view is fitted to its block, which the
+   * block in hand is again however it is drawn.
+   *
+   * The **columns** alone: the columns are the one axis that means the same on
+   * a band and a square, a stretch of genome. A band's rows
+   * are distance from the diagonal and name no place, and a square's rows off
+   * the diagonal are a place the band has nowhere to put. So a band turned
+   * square opens on the square that stretch cuts from its own sequence, and a
+   * square turned opens its band on the stretch across it. The turn used to
+   * refit instead: pressed on 334 kb of IV after a zoom, it showed the whole
+   * 1.17 Mb that zoom had read around them — neither the reader's window nor
+   * the chromosome, and the next zoom started from there.
+   */
+  private alongDiagonal(): ViewedPlaces | null {
+    if (this.heatmap.fitted) return null
+    return viewedPlaces(this.locusAxes.cols, this.heatmap.scaleX.domain)
+  }
+
+  /**
+   * Show {@link alongDiagonal}'s stretch on the grid now installed: across a
+   * band, or as the square it cuts from its own sequence — its width setting
+   * the zoom either way (`HeatmapView.showCellSpan`). Where it cannot be placed
+   * the block stays fitted, as it would have landed anyway.
+   */
+  private showAlong(along: ViewedPlaces): void {
+    const cols = unitsOfPlaces(this.locusAxes.cols, along)
+    if (cols !== null) this.heatmap.showCellSpan(cols)
   }
 
   /**
@@ -5581,10 +5643,11 @@ export class MatrixPanel {
     if (turnMoved || bandsMoved) {
       // A turn is a different *grid*, not different numbers in the same one, so
       // the cheap in-place swap cannot serve it: the block changes shape, its
-      // axes change meaning, and the view has to be refitted around them.
-      // Re-run from the top, which is one pass over a block already in memory
-      // and still costs no read.
-      this.setData(data, this.lastTitle, this.heldSecond())
+      // axes change meaning, and the view has to be placed again on them — on
+      // the stretch along the diagonal the reader was looking at, not on the
+      // whole block ({@link alongDiagonal}). Re-run from the top, which is one
+      // pass over a block already in memory and still costs no read.
+      this.setData(data, this.lastTitle, this.heldSecond(), { again: true })
       return
     }
     this.redraw()
@@ -6898,12 +6961,15 @@ export class MatrixPanel {
    * to 1.6 kb more than it is long, and measured against the 100 bp cell a
    * zoom had since read, a companion first drawn at another grid was told the
    * same name had resolved against a different sequence (§16.4).
+   *
+   * Always the **square**, on a turned map too, and kept through a turn: see
+   * {@link setData}'s `again`.
    */
   frameSpan(): FrameSpan | null {
     return this.framed
   }
 
-  /** See {@link frameSpan}: set by {@link setData}, kept through every {@link regrid}. */
+  /** See {@link frameSpan}: set by {@link setData} for a new block, kept through every {@link regrid} and every turn. */
   private framed: FrameSpan | null = null
 
   /**
@@ -6946,15 +7012,36 @@ export class MatrixPanel {
    */
   blockSpan(): { rows: number; cols: number; sequences: { rows: number; cols: number } } {
     const data = this.data
-    const cells = this.cellCount()
-    const bp = this.bpPerCell()
     // A turn only ever cuts a band out of a bin-level square, and its rows are
     // separation rather than position — both of which the cell arithmetic gets
     // right and the extent arithmetic below would not.
-    if (data === null || data.level === 'bin' || this.turned !== null) {
+    if (this.turned === null) return this.squareSpan()
+    const cells = this.cellCount()
+    const bp = this.bpPerCell()
+    return {
+      rows: cells.rows * bp,
+      cols: cells.cols * bp,
+      sequences: {
+        rows: data?.rowContigs ?? data?.rowGroups.length ?? 1,
+        cols: data?.colContigs ?? data?.colGroups.length ?? 1,
+      },
+    }
+  }
+
+  /**
+   * {@link blockSpan} of the block as read — the square, whether or not it is
+   * drawn turned. Both axes are places along the genome here, which is what
+   * {@link frameSpan} records: the region a view names is the square a turn
+   * rotates, and the depth the band was cut to is a fact about the zoom of the
+   * moment rather than about the region.
+   */
+  private squareSpan(): { rows: number; cols: number; sequences: { rows: number; cols: number } } {
+    const data = this.data
+    if (data === null || data.level === 'bin') {
+      const bp = Math.max(1, this.options.binsize)
       return {
-        rows: cells.rows * bp,
-        cols: cells.cols * bp,
+        rows: (data?.nrows ?? 1) * bp,
+        cols: (data?.ncols ?? 1) * bp,
         sequences: {
           rows: data?.rowContigs ?? data?.rowGroups.length ?? 1,
           cols: data?.colContigs ?? data?.colGroups.length ?? 1,

@@ -7342,18 +7342,33 @@ sequence on both; a pair that does not is refused in those words, and back at bi
 panel still drawing the level the deck has just left is *not following yet*, and says so, until its
 own read of the new level lands.
 
-A **turned** deck (§16.2) has a second way to disagree, and it is a different fact. Up the side of a
-band is distance from the diagonal, and two bands cut to different depths — each a whole number of
-its own bins — would make one row window two distances. That refusal is about the *bands* and not
-about the sequences, and it is worded as such: borrowing the sentence above would tell a reader their
-files resolved one name against different sequences when they did not, which is a claim they may act
-on. It goes away when the deck is turned back off. The deck cuts every turned companion to the first
-map's reach, in base pairs (§17.3), so two bands agree by construction wherever both blocks hold that
-much, and the refusal says the one way left for them not to: the band was cut to the first map's
-reach, and this map's block does not hold that much. Each used to be cut to its own box, and boxes
-measured while the grid was still settling made two depths out of a layout race, which this refusal
-then blamed on the files' resolutions — and went on blaming them, *each map opens on a fraction of
-its own block*, after the deck had stopped cutting that way.
+A **turned** deck (§16.2) is compared as a square one is. The region a view names is the square a
+turn rotates, so what each frame records is that square, both axes places along the genome, and it
+is not taken again when the turn is pressed: the turn re-runs the derivation on the block in hand,
+and after a zoom that block is a window a refine read inside the region (§2). Framed again on it, two
+copies of one yeast file zoomed into IV and then turned were each held to its own refine's window —
+two windows a few hundred base pairs apart, each padded on its own grid — and the second was told
+*this block spans 26.2 kb × 442.6 kb where the first map spans 26.2 kb × 439.8 kb. The same name
+resolved against different sequences*, and stood still from then on while the first map went back to
+the whole chromosome.
+
+How deep each band is cut is **not** a second gate. One used to refuse two bands that reached
+different distances from the diagonal, and it read the depths off the frames, cut at whatever zoom
+each map held when its block went in: a first map stepped on to chrV from deep inside IV was framed
+as reaching 1.6 kb, and its companion was told *this band reaches 577.6 kb from the diagonal where
+the first map reaches 1.6 kb* for as long as the deck stayed turned. The lock has no need of the two
+depths agreeing. Up the side the window is base pairs of separation on both maps (§16.3), so one row
+window is one distance; a band whose block holds less of it than the first map's is shown the
+window clamped, exactly as a square map beside a longer one is, and a refused map, never pushed, is
+never asked to read what would let it hold more. The deck still cuts every companion **following**
+it to the first map's reach (§17.3), so the bands on one window are one depth wherever their blocks
+hold that much.
+
+The one thing a turned deck has to refuse is a **band beside a square map** — a map whose block has
+no diagonal to turn on while the first map's has, or one a frame behind the press. Up the side of
+one is distance from the diagonal and up the side of the other is a place, so one row window would be
+two different things, and the line under it says so in those words rather than in the sentence
+about sequences.
 
 A panel the gate refuses is **still shown**, still readable and still exportable. Only the lock is
 off, and the panel says so in a line under its own heading rather than only in a tooltip on a chain
@@ -8078,6 +8093,18 @@ So the turn is a reading, like `O/E` and the smoothing beside it: one press, and
 down. The hash of an ordinary view stays short because only the reader's "yes" is in it, and a link
 with no `flip` in it opens the way this viewer opens.
 
+**A press keeps the stretch on screen** (§17.1: a presentation that moved the window would not be
+one). What is carried is the stretch along the diagonal — the columns, the one axis that is a
+stretch of genome on a band and a square alike: a square turned opens its band on that stretch, and a
+band turned square opens on the square that stretch cuts from its own sequence, on the diagonal,
+its width setting the zoom (`MatrixPanel.alongDiagonal`). A square's rows off the diagonal are a
+place the band has nowhere to put, and a band's rows name no place at all, so neither is carried. A
+view fitted to its block stays fitted. The press used to refit to the block in hand, and after a zoom
+that block is the window the zoom read around the view (§2): on 334 kb of IV it showed the 1.17 Mb
+read around them, neither the reader's window nor the chromosome. The window is placed in the plot
+the new shape is drawn in, measured at the press — placed in the band's short plot and grown into
+the square afterwards, it came out 139 kb below the diagonal.
+
 A block with no diagonal draws square and **writes nothing back**. Recording the refusal would let a
 metagenome a reader passed through switch the turn off for every map after it, which is a preference
 edited by a navigation.
@@ -8210,11 +8237,15 @@ over a band and four squares is not a comparison. The navigation lock (§16.3) m
 map's window in the same base pairs it measures a square one's, remembering that a rotated cell is
 half a bin — without which every turned panel drew half of what the one beside it drew.
 
-**The band's reach is the deck's too.** Each turned companion is cut to reach as far from the
-diagonal as the first map does, in base pairs converted to its own bins, rather than as far as its
-own box has rows for, and is not cut deeper on the way out as a lone band is (§17.2). A grid lays its
-cells out over several frames, so two panels asking their own boxes at their own moments got two
-answers: two bands of visibly different depths, which the lock then refused to move together (§16.4).
+**The band's reach is the deck's too.** Each turned companion following the deck is cut to reach as
+far from the diagonal as the first map does, in base pairs converted to its own bins, rather than as
+far as its own box has rows for, and is not cut deeper on the way out as a lone band is (§17.2). A
+grid lays its cells out over several frames, so two panels asking their own boxes at their own
+moments got two answers: two bands of visibly different depths on one window. A companion **not
+following** — moving on its own, or refused by the gate (§16.4) — is at its own zoom over its own
+window, and is cut to its own box as a lone band is: the first map's reach is a function of the first
+map's zoom, and a band cut to it changed height under every notch of a wheel over the other map.
+Back on the chain, it is cut to the first map's reach again.
 
 ### 17.4 Tracks under a turned map, and marks on one
 
