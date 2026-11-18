@@ -3,19 +3,18 @@
  * Put the published demo maps where `test/unit/demo-maps.test.ts` reads them.
  *
  * The maps are the lab's own, in this repository's `demo/`, and one of them on a
- * public bucket that any runner can read with no credential at all — which is the point: the reader suites built over
- * `make_fixtures.py`'s output need metacooler, whose repository is private, so a
- * runner without it compared the reader against nothing. These four files are
- * maps metacooler and cooler really wrote, and `scripts/make_demo_golden.py`
- * records what the public `cooler` package reads out of them.
+ * public bucket that any runner can read with no credential at all. These four
+ * files are maps metacooler and cooler really wrote, and
+ * `scripts/make_demo_golden.py` records what the public `cooler` package reads
+ * out of them.
  *
  * Every file is checked against the size and MD5 the golden manifest recorded,
  * because a golden compared with a different file than the one it was built from
  * fails as a reader bug. Where a byte-identical copy already sits under `demo/`
  * in this checkout it is copied rather than downloaded, so a contributor's
- * machine and the always-on CI job spend no network on it; `--from s3` refuses
- * that shortcut, which is what the golden job runs so that it proves the bucket,
- * not the repository, still serves what the goldens were made from. A map whose
+ * machine spends no network on it; `--from s3` refuses that shortcut, which is
+ * what CI's test job runs so that it proves the bucket, not the repository,
+ * still serves what the goldens were made from. A map whose
  * golden has no `url` is not on the bucket (its copy there was deleted, and
  * `publish-demo.sh` leaves its folder out): it comes from `demo/` either way.
  *

@@ -50,7 +50,7 @@
     },
     "generated-by": {
      "python_type": "str",
-     "value": "metacooler-0.1.0"
+     "value": "metacooler-0.2.0"
     },
     "genome-assembly": {
      "python_type": "str",
@@ -1593,7 +1593,7 @@
     "format": "HDF5::MetaCooler",
     "format-url": "https://github.com/js2264/metacooler",
     "format-version": 1,
-    "generated-by": "metacooler-0.1.0",
+    "generated-by": "metacooler-0.2.0",
     "nbins": 661,
     "ncontigs": 44,
     "ngenomes": 11,
@@ -16806,7 +16806,7 @@
     },
     "generated-by": {
      "python_type": "str",
-     "value": "metacooler-0.1.0"
+     "value": "metacooler-0.2.0"
     },
     "genome-assembly": {
      "python_type": "str",
@@ -17939,7 +17939,7 @@
     "format": "HDF5::MetaCooler",
     "format-url": "https://github.com/js2264/metacooler",
     "format-version": 1,
-    "generated-by": "metacooler-0.1.0",
+    "generated-by": "metacooler-0.2.0",
     "nbins": 341,
     "ncontigs": 44,
     "ngenomes": 11,
@@ -28722,7 +28722,7 @@
     },
     "generated-by": {
      "python_type": "str",
-     "value": "metacooler-0.1.0"
+     "value": "metacooler-0.2.0"
     },
     "genome-assembly": {
      "python_type": "str",
@@ -29696,7 +29696,7 @@
     "format": "HDF5::MetaCooler",
     "format-url": "https://github.com/js2264/metacooler",
     "format-version": 1,
-    "generated-by": "metacooler-0.1.0",
+    "generated-by": "metacooler-0.2.0",
     "nbins": 182,
     "ncontigs": 44,
     "ngenomes": 11,

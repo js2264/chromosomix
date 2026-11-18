@@ -1,17 +1,20 @@
 #!/usr/bin/env python
 """Build the chromosomix test fixtures.
 
-Run with the interpreter that has metacooler installed, pointed at a metacooler
-checkout's test data::
+Run with the interpreter that has metacooler installed, pointed at metacooler's
+test data::
 
-    pip install ../metacooler cooler
-    python scripts/make_fixtures.py --data ../metacooler/tests/data --force
+    pip install metacooler cooler biopython
+    python scripts/fetch_metacooler_data.py     # the installed release's tests/data
+    python scripts/make_fixtures.py --force
 
-``--data`` may be left out: it falls back to ``$METACOOLER_TEST_DATA``, then to
-a metacooler checkout beside this one (``../metacooler/tests/data``), which is
-the layout both a contributor's machine and the CI job that builds the goldens
-(.github/workflows/test.yml) have.  It used to default to one cluster path that
-only its author could reach, which is why that job never once built a fixture.
+``--data`` names the test data directory.  Left out, it falls back to
+``$METACOOLER_TEST_DATA``, then to a metacooler checkout beside this one
+(``../metacooler/tests/data``), then to what ``fetch_metacooler_data.py`` wrote
+from the installed release's sdist on PyPI (``test/fixtures/_metacooler/``),
+which is what the test job of .github/workflows/test.yml reads.  It used to
+default to one cluster path that only its author could reach, which is why that
+job never once built a fixture.
 
 Every ``.metacool`` / ``.mmetacool`` here is produced by the public
 ``metacooler`` CLI, and every ``.cool`` / ``.mcool`` by the public ``cooler``
@@ -54,21 +57,26 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 DEFAULT_OUT = REPO / "test" / "fixtures"
 SIBLING_DATA = REPO.parent / "metacooler" / "tests" / "data"
+FETCHED_DATA = DEFAULT_OUT / "_metacooler"
 
 
 def default_data() -> Path | None:
     """Where the metacooler test data is when ``--data`` is not given.
 
-    The environment first, because CI checks metacooler out wherever the runner
-    puts it; then a checkout beside this repository. ``None`` rather than a
-    guess, so the refusal in ``main`` can say what to do instead of failing deep
-    inside the first CLI call on a path that was never there.
+    The environment first; then a checkout beside this repository, the data a
+    contributor working on metacooler has; then the installed release's, as
+    ``fetch_metacooler_data.py`` unpacked it from PyPI, which is what CI reads.
+    ``None`` rather than a guess, so the refusal in ``main`` can say what to do
+    instead of failing deep inside the first CLI call on a path that was never
+    there.
     """
     named = os.environ.get("METACOOLER_TEST_DATA")
     if named:
         return Path(named)
     if SIBLING_DATA.is_dir():
         return SIBLING_DATA
+    if FETCHED_DATA.is_dir():
+        return FETCHED_DATA
     return None
 
 log = logging.getLogger("make_fixtures")
@@ -522,8 +530,8 @@ def main(argv: list[str] | None = None) -> int:
         "--data",
         type=Path,
         default=None,
-        help="metacooler's tests/data directory "
-        "(default: $METACOOLER_TEST_DATA, then ../metacooler/tests/data)",
+        help="metacooler's tests/data directory (default: $METACOOLER_TEST_DATA, "
+        "then ../metacooler/tests/data, then test/fixtures/_metacooler)",
     )
     parser.add_argument(
         "--force",
@@ -547,8 +555,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(
             "metacooler's test data was not found"
             + (f" at {data}" if data is not None else "")
-            + ": pass --data, set METACOOLER_TEST_DATA, or clone "
-            "https://github.com/js2264/metacooler beside this repository"
+            + ": run scripts/fetch_metacooler_data.py (npm run fixtures:metacooler), "
+            "which unpacks the installed release's from PyPI, or pass --data"
         )
 
     args.out.mkdir(parents=True, exist_ok=True)
