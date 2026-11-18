@@ -60,7 +60,7 @@ try {
   await page.waitForFunction(() => !document.body.textContent.includes('Opening ') && document.querySelector('.heatmap-canvas') !== null, null, { timeout: 180000 })
   await sleep(2500)
   await fold('Show the Annotations panel')
-  const square = await page.$('button[title^="Draw this map square again"]')
+  const square = await page.$('button[title*="square" i]')
   if (square) { await square.click(); await sleep(2500) }
   await shot('01-map')
   await fold('Fold the General panel')

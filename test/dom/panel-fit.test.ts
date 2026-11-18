@@ -23,10 +23,10 @@
  * never the arithmetic but who ran it and when.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { MatrixPanel } from '@/ui/MatrixPanel'
-import { getMapSize, resetMapSize, setMapSize } from '@/ui/mapSize'
+import { getMapSize, setMapSize } from '@/ui/mapSize'
 import { MIN_TURN_WIDTH, getTurnBox, setTurnBox } from '@/ui/turnBox'
 import type { MatrixResult } from '@/worker/protocol'
 import { setUpDom, type DomTeardown } from '../support/dom'
@@ -43,7 +43,7 @@ beforeEach(() => {
   // two nulls is "as the panel finds it", which is what these tests are about.
   window.localStorage.clear()
   setTurnBox({ width: null, height: null })
-  resetMapSize()
+  setMapSize(null)
 })
 
 afterEach(() => {
@@ -213,29 +213,19 @@ describe('a turned map', () => {
 })
 
 /**
- * …and the square map, which has handles of its own.
+ * …and the square map, which has handles of its own now.
  *
- * The same fitting, with a width and a height (§7.2): the two ends set the
- * width, the top and bottom the height, and a side nobody has set is the side
- * of the square the map opens as — so a box of any shape can be drawn, and one
- * zoom keeps every cell square inside it. What is worth pinning here is that the
- * panel *writes* it — the stylesheet's own default is what an unset box falls
- * back to, so a panel that wrote nothing would leave the property to the budget
- * and the handles would move a number nobody read — and that it writes a height
- * only for a rectangle, leaving a square to the aspect ratio that keeps it one.
+ * The same fitting, one number instead of two: a square block has no shape to
+ * choose, so every edge sets the side and a box of another shape would be paper
+ * down two sides of the picture. What is worth pinning here is that the panel
+ * *writes* it — the stylesheet's own default is what an unset size falls back to,
+ * so a panel that wrote nothing would leave the property to the budget and the
+ * handles would move a number nobody read.
  */
 describe('a square map', () => {
-  /** What the panel wrote: the width, the height where it wrote one, and the class a rectangle wears. */
-  const drawn = (fit: Harness): { width: number | null; height: number | null; shaped: boolean } => {
-    const read = (name: string): number | null => {
-      const raw = fit.grid.style.getPropertyValue(name)
-      return raw === '' ? null : Number.parseInt(raw, 10)
-    }
-    return {
-      width: read('--map-width'),
-      height: read('--map-height'),
-      shaped: fit.grid.classList.contains('is-shaped'),
-    }
+  const sizeOf = (fit: Harness): number | null => {
+    const raw = fit.grid.style.getPropertyValue('--map-size')
+    return raw === '' ? null : Number.parseInt(raw, 10)
   }
 
   /**
@@ -249,160 +239,82 @@ describe('a square map', () => {
     wrap.style.maxHeight = `${px}px`
   }
 
-  /** The handle on one edge. */
-  const grip = (fit: Harness, edge: 'top' | 'bottom' | 'left' | 'right'): HTMLElement => {
-    const node = fit.panel.el.querySelector<HTMLElement>(`.plot-grip-${edge}`)
-    if (node === null) throw new Error(`no ${edge} handle`)
-    // jsdom has no pointer capture, which the handle takes so a fast hand does
-    // not drop the drag on the map; nothing here depends on what it does.
-    node.setPointerCapture = () => {}
-    node.releasePointerCapture = () => {}
-    return node
-  }
-
-  /** A drag on a handle from one point to another, with Shift held if asked. */
-  const drag = (
-    node: HTMLElement,
-    from: { x: number; y: number },
-    to: { x: number; y: number },
-    shiftKey = false,
-  ): void => {
-    const fire = (type: string, at: { x: number; y: number }): void => {
-      node.dispatchEvent(
-        new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: at.x, clientY: at.y, shiftKey }),
-      )
-    }
-    fire('pointerdown', from)
-    fire('pointermove', to)
-    fire('pointerup', to)
-  }
-
-  it('opens square, at all the room there is, and writes no height for a square', () => {
+  it('is drawn at all the room there is, until somebody says otherwise', () => {
     const fit = harness(false)
     fit.panel.setData(block(64), 'IV')
     expect(fit.turned()).toBe(false)
-    budget(fit, 700)
-    fit.paint()
-    // 600 wide and 700 tall: the square of the narrower.
-    expect(drawn(fit)).toEqual({ width: 600, height: null, shaped: false })
+    // The room is 600 wide in this harness and jsdom gives no height, so the
+    // floor is what bounds it — what matters is that the side is *written*.
+    expect(sizeOf(fit)).not.toBeNull()
     expect(fit.boxWidth()).toBeNull()
   })
 
-  it('keeps a box the reader dragged, each side clamped to its own room', () => {
-    setMapSize({ width: 420, height: 300 })
+  it('keeps a size the reader dragged, clamped to the room it now has', () => {
+    setMapSize(420)
     const fit = harness(false)
     fit.panel.setData(block(64), 'IV')
-    budget(fit, 700)
-    fit.paint()
-    expect(drawn(fit)).toEqual({ width: 420, height: 300, shaped: true })
-    fit.room(250)
-    fit.paint()
-    // Clamped to the floor rather than to nothing; the height keeps its own.
-    expect(drawn(fit)).toEqual({ width: 250, height: 300, shaped: true })
+    expect(sizeOf(fit)).toBe(420)
+    fit.room(300)
+    fit.panel.remeasure()
+    expect(sizeOf(fit)).toBe(300)
     // …and gives it back when the room does, because the ask was stored whole.
     fit.room(900)
-    fit.paint()
-    expect(drawn(fit)).toEqual({ width: 420, height: 300, shaped: true })
+    fit.panel.remeasure()
+    expect(sizeOf(fit)).toBe(420)
   })
 
-  it('draws a side nobody set at the square’s side, which follows the room', () => {
-    setMapSize({ width: 560 })
+  it('goes back to all the room on a double-click, which is what null means', () => {
+    setMapSize(300)
     const fit = harness(false)
     fit.panel.setData(block(64), 'IV')
-    budget(fit, 450)
-    fit.paint()
-    expect(drawn(fit)).toEqual({ width: 560, height: 450, shaped: true })
+    expect(sizeOf(fit)).toBe(300)
+    setMapSize(null)
+    // The store tells every panel, so nothing else has to be called here — the
+    // one in the reader's hand and the others of a deck all redraw.
+    expect(sizeOf(fit)).toBeGreaterThan(300)
   })
 
-  it('gives a track grown under it the height, not a rectangle it does not know it is', () => {
+  it('gives up both sides to a track grown under it, rather than leaving a rectangle by accident', () => {
     // The reported case. The stacks over and under the map come out of its
     // height budget, and the grid's own box does not move when the map gives up
-    // the height a lane took — so the box was never fitted again: the old width
-    // stood under a ceiling that had come down, and the next touch of a handle
-    // snapped it to the square it should have been all along.
+    // the height a lane took — so the box was never fitted again: the old side
+    // stood as the width under a ceiling that had come down, and the next touch
+    // of an edge snapped it to the square it should have been all along.
     const fit = harness(false)
     fit.panel.setData(block(64), 'IV')
     budget(fit, 700)
     fit.paint()
-    expect(drawn(fit)).toEqual({ width: 600, height: null, shaped: false })
+    expect(sizeOf(fit)).toBe(600)
     // A stack under the map thickens, and the budget comes down with it. What a
     // deck's floor does, and what a lane's own height does, go through one place.
     budget(fit, 450)
     fit.panel.setLaneFloor({ top: 0, right: 0, bottom: 250, left: 0 })
-    expect(drawn(fit)).toEqual({ width: 450, height: null, shaped: false })
-
-    // A width the reader set keeps its length: the height alone gives way.
-    setMapSize({ width: 560 })
-    budget(fit, 380)
-    fit.panel.setLaneFloor({ top: 0, right: 0, bottom: 320, left: 0 })
-    expect(drawn(fit)).toEqual({ width: 560, height: 380, shaped: true })
+    expect(sizeOf(fit)).toBe(450)
   })
 
-  it('takes the width from an end and the height from a side, each alone', () => {
+  it('goes back to the size it opens at on Fit the view, which a double click on the plot also is', () => {
+    setMapSize(300)
     const fit = harness(false)
     fit.panel.setData(block(64), 'IV')
     budget(fit, 700)
     fit.paint()
-    // The right end in by 50: both ends move, so the box narrows by 100.
-    drag(grip(fit, 'right'), { x: 400, y: 300 }, { x: 350, y: 300 })
-    expect(getMapSize()).toEqual({ width: 500, height: null })
-    expect(drawn(fit)).toEqual({ width: 500, height: 600, shaped: true })
-    // The bottom up by 120: the height alone, at the hand's own rate.
-    drag(grip(fit, 'bottom'), { x: 300, y: 600 }, { x: 300, y: 480 })
-    expect(getMapSize()).toEqual({ width: 500, height: 480 })
-    // The top up by 40 is *out*, so taller — an edge handle means out is bigger.
-    drag(grip(fit, 'top'), { x: 300, y: 0 }, { x: 300, y: -40 })
-    expect(getMapSize()).toEqual({ width: 500, height: 520 })
-  })
-
-  it('keeps its shape under Shift, and stops as a whole at the first wall', () => {
-    setMapSize({ width: 400, height: 200 })
-    const fit = harness(false)
-    fit.panel.setData(block(64), 'IV')
-    budget(fit, 700)
-    fit.paint()
-    // The bottom down by 50: a quarter taller, so a quarter wider too.
-    drag(grip(fit, 'bottom'), { x: 300, y: 200 }, { x: 300, y: 250 }, true)
-    expect(getMapSize()).toEqual({ width: 500, height: 250 })
-    // Far further than the room: the width reaches 600 first, and the height
-    // stops where the shape puts it rather than going on alone.
-    drag(grip(fit, 'bottom'), { x: 300, y: 250 }, { x: 300, y: 650 }, true)
-    expect(getMapSize()).toEqual({ width: 600, height: 300 })
-  })
-
-  it('puts one side back to the square’s on a double-click of its handle', () => {
-    setMapSize({ width: 500, height: 250 })
-    const fit = harness(false)
-    fit.panel.setData(block(64), 'IV')
-    budget(fit, 700)
-    fit.paint()
-    grip(fit, 'left').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
-    expect(getMapSize()).toEqual({ width: null, height: 250 })
-    expect(drawn(fit)).toEqual({ width: 600, height: 250, shaped: true })
-  })
-
-  it('goes back to the square on Fit the view, which a double click on the plot also is', () => {
-    setMapSize({ width: 500, height: 250 })
-    const fit = harness(false)
-    fit.panel.setData(block(64), 'IV')
-    budget(fit, 700)
-    fit.paint()
+    expect(sizeOf(fit)).toBe(300)
     fit.panel.fit()
-    expect(getMapSize()).toEqual({ width: null, height: null })
+    expect(getMapSize()).toBeNull()
     // The store tells every panel, so nothing else has to be called here — the
     // one in the reader's hand and the others of a deck all redraw.
-    expect(drawn(fit)).toEqual({ width: 600, height: null, shaped: false })
+    expect(sizeOf(fit)).toBe(600)
   })
 
-  it('leaves both boxes as they were when Fit the view is pressed on a band', () => {
+  it('leaves the band’s box and the square’s size alone when Fit the view is pressed on a band', () => {
     // A band's box is the shape of a figure, and the square's is not on screen.
     setTurnBox({ width: 500 })
-    setMapSize({ width: 420, height: 300 })
+    setMapSize(420)
     const fit = harness(true)
     fit.panel.setData(block(64), 'IV')
     fit.panel.fit()
     expect(getTurnBox()).toEqual({ width: 500, height: null })
-    expect(getMapSize()).toEqual({ width: 420, height: 300 })
+    expect(getMapSize()).toBe(420)
   })
 
   it('offers four handles, where a band offers three', () => {
@@ -423,44 +335,18 @@ describe('a square map', () => {
     const fit = harness(false)
     fit.panel.setData(block(64), 'IV')
     fit.paint()
-    const titles = (): string[] =>
-      [...fit.panel.el.querySelectorAll<HTMLElement>('.plot-grip')].map((g) => g.title)
-    for (const title of titles()) {
-      expect(title).toContain('keep its shape')
-      expect(title).toContain('Double-click')
+    for (const grip of fit.panel.el.querySelectorAll<HTMLElement>('.plot-grip')) {
+      expect(grip.title).toContain('how big this map is drawn')
+      expect(grip.title).toContain('Double-click')
     }
-    expect(titles().some((title) => title.includes('how wide this map is drawn'))).toBe(true)
-    expect(titles().some((title) => title.includes('how tall this map is drawn'))).toBe(true)
     fit.panel.rederive(undefined, undefined, {
       on: true,
       onChange: () => {},
       onAvailable: () => {},
     })
     fit.paint()
-    expect(titles().some((title) => title.includes('how tall this band is drawn'))).toBe(true)
-    expect(titles().some((title) => title.includes('how wide this band is drawn'))).toBe(true)
-  })
-})
-
-/**
- * What an earlier version kept: one number, the side of a square, under the same
- * key. Read as that square rather than dropped, so a reader who sized their map
- * before the box had two sides opens it at the size they chose.
- */
-describe('a size kept by an earlier version', () => {
-  it('is read as the square it was', async () => {
-    window.localStorage.setItem('chromosomix:map-size', '520')
-    vi.resetModules()
-    const fresh = await import('@/ui/mapSize')
-    expect(fresh.getMapSize()).toEqual({ width: 520, height: 520 })
-    // …and written back in the new shape the first time it changes.
-    fresh.setMapSize({ height: 300 })
-    expect(JSON.parse(window.localStorage.getItem('chromosomix:map-size') ?? 'null')).toEqual({
-      width: 520,
-      height: 300,
-    })
-    // The square again is nothing to keep.
-    fresh.resetMapSize()
-    expect(window.localStorage.getItem('chromosomix:map-size')).toBeNull()
+    const titles = [...fit.panel.el.querySelectorAll<HTMLElement>('.plot-grip')].map((g) => g.title)
+    expect(titles.some((title) => title.includes('how tall this band is drawn'))).toBe(true)
+    expect(titles.some((title) => title.includes('how wide this band is drawn'))).toBe(true)
   })
 })

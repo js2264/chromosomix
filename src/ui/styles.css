@@ -3847,8 +3847,8 @@ p {
   position: relative;
   display: grid;
   /* How big a square map is, and therefore how much room this panel claims —
-     read by `.heatmap-wrap` for its side and its ceiling, and by
-     `.panel-grid.is-turned` for the height it reserves while the map is a band. Declared here rather than on the
+     read by `.heatmap-wrap` for its side and by `.panel-grid.is-turned` for the
+     height it reserves while the map is a band. Declared here rather than on the
      wrap because two rules need the same number and a second copy of a `clamp`
      this long is a second copy to keep in step. */
   --map-budget: clamp(
@@ -4133,10 +4133,9 @@ p {
    is the only thing that sits *on* the data — a wrapper border is however far
    away the labels happen to need, with dead space in between.
 
-   Square, because a contact map is, until the reader draws it otherwise: the
-   width is driven by the height the window can spare and capped by the column,
-   and `aspect-ratio` keeps the two in step through every resize. A rectangle is
-   `.panel-grid.is-shaped`, below. */
+   Square, because a contact map is: the width is driven by the height the
+   window can spare and capped by the column, and `aspect-ratio` keeps the two
+   in step through every resize. */
 /* A turned map is a **rectangle of a size the reader chose**, not a square that
    happens to have a band in it (§17.2).
 
@@ -4181,38 +4180,22 @@ p {
      the grid keeps, since a gap the arithmetic did not know about is a gap the
      map is pushed down by — and both default to nothing, so a view with no
      lanes is sized exactly as it was before they existed. */
-  /* `--map-width` is the panel's, written from the box the reader dragged its
-     edges to (`ui/mapSize.ts`) and, where they have not, from the square the
-     map opens as; the budget is what it falls back to, which keeps a panel that
-     never writes the property — and every build before the handles existed —
-     laid out exactly as it was. */
-  width: var(--map-width, var(--map-budget));
+  /* `--map-size` is the reader's own, written by the panel from the size they
+     dragged an edge to (`ui/mapSize.ts`); the budget is what it falls back to,
+     which is also what a double-click on any handle puts back. The fallback is
+     what keeps a panel that never writes the property — and every build before
+     the handles existed — laid out exactly as it was. */
+  width: var(--map-size, var(--map-budget));
   /* The ceiling both presentations are bounded by, and the number
      `MapBox.measureRoom` reads back to bound the handles: a *length* on an
      element, because a custom property comes back from `getComputedStyle` as the
-     unresolved `clamp()` it was written from. The panel clamps its box to it,
+     unresolved `clamp()` it was written from. The panel clamps `--map-size` to it,
      so this never fights the aspect ratio above. */
   max-height: var(--map-budget);
   /* Of its own grid track, which the grid's cap has already taken the lane
      stacks beside it out of. That indirection is the point: see `.panel-grid`. */
   max-width: 100%;
   flex: 0 1 auto;
-}
-
-/* A map the reader has **drawn as a rectangle** (§7.2): a height of its own
-   rather than its width again. One zoom serves both axes, so every cell stays
-   square inside it and the longer side holds more genome — a stretch of the
-   diagonal twice as long, at the same magnification, in a box twice as wide.
-
-   A class, and only while the box is not a square, rather than a height
-   written on every map: a square left to `aspect-ratio` stays a square when
-   something narrows it — the column's `max-width`, a deck's cell — where a
-   height written beside its width would leave a narrowed square a rectangle
-   nobody drew. `MapBox.writeTurnBox` sets the class and `--map-height`
-   together. */
-.panel-grid.is-shaped > .heatmap-wrap {
-  aspect-ratio: auto;
-  height: var(--map-height);
 }
 
 .heatmap-canvas {
@@ -9713,14 +9696,9 @@ body.is-carrying-card * {
   /* The whole width, and *not* the size a handle was dragged to: a phone has one
      column and no room to give away, and a size chosen on a laptop is a size this
      screen cannot honour. The handles are a pointer gesture and are not offered
-     here either — see `.plot-grip`. Square, too, whatever shape the box was
-     drawn on a wider screen: the height of a rectangle is the same size this
-     screen cannot honour. */
-  .heatmap-wrap,
-  .panel-grid.is-shaped > .heatmap-wrap {
+     here either — see `.plot-grip`. */
+  .heatmap-wrap {
     width: 100%;
-    aspect-ratio: 1 / 1;
-    height: auto;
   }
 
   .plot-grip {
@@ -11352,17 +11330,9 @@ body.is-carrying-card * {
      companion's 182-pixel map in a 430-pixel cell came from until the deck had
      measured its lead. Its own number is right for its own cell, and it is a
      number. */
-  width: var(--deck-plot, var(--map-width, 20rem));
+  width: var(--deck-plot, var(--map-size, 20rem));
   max-width: 100%;
   flex: 0 0 auto;
-}
-
-/* …and its height, where the box is a rectangle the reader drew (§7.2), from
-   the same measurement: a square's height follows its width through
-   `aspect-ratio`, a rectangle's does not, and a companion whose height came
-   from its own fit would stand beside the first map at another height. */
-.deck-panel:not(.is-lead) .panel-grid.is-shaped > .heatmap-wrap {
-  height: var(--deck-plot-h, var(--map-height));
 }
 
 /* And its **height**, under a turn, for the same reason one step further on.
@@ -11448,9 +11418,9 @@ body.is-carrying-card * {
    the canvas is sized from this box, so the box comes out at whatever the canvas
    was last left at. A deck of two at 1 kb drew 182-pixel maps in 430-pixel
    cells, a change of resolution moved them to 320 without ever reaching the
-   cell, and only a turn — which writes lengths — settled it. `--map-width` is
-   the size the panel *measured* (`ui/mapSize.ts`), already clamped to this cell
-   and to the height budget, so it is both definite and correct; the floor is what a
+   cell, and only a turn — which writes lengths — settled it. `--map-size` is the
+   size the panel *measured* (`ui/mapSize.ts`), already clamped to this cell and
+   to the height budget, so it is both definite and correct; the floor is what a
    panel that has not measured itself yet draws for one frame, and it is small
    rather than overflowing. `test/unit/deck-plot-css.test.ts` keeps it a number.
 
@@ -11458,11 +11428,11 @@ body.is-carrying-card * {
    short window — a notebook's 620-pixel frame, a laptop with its tools open —
    took the lane stacks out of the height and handed the map what was left: a
    map with three tracks under it in a deck of two drew a 42-pixel thumbnail.
-   The page scrolls instead, as the single view's does; `--map-width` is already
+   The page scrolls instead, as the single view's does; `--map-size` is already
    clamped to the cell, so the floor never pushes a map out of its column. */
 .deck .heatmap-wrap {
   width: min(
-    var(--map-width, 20rem),
+    var(--map-size, 20rem),
     max(20rem, calc(100vh - 16rem - var(--tabstrip-h) + var(--embed-room) - var(--lane-bottom, 0px) - var(--lane-top, 0px)))
   );
 }

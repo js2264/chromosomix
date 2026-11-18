@@ -1990,7 +1990,7 @@ export class MatrixPanel {
       iconButton(
         'maximize',
         withKey(
-          'Undo every pan and zoom, and draw the map square again — a double click on the plot does too',
+          'Undo every pan and zoom, and put the map back to its default size — a double click on the plot does too',
           KEYS.fit,
         ),
         () => this.fit(),
@@ -2993,18 +2993,17 @@ export class MatrixPanel {
    * fits it when it lands ({@link setWholeListener}). With nothing refining,
    * the block is the domain.
    *
-   * **And the square back**, on a square map whose box the reader has drawn as
-   * a rectangle: the box is part of what a reader means by the view, and the
-   * whole block fitted into a rectangle is the block with paper down two sides
-   * of it — so undoing everything is the square the map opens as, as wide as
-   * there is room for, and the block filling it. Before the fit, so the fit is
-   * measured on the canvas it is drawn in. The band's box is left alone: it is
-   * the shape of a figure rather than a window onto one (§17.2), and a reader
-   * who widened a band and pressed this to see the whole chromosome in it asked
-   * for the chromosome, not for a narrower band.
+   * **And the size back**, on a square map whose edges the reader dragged: the
+   * box is part of what a reader means by the view, so undoing everything is
+   * the square the map opens as, as large as there is room for, and the block
+   * filling it. Before the fit, so the fit is measured on the canvas it is drawn
+   * in. The band's box is left alone: it is the shape of a figure rather than a
+   * window onto one (§17.2), and a reader who widened a band and pressed this to
+   * see the whole chromosome in it asked for the chromosome, not for a narrower
+   * band.
    */
   fit(): void {
-    if (this.turned === null) this.box.square()
+    if (this.turned === null) this.box.reset()
     this.wholeListener?.()
     this.fitBlock()
   }
@@ -7270,8 +7269,7 @@ export class MatrixPanel {
     // lane still as wide as the plot used to be leaves the grid's box unchanged,
     // the observer silent, and the two canvases permanently out of step. This is
     // the one forced layout in the draw path, and it happens only when a lane is
-    // added, removed or resized. The box has already been fitted to the room
-    // the stacks leave, by {@link writeLaneMetrics}.
+    // added, removed or resized.
     this.heatmap.resize()
   }
 
@@ -7342,11 +7340,10 @@ export class MatrixPanel {
     // (`--map-budget`), and the grid's own box does not move when the map gives up
     // exactly the height a lane took — so the observer is silent and nothing
     // re-fitted it. A track grown under the map left the map at its old width
-    // under a ceiling that had come down, a rectangle the box did not know it
-    // was, until the next touch of a handle measured the room again and snapped
-    // it back to a square. Every change to the budget comes through here, so the
-    // box follows it by its own rule: a square gives up both sides, and a side
-    // the reader set keeps its length while there is room for it.
+    // under a ceiling that had come down, a rectangle by accident, until the next
+    // touch of an edge measured the room again and snapped it back to a smaller
+    // square. Every change to the budget comes through here, so the square
+    // follows it: it gives up both sides at once.
     this.box.refit()
   }
 

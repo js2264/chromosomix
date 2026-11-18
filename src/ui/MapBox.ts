@@ -1,15 +1,14 @@
 /**
- * The box a map is drawn in, and the four handles on its edges (§7.2, §17.2).
+ * The box a map is drawn in, and the four handles on its edges (§17.2).
  *
- * A square map's box is a width and a height, a square until the reader shapes
- * it (`ui/mapSize.ts`); a turned band's is its width and its depth
- * (`ui/turnBox.ts`). Both are the session's, so that a deck of maps is one
- * shape, and both are clamped on the way out to the room this panel has —
- * measured against the panel rather than against the grid the box is in, which
- * would follow the box down. This writes the box onto the grid as the custom
- * properties the stylesheet lays the map and its lanes out from, lays the
- * handles along the picture on every frame, and turns a drag or a key on one of
- * them into a new size in the store.
+ * A square map's box is one number, its side (`ui/mapSize.ts`); a turned band's
+ * is two, its width and its depth (`ui/turnBox.ts`). Both are the session's, so
+ * that a deck of maps is one shape, and both are clamped on the way out to the
+ * room this panel has — measured against the panel rather than against the grid
+ * the box is in, which would follow the box down. This writes the box onto the
+ * grid as the custom properties the stylesheet lays the map and its lanes out
+ * from, lays the handles along the picture on every frame, and turns a drag or
+ * a key on one of them into a new size in the store.
  *
  * Out of `ui/MatrixPanel.ts` because it is layout and not data: it reads which
  * presentation is on screen, and two rectangles off the renderer, and nothing
@@ -21,17 +20,8 @@
 import type { HeatmapView } from '../render/heatmap'
 import type { RotatedBlock } from '../render/rotate'
 import type { AnnotationLanes } from './AnnotationLanes'
-import { shiftKey } from './commands'
 import { el } from './dom'
-import {
-  MIN_MAP_SIZE,
-  fitMapSize,
-  getMapSize,
-  resetMapSize,
-  setMapSize,
-  subscribeMapSize,
-  type MapSize,
-} from './mapSize'
+import { fitMapSize, getMapSize, setMapSize, subscribeMapSize } from './mapSize'
 import type { MatrixPanel } from './MatrixPanel'
 import {
   MIN_TURN_HEIGHT,
@@ -78,11 +68,9 @@ export class MapBox {
    * Which of them are shown, and what a drag on one means, is the whole of the
    * difference between the two presentations:
    *
-   * - **A square map** shows all four. The two ends set its width and the top
-   *   and bottom its height (`ui/mapSize.ts`), so the box can be drawn as a
-   *   rectangle — one zoom for both axes keeps every cell square inside it, and
-   *   the longer side shows more genome. With Shift held, any edge resizes the
-   *   box in proportion, which is how a square is made bigger and stays one.
+   * - **A square map** shows all four, and every one sets the same number — the
+   *   side of the box (`ui/mapSize.ts`). A square block has no shape to choose,
+   *   so a box of another shape would be paper down two sides of the picture.
    * - **A band** shows three. Its width and its depth are separate numbers
    *   (`ui/turnBox.ts`), and its fourth edge is the diagonal itself: the band
    *   stands on the axis, so there is nothing to drag there. Which of the
@@ -164,6 +152,15 @@ export class MapBox {
   }
 
   /**
+   * Draw a square map at the size it opens at again — as large as there is room
+   * for — forgetting a size its edges were dragged to: what *Fit the view* asks
+   * of it (§7.2). The band's box is another number (`ui/turnBox.ts`), left alone.
+   */
+  reset(): void {
+    setMapSize(null)
+  }
+
+  /**
    * Lay the size handles along the edges of the picture.
    *
    * Placed from the measured rectangles on every frame, exactly as the key is, so
@@ -235,12 +232,8 @@ export class MapBox {
     for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
       this.grips[edge].title =
         mode === 'square'
-          ? edgeAxis(edge) === 'y'
-            ? `Drag to set how tall this map is drawn; hold ${shiftKey()} to keep its shape. ` +
-              'Double-click for the height of the square it opens as.'
-            : 'Drag to set how wide this map is drawn — both ends move, so it stays centred; ' +
-              `hold ${shiftKey()} to keep its shape. Double-click for the width of the square ` +
-              'it opens as.'
+          ? `Drag to set how big this map is drawn — every edge sets the same size, because a ` +
+            `square block has no shape to choose. ${same}`
           : edgeAxis(edge) === 'y'
             ? `Drag to set how tall this band is drawn. The distance from the diagonal it ` +
               `reaches follows from the zoom — the box keeps its shape and the picture fills ` +
@@ -257,38 +250,56 @@ export class MapBox {
    * so the edge goes exactly where the hand puts it. What each of the four edges
    * *means* is read at the moment of the drag rather than wired once, because the
    * same edge belongs to two pictures — the left edge of a band is one end of its
-   * width, and the left edge of a square map is one end of *its* width — and a
+   * width, and the left edge of a square map is one side of its size — and a
    * panel changes between them under the reader's hand.
    *
-   * Both presentations read the edges the same way now. The two ends are the
-   * width, and move it at twice the hand because the box is centred — the edge
-   * under the pointer has to stay under it, so the far end goes out by the same
-   * amount. A horizontal edge is the height, and moves it at once: on a **band**
-   * that is the far edge, its depth (`ui/turnBox.ts`); on a **square map** it is
-   * either of the two (`ui/mapSize.ts`), and both move the height the same way.
-   * The picture hangs from the stack above it, so its top is where the panel
-   * starts and a taller box grows downward; the top handle therefore reads as
-   * *out is bigger* rather than as an edge that follows the pointer — which is
-   * what an edge handle means anyway, and the alternative is a picture that
-   * floats in the middle of a reserved column with its tracks detached from it.
+   * The **band** keeps the numbers it always had (`ui/turnBox.ts`): its far
+   * horizontal edge is the depth, its two ends are the width, and the width moves
+   * at twice the hand because the box is centred — the edge under the pointer has
+   * to stay under it, so the far end goes out by the same amount.
    *
-   * A square map's box was one number, every edge setting the side, on the
-   * argument that a square block has no shape to choose. That is true of the
-   * block and not of the window onto it, and the reader who drew a rectangle by
-   * accident — a track grown under the map took the height and left the width,
-   * because nothing re-fitted the box (`MatrixPanel.syncLaneMetrics`) — found it
-   * the better shape for reading along a diagonal, and found it snapped back to
-   * a square by the next touch of a handle. So each side is its own, and **Shift
-   * scales both**: any edge, the other side following in proportion, which is
-   * the one-handle square resize this used to be and the modifier every image
-   * editor keeps a shape with.
+   * A **square map** has one number and every edge sets it (`ui/mapSize.ts`). The
+   * two ends move it at twice the hand, for the same centring reason. The two
+   * horizontal edges move it at once: the picture hangs from the stack above it,
+   * so its top is where the panel starts and a taller box grows downward. The top
+   * handle therefore reads as *out is bigger* rather than as an edge that follows
+   * the pointer — which is what an edge handle means anyway, and the alternative
+   * is a picture that floats in the middle of a reserved column with its tracks
+   * detached from it.
    *
    * Keyboard too, because this is the only way to reach the number without a
    * pointer and a `role="separator"` that answers no keys is a control that says
    * it is one.
    */
   private watchGrips(): void {
-    for (const edge of ['top', 'bottom', 'left', 'right'] as const) this.dragEdge(edge)
+    for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
+      const axis = edgeAxis(edge)
+      // Out of the box: left and up are negative on screen, right and down are
+      // positive, and "out" is whichever of them leaves the picture's middle.
+      const away = edge === 'left' || edge === 'top' ? -1 : 1
+      this.dragEdge(this.grips[edge], {
+        axis,
+        away: () => away,
+        held: () =>
+          this.turned === null
+            ? this.mapSize()
+            : axis === 'x'
+              ? this.turnBox().width
+              : this.turnBox().height,
+        // Both ends of a centred box move; one horizontal edge moves alone.
+        gain: axis === 'x' ? 2 : 1,
+        set: (value) => {
+          if (this.turned === null) setMapSize(value)
+          else if (axis === 'x') this.setTurnBox({ width: value })
+          else this.setTurnBox({ height: value })
+        },
+        reset: () => {
+          if (this.turned === null) setMapSize(null)
+          else if (axis === 'x') this.setTurnBox({ width: null })
+          else this.setTurnBox({ height: null })
+        },
+      })
+    }
   }
 
   /**
@@ -299,18 +310,18 @@ export class MapBox {
    * travelled — so they are one gesture parameterised rather than four listeners
    * that have to be kept saying the same thing.
    */
-  private dragEdge(edge: PlotEdge): void {
-    const grip = this.grips[edge]
-    const axis = edgeAxis(edge)
-    // Out of the box: left and up are negative on screen, right and down are
-    // positive, and "out" is whichever of them leaves the picture's middle.
-    const away = edge === 'left' || edge === 'top' ? -1 : 1
-    // Both ends of a centred box move; one horizontal edge moves alone.
-    const gain = axis === 'x' ? 2 : 1
-    const along = (box: { width: number; height: number }): number =>
-      axis === 'x' ? box.width : box.height
-
-    let from: { at: number; box: { width: number; height: number } } | null = null
+  private dragEdge(
+    grip: HTMLElement,
+    rule: {
+      axis: 'x' | 'y'
+      away: () => number
+      held: () => number
+      gain: number
+      set(value: number): void
+      reset(): void
+    },
+  ): void {
+    let from: { at: number; size: number } | null = null
     const onDown = (event: PointerEvent): void => {
       // No guard on the presentation any more: both of them have a size for this
       // handle to move, and the one edge that has none — the diagonal a band
@@ -318,16 +329,14 @@ export class MapBox {
       if (event.button !== 0) return
       event.preventDefault()
       event.stopPropagation()
-      // Both sides of the box as drawn: a drag with Shift scales the other side
-      // by the ratio this one has moved by, measured from where the drag began.
-      from = { at: axis === 'x' ? event.clientX : event.clientY, box: this.drawnBox() }
+      from = { at: rule.axis === 'x' ? event.clientX : event.clientY, size: rule.held() }
       grip.setPointerCapture(event.pointerId)
       grip.classList.add('is-dragging')
     }
     const onMove = (event: PointerEvent): void => {
       if (from === null) return
-      const now = axis === 'x' ? event.clientX : event.clientY
-      this.resizeAlong(axis, along(from.box) + (now - from.at) * away * gain, from.box, event.shiftKey)
+      const now = rule.axis === 'x' ? event.clientX : event.clientY
+      rule.set(from.size + (now - from.at) * rule.away() * rule.gain)
     }
     const onUp = (event: PointerEvent): void => {
       if (from === null) return
@@ -336,17 +345,15 @@ export class MapBox {
       grip.classList.remove('is-dragging')
     }
     const onKey = (event: KeyboardEvent): void => {
-      const box = this.drawnBox()
-      const size = along(box)
+      const size = rule.held()
       // A tenth of the box per press, a half with Shift — the step the map's own
-      // arrow keys pan by, so one hand learns one rule. One side at a time: Shift
-      // is the size of the step here, as it is for the pan, and not the shape.
+      // arrow keys pan by, so one hand learns one rule.
       const step = Math.max(1, Math.round(size * (event.shiftKey ? 0.5 : 0.1)))
-      const grow = axis === 'x' ? 'ArrowRight' : 'ArrowUp'
-      const shrink = axis === 'x' ? 'ArrowLeft' : 'ArrowDown'
-      if (event.key === grow) this.resizeAlong(axis, size + step, box, false)
-      else if (event.key === shrink) this.resizeAlong(axis, size - step, box, false)
-      else if (event.key === 'Home' || event.key === '0') this.resetAlong(axis)
+      const grow = rule.axis === 'x' ? 'ArrowRight' : 'ArrowUp'
+      const shrink = rule.axis === 'x' ? 'ArrowLeft' : 'ArrowDown'
+      if (event.key === grow) rule.set(size + step)
+      else if (event.key === shrink) rule.set(size - step)
+      else if (event.key === 'Home' || event.key === '0') rule.reset()
       else return
       event.preventDefault()
     }
@@ -356,50 +363,9 @@ export class MapBox {
     grip.addEventListener('pointerup', onUp)
     grip.addEventListener('pointercancel', onUp)
     grip.addEventListener('keydown', onKey)
-    // A double-click puts the default back on this side, which is the way out of
-    // an edge dragged somewhere useless.
-    grip.addEventListener('dblclick', () => this.resetAlong(axis))
-  }
-
-  /** The box on screen, whichever presentation it is, in CSS pixels. */
-  private drawnBox(): { width: number; height: number } {
-    return this.turned === null ? this.mapBox() : this.turnBox()
-  }
-
-  /**
-   * One side of the box to `size`, for a drag or a key that began on `from`.
-   *
-   * On a square map with `keepShape` — Shift held through the drag — the other
-   * side goes with it by the same ratio, and the ratio is held to what both
-   * sides' room allows, so the box stops growing as a whole when either side
-   * reaches its wall rather than turning into another shape against it.
-   */
-  private resizeAlong(
-    axis: 'x' | 'y',
-    size: number,
-    from: { width: number; height: number },
-    keepShape: boolean,
-  ): void {
-    if (this.turned !== null) {
-      this.setTurnBox(axis === 'x' ? { width: size } : { height: size })
-      return
-    }
-    if (!keepShape) {
-      this.setMapBox(axis === 'x' ? { width: size } : { height: size })
-      return
-    }
-    const room = this.turnRoom()
-    const most = Math.min(room.width / from.width, room.height / from.height)
-    const least = Math.max(MIN_MAP_SIZE / from.width, MIN_MAP_SIZE / from.height)
-    const ratio = Math.max(least, Math.min(most, size / (axis === 'x' ? from.width : from.height)))
-    this.setMapBox({ width: from.width * ratio, height: from.height * ratio })
-  }
-
-  /** One side of the box back to its default: the square's side, or the band's own rule. */
-  private resetAlong(axis: 'x' | 'y'): void {
-    if (this.turned === null) setMapSize(axis === 'x' ? { width: null } : { height: null })
-    else if (axis === 'x') this.setTurnBox({ width: null })
-    else this.setTurnBox({ height: null })
+    // A double-click puts the default back, which is the way out of an edge
+    // dragged somewhere useless.
+    grip.addEventListener('dblclick', () => rule.reset())
   }
 
   /**
@@ -502,75 +468,31 @@ export class MapBox {
     if (!turned) {
       this.grid.style.removeProperty('--turn-width')
       this.grid.style.removeProperty('--turn-height')
-      // A square map's box, on the same terms: written where the stylesheet's
-      // own default sits, so that the default is what an unset box falls back
-      // to (`--map-width` defaults to `--map-budget` in `styles.css`). Written on
-      // every refit rather than only on a drag, because "as much as there is" is
-      // a rule and the room moves under it — and a side the reader has not set
-      // is the square's, which moves with it.
-      const box = this.mapBox()
-      const width = Math.round(box.width)
-      const height = Math.round(box.height)
-      this.grid.style.setProperty('--map-width', `${width}px`)
-      // The height only while the box is not a square. A square is left to the
-      // aspect ratio, which keeps it one when something narrows it — the
-      // column's `max-width`, a deck's cell — where a height written beside the
-      // width would leave a narrowed square a rectangle nobody drew.
-      const shaped = width !== height
-      this.grid.classList.toggle('is-shaped', shaped)
-      if (shaped) this.grid.style.setProperty('--map-height', `${height}px`)
-      else this.grid.style.removeProperty('--map-height')
+      // A square map's side, on the same terms: one number, written where the
+      // stylesheet's own default sits so that the default is what an unset size
+      // falls back to (`--map-size` defaults to `--map-budget` in `styles.css`).
+      // Written on every refit rather than only on a drag, because "as much as
+      // there is" is a rule and the room moves under it.
+      this.grid.style.setProperty('--map-size', `${Math.round(this.mapSize())}px`)
       return
     }
-    this.grid.classList.remove('is-shaped')
-    this.grid.style.removeProperty('--map-width')
-    this.grid.style.removeProperty('--map-height')
+    this.grid.style.removeProperty('--map-size')
     const box = this.turnBox()
     this.grid.style.setProperty('--turn-width', `${Math.round(box.width)}px`)
     this.grid.style.setProperty('--turn-height', `${Math.round(box.height)}px`)
   }
 
   /**
-   * The box a square map is drawn in, in CSS pixels.
+   * The side a square map is drawn at, in CSS pixels.
    *
    * {@link turnBox}'s counterpart, and clamped on the way out for the same
-   * reasons: what is stored is two numbers for the session, the panels drawing
-   * from them need not have the same room, and "as much as there is" is a rule
-   * that has to be re-read whenever the room changes rather than a width
-   * remembered from another window. An axis nobody has set is the side of the
-   * square the map opens as (`ui/mapSize.ts`).
+   * reasons: what is stored is one number for the session, the panels drawing
+   * from it need not have the same room, and "as much as there is" is a rule that
+   * has to be re-read whenever the room changes rather than a width remembered
+   * from another window.
    */
-  private mapBox(): { width: number; height: number } {
+  private mapSize(): number {
     return fitMapSize(getMapSize(), this.turnRoom())
-  }
-
-  /**
-   * The square the map opens as, back in place of whatever the reader shaped —
-   * what *Fit the view* does to a square map's box (§7.2). The store tells every
-   * panel, so the one the button is on and the others of a deck all redraw.
-   */
-  square(): void {
-    resetMapSize()
-  }
-
-  /**
-   * Resize a square map's box, in CSS pixels; `null` on an axis puts the
-   * square's side back on it.
-   *
-   * {@link setTurnBox}'s counterpart, clamped on the way **in** for the same
-   * reason: the hand is in this panel, so what this panel can draw is what the
-   * hand was shown — a drag that ran on past the wall stores the wall, and comes
-   * back as what the reader saw when they let go rather than growing when the
-   * window does.
-   */
-  private setMapBox(next: Partial<MapSize>): void {
-    const room = this.turnRoom()
-    const fit = (value: number, high: number): number =>
-      Math.max(MIN_MAP_SIZE, Math.min(high, Math.round(value)))
-    const asked: Partial<MapSize> = {}
-    if (next.width !== undefined) asked.width = next.width === null ? null : fit(next.width, room.width)
-    if (next.height !== undefined) asked.height = next.height === null ? null : fit(next.height, room.height)
-    setMapSize(asked)
   }
 
   /**

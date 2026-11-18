@@ -804,10 +804,10 @@ describe('a map holding too little of the deck’s window', () => {
   })
 
   it('is not taken for a gesture where its box shows more of its block than the window', () => {
-    // A map drawn as a rectangle (§7.2), shown a square window clamped to its
-    // block: it fits the window and shows paper either side of it, and every
-    // redraw reports that wider window. Only the first was the echo the lock
-    // expected; the next dragged the first map onto the clamp.
+    // A map whose plot is wider than it is tall, shown a square window clamped
+    // to its block: it fits the window and shows paper either side of it, and
+    // every redraw reports that wider window. Only the first was the echo the
+    // lock expected; the next dragged the first map onto the clamp.
     const lock = new ViewportLock()
     const lead = leadOnIV()
     const wide = panel('wide', 1_000, 400)

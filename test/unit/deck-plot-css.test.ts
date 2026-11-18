@@ -19,7 +19,7 @@
  * comment says so.
  *
  * So the invariant is: **inside a deck, the width of a map's box is one of the
- * numbers somebody measured** — the panel's own (`--map-width`), its band's
+ * numbers somebody measured** — the panel's own (`--map-size`), its band's
  * (`--turn-width`), or the lead's, pushed down by the deck (`--deck-plot`) —
  * with a length as the fallback and never a percentage. A text test, because
  * jsdom has no layout and this suite has no browser: what it can check is that
@@ -66,7 +66,7 @@ describe('the width of a map’s box', () => {
     for (const rule of widthRules()) {
       if (!rule.selector.includes('deck')) continue
       expect(
-        /var\(--(map-width|turn-width|deck-plot)/.test(rule.width),
+        /var\(--(map-size|turn-width|deck-plot)/.test(rule.width),
         `${rule.selector} sizes a map from ${rule.width}; inside a deck the box has no ` +
           'definite containing block, so this has to be a number somebody measured',
       ).toBe(true)
@@ -91,57 +91,8 @@ describe('the width of a map’s box', () => {
     // A short window less the lane stacks under a map is a few pixels: a deck of
     // two in a 620-pixel notebook frame, three tracks under the map, drew a
     // 42-pixel thumbnail. The share has the single view's 20rem floor, and the
-    // measured `--map-width` still bounds it to the cell.
+    // measured `--map-size` still bounds it to the cell.
     const deck = widthRules().find((rule) => rule.selector === '.deck .heatmap-wrap')
-    expect(deck?.width).toMatch(/^min\( var\(--map-width, 20rem\), max\(20rem, calc\(100vh/)
-  })
-})
-
-/**
- * …and the height of one the reader has drawn as a rectangle (§7.2).
- *
- * A square's height is its width again, through `aspect-ratio`, so the width
- * rules above are the whole of it. A rectangle's is a number of its own, and the
- * same two mistakes are open to it: a companion that took the height from its
- * own fit would stand beside the first map at another height, and a phone that
- * kept a height dragged on a laptop would draw a strip the width of the screen.
- */
-describe('the height of a map drawn as a rectangle', () => {
-  /** The declarations of every rule naming exactly this selector, in the order they come. */
-  function rules(selector: string): string[] {
-    const out: string[] = []
-    for (const block of css.split('}')) {
-      const at = block.lastIndexOf('{')
-      if (at < 0) continue
-      const head = block.slice(0, at).split('*/').pop()?.replace(/\s+/g, ' ').trim() ?? ''
-      if (head.split(',').map((part) => part.trim()).includes(selector)) out.push(block.slice(at + 1))
-    }
-    return out
-  }
-  /** The first of them, which for these selectors is the one outside any `@media`. */
-  const rule = (selector: string): string => rules(selector)[0] ?? ''
-
-  it('is the panel’s own number, and only while the box is not a square', () => {
-    const shaped = rule('.panel-grid.is-shaped > .heatmap-wrap')
-    expect(shaped).toMatch(/height:\s*var\(--map-height\)/)
-    // A square is left to the aspect ratio, which keeps it one when something
-    // narrows it; only the class turns it off.
-    expect(shaped).toMatch(/aspect-ratio:\s*auto/)
-    expect(rule('.heatmap-wrap')).toMatch(/aspect-ratio:\s*1 \/ 1/)
-    expect(rule('.heatmap-wrap')).not.toMatch(/(?:^|[;{\s])height:/)
-  })
-
-  it('is the first map’s measured height on every other map of a deck', () => {
-    const companion = rule('.deck-panel:not(.is-lead) .panel-grid.is-shaped > .heatmap-wrap')
-    expect(companion).toMatch(/height:\s*var\(--deck-plot-h, var\(--map-height\)\)/)
-  })
-
-  it('is given up on a phone, which draws the whole width square', () => {
-    // The phone's rule names the plain box and the shaped one together, so it is
-    // the one of the shaped selector's rules that sets the whole width.
-    const narrow = rules('.panel-grid.is-shaped > .heatmap-wrap').find((body) => /width:\s*100%/.test(body))
-    expect(narrow).toBeDefined()
-    expect(narrow).toMatch(/aspect-ratio:\s*1 \/ 1/)
-    expect(narrow).toMatch(/height:\s*auto/)
+    expect(deck?.width).toMatch(/^min\( var\(--map-size, 20rem\), max\(20rem, calc\(100vh/)
   })
 })
