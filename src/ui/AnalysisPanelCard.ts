@@ -64,12 +64,20 @@ export interface AnalysisPanelOptions {
   /** The id of the task whose drawer is up, so one row can be marked. */
   active(): string | null
   /**
-   * Why no task that reads a map can run, or `null` (§18.1) — a deck with no
-   * map starred. Every such row is greyed with it and the sentence stands once,
-   * above the cards, rather than under each of twenty rows. A task that reads
-   * only the tracks has no map to be named, and keeps its own answer.
+   * Why no task that reads a map can run, or `null` (§18.1) — a deck of one
+   * map with it unstarred. Every such row is greyed with it and the sentence
+   * stands once, above the cards, rather than under each of twenty rows. A
+   * task that reads only the tracks has no map to be named, and keeps its own
+   * answer.
    */
   blocked?(): string | null
+  /**
+   * Why a task that reads a map runs only on every map at once, or `null`
+   * (§18.1) — a deck of two maps or more with none starred. Said in the same
+   * place as {@link blocked}, and greying nothing: every row still runs, by
+   * its drawer's *run on all*.
+   */
+  batchOnly?(): string | null
 }
 
 /** What the chip says, and how loudly. */
@@ -223,7 +231,11 @@ export class AnalysisPanelCard {
   readonly el: HTMLElement
 
   private readonly unsubscribe: () => void
-  /** The sentence above the cards while every task is greyed; see {@link AnalysisPanelOptions.blocked}. */
+  /**
+   * The sentence above the cards while no map is starred: every task that
+   * reads a map greyed ({@link AnalysisPanelOptions.blocked}), or run on every
+   * map at once ({@link AnalysisPanelOptions.batchOnly}).
+   */
   private readonly blockedEl = el('p', { class: 'inline-error analysis-blocked hidden', attrs: { role: 'status' } })
   /** The cards, under {@link blockedEl}. */
   private readonly cardsEl = el('div', { class: 'analysis-cards' })
@@ -500,10 +512,13 @@ export class AnalysisPanelCard {
     // and every row that reads a map greyed with it in its tooltip — the
     // per-row and per-group lines would print the same sentence twenty times.
     // A row that reads only the tracks is not one of them: it has no map to be
-    // named, and keeps whatever its own inputs say.
+    // named, and keeps whatever its own inputs say. With two maps or more the
+    // same absence greys nothing, since *run on all* names every map: the
+    // sentence above the cards says that the batch is what runs, and why.
     const blocked = this.options.blocked?.() ?? null
-    this.blockedEl.textContent = blocked ?? ''
-    this.blockedEl.classList.toggle('hidden', blocked === null)
+    const said = blocked ?? this.options.batchOnly?.() ?? null
+    this.blockedEl.textContent = said ?? ''
+    this.blockedEl.classList.toggle('hidden', said === null)
     const stopped = this.rows.map((row) => blocked !== null && readsMap(row.task))
 
     // **Availability first, for every row, and kept.** The group's line is a

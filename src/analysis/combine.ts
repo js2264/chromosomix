@@ -128,6 +128,22 @@ export function combineResults(
   return { outputs, perMapOnly }
 }
 
+/**
+ * Whether a map's result has anything the *all maps* tab draws across maps — a
+ * table, a curve or a profile, which the drawer folds, or an output that already
+ * compares every map — rather than only the line sending the reader to each
+ * map's tab, as a pileup does.
+ *
+ * A look at one result's kinds, not a fold: the drawer asks it to choose which
+ * tab to open on (§18.1), at every repaint while a job reports progress.
+ */
+export function foldsAcrossMaps(result: TaskResult): boolean {
+  return result.outputs.some(
+    (output) =>
+      output.kind === 'table' || output.kind === 'curve' || output.kind === 'profile' || acrossMaps(output),
+  )
+}
+
 /** Whether an output already compares every map; see {@link CurveOutput.acrossMaps}. */
 function acrossMaps(output: TaskOutput): boolean {
   return (

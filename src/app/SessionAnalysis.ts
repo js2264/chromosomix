@@ -35,14 +35,30 @@ import type { PairStats } from '../pairs/stats'
 import type { Session } from './Session'
 
 /**
- * What the Analysis column says while a deck has no map starred (§18.1): one
- * sentence, above every greyed row and in Run's refusal. The 1D tasks read no
- * map, so they are the ones left to run, and the sentence says so rather than
- * leaving a reader to wonder why one card is not greyed.
+ * What the Analysis column says while a deck has no map starred and only one
+ * map to run on (§18.1): one sentence, above every greyed row and in Run's
+ * refusal. The 1D tasks read no map, so they are the ones left to run, and the
+ * sentence says so rather than leaving a reader to wonder why one card is not
+ * greyed. A deck of one map beside a model or a stack of tracks is the only
+ * deck that reaches it: with two maps or more, the batch runs ({@link
+ * NO_STAR_BATCH}).
  */
 const NO_STAR_TASKS =
   'No map is starred, so only the 1D tasks can run: every other task reads one map, and the star ' +
   'is how it is named. Star a map in its heading to run them.'
+
+/**
+ * What the Analysis column says while a deck of two maps or more has none
+ * starred (§18.1): a task that reads a map runs on every map at once, and the
+ * plain Run, which would run on one, is refused with this sentence. A batch is
+ * set up from one map — its window, its score, the form's numbers and the
+ * price — and with none starred that map is the first, as the *Map* card is
+ * the first map's while it sets every map (§16.5); said here, once, rather
+ * than left for a reader to find in a result's provenance.
+ */
+const NO_STAR_BATCH =
+  'No map is starred, so a task that reads a map runs on every map at once, with the first ' +
+  'map’s window, score and settings. Star a map in its heading to run one on that map alone.'
 
 /**
  * A framing with the reader's circular declarations attached.
@@ -344,13 +360,13 @@ export class SessionAnalysis {
       originsFound: (uri, origins) => this.session.adoptOrigins(uri, origins),
       // The star, so a measurement lands on the picture it was measured from.
       targetMap: () => this.session.deck.grid?.starredMap ?? LEAD_MAP,
-      // A deck the reader has left with no map starred has no file for a task
-      // that reads a map to run against, and none is guessed for them (§18.1).
-      // The 1D tasks read only the tracks, and the column and drawer let them by.
-      blocked: () => {
-        const deck = this.session.deck.grid
-        return deck !== null && deck.starredMap === null ? NO_STAR_TASKS : null
-      },
+      // A deck the reader has left with no map starred names no one map for a
+      // task that reads one, and none is guessed for them (§18.1): every map is
+      // run on at once instead, which needs two of them. With one, there is no
+      // batch to offer, and nothing that reads a map runs. The 1D tasks read
+      // only the tracks, and the column and drawer let them by either way.
+      blocked: () => (this.unstarredMaps() === 1 ? NO_STAR_TASKS : null),
+      batchOnly: () => (this.unstarredMaps() > 1 ? NO_STAR_BATCH : null),
       /**
        * Every map on screen that can be run against **right now**, lead first.
        *
@@ -421,6 +437,17 @@ export class SessionAnalysis {
         this.session.setAnalysis(this.workspace?.hasTasks === true ? [this.workspace.panelEl] : [])
       },
     }
+  }
+
+  /**
+   * How many maps a deck with **no map starred** has, or `0` — no deck, or a
+   * star on one of its maps (§18.1). Counted as the batch button counts them
+   * ({@link targetCount}): every map in the grid, ready or still opening.
+   */
+  private unstarredMaps(): number {
+    const deck = this.session.deck.grid
+    if (deck === null || deck.starredMap !== null) return 0
+    return (this.session.file === null ? 0 : 1) + deck.analysable().length
   }
 
   /**

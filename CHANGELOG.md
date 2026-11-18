@@ -26,6 +26,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **With no map starred, a deck's map tasks run on every map at once (§18.1).** They used to be
+  greyed until a map was starred. Now only the plain `run on ★` is greyed, with the reason in its
+  tooltip, and *run on all N maps* runs, set up from the first map as the *Map* card is while it sets
+  every map: its window, its score and the form's numbers. The column says so once, above its cards,
+  and the drawer opens a batch's figures on the *all maps* tab. A deck with one map, beside a model
+  or a stack of tracks, still runs only its 1D tasks until the map is starred.
 - **The diagonal lock is on whenever the app opens (§8.9).** Every map is held on its diagonal until
   the reader lets go — Space, the toggle beside the turn, or the palette's *Diagonal lock* — and a
   release lasts as long as the page rather than being kept by the browser, so the next visit starts

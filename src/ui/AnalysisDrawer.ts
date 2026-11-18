@@ -90,7 +90,7 @@ import {
 } from '../analysis/write/tsv'
 import { cliCommandFor } from '../analysis/cliCommand'
 import { taskById } from '../analysis/registry'
-import { combineResults } from '../analysis/combine'
+import { combineResults, foldsAcrossMaps } from '../analysis/combine'
 import { figureBlock } from '../figures/FigureBlock'
 import type { MapId } from '../annotations/placement'
 import type { RunTarget } from '../analysis/runner'
@@ -168,11 +168,18 @@ export interface AnalysisDrawerOptions {
    */
   context(task?: AnalysisTask): AnalysisContext | null
   /**
-   * Why no task that reads a map can run, or `null` — a deck with no map
-   * starred (§18.1). Run and *run on all* refuse with it, in the price's place;
-   * a task that reads only the tracks has no map to be named and runs.
+   * Why no task that reads a map can run, or `null` — a deck of one map with
+   * it unstarred (§18.1). Run and *run on all* refuse with it, in the price's
+   * place; a task that reads only the tracks has no map to be named and runs.
    */
   blocked?(): string | null
+  /**
+   * Why a task that reads a map runs only on every map at once, or `null` — a
+   * deck of two maps or more with none starred (§18.1). The plain Run, which
+   * names one map, is greyed with it on its tooltip; *run on all* runs, priced
+   * as ever, and its figures open on the *all maps* tab.
+   */
+  batchOnly?(): string | null
   /** The framing a run started now would be a record of (§18.4). */
   framing(): AnalysisFraming | null
   /** A task's *Resolution* row, where there is a choice ({@link TaskResolutions}). */
@@ -781,13 +788,23 @@ export class AnalysisDrawer {
    * which picture a task measures, and this one measures the tracks: `run on ★`
    * claimed the star mattered to it, and a press after moving the star read as
    * a different run when it was the same one again.
+   *
+   * `run on ★`, greyed, while no map is starred (`unstarred`, §18.1): the
+   * button is still the one that runs on the star, and says why it cannot —
+   * the runner's own answer then is the first map, which is the fallback
+   * every view of an unstarred deck has, not a map the reader named.
    */
-  private paintRun(task: AnalysisTask, maps: number): void {
+  private paintRun(task: AnalysisTask, maps: number, unstarred: string | null): void {
     if (!readsMap(task)) {
       this.runButton.replaceChildren('run')
       this.runButton.title =
         `Run ${task.title} on ${readInstead(task)}` +
         (maps < 2 ? '.' : ' — it reads no map, so it runs once, whichever map is starred.')
+      return
+    }
+    if (unstarred !== null) {
+      this.runButton.replaceChildren('run on ', icon('star', { size: 12, class: 'run-star' }))
+      this.runButton.title = unstarred
       return
     }
     const target = maps < 2 ? null : this.options.runner.target()
@@ -810,7 +827,7 @@ export class AnalysisDrawer {
     this.syncForm(task, context)
     const across = this.options.runner.resultsFor(task.id)
     this.syncMaps(task, across)
-    const chosen = this.chosenMap.get(task.id)
+    const chosen = this.shownMap(task, across)
     const combined = chosen === ALL_MAPS && across.length > 1
     // Every run of this task on the map that is on screen, newest first. The
     // overlay has none: it is a fold of *one* result per map, so *the run before
@@ -1077,11 +1094,19 @@ export class AnalysisDrawer {
     return readsMap(task) ? (this.options.blocked?.() ?? null) : null
   }
 
+  /**
+   * Why a plain Run of this task cannot go, where *run on all* can: no map
+   * starred on a deck of two or more, for a task that reads one (§18.1).
+   */
+  private batchOnlyFor(task: AnalysisTask): string | null {
+    return readsMap(task) ? (this.options.batchOnly?.() ?? null) : null
+  }
+
   private run(): void {
     const task = this.current
     if (task === null) return
     // Whatever reached here — the button is greyed, but a key is not.
-    if (this.blockedFor(task) !== null) return
+    if (this.blockedFor(task) !== null || this.batchOnlyFor(task) !== null) return
     this.setStatus('')
     // Back to the newest, because the one about to arrive *is* the newest and a
     // reader who pressed Run while reading run 3 would otherwise watch their
@@ -1164,7 +1189,11 @@ export class AnalysisDrawer {
             ? estimate.refusal
             : null
 
-    this.runButton.disabled = busy || refusal !== null
+    // No map starred on a deck of several: the plain Run names one and there
+    // is none named, so it is greyed with the reason on it, and the batch —
+    // which names every map — is priced and runs as ever (§18.1).
+    const unstarred = this.batchOnlyFor(task)
+    this.runButton.disabled = busy || refusal !== null || unstarred !== null
     // The button appears only where there is more than one map to run on, and
     // is priced by the same refusal: a task this file cannot answer cannot be
     // answered five times either.
@@ -1172,7 +1201,7 @@ export class AnalysisDrawer {
     // opening ({@link runAll}), so counting only the ready ones offered "run on
     // all 3 maps" over a deck of four and then ran four.
     const maps = this.options.runner.targetCount()
-    this.paintRun(task, maps)
+    this.paintRun(task, maps, unstarred)
     // And only for a task that reads a map: one that reads the tracks has one
     // answer however many maps are open, so a batch of it is that run N times.
     this.runAllButton.classList.toggle('hidden', maps < 2 || !readsMap(task))
@@ -1208,6 +1237,29 @@ export class AnalysisDrawer {
   // -------------------------------------------------------------------------
 
   /**
+   * Which map's figures are on screen: the tab the reader pressed, else —
+   * `undefined` — the runner's own answer, the starred map's.
+   *
+   * With **no map starred** (§18.1) the default is *all maps* instead, where
+   * the result has something to draw across them: a batch is then the only run
+   * there is, and opening on the first map's tab read as though that map were
+   * the one run on — the guess the absent star refuses to make. A task whose
+   * every figure is one per map (a pileup) still opens on its first tab, since
+   * *all maps* would hold only the line sending the reader back to them.
+   */
+  private shownMap(
+    task: AnalysisTask,
+    across: ReadonlyArray<{ target: RunTarget; result: TaskResult }>,
+  ): MapId | typeof ALL_MAPS | undefined {
+    const picked = this.chosenMap.get(task.id)
+    if (picked !== undefined) return picked
+    const first = across[0]
+    return across.length > 1 && this.batchOnlyFor(task) !== null && foldsAcrossMaps(first.result)
+      ? ALL_MAPS
+      : undefined
+  }
+
+  /**
    * The tab strip: one map per tab, `all maps` last, arrows either side.
    *
    * Both navigations are here because they answer different questions. A reader
@@ -1233,7 +1285,7 @@ export class AnalysisDrawer {
       ...across.map((entry) => entry.target.map),
       ALL_MAPS,
     ]
-    const chosen = this.chosenMap.get(task.id) ?? stops[0]
+    const chosen = this.shownMap(task, across) ?? stops[0]
     const go = (to: MapId | typeof ALL_MAPS): void => {
       this.chosenMap.set(task.id, to)
       // A different map is a different list of runs — see {@link chosenRun}.
@@ -1483,7 +1535,12 @@ export class AnalysisDrawer {
         ? `from ${provenance.framing.label} — the view has moved since`
         : `from ${provenance.framing.label}`
       this.framingEl.title = provenance.framing.label
-      this.recomputeButton.classList.toggle('hidden', !stale)
+      // Not while no map is starred: *recompute here* is the plain Run again,
+      // and that names one map where none is named (§18.1) — a button that
+      // would do nothing when pressed. *Run on all* is the way to ask again.
+      const refused =
+        this.current !== null && (this.blockedFor(this.current) ?? this.batchOnlyFor(this.current)) !== null
+      this.recomputeButton.classList.toggle('hidden', !stale || refused)
       return
     }
     this.framingEl.className = 'analysis-framing'

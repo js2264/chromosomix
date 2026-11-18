@@ -7504,7 +7504,8 @@ the micro-C file's bin size as the map they had just chosen.
 column shows the first map's card with *every map — all N* under its title, in the warn colour: a
 setting changed there is made to **every map of the deck at once**, one moved setting at a time, so
 picking a ramp does not also flatten each map's clip onto the first one's. That is also the state in
-which no task that reads a map can run, and the 1D tasks, which read none, still do (§18.1). *None*
+which a task that reads a map runs only on every map at once — *run on all*, set up from the first
+map as this card is — and the 1D tasks, which read none, run as ever (§18.1). *None*
 holds for as long as the deck does, and a deck put down leaves the next one starred on its first
 map, which is where every deck starts.
 
@@ -8453,20 +8454,38 @@ or not the sentence is printed under it.
 The distinction is not *can this run now* but *can what the reader does next make it run*, and
 `TaskAvailability` is the three answers: `ready`, `waiting` with a sentence, `absent`.
 
-**Every task that reads a map is greyed while a deck has no map starred.** Such a task reads one map
-and the star is how that map is named (§16.5), so a deck the reader has left with no star filled has
-no file for it to run against — and none is guessed for them, the first map least of all, which
-would be the star's old default passed off as a choice. The column says so once, above its cards, in
-the warn colour: *no map is starred, so only the 1D tasks can run*; every row that reads a map is
-greyed with that sentence in its tooltip and without the per-group and per-row lines, which would
-print it twenty times; and the drawer's Run and *run on all* refuse with it in the price's place.
+**With no map starred, a task that reads a map runs on every map at once.** Such a task's plain Run
+reads one map and the star is how that map is named (§16.5), so a deck the reader has left with no
+star filled has no one file for it to run against — and none is guessed for them, the first map
+least of all, which would be the star's old default passed off as a choice. But *run on all N maps*
+names every map, and no star is already the state in which a setting is made to every map at once
+(§16.5); refusing the batch as well made it the one surface where no star meant *nothing* rather than
+*all of them*. So on a deck of two maps or more the drawer's `run on ★` is greyed, with the reason as
+its tooltip in place of the starred map's name it would otherwise give, and so is *recompute here*,
+which is that same Run again, left off a stale heading rather than offered and doing nothing; *run on
+all* is priced and runs as ever; no row is greyed; and the column says it once, above its cards, in
+the warn colour: *no map is starred, so a task that reads a map runs on every map at once, with the
+first map's window, score and settings*. That second half is the batch's own rule, said where it now matters: a
+batch is set up from one map — the framing, the form's seeded numbers, the price and the column's
+*ready* — which is the starred one, and with none starred it is the first, as the *Map* card is the
+first map's while it sets every map (§16.5). Nothing is run on the first map *instead of* the others;
+it is only the one the batch is read off. The drawer's figures open on the *all maps* tab rather
+than on the first map's, which read as the map that had been run on; a task whose every figure is
+one per map — a pileup — still opens on its first, since *all maps* would hold only the line
+pointing back to the tabs.
+
+**On a deck of one map — beside a model or a stack of tracks — every task that reads a map is greyed
+while it is unstarred**, since there is no batch to offer. The column says so once, above its cards:
+*no map is starred, so only the 1D tasks can run*; every row that reads a map is greyed with that
+sentence in its tooltip and without the per-group and per-row lines, which would print it twenty
+times; and the drawer's Run and *run on all* refuse with it in the price's place.
 **The 1D tasks are not greyed.** They read only tracks and sequences (§18.3), so there is no map for
 the star to name and nothing for its absence to stop: they keep their own answers — ready, or waiting
 on a file — and run. They were greyed too at first, because the rule a reader is given is *a task
 runs on the starred map* and a column in which some run and some do not looked like a rule with
 exceptions to learn. But a 1D task does not run on the starred map — its button says *run*, not *run
 on ★* (below) — and greying it under a sentence about a map was the exception. Starring any map puts
-every task back.
+every task back, the plain Run with them.
 
 **The column is asked again whenever the deck's maps change** — a companion's file opening, a cell
 moving to another sample of its collection, a cell closing — as it is when the star moves: which
@@ -8502,9 +8521,10 @@ one.
 
 **The Analysis drawer** is the workspace: parameters, a **Run** button with **cancel** beside it while
 a job runs and the price after the pair, progress, results, exports. On a deck the button reads
-*run on ★*, with the starred map named in its tooltip, and what a plain Run makes — its tab, its
-lanes, its name — is that map's; *run on all N maps* beside it runs the task once per map, in the
-grid's order (§16.9), and is not there on a single map. **A 1D task is one plain *run*, deck or
+*run on ★*, with the starred map named in its tooltip — greyed, with the reason there instead, while
+no map is starred (above) — and what a plain Run makes — its tab, its lanes, its name — is that
+map's; *run on all N maps* beside it runs the task once per map, in the grid's order (§16.9), and is
+not there on a single map. **A 1D task is one plain *run*, deck or
 not**, with no *run on all N maps* beside it: it reads the loaded tracks and sequences and never a
 map (§18.3), so four maps on screen are one answer and not four. It was offered both once; the batch
 read the same tracks once per map and filed as many identical lanes, each named after a map it never
