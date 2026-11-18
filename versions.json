@@ -256,6 +256,13 @@
   ],
   "pulls": [
     {
+      "number": 177,
+      "commit": "70523a1",
+      "title": "Run a deck's map tasks on every map at once while no map is starred",
+      "branch": "js/loving-gates-uj6p1u",
+      "date": "2026-11-18T12:27:30Z"
+    },
+    {
       "number": 176,
       "commit": "ab77de0",
       "title": "CI: build every fixture from PyPI and run the suite once",
