@@ -257,10 +257,10 @@
   "pulls": [
     {
       "number": 175,
-      "commit": "ccf1303",
+      "commit": "70c9690",
       "title": "Let a map be drawn as a rectangle, refit it when a track grows, and square it again on Fit the view",
       "branch": "js/kind-brahmagupta-g9f2vr",
-      "date": "2026-11-17T22:25:18Z"
+      "date": "2026-11-18T08:32:02Z"
     },
     {
       "number": 168,
