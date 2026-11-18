@@ -1,6 +1,13 @@
 {
-  "latest": "83f4b7f",
+  "latest": "99ed19c",
   "versions": [
+    {
+      "commit": "99ed19c",
+      "version": "0.21.0",
+      "date": "2026-11-18T13:08:18+01:00",
+      "subject": "Keep a map square as its tracks grow, let a deck's maps go wider together, and grow every track towards a turned map (#175)",
+      "tag": ""
+    },
     {
       "commit": "83f4b7f",
       "version": "0.21.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "f220b7f",
-      "version": "0.19.0",
-      "date": "2026-11-04T10:31:53+01:00",
-      "subject": "ci: refactor validation, timings and laptop notebooks",
-      "tag": ""
-    },
-    {
       "commit": "9731db4",
       "version": "0.19.0",
       "date": "2026-11-01T19:24:42+01:00",
@@ -255,13 +255,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 175,
-      "commit": "e569e74",
-      "title": "Keep a map square as its tracks grow, give it its default size on Fit the view, and let a deck's maps go wider together",
-      "branch": "js/kind-brahmagupta-g9f2vr",
-      "date": "2026-11-18T11:11:05Z"
-    },
     {
       "number": 168,
       "commit": "bf0eeff",
