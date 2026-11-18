@@ -256,6 +256,13 @@
   ],
   "pulls": [
     {
+      "number": 176,
+      "commit": "ab77de0",
+      "title": "CI: build every fixture from PyPI and run the suite once",
+      "branch": "js/tender-keller-3rmk78",
+      "date": "2026-11-18T12:26:38Z"
+    },
+    {
       "number": 168,
       "commit": "bf0eeff",
       "title": "Draw a metagenome's map as a circle or as two lines, a dev feature (§7.6)",
