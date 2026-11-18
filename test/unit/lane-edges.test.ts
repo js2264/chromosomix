@@ -24,6 +24,7 @@ import {
   acrossToCanvas,
   borderRuleAt,
   canvasToAcross,
+  drawnFlip,
   gripBox,
   gripFrom,
   laneGrowsInward,
@@ -236,6 +237,39 @@ describe('which way an unflipped lane grows', () => {
  * both, because a reader finds the gesture by accident or not at all, and it is
  * the kind of thing that fails silently in exactly one of a stack's lanes.
  */
+/**
+ * A turned map has one stack, below the band, and every lane falls into it
+ * (§17.4). Drawn with its own flip there, a lane from beside the map — turned on
+ * arrival to grow away from it on that side, where a computed track opens —
+ * hung downwards, away from the band, under lanes that rose to meet it.
+ */
+describe('a lane under a turned map', () => {
+  it('grows towards the band whatever it is stored as', () => {
+    for (const flip of [false, true]) {
+      // The stack below the band is the bottom edge's, where unflipped is inward.
+      expect(laneGrowsInward('bottom') !== drawnFlip({ flip }, true)).toBe(true)
+    }
+  })
+
+  it('grows towards the band from every edge it was put on, and as it was beside the square map', () => {
+    for (const edge of LANE_EDGES) {
+      const stored = laneStartsFlipped(edge)
+      expect(laneGrowsInward('bottom') !== drawnFlip({ flip: stored }, true)).toBe(true)
+      // Back on the square map the lane is drawn as it is stored: the turn
+      // edited nothing.
+      expect(drawnFlip({ flip: stored }, false)).toBe(stored)
+    }
+    // On the left of a square map a lane grows away from it, as the top's does.
+    expect(laneGrowsInward('left') !== drawnFlip({ flip: laneStartsFlipped('left') }, false)).toBe(false)
+  })
+
+  it('keeps the flip of a lane drawn as a heatmap, which reverses its colours rather than its direction', () => {
+    expect(drawnFlip({ flip: true, mode: 'heatmap' }, true)).toBe(true)
+    expect(drawnFlip({ flip: false, mode: 'heatmap' }, true)).toBe(false)
+    expect(drawnFlip({ flip: true, mode: 'area' }, true)).toBe(false)
+  })
+})
+
 describe('the rule on a lane’s draggable border', () => {
   const total = 200
 

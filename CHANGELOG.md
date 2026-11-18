@@ -351,6 +351,10 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **Every track grows towards a turned map (§17.4).** Under the 45° turn every track is drawn under the
+  band, and one that had been put beside the square map — a computed track, which opens on its left,
+  or one moved there — grew downwards, away from the picture. Every track now grows up towards the
+  band; turned back square, each is drawn on its side the way it was.
 - **The maps of a deck go wider together (§16.3).** On a deck opened on a region and zoomed, *Fit the
   view* on the first map — its button, `0`, a double click — put it back on its whole chromosome and
   left the map beside it on the region; so did a zoom out past the region. The yeast deck on

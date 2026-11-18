@@ -8227,6 +8227,17 @@ switches on and off, and a track that came back from it on the bottom edge becau
 turned when they pressed the button would be the picture editing their settings behind them — so
 "back where it came from on the way home" costs nothing, the store never having moved.
 
+**And every lane grows towards the band.** A lane put beside the square map is turned on arrival to
+grow away from it on that side (§8.9) — where a computed track opens (§18.5), or a lane moved there —
+and drawn with that flip in the stack below the band it hung downwards, away from the picture, under
+lanes from above and below that rose to meet it. Under a turn every lane is drawn growing up towards
+the band whatever its flip (`render/lane.ts`, `drawnFlip`), and its labels and its ceiling drag go with
+the drawing. The flip it is stored with is the square map's and is not touched, so a reader turning
+the map and back finds each lane on its side growing the way it did, as each is on the side it was. A
+lane drawn as a heatmap keeps its flip, which reverses its colours rather than its direction; and the
+lane menu's *Grow away from the map* is greyed while the map is turned, where it could change nothing
+on screen.
+
 Marks are placed by the **pair of loci they were always about**, since there is no row axis to ask
 where a locus is:
 
