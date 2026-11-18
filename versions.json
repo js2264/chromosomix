@@ -257,10 +257,10 @@
   "pulls": [
     {
       "number": 175,
-      "commit": "70c9690",
-      "title": "Let a map be drawn as a rectangle, refit it when a track grows, and square it again on Fit the view",
+      "commit": "6c06d3f",
+      "title": "Keep a map square as its tracks grow, give it its default size on Fit the view, and let a deck's maps go wider together",
       "branch": "js/kind-brahmagupta-g9f2vr",
-      "date": "2026-11-18T08:32:02Z"
+      "date": "2026-11-18T10:55:00Z"
     },
     {
       "number": 168,
