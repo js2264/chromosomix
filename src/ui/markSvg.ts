@@ -1,19 +1,13 @@
 /**
- * The app's mark drawn inline, for the two places on the landing page where a
- * picture of it is not enough.
+ * The app's mark drawn inline, beside the name on the landing page, where a
+ * picture of it is not enough: its cells are elements, so that the X the name
+ * ends on can be drawn on them when the pointer is over the masthead — the
+ * corners light, the arms run in to the centre, the diagonal steps back, and
+ * the map settles again (`styles.css`, `.cx-arm`). Drawn as vector it is also
+ * sharp at the size the masthead sets it, which the 192 px icon the header
+ * uses is not on every screen.
  *
- * - **Beside the name** (`mastheadMark`), whose cells are elements so that the
- *   X the name ends on can be drawn on them when the pointer is over the
- *   masthead: the corners light, the arms run in to the centre, the diagonal
- *   steps back, and the map settles again (`styles.css`, `.cx-arm`). Drawn as
- *   vector it is also sharp at the size the masthead sets it, which the 192 px
- *   icon the header uses is not on every screen.
- * - **In the page's right margin** (`markWatermark`): the map and its lanes
- *   without the plate, half of it, faint, in the theme's own colours — the
- *   light plate's ember on paper and the dark plate's on ink — which a PNG of
- *   one variant cannot follow.
- *
- * Both are built from `mark.generated.ts`, which `scripts/make-app-icons.py`
+ * It is built from `mark.generated.ts`, which `scripts/make-app-icons.py`
  * writes from the constants every PNG of the mark is rendered from, so this
  * file holds no drawing of its own. Built with `createElementNS` and
  * attributes alone: the page's policy allows no inline `style` (§21.6).
@@ -66,9 +60,9 @@ function cellClass(row: number, column: number): string | null {
   return row === column ? 'cx-diag' : null
 }
 
-/** The map's cells, in one colour, each with its intensity as opacity. */
-function cells(fill: string, animated: boolean): SVGElement {
-  const group = node('g', { fill })
+/** The map's cells, each with its intensity as opacity and its place on the X as a class. */
+function cells(): SVGElement {
+  const group = node('g', { fill: MARK_MAP.colour })
   const { x, y, pitch, inset, round } = MARK_MAP
   const size = pitch * (1 - 2 * inset)
   for (const [row, column, level] of MARK_CELLS) {
@@ -80,18 +74,18 @@ function cells(fill: string, animated: boolean): SVGElement {
       rx: (size * round).toFixed(1),
       opacity: level,
     })
-    const name = animated ? cellClass(row, column) : null
+    const name = cellClass(row, column)
     if (name !== null) rect.setAttribute('class', name)
     group.appendChild(rect)
   }
   return group
 }
 
-/** Every lane's slivers, in each lane's colour on one of the two plates. */
-function lanes(variant: 'dark' | 'light'): SVGElement {
+/** Every lane's slivers, each lane in its own colour. */
+function lanes(): SVGElement {
   const group = node('g', {})
   for (const lane of MARK_LANES) {
-    const one = node('g', { fill: lane[variant] })
+    const one = node('g', { fill: lane.colour })
     for (const [x, y, width, height, level] of lane.rects) {
       one.appendChild(node('rect', { x, y, width, height, rx: MARK_LANE_RADIUS, opacity: level }))
     }
@@ -132,8 +126,8 @@ export function mastheadMark(): SVGSVGElement {
   )
   svg.appendChild(defs)
   svg.appendChild(node('path', { d: MARK_PLATE.path, fill: `url(#${id}-plate)` }))
-  svg.appendChild(cells(MARK_MAP.dark, true))
-  svg.appendChild(lanes('dark'))
+  svg.appendChild(cells())
+  svg.appendChild(lanes())
   svg.appendChild(
     node('path', {
       d: MARK_PLATE.rim,
@@ -143,26 +137,4 @@ export function mastheadMark(): SVGSVGElement {
     }),
   )
   return svg
-}
-
-/**
- * The half mark in the landing page's right margin: the map and its lanes, no
- * plate, drawn twice — once in each plate's colours — so the stylesheet shows
- * the one the theme asks for (`.cx-ink-light`, `.cx-ink-dark`). The box it
- * returns is half the mark's width and clips the rest, so what shows is the
- * left half, standing against the window's right edge.
- */
-export function markWatermark(): HTMLElement {
-  const svg = frame('cx-watermark-art')
-  for (const variant of ['light', 'dark'] as const) {
-    const ink = node('g', { class: `cx-ink-${variant}` })
-    ink.appendChild(cells(MARK_MAP[variant], false))
-    ink.appendChild(lanes(variant))
-    svg.appendChild(ink)
-  }
-  const box = document.createElement('div')
-  box.className = 'picker-watermark'
-  box.setAttribute('aria-hidden', 'true')
-  box.appendChild(svg)
-  return box
 }

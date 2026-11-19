@@ -15,8 +15,7 @@ Go to <https://chromosomix.app/>. The landing page opens files from your disk or
 a catalogue of published data (**Connect to a data store**). Under *Just looking?*,
 **Human Hi-C data** opens K562 at the MYC locus with its tracks; each example's `?` says what it
 opens. Over the page stands the app's mark — a small contact map whose anti-diagonal makes the X
-of the name, drawing itself in when the pointer is over it — and, on a window wide enough to spare
-the room, half of it in the right margin.
+of the name, drawing itself in when the pointer is over it.
 
 ![The landing page: play the tutorial under New here?, Load files with its drop area and URL box, the four buttons that connect a folder, a bucket, Google Drive or Dropbox, and the data store tiles with the pointer on 4DN open data.](../../../assets/screens/start/landing.webp)
 
