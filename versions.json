@@ -1,6 +1,13 @@
 {
-  "latest": "ea8a1a8",
+  "latest": "bd65339",
   "versions": [
+    {
+      "commit": "bd65339",
+      "version": "0.21.0",
+      "date": "2026-11-20T18:29:27+01:00",
+      "subject": "Keep a deck's maps on one place across the whole genome: count its sequences end to end (#183)",
+      "tag": ""
+    },
     {
       "commit": "ea8a1a8",
       "version": "0.21.0",
@@ -255,13 +262,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 183,
-      "commit": "b6cc34b",
-      "title": "Keep a deck's maps on one place across the whole genome: count its sequences end to end",
-      "branch": "js/upbeat-curie-5qk8pa",
-      "date": "2026-11-20T16:54:09Z"
-    },
     {
       "number": 182,
       "commit": "b7427bc",
