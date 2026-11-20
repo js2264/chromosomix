@@ -672,6 +672,14 @@ export interface MatrixResult {
    */
   source?: { rows: Extent; cols: Extent }
   /**
+   * Sibling rungs a **balanced** read went round because they carry no
+   * weights, as `OpenResult.entries` names them: the rung asked for, and any
+   * coarser one stepped over on the way to the one that answered (§2). Absent
+   * for every read that came from where it was asked. The zoom reads it to
+   * stop asking those rungs for balanced counts (`ui/refine.ts`).
+   */
+  unweighted?: string[]
+  /**
    * Whole sequences summed into one cell, where the axis had more of them than
    * the picture has pixels. Absent, or 1, for every axis with room for a cell
    * per sequence — which is every cooler and most assemblies.
@@ -851,6 +859,13 @@ export interface StatsResult {
   lastOp: SourceStats
   /** Number of worker requests served. */
   calls: number
+  /**
+   * Bytes this reader worker holds that the main thread cannot see: the HDF5
+   * runtime's memory and the byte cache of the file's source — `null` where it
+   * has neither to report. What the status bar adds to the main thread's heap
+   * (§12).
+   */
+  memory?: { wasm: number | null; cache: number | null }
 }
 
 /** Every request kind, mapped to what it resolves with. */

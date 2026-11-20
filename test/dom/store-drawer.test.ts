@@ -100,7 +100,7 @@ describe('opening', () => {
     drawer.open()
     expect(drawer.isOpen).toBe(true)
     expect(drawer.storeId).toBe('rsg')
-    expect(drawer.el.querySelector('.store-title')?.textContent).toBe('RSG lab data')
+    expect(drawer.el.querySelector('.store-title')?.textContent).toBe('Example datasets')
     expect(all(drawer.el, '.gallery-card').length).toBeGreaterThan(0)
     // The lab's store is inline: still nothing fetched.
     expect(requested).toEqual([])
@@ -137,7 +137,7 @@ describe('opening', () => {
     drawer.open('4dn')
     // The DNA Bacterial Zoo is a dev feature (§29), and the switch is off here.
     expect(textsOf(drawer.el, '.store-head-tiles .store-tile-name')).toEqual([
-      'RSG lab data',
+      'Example datasets',
       'IGV genomes',
       '4DN open data',
       'ENCODE',

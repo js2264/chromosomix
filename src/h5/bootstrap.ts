@@ -213,13 +213,32 @@ async function load(): Promise<H5Module> {
     ns = (await import('h5wasm')) as unknown as RawH5wasmNamespace
   }
   await ns.ready
-  return {
+  const module: H5Module = {
     File: ns.File,
     Group: ns.Group,
     Dataset: ns.Dataset,
     FS: ns.FS as H5FileSystem,
     Module: ns.Module as H5Runtime,
   }
+  loaded = module
+  return module
+}
+
+/** The runtime once it has loaded, for {@link h5HeapBytes}. */
+let loaded: H5Module | null = null
+
+/**
+ * Bytes of the HDF5 runtime's linear memory, or `null` before it has loaded
+ * (or where a file never needed it — a `.hic`).
+ *
+ * What the reader worker holds for HDF5: every chunk h5wasm decompresses and
+ * every slice it hands back passes through it, and WebAssembly memory only
+ * grows. The status bar adds it to what this tab is using (§12), since the
+ * main thread's heap, which is all a page that is not cross-origin isolated
+ * can measure of itself, never sees it.
+ */
+export function h5HeapBytes(): number | null {
+  return loaded === null ? null : loaded.Module.HEAPU8.byteLength
 }
 
 function describe(cause: unknown): string {

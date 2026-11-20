@@ -46,7 +46,7 @@ import { icon, iconButton, markButton } from './icons'
 import type { IconName } from './icons'
 import { button, el } from './dom'
 import { LoadBox } from './LoadBox'
-import { appMark } from './mark'
+import { mastheadMark } from './markSvg'
 import { splitUri } from './labels'
 import { connectDirectory } from '../browse/connected'
 import { CONNECT_FOLDER_TITLE, providerFronts, type ProviderId } from './connectFronts'
@@ -241,7 +241,7 @@ export class FilePicker {
       el(
         'div',
         { class: 'picker-brand' },
-        el('div', { class: 'picker-masthead' }, appMark(), el('h1', { text: 'chromosomix' })),
+        el('div', { class: 'picker-masthead' }, mastheadMark(), el('h1', { text: 'chromosomix' })),
       ),
       el(
         'section',

@@ -25,7 +25,9 @@ npm run docs:build        # the documentation site, every internal link checked
 `npm test` says at its top what it left out:
 
 - **The suites over metacooler's fixtures**, which `npm run fixtures` builds with a Python that has
-  metacooler installed, a private repository. CI builds and runs them.
+  metacooler installed: `pip install metacooler 'cooler>=0.11' biopython`, then
+  `npm run fixtures:metacooler` to fetch its test data, then `npm run fixtures`. CI builds and runs
+  them on every push.
 - **The tests of the dev features** (`SPECS.md` §29), which `npm run test:dev` adds. CI runs them on
   every push.
 

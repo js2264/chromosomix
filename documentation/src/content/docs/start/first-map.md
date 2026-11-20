@@ -14,7 +14,8 @@ Go to <https://chromosomix.app/>. The landing page opens files from your disk or
 (**Load files**), a folder, bucket, Google Drive or Dropbox (**Connect a local or remote folder**), or
 a catalogue of published data (**Connect to a data store**). Under *Just looking?*,
 **Human Hi-C data** opens K562 at the MYC locus with its tracks; each example's `?` says what it
-opens.
+opens. Over the page stands the app's mark — a small contact map whose anti-diagonal makes the X
+of the name, drawing itself in when the pointer is over it.
 
 ![The landing page: play the tutorial under New here?, Load files with its drop area and URL box, the four buttons that connect a folder, a bucket, Google Drive or Dropbox, and the data store tiles with the pointer on 4DN open data.](../../../assets/screens/start/landing.webp)
 
@@ -46,8 +47,8 @@ checkerboard off the diagonal is the long arm's compartments.
 
 ## Move around
 
-- **Drag** pans, the **wheel** or a pinch zooms, **double-click** fits the picture. After a click on
-  the map, the arrow keys pan it; <kbd>0</kbd> fits it from anywhere.
+- **Drag** pans, the **wheel** or a pinch zooms, **double-click** shows the whole chromosome again.
+  After a click on the map, the arrow keys pan it; <kbd>0</kbd> fits it from anywhere.
 - To open a stretch rather than enlarge it, hold <kbd>⌥ Option</kbd> (<kbd>Alt</kbd> on Windows and
   Linux) and drag a box across it; add <kbd>⇧ Shift</kbd> to keep it on the diagonal.
 - Or type a place, `chr15:30,000,001-60,000,000`, and press **go**. Coordinates are 1-based and

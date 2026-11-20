@@ -28,7 +28,7 @@ import { describeTier, type NameContext, type NameMatch } from '../genome/naming
 import { DECK_DRAG_TYPE, mapStarTitle, type DeckLook } from './deck'
 import { deckTools } from './deckHead'
 import { matrixLevel, selectionOf } from '../state/ViewState'
-import type { ViewState } from '../types'
+import type { Extent, ParsedRange, ViewState } from '../types'
 import { ReaderClient } from '../worker/client'
 import type { DrawnDepth } from '../contacts'
 import type { Census } from '../metacooler/resample'
@@ -538,6 +538,13 @@ export class MapPanel {
    */
   private wrap: [number, number] | undefined = undefined
   /**
+   * The whole sequence each axis of the block on screen is a window on, in the
+   * open map's bins — the zoom's ceiling ({@link armRefine}) — or `null` where
+   * an axis is not one sequence, or is a circle's frame, and the ceiling is the
+   * block.
+   */
+  private whole: { rows: Extent; cols: Extent } | null = null
+  /**
    * The window this map reads for itself, or `null` for the deck's (§16.3).
    *
    * Set by a box drawn on it while its chain is open, which is the one gesture
@@ -703,9 +710,15 @@ export class MapPanel {
   /**
    * The zoom's own reader for this panel.
    *
-   * Its ceiling is the block this panel read, not the file: a companion
-   * follows the deck's navigation, and one that widened on its own would be
-   * showing a window the lock is about to drag it out of. What it reads *at* is
+   * Its ceiling is the whole sequence the block this panel read is a window
+   * on, as the first map's is (`ui/RegionView.ts`) — not the file, and no
+   * longer the block. A companion follows the deck's navigation, and the first
+   * map can go wider than the place the deck opened on: Fit the view puts its
+   * whole chromosome back, a zoom out passes the region's edge. A companion held
+   * to its block was left on the region beside it, clamped by the lock and
+   * asking nothing; held to the sequence, it reads what the deck went to
+   * ({@link MatrixPanel.reachViewport}, `panels/lock.ts`). A window of its own
+   * ({@link ownPlace}) is still its own ceiling. What it reads *at* is
    * the deck's resolution while this panel follows the deck ({@link followed}):
    * the lock's currency is base pairs (§16.3), so the maps stay in step whatever
    * their grids, and it was each map refining on its own that put two grids
@@ -1753,11 +1766,13 @@ export class MapPanel {
       this.read = key
       this.panel?.setBusy(true)
       this.say('')
-      const { block: result, wrap } = await this.readBlock(state, plan, info)
+      const { block: result, wrap, whole } = await this.readBlock(state, plan, info)
       if (this.disposed || this.read !== key) return
       // Kept only for the read that is drawn: a read overtaken by a newer one
-      // must not leave its lap behind for the ladder of a block it is not.
+      // must not leave its lap behind for the ladder of a block it is not —
+      // nor the sequence it was a window on.
       this.wrap = wrap
+      this.whole = whole ?? null
       this.show(result, info, state)
       // Once this map has its first block, as the lead's is counted (§6.5): a
       // census asked at the open was a walk in the same reader as this read.
@@ -1884,7 +1899,7 @@ export class MapPanel {
     state: ViewState,
     plan: Exclude<BlockPlan, { kind: 'none' }>,
     info: OpenResult,
-  ): Promise<{ block: MatrixResult; wrap?: [number, number] }> {
+  ): Promise<{ block: MatrixResult; wrap?: [number, number]; whole?: { rows: Extent; cols: Extent } }> {
     const choice = this.scoreOf(info, state)
     const level = this.levelOf(state)
     // Resolved against *this* file's columns rather than carried over from the
@@ -1979,7 +1994,45 @@ export class MapPanel {
       ...value,
       budgetBytes,
     })
-    return wrap === undefined ? { block } : { block, wrap }
+    if (wrap !== undefined) return { block, wrap }
+    // **The whole sequence each axis is a window on**, for the zoom's ceiling
+    // ({@link armRefine}) — as the first map's region view has it, so a deck
+    // that goes wider than the place it opened on reads the rest here too. A
+    // circle's frame is its own ceiling, as there; so is a window of this map's
+    // own ({@link ownPlace}), which its pill names and **widen 3×** is the way
+    // out of, as it always was.
+    if (this.ownPlace !== null) return { block }
+    const whole = await this.sequencesOf(rowRange, colRange)
+    return whole === null ? { block } : { block, whole }
+  }
+
+  /**
+   * The bin extent of the whole sequence each axis of a read is a window on, or
+   * `null` where an axis is not one sequence — the whole file, a range the
+   * reader could not resolve — and the ceiling is then the block, as it always
+   * was. One `range` request per axis, which reads no pixels, asked in this
+   * file's own spelling of the name (`ParsedRange.label`); none for an axis
+   * that is the genome already.
+   */
+  private async sequencesOf(
+    rows: ParsedRange | null,
+    cols: ParsedRange | null,
+  ): Promise<{ rows: Extent; cols: Extent } | null> {
+    if (rows === null) return null
+    const of = async (range: ParsedRange): Promise<Extent | null> => {
+      if (range.kind === 'genome') return range.extent
+      try {
+        const full = await this.client.request<'range'>({ kind: 'range', range: range.label })
+        return full.extent
+      } catch {
+        return null
+      }
+    }
+    const across = await of(rows)
+    if (across === null) return null
+    if (cols === null) return { rows: across, cols: across }
+    const down = await of(cols)
+    return down === null ? null : { rows: across, cols: down }
   }
 
   /**
@@ -2174,10 +2227,11 @@ export class MapPanel {
   }
 
   /**
-   * Let this panel's zoom read, inside what it already has.
+   * Let this panel's zoom read, inside the sequence it is a window on.
    *
-   * Bin level and a positional axis only, and the ceiling is the block itself —
-   * see {@link ladder}. The score and the balance come from {@link scoreOf},
+   * Bin level and a positional axis only, and the ceiling is that sequence, or
+   * the block where there is none — see {@link ladder}. The score and the
+   * balance come from {@link scoreOf},
    * which resolves against *this* file's columns rather than the lead's, exactly
    * as {@link readBlock} does: a companion refining with the lead's choice would
    * be drawing a column it may not have.
@@ -2195,9 +2249,11 @@ export class MapPanel {
     const wrap = this.wrap
     this.ladder = attachRefine({
       panel: this.panel as MatrixPanel,
-      // In the open map's bins: a block read from a sibling rung describes
-      // itself on that rung's grid, and `source` is the window it was asked for.
-      ceiling: {
+      // In the open map's bins: the whole sequence each axis is a window on,
+      // where the read found one ({@link whole}); else the block, where a block
+      // read from a sibling rung describes itself on that rung's grid and
+      // `source` is the window it was asked for.
+      ceiling: this.whole ?? {
         rows: result.source?.rows ?? result.rowExtent,
         cols: result.source?.cols ?? result.colExtent,
       },

@@ -194,6 +194,8 @@ function fakeStore(entries: AnnotationEntry[]) {
 function leadPanel() {
   const state = { exporter: null as { save(format: string, dpi: number): Promise<boolean> } | null }
   const panel = {
+    setRegridListener: () => {},
+    reachViewport: () => {},
     setViewportListener: () => {},
     setDeckExport: (exporter: typeof state.exporter) => {
       state.exporter = exporter

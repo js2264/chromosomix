@@ -30,7 +30,10 @@ cells make a row. An empty cell stays where you put it, and a link keeps it.
 ## Moving together
 
 A pan, a zoom, a typed locus or a step to another sequence on any map moves them all, and the
-heading above the grid steers every map. Pointing at one map marks the same place on the others.
+heading above the grid steers every map. That includes going past the region the deck opened on: a
+zoom out, a pan beyond its edge, or **Undo every pan and zoom** (<kbd>0</kbd>) back to the whole
+chromosome, and every map reads the rest of its sequence to follow. Pointing at one map marks the
+same place on the others.
 Maps stay together in base pairs, the coarser rounding outward. A window that runs off the end of a
 shorter sequence slides back inside it at the same width.
 
@@ -48,8 +51,10 @@ whole deck, as does a box drawn on a map still on the chain.
 The starred map, the first until you star another, is the one the **Map** card (**Aesthetics**
 panel) sets, the **File** card (**General** panel) describes and the **Analysis** panel's tasks run
 on ([How analyses run](/analyses/)). Press the filled star to star none: the **Map** card then sets
-every map at once, and says so: *every map — all 4*. With no map starred, only the tasks that read
-tracks alone can run.
+every map at once, and says so: *every map — all 4*. With no map starred, a task that reads a map runs
+on every map at once: **run on ★** is greyed and **run on all N maps** runs, with the first map's
+window, score and settings, and its figures open on the **all maps** tab. A deck with only one map
+runs only the tasks that read tracks alone until you star it.
 
 A task reads every map at the first map's resolution for it — the one its **Resolution** row was
 given, else the one picked in the bar above the map, else the one the first map was opened at — each
@@ -60,7 +65,9 @@ other maps a comparison such as Reproducibility reads.
 ## What is shared, and what is not
 
 - Shared: the region, the sequence or selection, the level, the resolution, pan and zoom (unless a
-  map is off the chain) and the [45° turn](/browse/turn/).
+  map is off the chain), the [45° turn](/browse/turn/) and the
+  [size of the maps](/browse/navigating/#the-size-of-the-map): drag an edge of any map, and every map
+  takes the size.
 - Each map's own, starting as the first map's: the score, O/E, smoothing, arms, transform, colours
   and clip.
 
@@ -85,8 +92,8 @@ For one depth, use the chevrons after the **contacts** box
 One sequence name at two lengths, differing by more than a cell of the coarser map, is two different
 places: the map that differs is still drawn and exported, but off the lock, with a line under its
 heading saying why. A file with no sequence of that name is refused in its own cell, with the names
-it has. On a turned deck, a map whose block does not reach as far from the diagonal as the first
-map's cannot follow, and says so.
+it has. On a turned deck, a map whose band does not reach as far from the diagonal as the first
+map's still follows, with paper above its band where its block holds no more.
 
 ## Arranging the cells
 

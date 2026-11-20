@@ -1574,6 +1574,18 @@ export interface HeatmapOptions {
    * is a place on the genome rather than a cell.
    */
   onHover?: (cell: Cell | null, at?: { x: number; y: number; span?: boolean }) => void
+  /**
+   * Asked for the whole picture back — a double click, a double tap, Home —
+   * instead of {@link HeatmapView.fit}, which fits the block in hand.
+   *
+   * The two are not the same once a zoom reads blocks of its own (§2): the
+   * block in hand is then the window last read around the view, a stretch of
+   * the chromosome rather than the chromosome, and fitting it was a zoom out
+   * to that stretch. The caller knows the view's domain, and puts it back.
+   * Absent, the gestures fit the block, which is the whole of the domain
+   * wherever nothing refines.
+   */
+  onFit?: () => void
 }
 
 // `plotOptions` is resolved into its own field rather than into `opts`,
@@ -1631,6 +1643,7 @@ type ResolvedOptions = Required<
     | 'onDrawing'
     | 'selectionLabel'
     | 'onHover'
+    | 'onFit'
     | 'plotOptions'
   >
 > & { margin: Margin }
@@ -1813,6 +1826,7 @@ export class HeatmapView {
   private readonly onHover:
     | ((cell: Cell | null, at?: { x: number; y: number; span?: boolean }) => void)
     | null
+  private readonly onFit: (() => void) | null
 
   private matrix: DenseMatrix | null = null
   /** Base-pair mapping per axis; `null` where the axis has no single one. */
@@ -2090,6 +2104,7 @@ export class HeatmapView {
     this.onDrawing = options.onDrawing ?? null
     this.selectionLabel = options.selectionLabel ?? null
     this.onHover = options.onHover ?? null
+    this.onFit = options.onFit ?? null
 
     // The `metacooler show` defaults, verbatim (spec §7.1). Two NaN bounds mean
     // "vmin 0, vmax at the 99th percentile of the non-zero transformed values",
@@ -2836,6 +2851,15 @@ export class HeatmapView {
   }
 
   /**
+   * The whole picture back, as the reader's gestures ask for it: the caller's
+   * {@link HeatmapOptions.onFit} where it has one, {@link fit} where not.
+   */
+  private putBack(): void {
+    if (this.onFit === null) this.fit()
+    else this.onFit()
+  }
+
+  /**
    * Pan by a screen distance in CSS pixels. Positive `dx` drags content right.
    *
    * Held on the diagonal, only the part of the pan that runs along it: the line
@@ -2987,6 +3011,13 @@ export class HeatmapView {
    * One scalar still serves both axes, `clampView` stands the band back on its
    * anchor, and what the caller gets is the stretch it asked for at as much
    * magnification as the picture allows.
+   *
+   * On a **square** block the rows are centred on the same stretch, on the
+   * diagonal where it has one — {@link zoomToBand}'s rule, for the same reason:
+   * a stretch of one axis means *this stretch, against itself*. A band turned
+   * square opens on that square (`MatrixPanel.alongDiagonal`), and a plot wider
+   * than it is tall still shows the stretch across it rather than the rows'
+   * fit, which would widen the window on every turn and back.
    */
   showCellSpan(cols: [number, number]): void {
     const plot = this.plotRect
@@ -2997,7 +3028,12 @@ export class HeatmapView {
       this.minZoom(),
       this.maxZoom(),
     )
-    this.originX = (cols[0] + cols[1]) / 2 - plot.width / this.zoom / 2
+    const centre = (cols[0] + cols[1]) / 2
+    this.originX = centre - plot.width / this.zoom / 2
+    // `row = col − offset`. A band's rows are pinned to its anchor by the clamp
+    // below whatever this says.
+    const offset = this.diagonalOffset()
+    if (offset !== null) this.originY = centre - offset - plot.height / this.zoom / 2
     this.clampView()
     this.syncScales()
     this.changed()
@@ -3459,6 +3495,30 @@ export class HeatmapView {
   /** `true` where this block has a diagonal to be put on. */
   get hasDiagonal(): boolean {
     return this.diagonalOffset() !== null
+  }
+
+  /**
+   * Whether the diagonal runs through the **middle** of the window on screen —
+   * the half of it a quarter in from each edge — or `null` where the block has
+   * no diagonal at all (§7.1).
+   *
+   * The middle, not the frame: a view that has been dragged off the line with
+   * the diagonal still clipping one corner is a picture of the contacts away
+   * from it, and a colour range measured for the line is no range for it. What
+   * `MatrixPanel` decides whether a range must follow the view by.
+   */
+  diagonalThroughView(): boolean | null {
+    const offset = this.diagonalOffset()
+    if (offset === null) return null
+    const { rows, cols } = this.cellWindow()
+    const inset = (extent: [number, number]): [number, number] => {
+      const quarter = (extent[1] - extent[0]) / 4
+      return [extent[0] + quarter, extent[1] - quarter]
+    }
+    const [r0, r1] = inset(rows)
+    const [c0, c1] = inset(cols)
+    // `col = row + offset`: the rows' middle carried onto the columns.
+    return r0 + offset < c1 && r1 + offset > c0
   }
 
   /**
@@ -5811,7 +5871,7 @@ export class HeatmapView {
         this.zoomAt(plot.x + plot.width / 2, plot.y + plot.height / 2, 1 / KEY_ZOOM)
         break
       case 'Home':
-        this.fit()
+        this.putBack()
         break
       default:
         handled = false
@@ -6157,7 +6217,7 @@ export class HeatmapView {
       // Beats the pending single click, which is the point: this is "put it
       // back", not "go there and put it back".
       cancelPendingClick()
-      this.fit()
+      this.putBack()
       this.changed()
     }
     const onLeave = (): void => {
@@ -6298,7 +6358,7 @@ export class HeatmapView {
         // beat the first tap's pending navigation.
         lastTapAt = 0
         cancelPendingClick()
-        this.fit()
+        this.putBack()
         this.changed()
         return
       }

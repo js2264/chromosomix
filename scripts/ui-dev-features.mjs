@@ -93,7 +93,7 @@ async function openMetacool() {
 
 /** The lab's store, which names no mock community, on or off. */
 async function labStore() {
-  await page.click('text=RSG lab data')
+  await page.click('text=Example datasets')
   await sleep(2500)
 }
 

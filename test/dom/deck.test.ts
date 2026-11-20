@@ -100,6 +100,8 @@ function leadPanel(
     selected: [] as unknown[],
   }
   const panel = {
+    setRegridListener: () => {},
+    reachViewport: () => {},
     setViewportListener: () => {},
     setDeckExport: () => {},
     setCardFor: (target: unknown) => {

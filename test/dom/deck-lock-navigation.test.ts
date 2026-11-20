@@ -127,10 +127,23 @@ function release(): void {
 function leadPanel() {
   /** Every window the deck put this map at. */
   const shown: Array<[number, number]> = []
-  const at = { origin: 0, cells: BINS, reading: false }
+  const at = {
+    origin: 0,
+    cells: BINS,
+    reading: false,
+    /** Base pairs a cell of the block on screen covers: the zoom's grid. */
+    bp: BINSIZE,
+    /** The region as this map first drew it, where that is not the block on screen. */
+    frame: null as null | { rows: number; cols: number; sequences: { rows: number; cols: number }; bpPerCell: number },
+    /** Whether this map is drawn turned, and how far its band reaches from the diagonal (§17.3). */
+    turned: false,
+    reach: null as number | null,
+  }
   /** The deck's listener, so a test can make this map report. */
   let listener: ((rows: [number, number], cols: [number, number]) => void) | null = null
   const panel = {
+    setRegridListener: () => {},
+    reachViewport: () => {},
     setViewportListener: (next: typeof listener) => {
       listener = next
     },
@@ -141,20 +154,20 @@ function leadPanel() {
     setHoverListener: () => {},
     setLaneHoverListener: () => {},
     showLaneEcho: () => {},
-    turnReach: () => null,
+    turnReach: () => at.reach,
     setLaneFloor: () => {},
     remeasure: () => {},
-    bpPerCell: () => BINSIZE,
+    bpPerCell: () => at.bp,
     cellCount: () => (at.reading ? { rows: 1, cols: 1 } : { rows: at.cells, cols: at.cells }),
     blockLevel: () => 'bin',
-    frameSpan: () => null,
+    frameSpan: () => at.frame,
     lockOrigin: () => ({ rows: at.origin, cols: at.origin }),
-    blockSpan: () => ({ rows: at.cells * BINSIZE, cols: at.cells * BINSIZE, sequences: { rows: 1, cols: 1 } }),
+    blockSpan: () => ({ rows: at.cells * at.bp, cols: at.cells * at.bp, sequences: { rows: 1, cols: 1 } }),
     viewport: () => ({ rows: [0, at.cells], cols: [0, at.cells] }),
     get hasBlock(): boolean {
       return !at.reading
     },
-    isTurned: () => false,
+    isTurned: () => at.turned,
     showViewport: (rows: [number, number]) => {
       shown.push(rows)
       return !at.reading
@@ -204,8 +217,11 @@ afterEach(() => {
   teardown()
 })
 
-/** A deck of the stand-in and one companion, at 200–600 kb. */
-async function deckAt() {
+/**
+ * A deck of the stand-in and one companion, at 200–600 kb — `before` done to
+ * the first map once it has drawn, before the companion is added.
+ */
+async function deckAt(before?: (lead: ReturnType<typeof leadPanel>) => void) {
   let maps: string | undefined
   const deck = new PanelDeck({
     onMapsChange: (next) => {
@@ -234,6 +250,7 @@ async function deckAt() {
   }
   go(`${SEQUENCE}:200000-600000`)
   lead.lands()
+  before?.(lead)
   deck.add({ kind: 'remote', uri: 'https://x.example.org/rep2.cool' })
   await settled()
   const companion = deck.analysable()[0]?.panel.map ?? null
@@ -278,5 +295,150 @@ describe('the deck’s window across a navigation', () => {
     lead.shown.length = 0
     redraw([30, 40])
     expect(lead.shown).toEqual([[30, 40]])
+  })
+})
+
+describe('whether a companion of the same file follows', () => {
+  /**
+   * The note seen under a second copy of the first map's own file: "this block
+   * spans 1.53 Mb × 1.53 Mb where the first map spans 1.53 Mb × 1.53 Mb … the
+   * same name resolved against different sequences". Each region is the block
+   * its map first drew, rounded up to whole cells of *that* block; it was held
+   * to the cells the zooms had read since, a hundred base pairs, so a first map
+   * first drawn at a coarser grid than its companion was a different sequence.
+   */
+  it('holds each map’s region to the cell it was first drawn at, not the one a zoom has read since', async () => {
+    const { deck } = await deckAt((lead) => {
+      // 400 kb first drawn at 30 kb a cell, rounded up to 14 cells: 420 kb.
+      lead.at.frame = { rows: 420_000, cols: 420_000, sequences: { rows: 1, cols: 1 }, bpPerCell: 30_000 }
+      // Zoomed since, to 1 kb a cell.
+      lead.at.bp = 1_000
+      lead.at.cells = 400
+    })
+    const cell = deck.el.querySelector<HTMLElement>('.deck-grid > .deck-panel:not(.is-lead)')
+    const note = cell?.querySelector('.deck-note.deck-unlocked:not(.deck-res-note)')
+    expect(note?.textContent ?? '').toBe('')
+    expect(cell?.classList.contains('is-unlocked')).toBe(false)
+  })
+
+  it('still refuses a region longer by more than a cell of either', async () => {
+    const { deck } = await deckAt((lead) => {
+      lead.at.frame = { rows: 480_000, cols: 480_000, sequences: { rows: 1, cols: 1 }, bpPerCell: 30_000 }
+      lead.at.bp = 1_000
+      lead.at.cells = 480
+    })
+    const cell = deck.el.querySelector<HTMLElement>('.deck-grid > .deck-panel:not(.is-lead)')
+    const note = cell?.querySelector('.deck-note.deck-unlocked:not(.deck-res-note)')
+    expect(note?.textContent ?? '').toContain('resolved against different sequences')
+  })
+})
+
+/**
+ * The first map going wider than the place the deck opened on (§16.3): Fit the
+ * view putting its whole sequence back, or a zoom out past the region's edge.
+ * A companion's zoom was held to the block it had read — the region — so the
+ * lock clamped the deck's window to that block, and a view showing all of its
+ * block asks its zoom for nothing: the map beside a whole chromosome stayed on
+ * the 400 kb it had opened on.
+ */
+describe('a companion when the first map goes wider than the deck’s place', () => {
+  it('reads the rest of the sequence and shows the deck’s window on it', async () => {
+    const { lead, companion, redraw } = await deckAt()
+    expect(shownBp(companion), 'the region it opened on').toEqual([200_000, 600_000])
+    lead.shown.length = 0
+
+    // The first map's whole sequence, 0–1 Mb, in a block of it, reported — the
+    // region it first drew still the 400 kb the deck opened on (§16.4).
+    lead.at.frame = { rows: 400_000, cols: 400_000, sequences: { rows: 1, cols: 1 }, bpPerCell: BINSIZE }
+    lead.at.origin = 0
+    lead.at.cells = BINS
+    lead.lands()
+    await settled()
+    // Its frame, as the block its zoom read for the deck makes one.
+    redraw(companion.viewport()?.rows ?? [0, 0])
+    await settled()
+
+    expect(shownBp(companion)).toEqual([0, 1_000_000])
+    expect(lead.shown, 'and the first map is not dragged back onto the region').toEqual([])
+  })
+})
+
+/**
+ * A turned deck (§16.4, §17.3). Two copies of one yeast file, zoomed and then
+ * turned, were refused as two sequences; stepped on to chrV, the companion was
+ * refused because the first map's band had been framed at the 800 bp it was
+ * cut to on its way in; and a refused companion, never pushed, never read the
+ * rest of the chromosome when the first map went back to it. Up the side of a
+ * band the window is base pairs of separation on both maps, so how deep each
+ * band is cut is not a reason for one of them to stand still.
+ */
+describe('a turned deck', () => {
+  /** The companion drawn turned, its band cut `rows` base pairs deep, and what it is told to reach. */
+  function turned(companion: MatrixPanel, rows?: number): Array<number | null> {
+    const told: Array<number | null> = []
+    const cut = companion.setTurnReach.bind(companion)
+    Object.assign(companion, {
+      isTurned: () => true,
+      setTurnReach: (bp: number | null) => {
+        told.push(bp)
+        cut(bp)
+      },
+      ...(rows === undefined ? {} : { blockSpan: () => ({ rows, cols: 400_000, sequences: { rows: 1, cols: 1 } }) }),
+    })
+    return told
+  }
+
+  /** The companion's cell, and the line under its heading when it is not following. */
+  function companionCell(deck: PanelDeck): { cell: HTMLElement | null; note: () => string } {
+    const cell = deck.el.querySelector<HTMLElement>('.deck-grid > .deck-panel:not(.is-lead)')
+    return {
+      cell,
+      note: () => cell?.querySelector('.deck-note.deck-unlocked:not(.deck-res-note)')?.textContent ?? '',
+    }
+  }
+
+  it('follows a band cut shallower than the first map’s, as a square map follows a shorter block', async () => {
+    const { deck, lead, companion } = await deckAt()
+    turned(companion, 50_000)
+    lead.at.turned = true
+    lead.at.reach = 600_000
+    // The region each first drew is a square, whichever way it is drawn now.
+    lead.at.frame = { rows: 400_000, cols: 400_000, sequences: { rows: 1, cols: 1 }, bpPerCell: BINSIZE }
+    lead.lands()
+    await settled()
+    const { cell, note } = companionCell(deck)
+    expect(note()).toBe('')
+    expect(cell?.classList.contains('is-unlocked')).toBe(false)
+  })
+
+  it('cuts a companion to the first map’s reach while it follows, and gives it its own box while it does not', async () => {
+    const { deck, lead, companion } = await deckAt()
+    const told = turned(companion)
+    lead.at.turned = true
+    lead.at.reach = 300_000
+    lead.lands()
+    await settled()
+    expect(told.at(-1)).toBe(300_000)
+    const { cell } = companionCell(deck)
+    cell?.querySelector<HTMLButtonElement>('button[title^="Following the other maps"]')?.click()
+    expect(told.at(-1), 'off the chain, at its own zoom').toBeNull()
+    // The first map zooms: its reach moves, and the band beside it does not.
+    lead.at.reach = 120_000
+    lead.lands()
+    await settled()
+    expect(told.at(-1)).toBeNull()
+    cell?.querySelector<HTMLButtonElement>('button[title^="Moving on its own"]')?.click()
+    expect(told.at(-1), 'back on the chain').toBe(120_000)
+  })
+
+  it('refuses a square map beside a turned first map, in words about the rows and not the sequences', async () => {
+    const { deck, lead } = await deckAt()
+    lead.at.turned = true
+    lead.at.reach = 300_000
+    lead.lands()
+    await settled()
+    const { note } = companionCell(deck)
+    expect(note()).toContain('the first map is turned and this map is square')
+    expect(note()).not.toContain('different sequences')
   })
 })

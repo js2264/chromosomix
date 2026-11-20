@@ -12,7 +12,7 @@
 
 import { UNBINNED_NAME } from '../constants'
 import { ViewerError } from '../errors'
-import { getH5 } from '../h5/bootstrap'
+import { getH5, h5HeapBytes } from '../h5/bootstrap'
 import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
@@ -1267,6 +1267,67 @@ async function handleMatrix(
 async function readMatrix(
   request: Extract<WorkerRequest, { kind: 'matrix' }>,
 ): Promise<MatrixResult> {
+  const swap = request.balance === true ? await weighedRung(request) : null
+  if (swap === null) return readMatrixAt(request)
+  const result = await readMatrixAt(swap.request)
+  return { ...result, unweighted: swap.skipped }
+}
+
+/**
+ * A balanced read of a sibling rung that carries no weights, asked again of
+ * the nearest coarser one that does — or `null` to read it as asked (§2, §3.4).
+ *
+ * A ladder need not be balanced at every rung: the E. coli micro-C `.mcool`
+ * the lab shares stores 10 bp beside 100 bp … 10 kb and balanced every rung but
+ * the 10 bp one. A zoom with balanced counts on came down to that rung and was
+ * refused — the read reached `applyWeights` and threw, and the refusal took the
+ * place of a map that had been fine a notch before. Balanced counts at 10 bp do
+ * not exist in that file; the nearest picture that does is the 100 bp one, so
+ * that is what answers, and the block says which rungs it went round
+ * (`MatrixResult.unweighted`) so the zoom stops asking for them
+ * (`ui/refine.ts`). The pooling asked for is carried onto the coarser rung's
+ * bins, so the cell is no finer than the one planned.
+ *
+ * The open map itself is never stepped round: a file whose open map is not
+ * balanced does not offer balanced counts at all (`OpenResult.hasWeights`).
+ * Where no coarser rung carries weights either, the read goes ahead as asked
+ * and refuses as it always did.
+ */
+async function weighedRung(
+  request: Extract<WorkerRequest, { kind: 'matrix' }>,
+): Promise<{ request: Extract<WorkerRequest, { kind: 'matrix' }>; skipped: string[] } | null> {
+  const asked = request.rung
+  if (asked === undefined || asked === '') return null
+  const open = requireSession().mc
+  const mc = await mapFor(asked)
+  if (mc === open || mc.hasWeights) return null
+  const from = mc.binsize ?? 0
+  if (!(from > 0)) return null
+  const skipped = [asked]
+  const coarser = open.entries
+    .filter((name) => /^\d+$/.test(name) && Number(name) > from)
+    .sort((a, b) => Number(a) - Number(b))
+  for (const name of coarser) {
+    const isOpen = open.binsize !== null && Number(name) === open.binsize
+    const each = isOpen ? open : await mapFor(name)
+    if (!each.hasWeights) {
+      skipped.push(name)
+      continue
+    }
+    const to = each.binsize ?? Number(name)
+    const k = Math.max(1, Math.round((Math.max(1, request.binsPerCell ?? 1) * from) / to))
+    const { rung: _rung, binsPerCell: _pooling, ...rest } = request
+    return {
+      request: { ...rest, ...(isOpen ? {} : { rung: name }), ...(k > 1 ? { binsPerCell: k } : {}) },
+      skipped,
+    }
+  }
+  return null
+}
+
+async function readMatrixAt(
+  request: Extract<WorkerRequest, { kind: 'matrix' }>,
+): Promise<MatrixResult> {
   const open = requireSession().mc
   // The rung the caller named, and the request's own extents translated onto it.
   // Both are no-ops for the ordinary read, which names no rung: `mapFor` hands
@@ -2203,7 +2264,12 @@ function handleReadPlan(): ReadPlans | null {
 
 function handleStats(): StatsResult {
   const { source } = requireSession()
-  return { total: source.stats(), lastOp: { ...lastOp }, calls }
+  return {
+    total: source.stats(),
+    lastOp: { ...lastOp },
+    calls,
+    memory: { wasm: h5HeapBytes(), cache: source.heldBytes?.() ?? null },
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2293,12 +2359,15 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
 }
 
 async function handle(request: WorkerRequest): Promise<void> {
-  calls++
+  // The status bar's own ask for these counters is not one of them, and is no
+  // reason for the census to stand aside: it comes once a second (§12).
+  const counted = request.kind !== 'stats'
+  if (counted) calls++
   // The census and a read marked `background` go behind every other request:
   // one waits between its steps (`handleContacts`), the other before it starts.
   const background = request.kind === 'contacts' || (request.kind === 'matrix' && request.background === true)
   if (background && request.kind === 'matrix') await foreground.quiet(() => cancelled.has(request.id))
-  const ended = background ? null : foreground.begin()
+  const ended = background || !counted ? null : foreground.begin()
   const before = session?.source.stats()
   const summing = followCells(request.id)
   try {

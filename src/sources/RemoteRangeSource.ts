@@ -547,6 +547,11 @@ export class RemoteRangeSource implements ByteSource {
     return { requests: this.requests, bytes: this.bytesRead }
   }
 
+  /** Bytes of chunks retained now. */
+  heldBytes(): number {
+    return this.cachedBytes
+  }
+
   /** Zero the counters, so a budget test can measure one view change. */
   resetStats(): void {
     this.requests = 0

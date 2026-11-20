@@ -129,6 +129,28 @@ export function laneStartsFlipped(edge: LaneEdge): boolean {
   return !laneIsHorizontal(edge)
 }
 
+/**
+ * The flip a lane is **drawn** with: its own beside a square map, and under a
+ * turn (§17.4) the one that has it grow **towards the band**, whatever it is
+ * stored as.
+ *
+ * A turned map has one stack, below the band, and every lane falls into it from
+ * whichever edge it was put on. Drawn with its own flip there, a lane from beside
+ * the map — turned on arrival to grow away from it on that side
+ * ({@link laneStartsFlipped}), which is where a computed track opens — hung
+ * downwards, away from the picture it annotates, under lanes from above and
+ * below that rose to meet it. The turn is a presentation and not an edit, so the
+ * stored flip is not touched and is what the square map draws again.
+ *
+ * Except on a lane drawn as a **heatmap**, whose flip reverses its colours rather
+ * than its direction (§18.12): there it is kept, so turning the map does not
+ * recolour the lane.
+ */
+export function drawnFlip(style: { readonly flip: boolean; readonly mode?: string }, turned: boolean): boolean {
+  if (!turned || style.mode === 'heatmap') return style.flip
+  return !laneGrowsInward('bottom')
+}
+
 /** Canvas coordinate of an across-offset, on the axis the lane is thick in. */
 export function acrossToCanvas(frame: LaneFrame, across: number): number {
   return frame.acrossFrom + laneOutward(frame.orientation) * across

@@ -24,7 +24,7 @@ import type { AnnotationStore } from '../annotations/store'
 import { LANE_EDGES, hasAMovableAxis, placementOn, type AnnotationEntry, type AnnotationKind, type FeatureSet } from '../annotations/types'
 import type { MapId } from '../annotations/placement'
 import { CROSSHAIR_COLOR, type HeatmapView } from '../render/heatmap'
-import { laneIsHorizontal } from '../render/lane'
+import { drawnFlip, laneIsHorizontal } from '../render/lane'
 import type { OverlayAxes, OverlayFrame } from '../render/overlays'
 import { MARK_REACH } from '../render/overlays'
 import { placeRays, type RotatedBlock } from '../render/rotate'
@@ -1007,7 +1007,9 @@ export class LaneGestures {
             // the frame which way a larger value is drawn, and it can only be
             // asked in the units it answers in.
             drag.within + outward * (now - drag.from0),
-            drag.members[0]?.style.flip === true,
+            // As the lane is drawn, which under a turn is towards the band
+            // whatever it is stored as (§17.4).
+            drag.members[0] !== undefined && drawnFlip(drag.members[0].style, this.turned !== null),
           ),
         }
         this.host.schedule()
@@ -1186,6 +1188,8 @@ export class LaneGestures {
               run: (stretch) => void copyStretch(client, hit.entry.id, stretch),
             }
           : null,
+        // Under a turn every lane grows towards the band (§17.4).
+        this.turned !== null,
       )
     }
 

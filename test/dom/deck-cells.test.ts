@@ -126,6 +126,8 @@ function leadPanel() {
     cols: [{ contig: 'chr1', start: 10000, end: 30000, unitFrom: 10, unitTo: 30 } as LocusWindow],
   }
   const panel = {
+    setRegridListener: () => {},
+    reachViewport: () => {},
     setViewportListener: (listener: typeof state.viewport) => {
       state.viewport = listener
     },

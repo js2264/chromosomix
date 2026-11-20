@@ -132,7 +132,14 @@ show. The properties that keep this inside §2 rather than beside it:
   is gone before the view reaches it; and the last step, onto the finest rung, is taken whenever
   the view can show it, factor of two or not. A view showing its whole block reads nothing for the
   block's edges — it is pressed against every one of them because it shows all of it — until the
-  reader pulls back past them;
+  reader pulls back past them. **A turned map's window is the on-diagonal square of its columns**
+  (§17), in the square block's cells: its drawn columns are half-cells of the rotation and its rows
+  distance from the diagonal, not a place. A block read from a sibling rung — every block after the
+  first, with the preference on — used to be asked for its window as a square map's is, its band's
+  rows read as loci and its half-cells as cells, so the ladder was told of a window the view was not
+  showing, read blocks that did not cover it, and read again on the next notch; and a band landing
+  under a zoom made for a coarser block was cut as deep as that block's cells, a fraction of the box,
+  and cut again on the next frame. Both made the triangle stutter where the square map did not;
 - **one block, never tiles.** The picture is always exactly one bounded read, drawn whole. Up to eight
   are *retained*, within 160 MB, so that zooming back out is a swap rather than a request, which is a
   small bounded cache of blocks and not a tile cache: nothing is evicted mid-picture and nothing is
@@ -147,9 +154,27 @@ show. The properties that keep this inside §2 rather than beside it:
   zoom doubles, ending on those bins. It used to end on the rung the file was opened at, which made
   the finest data a reader could zoom to depend on which entry a link happened to name. A MAG of no
   more bins than the plot can show is the finest data in its file from the first read, so §2's own
-  case reads nothing more; a larger one reads its own bins once a zoom can show them;
+  case reads nothing more; a larger one reads its own bins once a zoom can show them. **With balanced
+  counts on, the finest rung is the finest that is balanced.** A ladder need not carry weights at
+  every rung — the lab's E. coli micro-C `.mcool` balanced 100 bp to 10 kb and not its 10 bp — and a
+  zoom that came down to an unbalanced rung was refused there, its refusal (*no /bins/weight
+  column*) taking the place of a map that had been fine a notch before. A balanced read of a rung
+  with no weights is answered by the nearest coarser rung that has them, with the pooling asked for
+  carried onto its bins (`weighedRung`, `worker/reader.worker.ts`), and the block names the rungs it
+  went round (`MatrixResult.unweighted`); the ladder takes them off its rungs on the first such
+  block, so the zoom comes to rest on the 100 bp rung and asks nothing more of the 10 bp one, and a
+  resolution picked at an unbalanced rung is drawn from the one above it (§3.4). Learnt from the
+  blocks rather than asked of the file at open, which would walk every rung's `/bins` before the
+  first picture; and per view, so the same map on raw counts zooms on to 10 bp;
 - **it is bounded by the view.** A zoom can never widen past the domain the view was entered on, so
-  it cannot become the full pixel scan §7.3 gates;
+  it cannot become the full pixel scan §7.3 gates. **And the domain is what a refit puts back** — a
+  double click, a double tap, Home, `0`, *Fit the view* (`BlockLadder.whole`): the finest retained
+  block that spans it goes on screen and is fitted, which the view's first read always was, so this
+  is usually free; where none is retained the domain is read, at the screen's grid, the block in hand
+  fitted meanwhile, and the view is fitted to the domain when it lands unless the reader has moved
+  since. A refit used to fit the block in hand, which after a zoom is the window last read around the
+  view: zoomed to 100 bp at the end of yeast chrIV, a double click showed 1.37–1.53 Mb at 100 bp, a
+  tenth of the chromosome, and a view showing its whole block reads nothing more (above);
 - **it is a preference, and it is on.** A view's first read is screen-sized too (§7.2), so a map opens
   at the screen's resolution — a chromosome of a remote file in well under a second, whatever rung it
   was opened at — and sharpens as the reader zooms. It is the tick at the head of the crumb bar's
@@ -2507,7 +2532,7 @@ still do not, and `test/unit/bins-guard.test.ts` still proves it for every unbal
 reads it back here against cooler's own `matrix(balance=True)` — whole chromosomes, a window across
 a seam, the whole genome and a block between two sequences after `cooler coarsen` — `NaN` where
 cooler's is and every other cell to Float32's precision, the type the block is held in (in the
-goldens job of `.github/workflows/test.yml`, with the other fixtures cooler builds; nothing compared
+test job of `.github/workflows/test.yml`, with the other fixtures cooler builds; nothing compared
 is committed, §7.5 says how it is made).
 
 ### 6.5 Drawn to a total — subsampled or oversampled
@@ -2678,10 +2703,30 @@ diverges from what a reader reproduces locally.
   the view.** A range kept across a zoom is still automatic but no longer the view's own — after a
   zoom from a whole chromosome to a domain, a range for cells many times the size of the ones on
   screen — so *auto* is never greyed, and a press measures the stretch of the block in view, by the
-  same rule, and keeps it as the range the next refine holds (`MatrixPanel.measureInView`)
+  same rule, and keeps it as the range the next refine holds (`MatrixPanel.measureInView`).
+  **An automatic range follows a view off the diagonal.** Kept is right along the line, where it was
+  measured: a drag along it meets the population of contacts it was measured on. Off it, it is not
+  that population — contacts fall by orders of magnitude with distance, so a range measured round the
+  diagonal is a floor most of the field away from it is under. Dragged sideways off K562 chr7 at
+  25 kb, everything ten megabases from the line drew white at −3.3, though every block had been read,
+  and a reader looking at white after a drag concluded that nothing had loaded. So while the middle
+  of the view — the half of it a quarter in from each edge — is off the diagonal, the range is
+  measured on the cells in view, as *auto* measures it, once the view has stood still for 250 ms and
+  again on every block that lands there; and on the way back onto the line the range it had there
+  is put back — or the range of a wider block read meanwhile, by the rule above — so the diagonal is
+  neither drawn on the far field's range nor comes back another colour from the one it left
+  (`MatrixPanel.followOffDiagonal`). Measured again on the way back instead, yeast IV at 1 kb came
+  back at −3.0 to −0.3 where it had left at −4.2 to −1.1. The same window then draws its
+  compartments, at −4.6 to −3.5. Only an automatic range: a bound typed is a decision
+  and the panel never moves it. Not on a turned map, whose picture is a band along the diagonal by
+  construction, nor on a block the diagonal does not cross, whose range is already its own
 - the **cell size** is named in the key, on its own line under the scale's name, and in the exported
   key as well — it is the one fact about a refining map that cannot be recovered from the pixels, and
-  a figure that carries it needs no caption to say it
+  a figure that carries it needs no caption to say it. It is the line under the heading's number, to
+  the base pair, from the same block: a block read from the open rung names no bin size of its own,
+  and is measured from the open map's — which the whole-genome view used to give its panel as the
+  whole file's pooled grid, so chr7 zoomed to the 10 kb rung a K562 map was opened at was keyed
+  `760 kb` under a line reading `10 kb`, and E. coli at its open 200 bp `1.2 kb`
 - separators at genome or contig boundaries, in `metacooler show`'s two greys — and **heavier than its
   0.5 and 1**: 1.5 CSS pixels between sequences and 2 between genomes or selection blocks, in every
   picture, since drawn at the larger of the CLI's width and one device pixel a line between two
@@ -2759,10 +2804,33 @@ straight from the values (*a large block is drawn at the size it is looked at*, 
 are canvas transforms over the in-memory matrix. A colour-vision-safe
 colormap is selectable; keyboard pan and zoom are supported — on the focused map the arrows pan,
 Page Up and Page Down zoom about the centre a wheel notch at a time, and Home refits — and from
-anywhere in the window `0` refits (*Fit the view*, by its place, so AZERTY's bare `à` does) and
+anywhere in the window `0` refits (*Fit the view*, by its place, so AZERTY's bare `à` does), as a
+double click on the plot does: the whole of the view's domain — the chromosome, region or genome it
+was opened on — at the resolution that fits the screen, never only the block a zoom last read (§2) — and
 Space locks the map onto its diagonal (§8.9). `−` and `+` are not a zoom on a map: they step its
 resolution (§5.5), and the wheel, a pinch, the paging keys and the boxes zoom. In the 1D browser `0`
 is the whole genome, as a double click is.
+
+**The map's box is a square the reader can size, and only a square.** Bars on its four edges, faint
+until approached, size the box the picture is drawn in, and every edge sets the same side: a square
+block in a square box, the two ends moving it about its middle so the edge under the hand stays under
+it. A double click on a bar gives back the size the map opens at: as much room as there is, the
+height the window can spare after the stacks above and below the map, capped by the width the
+columns leave after the stacks beside it. *Fit the view* undoes pan and zoom and leaves the size as it
+is, and a turned map's box is its own (§17.2). A box drawn as a rectangle, each pair of edges setting
+one side, and *Fit the view* putting the size back too, were offered for a while and taken back: a map
+is read as a square, and undoing a zoom is not resizing the map.
+
+A track grown under the map takes its room out of both sides of the square. It used to leave the box
+at its old side under a ceiling that had come down — the grid's own box does not move when the map
+gives up exactly the height a lane took, and nothing else fitted the box again: a rectangle nobody had
+drawn, which the next touch of a bar snapped back to a smaller square. Every change to the room the
+stacks leave now fits the box again (`MatrixPanel.writeLaneMetrics`).
+
+The size is a preference about the window, like the band's (§17.2): kept in this browser's storage
+(`ui/mapSize.ts`) rather than in a link, shared by every map on screen, and fitted to each panel on the
+way out, so a size chosen beside a wide map is as much of it as fits beside a narrow one and comes
+back whole when the room does.
 
 **The wheel's two axes mean two different things.** Up and down is the zoom, about the pointer — or,
 where the pointer is within four pixels of the diagonal, about the diagonal's nearest point, so a
@@ -3266,7 +3334,7 @@ under `ICE` shows the same picture.
 
 **Every normalisation is held to cooler or cooltools, run in CI rather than read from a golden.**
 `scripts/reprocess_with_cooltools.py` (`npm run fixtures:reprocessed`) has the two packages
-reprocess the demo yeast Micro-C into gitignored fixtures, built in the goldens job of
+reprocess the demo yeast Micro-C into gitignored fixtures, built in the test job of
 `.github/workflows/test.yml` with the other fixtures cooler can write, and read by
 `test/unit/normalise-cooler.test.ts`, which normalises the same blocks here through `deriveBlock` —
 three whole chromosomes at 1 kb, and at 16 kb after `cooler coarsen` the whole genome and a block
@@ -4502,7 +4570,13 @@ turned, where the picture already is one — lit and greyed together on a block 
 cross, a lock waiting for the next one that it does. It is **every map's**: a deck's maps move as one
 (§16.2), and one held on its diagonal beside one that was not would be dragged off it by its own
 neighbour. It outlives a navigation, so a reader stepping along a genome on its diagonal stays on it
-at the next sequence, and like *Refine on zoom* (§2) it is kept by the browser, not the hash.
+at the next sequence, and it is not in the hash. **It is on whenever the app opens**: a contact map is
+read along its diagonal, and a drag that drifts off the line is the commonest way a reader loses
+their place in one. It was off until pressed and the press was kept by the browser, so a reader who
+let go once to look at a contact off the line found every map unlocked in every later visit; a
+release now lasts as long as the page — every map, every navigation — and the next visit starts
+held. The key it used to be kept under is cleared on the first read, so an unlock stored before
+this does not outlive it.
 
 **Space presses it**, from anywhere the keyboard is not already a control's: the one key a hand finds
 without looking. It stands down wherever Space already has a job: a focused button it presses, a
@@ -4528,12 +4602,17 @@ picture's own bottom edge and whose gestures name stretches of the genome, nor o
 diagonal does not cross; and with the lock on, every zoom is about the line's nearest point, near
 or not, as above.
 
-**The corner says how to zoom into a region**, while the pointer is over the map: under the key —
-or in its place when the legend is off — a line or two of plain text, small and in no box, in the
-reader's own modifiers: *⌥ + drag to zoom into a region* and *⇧ + ⌥ + drag to zoom along the
-diagonal* on a Mac, *Alt* and *Shift* elsewhere. It says what a drag will do **now**: one line under
-the diagonal lock, where ⌥ alone already pins the box; *a stretch* under a turn, whose box is a
-stretch of the genome; and Shift's line only where there is a diagonal to pin a box to. **On a
+**The corner says what a drag with a key held does**, while the pointer is over the map: under the
+key — or in its place when the legend is off — a few lines of plain text, small and in no box, in
+the reader's own modifiers, and named by what each gesture does. **Shift zooms**: *⇧ + drag to
+zoom*, the band it names filling the picture in place. **Option refocuses**: *⌥ + drag to refocus
+on a region* and *⇧ + ⌥ + drag to refocus along the diagonal* — the box opened as a view of its own,
+read at its own resolution — on a Mac, *Alt* and *Shift* elsewhere. Both used to be called *zoom*,
+which left a reader no way to tell from the corner that one moves the picture and the other opens a
+new one. It says what a drag will do **now**: Option's one line under the diagonal lock, where ⌥
+alone already pins the box; *a stretch* under a turn, whose box is a stretch of the genome; Shift
+with Option only where there is a diagonal to pin a box to; and, on a map whose view has nowhere to
+open a box, *zoom into* where it would say *refocus on*, since Option then zooms too. **On a
 window of one sequence a last line says the way back out** — *click to see the whole of IV* — since
 a click on a cell there opens the sequence the window is on, and nothing else on the picture says
 so; not on a whole sequence, a pair of windows or a turned map. Nobody finds
@@ -4542,7 +4621,9 @@ is where the hand already is, gone the moment it leaves the map, and drawn in no
 the page's colour keeps it legible over cells without covering them, and its ink is the picture's —
 paper in both themes. Not on a screen with no pointer to hover, nor where the plot is too narrow for
 the key (§7.1). The 1D browser says the same under its ruler while the pointer is over its tracks:
-*⌥ + drag to zoom into a stretch*, *or drag along the ruler*.
+*⇧ + drag to zoom into a stretch*, *or drag along the ruler* — Shift first, as on the map; Option
+does the same there, as it always has, since the browser has no view of its own to open a stretch
+in.
 
 The same gesture is on the **lane stacks** and in the **1D browser**, and it is the same gesture in
 the strict sense — `HeatmapView.bandAt` is the one pixels-to-cells conversion, because §8.4 glues the
@@ -6706,7 +6787,17 @@ down a blank page. The package's description and keywords say the same to npm's 
 ## 12. Performance budgets
 
 Instrumented from the first commit and surfaced on the status bar — *read*, whose panel gives the
-requests and bytes in total and for the last view; these are also paper figures.
+requests and bytes in total and for the last view; these are also paper figures. **They are counted
+again every second**, with the memory and CPU beside them, so they move while the map is pulled
+about: the bar used to ask the reader only when a view was built, and a zoom or a drag reads its
+blocks without one, so *read* sat at the first picture's figure through a hundred megabytes of
+refines. The bar shows bytes and requests together — `25.3 MB · 30 req`, short enough to stay on its
+one line — and does not ask again while an ask is out; the ask is no call of the worker's own and no
+reason for the census to stand aside. *Memory* adds what the reader holds for the open file — the
+HDF5 runtime's memory and the chunks its byte source keeps (`StatsResult.memory`) — to the main
+thread's heap, which is all a page that is not cross-origin isolated can measure of itself and which
+never sees a block being read; a whole-tab measurement, where the browser offers one, already counts
+it.
 
 | Operation | Budget |
 |---|---|
@@ -7313,7 +7404,7 @@ There is one owner. Panels never speak to each other: each reports where it is a
 With N panels each echoing to N−1 others there are N² conversations and no frame in which the deck is
 in one state.
 
-The feedback loop is real and is guarded four ways, because an echo has four shapes. A panel moved
+The feedback loop is real and is guarded five ways, because an echo has five shapes. A panel moved
 programmatically redraws, and redrawing is how a panel reports — so every push returns as a report
 one frame later, quantised to the receiving panel's grid and possibly slid inside its block.
 
@@ -7331,8 +7422,38 @@ one frame later, quantised to the receiving panel's grid and possibly slid insid
    forgives a slide once, and a panel redraws more often than that: a zoom landing a sharper block on
    it is a redraw, and one that slid because its block held less than the deck's window reported the
    slide again and became the driver, dragging every other map onto the stretch it happened to hold.
+5. A report from a panel **still where the lock last put it**, on the block it was put there on — the
+   window it showed after the push, read back from it (`LockMember.viewport`) — is a redraw however
+   late it comes. A panel whose plot is not the window's shape fits the window and shows more of its
+   block on one axis than it was pushed — paper beside a block narrower than the deck's window — so
+   what it reports is wider than what (4) would push; it was swallowed once, by (2), and its next
+   redraw dragged the other maps onto the clamp.
 
 Without (3) a two-resolution deck drifts one coarse cell per frame until it hits a wall.
+
+**A map holding too little of the deck's window reads the rest.** The clamp above was the honest
+answer while every block was read whole: a file that was shorter stopped at its own end. Since a zoom
+reads a window inside the region (§2), the block a map holds is usually a stretch of its sequence,
+and the clamp kept it there — the yeast deck on IV:1.0–1.4 Mb, zoomed, then the micro-C map fitted to
+the whole of IV by *Fit the view* (§7.2) or zoomed out past the stretch, beside a Hi-C map still on
+1.0–1.4 Mb: clamped to its whole block, which is a fitted view, and a fitted view asks its zoom for
+nothing (§2). So a push that reaches more than half a cell past a map's block also asks that map for
+the deck's window (`LockMember.reach`, `BlockLadder.reach`). A block it still holds that spans the
+window goes in at once and the window is shown on it; otherwise the window is read as the map's own
+view would be, and the read is kept for as long as the view stands where the lock put it, rather than
+called off by a frame of the clamp. A block that goes in under a map the lock last put somewhere —
+that read landing, or one the map's own zoom made — is said to the lock before the redraw it makes
+(`MatrixPanel.regrid` → `ViewportLock.landed`), and the map is shown the deck's window again on it, so
+the redraw is the echo of that push. It used to be a report: the place the map had been clamped to,
+on a block that could show more, differing from the deck's window and so taken for a gesture that
+dragged the first map back onto the region. A map the reader has moved since is left where they put
+it. For any of this to reach past the region, a companion's zoom is held to the **whole sequence**
+its block is on (`MapPanel.sequencesOf`, one `range` request per axis, which reads no pixels), as the
+first map's region view always was (§2) — it was held to the block it read, the region itself, and
+the first map's *Fit the view*, zoom out or pan past the region's edge left every companion on the
+region. A file genuinely shorter than the deck's window is clamped or slid as above, a circle's
+frame is still its own ceiling (§8.15), and so is a window a companion off the lead reads of its own
+(below), which its pill names and **widen 3×** is the way out of.
 
 **A navigation clears the deck's window, and only a map drawing the new place speaks for it.** A
 different region is a different window, so the window is put down when the deck is handed one, and
@@ -7401,7 +7522,15 @@ different sequences, whatever the name says, and a shared window between them wo
 The tolerance is one cell of the coarser panel **per sequence on the axis**, because the last bin of
 a contig may be short (§3.3) and a stricter test would refuse every honest pair whose bin size does
 not divide the contig — and a cell never straddles two sequences, so an axis of sixteen chromosomes
-rounds sixteen last cells, not one.
+rounds sixteen last cells, not one. The cell is each region's **own**: the cell of the block it was
+first drawn at, whose whole number of cells its span was rounded up to — not the cell on screen now,
+which a zoom has made finer since. Held to the zooms' cells, a second copy of the first map's own
+file was refused: yeast chrIV (1,531,933 bp) first drawn at 1.6 kb a cell spans 958 cells,
+1,532,800 bp, and a companion first drawn at 200 bp spans 1,532,000 — 800 bp apart, against a
+tolerance of the 200 bp the two zooms had reached — and the reader was told *this block spans
+1.53 Mb × 1.53 Mb where the first map spans 1.53 Mb × 1.53 Mb. The same name resolved against
+different sequences*. Whether it happened depended on the grids two maps happened to open at, which
+is the screen and the deck's resolution at the moment the companion was added.
 
 It used to compare the blocks on screen, and a block a zoom has refined is a window read inside the
 region (§2), as wide as that map's zoom made it. Two maps whose refines read different windows were
@@ -7418,18 +7547,33 @@ sequence on both; a pair that does not is refused in those words, and back at bi
 panel still drawing the level the deck has just left is *not following yet*, and says so, until its
 own read of the new level lands.
 
-A **turned** deck (§16.2) has a second way to disagree, and it is a different fact. Up the side of a
-band is distance from the diagonal, and two bands cut to different depths — each a whole number of
-its own bins — would make one row window two distances. That refusal is about the *bands* and not
-about the sequences, and it is worded as such: borrowing the sentence above would tell a reader their
-files resolved one name against different sequences when they did not, which is a claim they may act
-on. It goes away when the deck is turned back off. The deck cuts every turned companion to the first
-map's reach, in base pairs (§17.3), so two bands agree by construction wherever both blocks hold that
-much, and the refusal says the one way left for them not to: the band was cut to the first map's
-reach, and this map's block does not hold that much. Each used to be cut to its own box, and boxes
-measured while the grid was still settling made two depths out of a layout race, which this refusal
-then blamed on the files' resolutions — and went on blaming them, *each map opens on a fraction of
-its own block*, after the deck had stopped cutting that way.
+A **turned** deck (§16.2) is compared as a square one is. The region a view names is the square a
+turn rotates, so what each frame records is that square, both axes places along the genome, and it
+is not taken again when the turn is pressed: the turn re-runs the derivation on the block in hand,
+and after a zoom that block is a window a refine read inside the region (§2). Framed again on it, two
+copies of one yeast file zoomed into IV and then turned were each held to its own refine's window —
+two windows a few hundred base pairs apart, each padded on its own grid — and the second was told
+*this block spans 26.2 kb × 442.6 kb where the first map spans 26.2 kb × 439.8 kb. The same name
+resolved against different sequences*, and stood still from then on while the first map went back to
+the whole chromosome.
+
+How deep each band is cut is **not** a second gate. One used to refuse two bands that reached
+different distances from the diagonal, and it read the depths off the frames, cut at whatever zoom
+each map held when its block went in: a first map stepped on to chrV from deep inside IV was framed
+as reaching 1.6 kb, and its companion was told *this band reaches 577.6 kb from the diagonal where
+the first map reaches 1.6 kb* for as long as the deck stayed turned. The lock has no need of the two
+depths agreeing. Up the side the window is base pairs of separation on both maps (§16.3), so one row
+window is one distance; a band whose block holds less of it than the first map's is shown the
+window clamped, exactly as a square map beside a longer one is, and a refused map, never pushed, is
+never asked to read what would let it hold more. The deck still cuts every companion **following**
+it to the first map's reach (§17.3), so the bands on one window are one depth wherever their blocks
+hold that much.
+
+The one thing a turned deck has to refuse is a **band beside a square map** — a map whose block has
+no diagonal to turn on while the first map's has, or one a frame behind the press. Up the side of
+one is distance from the diagonal and up the side of the other is a place, so one row window would be
+two different things, and the line under it says so in those words rather than in the sentence
+about sequences.
 
 A panel the gate refuses is **still shown**, still readable and still exportable. Only the lock is
 off, and the panel says so in a line under its own heading rather than only in a tooltip on a chain
@@ -7580,7 +7724,8 @@ the micro-C file's bin size as the map they had just chosen.
 column shows the first map's card with *every map — all N* under its title, in the warn colour: a
 setting changed there is made to **every map of the deck at once**, one moved setting at a time, so
 picking a ramp does not also flatten each map's clip onto the first one's. That is also the state in
-which no task that reads a map can run, and the 1D tasks, which read none, still do (§18.1). *None*
+which a task that reads a map runs only on every map at once — *run on all*, set up from the first
+map as this card is — and the 1D tasks, which read none, run as ever (§18.1). *None*
 holds for as long as the deck does, and a deck put down leaves the next one starred on its first
 map, which is where every deck starts.
 
@@ -8154,6 +8299,18 @@ So the turn is a reading, like `O/E` and the smoothing beside it: one press, and
 down. The hash of an ordinary view stays short because only the reader's "yes" is in it, and a link
 with no `flip` in it opens the way this viewer opens.
 
+**A press keeps the stretch on screen** (§17.1: a presentation that moved the window would not be
+one). What is carried is the stretch along the diagonal — the columns, the one axis that is a
+stretch of genome on a band and a square alike: a square turned opens its band on that stretch, and a
+band turned square opens on the square that stretch cuts from its own sequence, on the diagonal,
+its width setting the zoom (`MatrixPanel.alongDiagonal`). A square's rows off the diagonal are a
+place the band has nowhere to put, and a band's rows name no place at all, so neither is carried. A
+view fitted to its block stays fitted. The press used to refit to the block in hand, and after a zoom
+that block is the window the zoom read around the view (§2): on 334 kb of IV it showed the 1.17 Mb
+read around them, neither the reader's window nor the chromosome. The window is placed in the plot
+the new shape is drawn in, measured at the press — placed in the band's short plot and grown into
+the square afterwards, it came out 139 kb below the diagonal.
+
 A block with no diagonal draws square and **writes nothing back**. Recording the refusal would let a
 metagenome a reader passed through switch the turn off for every map after it, which is a preference
 edited by a navigation.
@@ -8286,11 +8443,15 @@ over a band and four squares is not a comparison. The navigation lock (§16.3) m
 map's window in the same base pairs it measures a square one's, remembering that a rotated cell is
 half a bin — without which every turned panel drew half of what the one beside it drew.
 
-**The band's reach is the deck's too.** Each turned companion is cut to reach as far from the
-diagonal as the first map does, in base pairs converted to its own bins, rather than as far as its
-own box has rows for, and is not cut deeper on the way out as a lone band is (§17.2). A grid lays its
-cells out over several frames, so two panels asking their own boxes at their own moments got two
-answers: two bands of visibly different depths, which the lock then refused to move together (§16.4).
+**The band's reach is the deck's too.** Each turned companion following the deck is cut to reach as
+far from the diagonal as the first map does, in base pairs converted to its own bins, rather than as
+far as its own box has rows for, and is not cut deeper on the way out as a lone band is (§17.2). A
+grid lays its cells out over several frames, so two panels asking their own boxes at their own
+moments got two answers: two bands of visibly different depths on one window. A companion **not
+following** — moving on its own, or refused by the gate (§16.4) — is at its own zoom over its own
+window, and is cut to its own box as a lone band is: the first map's reach is a function of the first
+map's zoom, and a band cut to it changed height under every notch of a wheel over the other map.
+Back on the chain, it is cut to the first map's reach again.
 
 ### 17.4 Tracks under a turned map, and marks on one
 
@@ -8302,6 +8463,17 @@ This is a *presentation* of the placement and not a rewrite of it. The turn is s
 switches on and off, and a track that came back from it on the bottom edge because it happened to be
 turned when they pressed the button would be the picture editing their settings behind them — so
 "back where it came from on the way home" costs nothing, the store never having moved.
+
+**And every lane grows towards the band.** A lane put beside the square map is turned on arrival to
+grow away from it on that side (§8.9) — where a computed track opens (§18.5), or a lane moved there —
+and drawn with that flip in the stack below the band it hung downwards, away from the picture, under
+lanes from above and below that rose to meet it. Under a turn every lane is drawn growing up towards
+the band whatever its flip (`render/lane.ts`, `drawnFlip`), and its labels and its ceiling drag go with
+the drawing. The flip it is stored with is the square map's and is not touched, so a reader turning
+the map and back finds each lane on its side growing the way it did, as each is on the side it was. A
+lane drawn as a heatmap keeps its flip, which reverses its colours rather than its direction; and the
+lane menu's *Grow away from the map* is greyed while the map is turned, where it could change nothing
+on screen.
 
 Marks are placed by the **pair of loci they were always about**, since there is no row axis to ask
 where a locus is:
@@ -8518,20 +8690,38 @@ or not the sentence is printed under it.
 The distinction is not *can this run now* but *can what the reader does next make it run*, and
 `TaskAvailability` is the three answers: `ready`, `waiting` with a sentence, `absent`.
 
-**Every task that reads a map is greyed while a deck has no map starred.** Such a task reads one map
-and the star is how that map is named (§16.5), so a deck the reader has left with no star filled has
-no file for it to run against — and none is guessed for them, the first map least of all, which
-would be the star's old default passed off as a choice. The column says so once, above its cards, in
-the warn colour: *no map is starred, so only the 1D tasks can run*; every row that reads a map is
-greyed with that sentence in its tooltip and without the per-group and per-row lines, which would
-print it twenty times; and the drawer's Run and *run on all* refuse with it in the price's place.
+**With no map starred, a task that reads a map runs on every map at once.** Such a task's plain Run
+reads one map and the star is how that map is named (§16.5), so a deck the reader has left with no
+star filled has no one file for it to run against — and none is guessed for them, the first map
+least of all, which would be the star's old default passed off as a choice. But *run on all N maps*
+names every map, and no star is already the state in which a setting is made to every map at once
+(§16.5); refusing the batch as well made it the one surface where no star meant *nothing* rather than
+*all of them*. So on a deck of two maps or more the drawer's `run on ★` is greyed, with the reason as
+its tooltip in place of the starred map's name it would otherwise give, and so is *recompute here*,
+which is that same Run again, left off a stale heading rather than offered and doing nothing; *run on
+all* is priced and runs as ever; no row is greyed; and the column says it once, above its cards, in
+the warn colour: *no map is starred, so a task that reads a map runs on every map at once, with the
+first map's window, score and settings*. That second half is the batch's own rule, said where it now matters: a
+batch is set up from one map — the framing, the form's seeded numbers, the price and the column's
+*ready* — which is the starred one, and with none starred it is the first, as the *Map* card is the
+first map's while it sets every map (§16.5). Nothing is run on the first map *instead of* the others;
+it is only the one the batch is read off. The drawer's figures open on the *all maps* tab rather
+than on the first map's, which read as the map that had been run on; a task whose every figure is
+one per map — a pileup — still opens on its first, since *all maps* would hold only the line
+pointing back to the tabs.
+
+**On a deck of one map — beside a model or a stack of tracks — every task that reads a map is greyed
+while it is unstarred**, since there is no batch to offer. The column says so once, above its cards:
+*no map is starred, so only the 1D tasks can run*; every row that reads a map is greyed with that
+sentence in its tooltip and without the per-group and per-row lines, which would print it twenty
+times; and the drawer's Run and *run on all* refuse with it in the price's place.
 **The 1D tasks are not greyed.** They read only tracks and sequences (§18.3), so there is no map for
 the star to name and nothing for its absence to stop: they keep their own answers — ready, or waiting
 on a file — and run. They were greyed too at first, because the rule a reader is given is *a task
 runs on the starred map* and a column in which some run and some do not looked like a rule with
 exceptions to learn. But a 1D task does not run on the starred map — its button says *run*, not *run
 on ★* (below) — and greying it under a sentence about a map was the exception. Starring any map puts
-every task back.
+every task back, the plain Run with them.
 
 **The column is asked again whenever the deck's maps change** — a companion's file opening, a cell
 moving to another sample of its collection, a cell closing — as it is when the star moves: which
@@ -8567,9 +8757,10 @@ one.
 
 **The Analysis drawer** is the workspace: parameters, a **Run** button with **cancel** beside it while
 a job runs and the price after the pair, progress, results, exports. On a deck the button reads
-*run on ★*, with the starred map named in its tooltip, and what a plain Run makes — its tab, its
-lanes, its name — is that map's; *run on all N maps* beside it runs the task once per map, in the
-grid's order (§16.9), and is not there on a single map. **A 1D task is one plain *run*, deck or
+*run on ★*, with the starred map named in its tooltip — greyed, with the reason there instead, while
+no map is starred (above) — and what a plain Run makes — its tab, its lanes, its name — is that
+map's; *run on all N maps* beside it runs the task once per map, in the grid's order (§16.9), and is
+not there on a single map. **A 1D task is one plain *run*, deck or
 not**, with no *run on all N maps* beside it: it reads the loaded tracks and sequences and never a
 map (§18.3), so four maps on screen are one answer and not four. It was offered both once; the batch
 read the same tracks once per map and filed as many identical lanes, each named after a map it never
@@ -13448,7 +13639,7 @@ used to go with the toolbar, which left a red line and nothing on the page to pr
 **Each store is drawn by a front that knows what it is for** (`ui/stores/registry.ts`), which is
 why one table for all of them was the wrong shape and is gone:
 
-- **RSG lab data** — a *gallery* (`GalleryView`): one card per published figure, of the shape above
+- **Example datasets** — a *gallery* (`GalleryView`): one card per published figure, of the shape above
   — a title and *open*, the assembly and the provenance as chips (the provenance clipped at the
   card's width and whole on its tooltip), one line with the paragraph that used to be the row on
   its tooltip, and the figure's files behind a fold — under two headings. **Demo**: one yeast
@@ -13464,7 +13655,10 @@ why one table for all of them was the wrong shape and is gone:
   Fig. 2's GM12878 map on chr19 with two labs' CTCF and ATAC-seq and nothing computed, each task of its
   chain — insulation at four scales, peaks on both CTCF tracks, the APA between consecutive peaks, the
   metaplots — opening on the figure's recipe (`analysis`, §18.2), and Fig. S3a–c's bacteria read along their arms — and Meneu et al. 2025's bacterial
-  chromosomes in yeast. Inline, so it costs no request; where its files live is §24.3.
+  chromosomes in yeast. Inline, so it costs no request; where its files live is §24.3. Its mark is
+  a Hi-C map 100 bins square in the viewer's own ramp — decay, domains, loops and the A/B plaid —
+  with nothing written on it (`scripts/make-rsg-mark.mjs`); the letters behind it, shown while it
+  loads, are *EX*. It used to spell *RSG* down its diagonal, which went with the store's old name.
 - **DNA Bacterial Zoo** — a dev feature (§29), published with the multi-genome format: switched
   off, it has no tile. The genome gallery's cards over **one** file: a card a species, whose
   button is the species' session, with its sample and its replicon count as chips and its map, its
@@ -13479,7 +13673,7 @@ why one table for all of them was the wrong shape and is gone:
   (§24.1), fixed here in the registry as a shipped store's page is — `group: species`, no
   `sessions` file, which is what tells the gallery to read the one file rather than IGV's two.
   Read from the lab's bucket on the gesture that opens it (§24.3). Its mark is drawn by the script
-  that draws RSG's, over a map a bacterium would make: a circle, whose far corners are warm, with
+  that draws *Example datasets*', over a map a bacterium would make: a circle, whose far corners are warm, with
   the X its arms, zipped from the origin, draw across the diagonal *DBZ* stands on.
 - **IGV genomes** — a *genome gallery* (`GenomesView`): one card per genome, whose button is its
   pre-configured session — the FASTA with every track IGV ships for it, in the 1D browser — and
@@ -13712,10 +13906,18 @@ one was answered `403 Forbidden` on `&limit=500&from=0`, having answered the sam
 `limit=all`, and `--page-size` is there for the run that disagrees; the tempting uniformity is the
 one thing the evidence rules out.
 
-Around that, three rules that hold for both. Every **whole read is retried** three times when a
-host agrees to answer and then stops talking — an HTTP *status* is never retried, because 4DN's
-JSON-bodied 404 is zero results and retrying it would turn it into a failure. A **refused page says
-what to do**: a 403 on a query carrying `from` names `--page-size 0` in its message, because that is
+Around that, four rules that hold for both. Every **whole read is retried** three times when a
+host agrees to answer and then stops talking. A **request the host would not answer is asked
+again** — a connection refused, reset or dropped before a status line came back, or a status that
+is a server's load rather than an answer about the request (408, 425, 429, 500, 502, 503, 504) —
+after waits of 2, 10, 30, 60 and 120 seconds: six attempts and under four minutes, and the sentence
+the last one ends in says how many there were. The runs that taught it were ENCODE's
+`504 Gateway Time-out` of 2026-10-26 and 4DN's TLS handshakes cut off (`UNEXPECTED_EOF_WHILE_READING`)
+from 2026-11-02, each one request that ended the run at its first answer. Every other status is
+never retried, because each is a decision: 4DN's JSON-bodied 404 is zero results and retrying it
+would turn it into a failure, a bucket's 404 is a README that is not there, and a 403 to a page has
+the fix below; nor is a certificate that is not the host's, which no second attempt changes. A
+**refused page says what to do**: a 403 on a query carrying `from` names `--page-size 0` in its message, because that is
 the fix and no status page will suggest it. And the paged walk stops on `total`, on a short page, or
 on a page that adds no record it has not already seen — the last of which is **fatal when the walk
 is short**, since a portal ignoring `from` would otherwise publish a store whose enrichment covers a
@@ -13730,8 +13932,17 @@ column name** for the same reason, since columns have been added to that file be
 that counted fields would have shifted every cell the week it happened. A run that finds nothing
 exits 2 — distinct from the 1 an HTTP failure exits with — so that a workflow never overwrites a
 good store with an empty one and never has to tell a portal outage from an empty catalogue by reading
-a log. A run that loses **one** front end publishes nothing at all, because the branch is replaced
-wholesale: a missing store would delete last week's good copy of that shelf rather than leave it.
+a log. A run that loses a front end **keeps that front end's shelf and publishes the others**. The
+branch is replaced wholesale, so a store missing from the run would delete its good copy; the
+workflow therefore copies the lost front end's files from the branch — its store or shards, its
+session shelf, its sessions — into the run before it publishes, unchanged, `generatedAt` and all, so
+the shelf still says how old it is, and the run is failed at its very end, after the publish and the
+deploy, so a portal that keeps failing is a red run every week. Until 2026-11 a lost front end
+published nothing at all, which let one portal's outage hold every shelf back: 4DN's portal dropped
+the connection on 2026-11-02, -09 and -13, and ENCODE, IGV and DNA Zoo went unpublished with it. An empty
+catalogue (exit 2) takes the same road, so it is never published over a good one; a front end the
+branch has never held stays unpublished, and a run in which nothing finished and nothing was held
+publishes nothing.
 
 `.github/workflows/stores.yml` runs `igv`, `4dn` and `encode` with their sessions, and `dnazoo`,
 weekly and on demand, uploads everything as a **timestamped workflow artifact** (`stores-<date>`,
@@ -13783,7 +13994,7 @@ bucket answers 404, which a shipped store reads as *Nothing has been published f
 sentence says what publishes this one (`StoreRef.publishedBy`) rather than sending a maintainer to
 the Stores workflow, which has nothing to do with it.
 
-**Nor is the lab's own store.** *RSG lab data* is inline (`demosStore()`, `ui/examples.ts`), and
+**Nor is the lab's own store.** *Example datasets* is inline (`demosStore()`, `ui/examples.ts`), and
 the files its cards open are one folder on the lab's bucket, `demo/store/`, a directory a card or a
 dataset — `yeast/`, `human/`, `gibcus2018/`, `meneu2025/`, `chromosomix_paper/`, `k562/`, every file
 the landing page's *Human Hi-C data* reads (§24.11), and `ecoli/`, the *E. coli* K-12 sequence and genes
@@ -14148,12 +14359,21 @@ show syntax, which this document does better, but to be pressed: the reader's fi
 something that already drew a shelf.
 
 **What CORS costs, measured.** On 2026-09-16 neither `genome.ucsc.edu` nor
-`hgdownload.soe.ucsc.edu` answers a cross-origin `GET`, which puts UCSC's own example hubs and the
+`hgdownload.soe.ucsc.edu` answered a cross-origin `GET`, which put UCSC's own example hubs and the
 whole of GenArk out of reach of every browser-only viewer — this one, igv.js, anything without a
-server. The failure message says so for a `*.ucsc.edu` host rather than sending a reader to check a
-URL that is perfectly correct, and says the part that would otherwise be found out one row at a
-time: pasting such a hub's text gets past the header for the *hub*, and its `bigDataUrl`s are on the
-same hosts and will not open. Downloading the hub and opening it from a connected folder is the road
+server. **On 2026-11-13 `hgdownload.soe.ucsc.edu` did**: `Access-Control-Allow-Origin: *`, a
+preflight allowing `Range`, and `206` to a ranged `GET`, on GenArk's files — a `hub.txt`, a `.2bit`,
+a `chrom.sizes`, a bigBed under `bbi/` — and on `goldenPath` alike (`hg38.2bit`,
+`ncbiRefSeq.txt.gz`). So a GenArk hub, of the 54,942 assemblies GenArk listed that day, opens by its
+URL like any other, and so does a `.2bit` on that host. It exposes nothing past the headers CORS
+lets every page read, so `Content-Range` is hidden and a file's size comes from a `HEAD`, as on 4DN's
+bucket (§8.8). `genome.ucsc.edu` and `genome-euro.ucsc.edu` answered the same request `403` with no
+header, so UCSC's own example hubs are still out of reach as far as that request shows. The failure
+message adds a sentence for a `*.ucsc.edu` host rather than sending a reader to check a URL that is
+perfectly correct, and says the part that would otherwise be found out one row at a time: pasting
+such a hub's text gets past the header for the *hub*, and its `bigDataUrl`s are on the same hosts
+and will not open. That sentence still names every `*.ucsc.edu` host, `hgdownload` among them, which
+since 2026-11-13 is right of the genome browser's hosts only. Downloading the hub and opening it from a connected folder is the road
 that works, and it is the reader's own machine doing the fetching, which is the only place this
 project is willing to move that work to. What this does **not** do is proxy the fetch — routing a
 reader's traffic through a third party to work around somebody else's header is exactly what C1
@@ -14230,7 +14450,8 @@ modelled on those round trips), the first picture in 0.9 s where it took 1.6. Ar
 
 - **Above**, IGV's hg38 (`hg38_1kg`, the IGV store's human genome): RefSeq genes against the map,
   then the sequence, then the bands. The genes and the bands are IGV's own copies and not the files
-  IGV's genome table names, because UCSC's `ncbiRefSeq.txt.gz` carries no CORS header; the sequence is
+  IGV's genome table names, because UCSC's `ncbiRefSeq.txt.gz` carried no CORS header when the example
+was put together (it has since 2026-11-13, §24.10); the sequence is
   the 1000 Genomes FASTA read by range through its index, because the FASTA of IGV's own `hg38` is on
   a bucket that refuses an anonymous reader (§24.3). All three are read from the lab's copies, as the
   rest are.
@@ -14269,6 +14490,26 @@ kilobytes of code is a session that cannot go missing from a bucket. Each is a `
 any a workspace file holds, and its test reads it back through `parseWorkspaceFile`, the validator
 every such file meets. Each carries the reader's own overlay preferences and no column layout, so
 opening it changes neither.
+
+### 24.12 The mark on the landing page
+
+**The masthead is the mark and the name**, the mark's plate 1.17em of a name whose size is
+`clamp`ed to the window — near the name's own height, where the 192 px icon at 1em drew a plate four
+fifths of it. It is drawn **inline** (`ui/markSvg.ts`), not as that icon, for two reasons: it is
+sharp at the size the masthead sets it on any screen, and its cells are elements. **Over the mark or
+the name, the X draws itself**: the anti-diagonal's corners light, its arms run in to the centre a
+step at a time, the six other cells of the diagonal step back while the cross is whole, and the map
+settles again, in under a second. Nothing happens on a press, and nothing moves at all for a reader
+whose system asks for less motion.
+
+**Nothing else of the mark is on the page.** Half of it stood faint in the right margin of a wide
+window for a while, and read as clutter beside a page whose offers are the point of it; the margin is
+empty again.
+
+**It is one drawing with every other picture of the mark.** `scripts/make-app-icons.py` renders
+the icons, writes the favicon and writes `ui/mark.generated.ts`, the cells, lanes, plate and colours
+as data, from the same constants; the page builds its SVG from that data with
+`createElementNS` and attributes alone, because the page's policy allows no inline `style` (§11).
 
 ## 25. A 3D structure beside the map
 
@@ -16773,7 +17014,8 @@ dev feature is held to its tests on every push all the same. A name the registry
 the default run by file (`test/unit/dev-tests.test.ts`), so a feature made public by deleting its line
 (§29.1) cannot leave its tests out by a marker nobody reads, and neither can a marker written where it
 is not read. The same header carries `// @fixtures metacooler` on the suites that open what
-`npm run fixtures` builds, which needs metacooler, a private repository: while none of those fixtures
+`npm run fixtures` builds, which needs metacooler installed and its test data in place (`pip install
+metacooler`, `npm run fixtures:metacooler`), as CI has them on every run: while none of those fixtures
 is on disk the suites are left out rather than failed, so a fresh clone's `npm test` passes or fails on
 the code and never on a file it cannot have, and once any is there they run and fail by name on what is
 missing. What a run leaves out, and the command that runs it, is one line at its top

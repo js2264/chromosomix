@@ -3,16 +3,20 @@
  * The Analysis column while a deck has **no map starred** (§18.1).
  *
  * A task that reads a map reads one, and the star is how that map is named, so
- * with none starred there is nothing for it to run against — and nothing is
- * guessed for the reader. Every such row is greyed, the reason is said once
- * above the cards rather than under each of twenty rows, and the drawer's Run
- * refuses with the same sentence. The 1D tasks read only the tracks, so the
- * star's absence is nothing to them: they keep their own answer, and run.
- * Starring a map puts it all back.
+ * with none starred a plain Run has nothing to run against — and nothing is
+ * guessed for the reader. On a deck of two maps or more, *run on all* names
+ * every map, so it runs: no row is greyed, the column says once above the cards
+ * that the batch is what runs, and the drawer's `run on ★` is greyed with that
+ * sentence. On a deck of one map there is no batch to offer, so every such row
+ * is greyed, the reason is said once above the cards rather than under each of
+ * twenty rows, and the drawer's Run refuses with the same sentence. The 1D tasks
+ * read only the tracks, so the star's absence is nothing to them: they keep
+ * their own answer, and run. Starring a map puts it all back.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import type { RunTarget } from '@/analysis/runner'
 import type { AnalysisContext, AnalysisFraming } from '@/analysis/types'
 import type { BedGraphContig } from '@/analysis/write/bedgraph'
 import { AnalysisWorkspace, type AnalysisWorkspaceHost } from '@/analysis/workspace'
@@ -72,9 +76,21 @@ function context(): AnalysisContext {
 }
 
 const SENTENCE = 'No map is starred, so no task can run.'
+const BATCH = 'No map is starred, so a task that reads a map runs on every map at once.'
 
-function bench(): { workspace: AnalysisWorkspace; unstar(on: boolean): void } {
-  let blocked = false
+/** Two maps, which is what a batch needs to be offered. */
+const MAPS: RunTarget[] = [
+  { map: 'lead', uri: 'lead.cool', label: 'lead.cool' },
+  { map: 'p1', uri: 'rep2.cool', label: 'rep2.cool' },
+]
+
+/**
+ * A workspace whose deck can lose its star: `unstar(true)` on a deck of one map,
+ * where nothing that reads a map runs; `unstar('several')` on a deck of two,
+ * where the batch does; `unstar(false)` stars one again.
+ */
+function bench(): { workspace: AnalysisWorkspace; unstar(on: boolean | 'several'): void } {
+  let state: boolean | 'several' = false
   const store = new AnnotationStore(`no-star|${Math.random()}`, { persist: false })
   const host: AnalysisWorkspaceHost = {
     source: () => null,
@@ -86,17 +102,26 @@ function bench(): { workspace: AnalysisWorkspace; unstar(on: boolean): void } {
     contigs: () => CONTIGS,
     carried: () => [],
     changed: () => {},
-    blocked: () => (blocked ? SENTENCE : null),
+    blocked: () => (state === true ? SENTENCE : null),
+    batchOnly: () => (state === 'several' ? BATCH : null),
+    allTargets: () => (state === true ? MAPS.slice(0, 1) : MAPS),
+    allTargetsReady: async () => (state === true ? MAPS.slice(0, 1) : MAPS),
+    targetCount: () => (state === true ? 1 : MAPS.length),
   }
   const workspace = new AnalysisWorkspace(host)
   document.body.append(workspace.panelEl, workspace.drawerEl)
   return {
     workspace,
     unstar: (on) => {
-      blocked = on
+      state = on
       workspace.refresh()
     },
   }
+}
+
+/** The drawer's buttons in its run row. */
+function runRow(workspace: AnalysisWorkspace): HTMLButtonElement[] {
+  return all<HTMLButtonElement>(workspace.drawerEl, '.analysis-run button')
 }
 
 function warning(workspace: AnalysisWorkspace): HTMLElement | null {
@@ -120,7 +145,7 @@ function rowTitled(workspace: AnalysisWorkspace, title: string): HTMLElement | u
   )
 }
 
-describe('the Analysis column with no map starred', () => {
+describe('the Analysis column with no map starred, on a deck of one map', () => {
   it('says nothing, and greys nothing it would not have, while a map is starred', () => {
     const { workspace } = bench()
     expect(warning(workspace)?.classList.contains('hidden')).toBe(true)
@@ -190,5 +215,53 @@ describe('the Analysis column with no map starred', () => {
     expect(warning(workspace)?.classList.contains('hidden')).toBe(true)
     const rows = all<HTMLElement>(workspace.panelEl, '.analysis-row')
     expect(rows.some((row) => !row.classList.contains('is-waiting'))).toBe(true)
+  })
+})
+
+describe('the Analysis column with no map starred, on a deck of several maps', () => {
+  it('greys no task that reads a map, and says once that the batch is what runs', () => {
+    const { workspace, unstar } = bench()
+    const before = all<HTMLElement>(workspace.panelEl, '.analysis-row').map((row) =>
+      row.classList.contains('is-waiting'),
+    )
+    unstar('several')
+    expect(warning(workspace)?.classList.contains('hidden')).toBe(false)
+    expect(warning(workspace)?.textContent).toBe(BATCH)
+    const after = all<HTMLElement>(workspace.panelEl, '.analysis-row').map((row) =>
+      row.classList.contains('is-waiting'),
+    )
+    expect(after).toEqual(before)
+    const { maps } = rowsByCard(workspace)
+    expect(maps.some((row) => row.title === BATCH || row.title === SENTENCE)).toBe(false)
+    // Said above the cards, not again under a heading or a row.
+    const lines = all<HTMLElement>(workspace.panelEl, '.analysis-group-needs, .analysis-row-needs')
+    expect(lines.every((line) => (line.textContent ?? '') !== BATCH)).toBe(true)
+  })
+
+  it('greys run on the star with the reason, and runs on every map', async () => {
+    const { workspace, unstar } = bench()
+    const { maps } = rowsByCard(workspace)
+    maps.find((node) => !node.classList.contains('is-waiting'))?.click()
+    unstar('several')
+    const run = runRow(workspace).find((node) => (node.textContent ?? '').trim() === 'run on')
+    const batch = runRow(workspace).find((node) => (node.textContent ?? '').startsWith('run on all'))
+    expect(run?.disabled).toBe(true)
+    expect(run?.title).toBe(BATCH)
+    expect(batch?.classList.contains('hidden')).toBe(false)
+    expect(batch?.textContent).toBe('run on all 2 maps')
+    expect(batch?.disabled).toBe(false)
+    // No refusal in the price's place: the batch is going to happen.
+    expect(workspace.drawerEl.querySelector('.analysis-refusal')).toBeNull()
+  })
+
+  it('puts the plain run back the moment a map is starred again', () => {
+    const { workspace, unstar } = bench()
+    const { maps } = rowsByCard(workspace)
+    maps.find((node) => !node.classList.contains('is-waiting'))?.click()
+    unstar('several')
+    unstar(false)
+    expect(warning(workspace)?.classList.contains('hidden')).toBe(true)
+    const run = runRow(workspace).find((node) => (node.textContent ?? '').trim().startsWith('run on'))
+    expect(run?.title).not.toBe(BATCH)
   })
 })

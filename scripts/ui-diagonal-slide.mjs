@@ -1,10 +1,11 @@
 /**
  * The diagonal lock (§7.2, §8.9), in headless Chromium on the yeast micro-C
- * demo. Zoomed in, a sideways scroll is the columns alone; Space locks the view
- * onto the diagonal and lights the toggle beside the turn; then a sideways
- * scroll slides down the diagonal, a drag straight across the map moves it
- * along the line, an Option-drag draws its box on the diagonal, a step to the
- * next sequence stays locked, and a second Space lets go.
+ * demo. The map opens held, its toggle lit; Space lets go, and zoomed in a
+ * sideways scroll is the columns alone; Space again puts the view back onto the
+ * diagonal and lights the toggle beside the turn; then a sideways scroll slides
+ * down the diagonal, a drag straight across the map moves it along the line,
+ * an Option-drag draws its box on the diagonal, a step to the next sequence
+ * stays locked, and a third Space lets go.
  *
  * The line under the title names the window on screen: one locus when the view
  * is on the diagonal, `rows × columns` when it is not — which is what the log
@@ -40,10 +41,12 @@ for (let k = 0; k < 4; k++) {
   await sleep(120)
 }
 await sleep(2500)
-console.log('zoomed in      ', await state())
+console.log('zoomed in, held ', await state())
 await shot('w01-before')
 
-// Unlocked: two fingers sideways are the columns alone, and the view leaves the line.
+// Let go: two fingers sideways are the columns alone, and the view leaves the line.
+await page.keyboard.press('Space')
+await sleep(600)
 for (let k = 0; k < 12; k++) {
   await page.mouse.wheel(60, 0)
   await sleep(40)
@@ -52,7 +55,7 @@ await sleep(2500)
 console.log('sideways, free ', await state())
 await shot('w02-unlocked-columns-alone')
 
-// Space: onto the diagonal, and held.
+// Space again: back onto the diagonal, and held.
 await page.keyboard.press('Space')
 await sleep(2500)
 console.log('Space          ', await state())
@@ -111,7 +114,7 @@ await sleep(2500)
 console.log('V, zoom + slide', await state())
 await shot('w07-next-sequence-still-locked')
 
-// Space again: let go, and a drag goes where the hand does.
+// Space once more: let go, and a drag goes where the hand does.
 await page.keyboard.press('Space')
 await sleep(800)
 await page.mouse.move(centre.x, centre.y)

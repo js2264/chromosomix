@@ -4,10 +4,9 @@
 Why this exists
 ---------------
 The goldens in ``test/golden/`` are built over fixtures that ``make_fixtures.py``
-writes with the metacooler CLI, and metacooler is not on PyPI: a runner without
-access to its repository builds none of them, and the reader suites that compare
-against them never run there. This script is the half of that comparison that
-needs nothing private. Its inputs are four maps of this repository's ``demo/`` —
+writes with the metacooler CLI, which a contributor without metacooler installed
+cannot build. This script is the half of that comparison that needs only
+``cooler``, and maps metacooler really wrote. Its inputs are four maps of this repository's ``demo/`` —
 a ``.metacool`` and an ``.mmetacool`` that metacooler really wrote, a yeast
 ``.cool`` and an E. coli ``.mcool`` — of which the yeast one is also on the lab's
 bucket (``rsglab-data``, ``demo/``), where the app reads it; and its oracle is ``cooler``, which opens every one of them: a ``.metacool`` is a

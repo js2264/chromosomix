@@ -166,11 +166,19 @@ function runnerWith(entries: Array<{ target: RunTarget; result: TaskResult }>): 
   } as unknown as AnalysisRunner
 }
 
-function open(entries: Array<{ target: RunTarget; result: TaskResult }>): AnalysisDrawer {
+/**
+ * @param batchOnly The deck's sentence while no map is starred and the batch is
+ * what runs (§18.1); given, the task is one that reads a map.
+ */
+function open(
+  entries: Array<{ target: RunTarget; result: TaskResult }>,
+  batchOnly: string | null = null,
+): AnalysisDrawer {
   const drawer = new AnalysisDrawer({
     runner: runnerWith(entries),
     context: () => CONTEXT,
     framing: () => FRAMING,
+    batchOnly: () => batchOnly,
     onClose: () => {},
     hasLanes: () => false,
     writeProfile: () => Promise.resolve(),
@@ -180,7 +188,7 @@ function open(entries: Array<{ target: RunTarget; result: TaskResult }>): Analys
     id: TASK_ID,
     title: 'Contact probability',
     group: 'map',
-    venue: 'reader',
+    venue: batchOnly === null ? 'reader' : 'analysis',
     params: [],
     availability: () => ({ state: 'ready' }),
     estimate: () => null,
@@ -243,6 +251,57 @@ describe('the map tabs', () => {
     // Third stop is `all maps`, whose figure is the overlay.
     expect(titles(drawer)[0]).toMatch(/all maps/)
     click(drawer.el.querySelector('.analysis-maps button:last-child'))
+    expect(titles(drawer)).toEqual(['one'])
+  })
+})
+
+describe('the map tabs with no map starred (§18.1)', () => {
+  const UNSTARRED = 'No map is starred.'
+  const lit = (drawer: AnalysisDrawer): string[] =>
+    [...drawer.el.querySelectorAll('.analysis-map.is-on')].map((node) => node.textContent ?? '')
+
+  it('open on all maps, the batch being the only run there is', () => {
+    const drawer = open(
+      [
+        { target: targetOf('lead', 'rep1'), result: resultOf(TASK_ID, [curve('ps', 'P(s)', 'cis')]) },
+        { target: targetOf('m2', 'rep2'), result: resultOf(TASK_ID, [curve('ps', 'P(s)', 'cis', 2)]) },
+      ],
+      UNSTARRED,
+    )
+    expect(lit(drawer)).toEqual(['all maps'])
+    expect(titles(drawer)[0]).toMatch(/all maps/)
+  })
+
+  it('open on the first map where every figure is one per map', () => {
+    const drawer = open(
+      [
+        { target: targetOf('lead', 'rep1'), result: resultOf(TASK_ID, [matrix('apa')]) },
+        { target: targetOf('m2', 'rep2'), result: resultOf(TASK_ID, [matrix('apa')]) },
+      ],
+      UNSTARRED,
+    )
+    expect(lit(drawer)).toEqual(['rep1'])
+  })
+
+  it('keep the tab the reader pressed', () => {
+    const drawer = open(
+      [
+        { target: targetOf('lead', 'rep1'), result: resultOf(TASK_ID, [curve('ps', 'one', 'cis')]) },
+        { target: targetOf('m2', 'rep2'), result: resultOf(TASK_ID, [curve('ps', 'two', 'cis')]) },
+      ],
+      UNSTARRED,
+    )
+    click(drawer.el.querySelectorAll('.analysis-map')[1])
+    expect(lit(drawer)).toEqual(['rep2'])
+    expect(titles(drawer)).toEqual(['two'])
+  })
+
+  it('open on the first map while one is starred, as ever', () => {
+    const drawer = open([
+      { target: targetOf('lead', 'rep1'), result: resultOf(TASK_ID, [curve('ps', 'one', 'cis')]) },
+      { target: targetOf('m2', 'rep2'), result: resultOf(TASK_ID, [curve('ps', 'two', 'cis')]) },
+    ])
+    expect(lit(drawer)).toEqual(['rep1'])
     expect(titles(drawer)).toEqual(['one'])
   })
 })

@@ -438,9 +438,14 @@ export class WholeView {
     this.panelHost = el('div', { class: 'whole-host' })
 
     this.panel = new MatrixPanel({
-      // The bin size of the grid actually on screen. Pooling is not a mode the
-      // panel has to know about: a block of 3 kb cells is a block of 3 kb bins.
-      binsize: props.binsize * this.plan.binsPerCell,
+      // **The open map's own bin size**, which the panel keeps as the base every
+      // block without a `binsize` of its own is measured from — a block read
+      // from the open rung. The whole file's pooled grid is the *effective*
+      // resolution, set just below and before every block (`setResolution`).
+      // Built at the pooled grid, a zoom that landed on the open rung was keyed
+      // at that grid times the block's own: chr7 at 10 kb said `760 kb` in the
+      // map's corner, and E. coli at 200 bp `1.2 kb`.
+      binsize: props.binsize,
       ...(props.caption === undefined ? {} : { caption: props.caption }),
       ...(props.annotations === undefined ? {} : { annotations: props.annotations }),
       ...(presentationOf(props.compare) === undefined
@@ -535,6 +540,10 @@ export class WholeView {
           ? props.onOpenRegion(axisRegion(selection.rows))
           : props.onOpenRegion(axisRegion(selection.rows), axisRegion(selection.cols)),
     })
+    // The bin size of the grid actually on screen, until a block says its own.
+    // Pooling is not a mode the panel has to know about: a block of 3 kb cells
+    // is a block of 3 kb bins.
+    this.panel.setResolution(props.binsize * this.plan.binsPerCell)
 
     this.panelHost.appendChild(this.panel.el)
     this.el = el(

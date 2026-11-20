@@ -58,6 +58,48 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **With no map starred, a deck's map tasks run on every map at once (§18.1).** They used to be
+  greyed until a map was starred. Now only the plain `run on ★` is greyed, with the reason in its
+  tooltip, and *run on all N maps* runs, set up from the first map as the *Map* card is while it sets
+  every map: its window, its score and the form's numbers. The column says so once, above its cards,
+  and the drawer opens a batch's figures on the *all maps* tab. A deck with one map, beside a model
+  or a stack of tracks, still runs only its 1D tasks until the map is starred.
+- **The diagonal lock is on whenever the app opens (§8.9).** Every map is held on its diagonal until
+  the reader lets go — Space, the toggle beside the turn, or the palette's *Diagonal lock* — and a
+  release lasts as long as the page rather than being kept by the browser, so the next visit starts
+  held again. An unlock kept by an earlier version is forgotten.
+- **The hint in the map's corner says what each drag does (§8.9).** *⇧ + drag to zoom* — the band
+  fills the picture in place — then *⌥ + drag to refocus on a region* and *⇧ + ⌥ + drag to refocus
+  along the diagonal*, which open the box as a view of its own; both used to be called *zoom*. The 1D
+  browser's hint leads with Shift too: *⇧ + drag to zoom into a stretch*.
+- **An automatic colour range follows a view off the diagonal (§7.1).** With the lock let go, a map
+  dragged away from its diagonal is measured on what is in view once it stands still, and given its
+  range on the line back when it returns. The range measured round the diagonal is a floor most of the field
+  away from it is under, so a drag sideways off chr7 drew white where every block had been read. A
+  range typed is never moved.
+- **The status bar's *read* and *memory* move as the map does (§12).** Both are counted again every
+  second rather than when a view is built, so a zoom's reads show as they land; *read* shows the
+  requests beside the bytes (`25.3 MB · 30 req`), and *memory* adds what the reader holds for the open
+  file — its HDF5 memory and the chunks it keeps — to the main thread's heap. The note under a
+  status panel's numbers wraps inside the panel, where it ran on past its edge in one line.
+- **The lab's store is called *Example datasets*, no longer *RSG lab data* (§24.2).** The first tile
+  of the landing page's *Connect to a data store*, the drawer it opens and the credit under the example
+  sessions that open its figures say so; what it holds is unchanged. Its tile's mark is still a
+  contact map in the viewer's own colours, but no longer spells *RSG* down its diagonal: the diagonal
+  is a plain Hi-C diagonal, and the letters shown while the picture loads are *EX*.
+- **The app's mark is an X, and has a red track on all four sides.** The anti-diagonal of its contact
+  map is lit from corner to corner through the centre, symmetric about both diagonals, and a few
+  cells round it are quieted so the cross reads at sixteen pixels. A red track runs along every edge
+  of the map, outside the blue lanes on the left and the bottom; the map is smaller to make room, and
+  the margin round the mark is unchanged. The favicon, the install and home-screen icons, the desktop
+  icon, the header, the landing page and the *Add a custom store* tile all carry it
+  (`scripts/make-app-icons.py`, `npm run icons:app`).
+- **The landing page carries the mark larger, and draws its X on hover (§24.12).** The mark beside
+  the name is drawn inline and its plate is near the name's own height, where it was four fifths of
+  it. With the pointer over the mark or the name, the anti-diagonal lights from the corners in while
+  the diagonal steps back, and settles again — not for a reader who asks for less motion. It is built
+  from `src/ui/mark.generated.ts`, which the icon script now writes beside the icons. The half mark
+  that stood faint in the right margin of a wide window is gone again: it read as clutter.
 - **A map opens at the screen's resolution and sharpens as you zoom, down to the finest resolution the
   file stores: *Refine on zoom* is on by default (§2, §7.2, §12).** With nothing picked, a view's
   first read is the stored rung nearest a cell to each pixel of the plot, so a chromosome opens quickly
@@ -332,6 +374,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   page can read where a bucket hides `Content-Range`, as 4DN's does.
 - **`/bins` is listed after the map's first picture (§8.12).** Listing a cooler's bin columns for
   the Metadata card's drop-down was four round trips the map waited for before its view was mounted.
+- **CI builds every fixture from PyPI, and runs the suite once (§29.6).** metacooler is on PyPI, so
+  the Tests workflow installs it beside cooler, cooltools and g3dtools on every push and pull request
+  and builds every fixture, with no token and no checkout of a private repository. metacooler's test
+  data comes from the installed release's sdist (`npm run fixtures:metacooler`,
+  `scripts/fetch_metacooler_data.py`). The two contact lists that sdist leaves out are rewritten by
+  its own seeded generator, and must give the coolers metacooler ships pixel for pixel, at 1 kb and
+  at DpnII fragments. The fixture-free run before the full suite is gone, and so are the steps that
+  ran what they could when the fixtures could not be built. The workflow's jobs are now `build`,
+  `test`, `widgets`, `docs` and, on `main`, `coverage`. The goldens of metacooler's fixtures are
+  rebuilt with 0.2.0; the only change is the version they record.
 
 ### Removed
 
@@ -346,6 +398,74 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A deck turned 45° moves as one (§16.4, §17.3).** Two copies of the yeast micro-C zoomed into IV
+  and then turned left the second *not following: this block spans 26.2 kb × 442.6 kb where the first
+  map spans 26.2 kb × 439.8 kb. The same name resolved against different sequences*; stepped on to
+  chrV with `>`, it said *this band reaches 577.6 kb from the diagonal where the first map reaches
+  1.6 kb*; and from then on it stayed put while the first map was zoomed, double-clicked back to the
+  whole chromosome or stepped on — its band changing height under the wheel all the same. The turn
+  took each map's region again from the window its zoom had read, and a turned map's region was the
+  depth its band happened to be cut to on its way in. Each region is now the square the turn rotates,
+  kept through the turn; how deep two bands are cut no longer stops one following the other, a
+  shallower band being shown the window clamped as a shorter square map is; and only a map following
+  the deck is cut to the first map's reach — one moving on its own keeps its own.
+- **Turning a map keeps what you are looking at (§17.2).** The turn button refitted the picture: pressed
+  on 334 kb of yeast IV after a zoom, the band showed the 1.17 Mb the zoom had read around them —
+  neither your window nor the chromosome. A press now keeps the stretch along the diagonal: the band
+  opens on it, and turned back square the map is on that stretch, on its diagonal. A map showing its
+  whole block still shows its whole block.
+- **Every track grows towards a turned map (§17.4).** Under the 45° turn every track is drawn under the
+  band, and one that had been put beside the square map — a computed track, which opens on its left,
+  or one moved there — grew downwards, away from the picture. Every track now grows up towards the
+  band; turned back square, each is drawn on its side the way it was.
+- **The maps of a deck go wider together (§16.3).** On a deck opened on a region and zoomed, *Fit the
+  view* on the first map — its button, `0`, a double click — put it back on its whole chromosome and
+  left the map beside it on the region; so did a zoom out past the region. The yeast deck on
+  IV:1.0–1.4 Mb showed micro-C over the whole of IV beside Hi-C still on 1.0–1.4 Mb. A companion's zoom
+  was held to the block it had read, the region, and the deck's window clamped to that block asked it
+  for nothing. Its zoom now reaches the whole sequence, as the first map's always has, and a map shown
+  less of the deck's window than it asks for reads the rest and is put on the window when it lands.
+- **A track grown under the map no longer leaves it a rectangle (§7.2).** Growing a track drawn only
+  above or below the map took the map's height and left its width — a rectangle by accident, which
+  the next drag on an edge snapped back to a smaller square; a track drawn under and beside the map
+  shrank the square instead. Both now shrink the square to the room that is left.
+- **The map's key names the resolution the line above it does (§7.1).** On the whole-genome view, a
+  zoom that landed on the rung the file was opened at was keyed at the whole genome's pooled grid
+  times its own: K562 chr7 at 10 kb said `760 kb` in the corner under a line reading `10 kb`, and
+  E. coli at 200 bp said `1.2 kb`. The view gave its map the pooled grid where the open map's bin size
+  belonged.
+- **A balanced zoom stops at the finest rung that is balanced (§2).** A ladder whose finest rung has
+  no weights — the lab's E. coli micro-C `.mcool` stores 10 bp unbalanced — refused the zoom there with
+  *This file has no /bins/weight column*, in place of the map. The read is answered by the nearest
+  coarser balanced rung, 100 bp, and the zoom asks nothing more of the unbalanced one; on raw counts
+  it zooms on to 10 bp as before.
+- **The turned map keeps up with *Refine on zoom* (§2, §17).** A turned map read from a sibling rung
+  told the zoom its band's rows as loci and its half-cells as cells, so it read blocks that did not
+  cover the view and read again on the next notch; and a band landing under a coarser block's zoom
+  was cut too shallow and cut again on the next frame. The triangle was laggy with the preference on
+  and smooth with it off; it now reads around the view it shows, as the square map does.
+- **The built-in stores are refreshed again while a portal is down (§24.3).** The weekly Stores run
+  failed on 2026-10-26 (ENCODE answered `504 Gateway Time-out`), 2026-11-02 and 2026-11-09, and again
+  when run by hand on 2026-11-13 (4DN's portal dropped the connection during its TLS handshake), and
+  each failure published nothing, so no shelf had been refreshed since 2026-10-15. `make_store.py` now asks again
+  when a host does not answer — a connection refused, reset or dropped, or a 408, 425, 429 or 5xx —
+  after waits of 2, 10, 30, 60 and 120 s, and still never retries a 404, a 403 or a certificate that
+  is not the host's. When a front end fails anyway, the workflow republishes its last good shelf
+  unchanged, with its own date, publishes the others, and fails the run at its end so the failure is
+  still seen.
+- **A double click puts the whole chromosome back, at the resolution that fits the screen (§2,
+  §7.2).** With *Refine on zoom* on it fitted the block the zoom had last read around the view: zoomed
+  to 100 bp at the end of yeast chrIV, a double click showed 1.37–1.53 Mb at 100 bp, a tenth of the
+  chromosome, and nothing more was read. A double click, a double tap, Home, `0` and *Fit the view*
+  now show the view's whole domain — the coarser block of it the map opened on, which is still in
+  hand, or a fresh read of it where that has been let go.
+- **A second copy of the first map's file follows the deck (§16.4).** Adding the same map to a deck
+  sometimes left it *not following: this block spans 1.53 Mb × 1.53 Mb where the first map spans
+  1.53 Mb × 1.53 Mb. The same name resolved against different sequences*. Each map's region is its
+  first block's span, rounded up to whole cells of that block, and it was held to the much finer
+  cells the zooms had read since — so two maps first drawn at different grids, which depends on the
+  screen and the deck's resolution when the second was added, disagreed by more than a 100 bp cell.
+  Each region is now held to the cell it was first drawn at.
 - **A wheel or pinch zoom aimed at the diagonal stays on it (§7.2, §8.9).** A zoom keeps the point
   under the pointer fixed, and a pointer a fraction of a pixel off the diagonal carried the view's
   centre off it by that fraction times the zoom, notch after notch: on the whole of K562 chr5, 263 kb

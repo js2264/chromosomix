@@ -315,6 +315,20 @@ export interface LadderOptions {
    * beside this one rather than after it has landed.
    */
   onTarget?(grid: number | null): void
+  /**
+   * Told when a read {@link BlockLadder.whole} made for the whole domain has
+   * gone in, and the reader has not moved since: fit the view to it.
+   */
+  onWhole?(): void
+  /**
+   * Told of every block before the ladder holds it — the view's own first read
+   * it {@link BlockLadder.adopt}s and each of its own — for what a block says
+   * about the file rather than about the window: a balanced read answered from
+   * a coarser rung because the one asked for carries no weights
+   * (`MatrixResult.unweighted`), which {@link attachRefine} takes off the
+   * ladder so the zoom comes to rest above it.
+   */
+  learn?(result: MatrixResult): void
   /** Told when the ladder is destroyed, for whatever its wiring must let go of. */
   dispose?(): void
 }
@@ -373,8 +387,21 @@ export class BlockLadder {
   private readonly options: LadderOptions
   private held: Held[] = []
   private current: MatrixResult | null = null
-  private inflight: { key: string; rows: Extent; cols: Extent; grid: number; cancel(): void } | null = null
-  private pending: { rows: Extent; cols: Extent; key: string } | null = null
+  private inflight: {
+    key: string
+    rows: Extent
+    cols: Extent
+    grid: number
+    cancel(): void
+    /** A read of the whole domain, which the view is fitted to when it lands ({@link whole}). */
+    whole?: boolean
+    /**
+     * A read a deck asked for ({@link reach}): the view on screen when it was
+     * asked, which the read is kept for for as long as the view stays there.
+     */
+    from?: RefineView
+  } | null = null
+  private pending: { rows: Extent; cols: Extent; key: string; whole?: boolean; from?: RefineView } | null = null
   /**
    * Reads that failed, by key.
    *
@@ -412,6 +439,7 @@ export class BlockLadder {
    * for free.
    */
   adopt(result: MatrixResult, rows?: Extent, cols?: Extent): void {
+    this.options.learn?.(result)
     this.current = result
     // A block read from a sibling rung describes itself on that rung's grid;
     // `source` is the window it was asked for, in the open map's bins.
@@ -511,6 +539,14 @@ export class BlockLadder {
     if (flight !== null) {
       const inside = covers(flight.rows, view.rows) && covers(flight.cols, view.cols)
       if (inside && flight.grid <= this.gridWanted(view) * REFINE_FACTOR) return
+      // The whole domain, read for a view that has been put back and has not
+      // moved since, is what that view is waiting for ({@link whole}).
+      if (flight.whole === true && (view.fit === undefined || Math.abs(view.fit - 1) <= FIT_SLACK)) return
+      // A window a deck asked for, while the view stands where the deck put it
+      // and waits for it ({@link reach}): the view is the deck's window clamped
+      // to the block in hand, and reading around *it* is the read that left the
+      // map there.
+      if (flight.from !== undefined && sameWindow(view, flight.from)) return
       flight.cancel()
       this.inflight = null
       this.options.onBusy?.(false)
@@ -529,6 +565,139 @@ export class BlockLadder {
       return
     }
     this.fire(view)
+  }
+
+  /**
+   * Put the view's **whole domain** in hand, for a view about to be fitted —
+   * what a double click asks for (SPECS §7.2).
+   *
+   * A fitted view fits the block on screen, and once a zoom has read its own
+   * blocks that is the window last read around the view: 160 kb of a 1.5 Mb
+   * chromosome, at the 100 bp the zoom had got to. Fitting it was a zoom out to
+   * that stretch and no further, and a fitted view asks for nothing wider
+   * ({@link edgeWanted}) — so the double click that means "the whole thing"
+   * stopped a tenth of the way there, at the finest grid, on whatever part of
+   * the sequence the reader had panned to.
+   *
+   * The finest block in hand that spans the domain goes on screen now, for the
+   * caller to fit — the view's first read always did, so this is usually free.
+   * Where none is held any longer, the domain is read, the block on screen
+   * stays up meanwhile, and {@link LadderOptions.onWhole} is told when it lands
+   * so the view is fitted to it — unless the reader has moved since, when the
+   * block lands where they are, as any other does.
+   */
+  whole(): void {
+    if (this.disposed) return
+    const { ceiling } = this.options
+    const spans = (held: Held): boolean => covers(held.rows, ceiling.rows) && covers(held.cols, ceiling.cols)
+    const shown = this.held0()
+    if (shown !== null && spans(shown)) return
+    let best: Held | null = null
+    for (const held of this.held) {
+      if (spans(held) && (best === null || held.grid < best.grid)) best = held
+    }
+    if (best !== null) {
+      if (this.options.onBlock(best.result)) {
+        this.current = best.result
+        this.report()
+        return
+      }
+      this.drop(best.result)
+    }
+    const key = keyOf(ceiling.rows, ceiling.cols)
+    if (this.refused.has(key)) return
+    if (this.inflight?.whole === true) return
+    if (this.inflight !== null) {
+      this.inflight.cancel()
+      this.inflight = null
+      this.options.onBusy?.(false)
+    }
+    this.paused?.()
+    this.paused = null
+    const screen = this.options.view?.()?.screen
+    const view: RefineView = {
+      rows: ceiling.rows,
+      cols: ceiling.cols,
+      fit: 1,
+      ...(screen === undefined ? {} : { screen }),
+    }
+    this.pending = { rows: ceiling.rows, cols: ceiling.cols, key, whole: true }
+    this.fire(view)
+  }
+
+  /**
+   * Put a block in hand that holds `view` — a window a deck's lock asked this
+   * map to show and the block on screen holds only part of (SPECS §16.3).
+   *
+   * The view shows that window clamped to its block, and a clamp is a view the
+   * ladder never reads for: clamped to the whole block, it is a fitted view,
+   * which asks for nothing wider ({@link edgeWanted}); slid against one edge, it
+   * reads ahead around where it was slid to rather than where the deck is. So
+   * the map one Fit the view or a zoom out had left the region's stretch behind
+   * stayed on that stretch, beside a map showing the chromosome.
+   *
+   * The finest block held that holds the window, clipped to the ceiling, goes
+   * on screen now. Where none does, the window is read as the view's own would
+   * be were it on screen ({@link windowFor}), and kept from the cancel a frame
+   * of the clamped view would otherwise give it for as long as the view stands
+   * where the deck put it ({@link consider}). The block lands where the view
+   * is, as every block does, and the deck shows its window on it.
+   */
+  reach(view: RefineView): void {
+    if (this.disposed) return
+    const { ceiling } = this.options
+    const want = { rows: clip(view.rows, ceiling.rows), cols: clip(view.cols, ceiling.cols) }
+    if (!(want.rows[1] > want.rows[0]) || !(want.cols[1] > want.cols[0])) return
+    const holds = (held: { rows: Extent; cols: Extent }): boolean =>
+      covers(held.rows, want.rows) && covers(held.cols, want.cols)
+    const shown = this.held0()
+    if (shown !== null && holds(shown)) return
+    let best: Held | null = null
+    for (const held of this.held) {
+      if (holds(held) && (best === null || held.grid < best.grid)) best = held
+    }
+    if (best !== null) {
+      if (this.options.onBlock(best.result)) {
+        this.current = best.result
+        this.report()
+        return
+      }
+      this.drop(best.result)
+    }
+    const asked: RefineView = {
+      rows: want.rows,
+      cols: want.cols,
+      fit: 1,
+      ...(view.screen === undefined ? {} : { screen: view.screen }),
+    }
+    // Never narrower than the window (`around` reads a view too wide for memory
+    // pooled), so the block that lands holds it and the next ask is answered
+    // above; a refusal is not asked again.
+    const wanted = this.windowFor(asked)
+    const key = keyOf(wanted.rows, wanted.cols)
+    if (this.refused.has(key)) return
+    const from = this.options.view?.() ?? undefined
+    const flight = this.inflight
+    if (flight !== null) {
+      if (holds(flight)) {
+        // Already on its way: kept for the deck as a read of its own would be.
+        if (from !== undefined) flight.from = from
+        return
+      }
+      flight.cancel()
+      this.inflight = null
+      this.options.onBusy?.(false)
+    }
+    this.paused?.()
+    this.paused = null
+    this.pending = { ...wanted, key, ...(from === undefined ? {} : { from }) }
+    this.fire(asked)
+  }
+
+  /** Whether the view on screen is fitted to the block it shows, as a view just put back is. */
+  private fitted(): boolean {
+    const fit = this.options.view?.()?.fit
+    return fit === undefined || Math.abs(fit - 1) <= FIT_SLACK
   }
 
   /** Consider the last view again once the zoom has paused, in `ms`. */
@@ -752,7 +921,16 @@ export class BlockLadder {
 
     const plan = this.options.plan(pending, view)
     const { promise, cancel } = this.options.read(pending.rows, pending.cols, plan)
-    this.inflight = { key: pending.key, rows: pending.rows, cols: pending.cols, grid: plan.grid, cancel }
+    const whole = pending.whole === true
+    this.inflight = {
+      key: pending.key,
+      rows: pending.rows,
+      cols: pending.cols,
+      grid: plan.grid,
+      cancel,
+      ...(whole ? { whole } : {}),
+      ...(pending.from === undefined ? {} : { from: pending.from }),
+    }
     this.options.onBusy?.(true)
     this.report()
     void promise
@@ -760,9 +938,15 @@ export class BlockLadder {
         if (this.disposed || this.inflight?.key !== pending.key) return
         this.inflight = null
         this.options.onBusy?.(false)
+        this.options.learn?.(result)
         this.keep(result, pending.rows, pending.cols)
-        if (this.options.onBlock(result)) this.current = result
-        else {
+        // Asked before the block goes in, which carries the window across and
+        // so changes how the view is zoomed against its block.
+        const refit = whole && this.fitted()
+        if (this.options.onBlock(result)) {
+          this.current = result
+          if (refit) this.options.onWhole?.()
+        } else {
           this.drop(result)
           this.refused.add(pending.key)
         }
@@ -1195,6 +1379,11 @@ function keyOf(rows: Extent, cols: Extent): string {
   return `${rows[0]}:${rows[1]}|${cols[0]}:${cols[1]}`
 }
 
+/** Whether two views are over the same window, whatever their screens say. */
+function sameWindow(a: RefineView, b: RefineView): boolean {
+  return a.rows[0] === b.rows[0] && a.rows[1] === b.rows[1] && a.cols[0] === b.cols[0] && a.cols[1] === b.cols[1]
+}
+
 function isAbort(err: unknown): boolean {
   return err instanceof Error && err.name === 'AbortError'
 }
@@ -1423,6 +1612,18 @@ export interface RefinablePanel {
   setWaiting(on: boolean): void
   /** The window on screen now ({@link LadderOptions.view}); optional. */
   refineWindowNow?(): RefineView | null
+  /**
+   * Who to ask for the whole domain before the view is fitted
+   * ({@link BlockLadder.whole}); `null` lets go. Optional.
+   */
+  setWholeListener?(listener: (() => void) | null): void
+  /** Fit the view to the block it holds, as a whole read lands; optional. */
+  fitBlock?(): void
+  /**
+   * Who to ask for a window a deck wants shown past the block in hand
+   * ({@link BlockLadder.reach}); `null` lets go. Optional.
+   */
+  setReachListener?(listener: ((view: RefineView) => void) | null): void
 }
 
 /**
@@ -1504,13 +1705,40 @@ export function attachRefine(options: {
   onTarget?: (binsize: number | null) => void
 }): BlockLadder {
   const seconds = new WeakMap<MatrixResult, MatrixResult>()
-  const rungs = options.second === true ? [] : (options.rungs ?? [])
+  const stored = options.second === true ? [] : (options.rungs ?? [])
   const open = Math.max(1, options.binsize)
-  // **The finest rung the file stores**, in bins of the open map: where a zoom
-  // with *Refine on zoom* on comes to rest, whichever rung the file was opened
-  // at (§2). A fraction of one where a finer rung than the open one is stored.
-  const finest = finestFloor(rungs, open)
-  const pick = (): PickedResolution | null => options.picked?.() ?? null
+  // **The rungs this view can read**: every stored one, less any a balanced
+  // read has gone round for want of weights (`MatrixResult.unweighted`) — the
+  // E. coli micro-C `.mcool` balanced every rung but its finest, 10 bp. Learnt
+  // from the blocks rather than asked of the file at open, which would cost a
+  // walk of every rung's `/bins` before the first picture; and per ladder, so a
+  // view rebuilt on raw counts reads them all again.
+  const unweighted = new Set<string>()
+  let rungs: ReadonlyArray<Rung> = stored
+  // **The finest of them**, in bins of the open map: where a zoom with *Refine
+  // on zoom* on comes to rest, whichever rung the file was opened at (§2). A
+  // fraction of one where a finer rung than the open one is stored.
+  let finest = finestFloor(rungs, open)
+  const learn = (result: MatrixResult): void => {
+    const names = result.unweighted ?? []
+    if (names.every((name) => unweighted.has(name))) return
+    for (const name of names) unweighted.add(name)
+    rungs = stored.filter((rung) => !unweighted.has(rung.name))
+    finest = finestFloor(rungs, open)
+  }
+  // A pick on a rung with no weights is drawn from the nearest one above it
+  // that has them, as the reader answers it: planned there, so the ladder
+  // expects the grid the block comes back on rather than asking again for one
+  // it will never get.
+  const pick = (): PickedResolution | null => {
+    const asked = options.picked?.() ?? null
+    if (asked === null || !unweighted.has(asked.rung.name)) return asked
+    const above = rungs.filter((rung) => rung.binsize > asked.rung.binsize)
+    const next = above.length === 0 ? null : above.reduce((a, b) => (b.binsize < a.binsize ? b : a))
+    return next === null
+      ? openPick(open)
+      : { binsize: next.binsize, rung: next, factor: 1 }
+  }
   // The zoom picks while the preference is ticked and nothing is picked: a pick
   // in the link wins (§3.4).
   const refining = (): boolean => refineEnabled() && pick() === null
@@ -1575,12 +1803,24 @@ export function attachRefine(options: {
     ...(options.onTarget === undefined
       ? {}
       : { onTarget: (grid: number | null) => options.onTarget?.(grid === null ? null : Math.round(grid * open)) }),
-    dispose: () => stopRefine(),
+    onWhole: () => options.panel.fitBlock?.(),
+    learn,
+    dispose: () => {
+      stopRefine()
+      options.panel.setWholeListener?.(null)
+      options.panel.setReachListener?.(null)
+    },
   })
   // Every frame, on or off: on, the screen's resolution down to the finest
   // rung; off, the picked resolution, coarser only where the window is too
   // wide for it — and its own resolution again as soon as it is not (§3.4).
   options.panel.setRefineListener((view) => ladder.consider(view))
+  // A double click puts back the view's domain, not the block the zoom last
+  // read around it (SPECS §7.2).
+  options.panel.setWholeListener?.(() => ladder.whole())
+  // A deck's window past the block in hand is read rather than clamped to it
+  // for good (SPECS §16.3).
+  options.panel.setReachListener?.((view) => ladder.reach(view))
   // The preference changes what the window on screen wants, so it is asked
   // again at once rather than at the reader's next gesture.
   const stopRefine = subscribeRefine(() => ladder.reconsider())
