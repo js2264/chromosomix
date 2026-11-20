@@ -256,6 +256,13 @@
   ],
   "pulls": [
     {
+      "number": 183,
+      "commit": "b6cc34b",
+      "title": "Keep a deck's maps on one place across the whole genome: count its sequences end to end",
+      "branch": "js/upbeat-curie-5qk8pa",
+      "date": "2026-11-20T16:54:09Z"
+    },
+    {
       "number": 182,
       "commit": "b7427bc",
       "title": "Draw a metagenome's map as a circle or as two lines",
