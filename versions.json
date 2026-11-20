@@ -1,6 +1,13 @@
 {
-  "latest": "873b766",
+  "latest": "ea8a1a8",
   "versions": [
+    {
+      "commit": "ea8a1a8",
+      "version": "0.21.0",
+      "date": "2026-11-20T14:08:49+01:00",
+      "subject": "Landing page: remove the half mark from the right margin (#179)",
+      "tag": ""
+    },
     {
       "commit": "873b766",
       "version": "0.21.0",
@@ -135,13 +142,6 @@
       "tag": "v0.20.0"
     },
     {
-      "commit": "dccd0ec",
-      "version": "0.19.0",
-      "date": "2026-11-04T22:45:42+01:00",
-      "subject": "Move viewer timings to a separate notebook (#162)",
-      "tag": ""
-    },
-    {
       "commit": "9731db4",
       "version": "0.19.0",
       "date": "2026-11-01T19:24:42+01:00",
@@ -255,13 +255,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 179,
-      "commit": "7f01627",
-      "title": "Landing page: remove the half mark from the right margin",
-      "branch": "remove-landing-watermark",
-      "date": "2026-11-19T13:02:08Z"
-    },
     {
       "number": 168,
       "commit": "bf0eeff",
