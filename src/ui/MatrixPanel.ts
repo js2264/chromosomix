@@ -148,15 +148,19 @@ import {
   axisSpansFor,
   binsOf,
   bpWithin,
+  frameOf,
   groupAt,
+  placesOnFrame,
   separatorsFor,
   slidesAlongDiagonal,
   spanOnAxis,
   toDense,
   unitsOfPlaces,
   viewedPlaces,
+  type FrameStretch,
   type ViewedPlaces,
 } from './blockAxes'
+import type { PlaceAxis } from '../panels/lock'
 import { FIGURE_BACKGROUND, readCanvasPalette, readPageText } from './canvasPalette'
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
@@ -4070,6 +4074,9 @@ export class MatrixPanel {
     // as long as the deck stayed turned.
     if (options.again !== true || this.framed === null) {
       this.framed = { ...this.squareSpan(), bpPerCell: Math.max(1, this.options.binsize) }
+      // The sequences the region lays along each axis, for the same reason and
+      // kept the same way: what the lock counts places on (`lockPlaces`).
+      this.lined = { rows: frameOf(axes.square.rows), cols: frameOf(axes.square.cols) }
     }
     // The presentation a derivation took over, recorded now that the block it
     // was chosen for is actually in. Announced from here rather than from
@@ -6935,7 +6942,8 @@ export class MatrixPanel {
    * two maps whose zooms read different windows are put on one place rather
    * than at one offset into two blocks. Read off the axes the picture is
    * labelled with, so it is right for a block read from a sibling rung and for
-   * one pooled, whose bins are not the file's.
+   * one pooled, whose bins are not the file's. Only the whole story on an axis
+   * of one sequence: across several, {@link lockPlaces} says where each cell is.
    */
   lockOrigin(): { rows: number; cols: number } {
     const at = (axis: LocusAxis | null): number => {
@@ -6944,6 +6952,49 @@ export class MatrixPanel {
     }
     return { rows: this.turned === null ? at(this.locusAxes.rows) : 0, cols: at(this.locusAxes.cols) }
   }
+
+  /**
+   * Where the cells of the block on screen are, per axis, where
+   * {@link lockOrigin} cannot say it: an axis of more than one sequence — the
+   * whole genome, a selection — whose cells the deck's lock counts as places
+   * along the sequences the view was first drawn over, laid end to end
+   * (`panels/lock.ts`, `PlaceAxis`; `ui/blockAxes.ts`, `placesOnFrame`).
+   *
+   * An origin is where the block begins *in its sequence*, and a block a zoom
+   * read inside the genome begins in one of them: the yeast deck zoomed fast
+   * into the whole genome held one block from chrVII and one from chrI, and
+   * counted from each block's start the two maps were put on chrVII:378 kb and
+   * on chrII:148 kb, which is 378 kb into the genome.
+   *
+   * `null` on an axis of one sequence, which its origin and its step say
+   * exactly; above bin level, where the lock counts cells; under a turn, which
+   * only a single sequence has; and where cells pool several sequences.
+   */
+  lockPlaces(): { rows: PlaceAxis | null; cols: PlaceAxis | null } | null {
+    const data = this.data
+    if (data === null || data.level !== 'bin' || this.turned !== null) return null
+    if ((data.contigsPerCell ?? 1) > 1) return null
+    const lined = this.lined
+    const { rows, cols } = this.locusAxes
+    const held = this.placesHeld
+    if (held !== null && held.lined === lined && held.rows === rows && held.cols === cols) return held.places
+    const across = placesOnFrame(lined?.rows ?? null, rows)
+    const along = placesOnFrame(lined?.cols ?? null, cols)
+    const places = across === null && along === null ? null : { rows: across, cols: along }
+    this.placesHeld = { lined, rows, cols, places }
+    return places
+  }
+
+  /** The line each axis of the region was first drawn over: see {@link lockPlaces}. */
+  private lined: { rows: FrameStretch[] | null; cols: FrameStretch[] | null } | null = null
+
+  /** {@link lockPlaces}' answer, for the block and the line it was worked out on. */
+  private placesHeld: {
+    lined: { rows: FrameStretch[] | null; cols: FrameStretch[] | null } | null
+    rows: LocusAxis | null
+    cols: LocusAxis | null
+    places: { rows: PlaceAxis | null; cols: PlaceAxis | null } | null
+  } | null = null
 
   /**
    * The span of the block this view first drew — the region it names, read

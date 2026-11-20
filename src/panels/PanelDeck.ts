@@ -1094,6 +1094,7 @@ export class PanelDeck {
       bpPerCell: () => panel.bpPerCell(),
       cells: () => panel.cellCount(),
       origin: () => panel.lockOrigin(),
+      places: () => panel.lockPlaces(),
       locked: () => this.leadLocked,
       show: (rows, cols) => panel.showViewport(rows, cols),
       viewport: () => panel.viewport(),
@@ -2058,6 +2059,7 @@ export class PanelDeck {
       bpPerCell: () => map.bpPerCell(),
       cells: () => map.cellCount(),
       origin: () => map.lockOrigin(),
+      places: () => map.lockPlaces(),
       locked: () => this.lockNote(slot) === null,
       show: (rows, cols) => map.showViewport(rows, cols),
       viewport: () => map.viewport(),
@@ -2125,9 +2127,9 @@ export class PanelDeck {
     // In the lead's own currency, which above bin level is the cell index
     // rather than base pairs ({@link lockUnit}) — a seed stated in the wrong
     // one is the same wrong window as a report in the wrong one, arriving
-    // before anybody has had the chance to correct it.
-    const unit = lockUnit(lead)
-    this.lock.seed(view.rows, view.cols, unit === 'cell' ? 1 : lead.bpPerCell(), unit, lead.lockOrigin())
+    // before anybody has had the chance to correct it — and through its own
+    // places, which across several sequences are not an origin and a step.
+    this.lock.seedFrom(LEAD, view.rows, view.cols)
   }
 
   /**

@@ -9,10 +9,13 @@
  * too far and would have to be refused between files of different resolution,
  * which is exactly the refusal `compareRefusal` makes for the blended square
  * and exactly the one side-by-side panels do not need. So **the currency is
- * base pairs**, measured from each block's own start, and each panel converts
- * on the way in and on the way out. That is one division and one multiplication
- * per axis, and it is what lets panels of unequal resolution follow each other
- * honestly.
+ * base pairs**, a place, and each panel converts on the way in and on the way
+ * out. On one sequence that is one division and one multiplication per axis,
+ * counted from where the panel's block sits in it ({@link LockMember.origin});
+ * across several — the whole genome, a selection — it is a sequence at a time,
+ * along the line the sequences make end to end ({@link PlaceAxis}). It is what
+ * lets panels of unequal resolution, holding blocks a zoom read at different
+ * places, follow each other honestly.
  *
  * **The one exception is above bin level**, where a cell is a whole sequence
  * and therefore has no width in base pairs to convert through — see
@@ -95,6 +98,33 @@ export interface LockWindow {
 export type CellSpan = [number, number]
 
 /**
+ * One axis of a panel's block as places, the lock's currency along it, where an
+ * origin and a step cannot say where its cells are.
+ *
+ * They can on one sequence: a cell there is `bpPerCell` of it, and the block
+ * begins `origin` into it. They cannot across several, which is the whole
+ * genome and a selection. Every sequence's last cell may be short (§3.3), so a
+ * step through a sequence boundary is not a step's worth of base pairs, and a
+ * block a zoom read inside the genome (§2) begins somewhere in *one* of the
+ * sequences, which an origin, a position in a sequence, cannot say. Two maps
+ * whose zooms read blocks beginning in chrVII and in chrI were each counted
+ * from where its own block began, and the deck put the first on chrVII:378 kb
+ * and the second on chrII:148 kb, which is 378 kb into the genome. So such an
+ * axis lays its sequences end to end, each its own length, and converts a cell
+ * sequence by sequence (`ui/blockAxes.ts`, `placesOnFrame`).
+ *
+ * Both directions answer anywhere, inside the block or past either end of it,
+ * since a window the block holds too little of is converted past it to be
+ * read (`LockMember.reach`).
+ */
+export interface PlaceAxis {
+  /** The place at a cell edge of this block. */
+  place(cell: number): number
+  /** The cell edge of this block at a place, fractional and unclamped: {@link place}'s inverse. */
+  cell(place: number): number
+}
+
+/**
  * A panel's cell window turned into base pairs.
  *
  * Exact: a cell is `bpPerCell` base pairs wide by construction (§3.3's uniform
@@ -131,12 +161,34 @@ export function cellsToBp(span: CellSpan, bpPerCell: number): AxisWindow {
  */
 export function bpToCells(window: AxisWindow, bpPerCell: number, cells: number): CellSpan {
   const k = bpPerCell > 0 ? bpPerCell : 1
+  return cellsWithin(window.lo / k, window.hi / k, cells)
+}
+
+/**
+ * How far a converted bound may sit off a whole cell and still be that cell.
+ *
+ * A place converted back through a panel's sequences is a sum and a division
+ * rather than one division, and can land a few ulps either side of the cell
+ * edge it names. Rounded outward as it stands, a window exactly on whole cells
+ * would come back a cell wider at either end, and the echo of that push would
+ * not be recognised as one (guard 4).
+ */
+const ROUNDING = 1e-6
+
+/**
+ * A window in one panel's cells — fractional, and anywhere, before the block or
+ * past it — as the cells it is shown as: {@link bpToCells}' rule, outward and
+ * then slid inside the block, once the conversion into this panel's cells has
+ * been made. Which, on an axis of more than one sequence, is not one division
+ * ({@link PlaceAxis}).
+ */
+export function cellsWithin(lo: number, hi: number, cells: number): CellSpan {
   const limit = Math.max(1, Math.floor(cells))
-  const lo = Math.floor(Math.min(window.lo, window.hi) / k)
-  const hi = Math.ceil(Math.max(window.lo, window.hi) / k)
-  const span = Math.max(1, hi - lo)
+  const from = Math.floor(Math.min(lo, hi) + ROUNDING)
+  const to = Math.ceil(Math.max(lo, hi) - ROUNDING)
+  const span = Math.max(1, to - from)
   if (span >= limit) return [0, limit]
-  const start = Math.max(0, Math.min(limit - span, lo))
+  const start = Math.max(0, Math.min(limit - span, from))
   return [start, start + span]
 }
 
@@ -235,6 +287,14 @@ export interface LockMember {
    * is two places 300 kb apart. Absent is zero.
    */
   origin?(): { rows: number; cols: number }
+  /**
+   * Where this panel's cells are, per axis, where {@link origin} and
+   * {@link bpPerCell} cannot say it: an axis of more than one sequence
+   * ({@link PlaceAxis}). Read only where {@link unit} is `'bp'`, and asked per
+   * call, as the block under it changes. Absent, `null`, or `null` on an axis,
+   * is that axis's line: `origin + cell × bpPerCell`.
+   */
+  places?(): { rows: PlaceAxis | null; cols: PlaceAxis | null } | null
   /** Whether this panel is following the deck, or has been let off the lead. */
   locked(): boolean
   /**
@@ -286,6 +346,62 @@ function originOf(member: LockMember): { rows: number; cols: number } {
   return member.unit() === 'cell' ? { rows: 0, cols: 0 } : (member.origin?.() ?? { rows: 0, cols: 0 })
 }
 
+/** The line `origin + cell × step`: one sequence's places, or a cell index counted from zero. */
+function line(origin: number, step: number): PlaceAxis {
+  const k = step > 0 ? step : 1
+  return { place: (cell) => origin + cell * k, cell: (place) => (place - origin) / k }
+}
+
+/**
+ * How a member's cells are places, per axis, in the currency it locks in: its
+ * own {@link LockMember.places} where it has them, the line of its origin and
+ * its step where it does not, and the cell index counted from zero above bin
+ * level, where a cell is a whole sequence ({@link LockUnit}).
+ */
+function axesOf(member: LockMember): { rows: PlaceAxis; cols: PlaceAxis } {
+  const own = member.unit() === 'bp' ? (member.places?.() ?? null) : null
+  const step = stepOf(member)
+  const origin = originOf(member)
+  return {
+    rows: own?.rows ?? line(origin.rows, step),
+    cols: own?.cols ?? line(origin.cols, step),
+  }
+}
+
+/** A cell window of a member, as places along its axes. */
+function windowIn(member: LockMember, rows: CellSpan, cols: CellSpan): LockWindow {
+  const at = axesOf(member)
+  return {
+    rows: { lo: at.rows.place(rows[0]), hi: at.rows.place(rows[1]) },
+    cols: { lo: at.cols.place(cols[0]), hi: at.cols.place(cols[1]) },
+    unit: member.unit(),
+  }
+}
+
+/** A window of places in a member's cells, fractional and unclamped, lowest first. */
+function rawCells(member: LockMember, window: LockWindow): { rows: CellSpan; cols: CellSpan } {
+  const at = axesOf(member)
+  const raw = (axis: AxisWindow, places: PlaceAxis): CellSpan => {
+    const a = places.cell(axis.lo)
+    const b = places.cell(axis.hi)
+    return [Math.min(a, b), Math.max(a, b)]
+  }
+  return { rows: raw(window.rows, at.rows), cols: raw(window.cols, at.cols) }
+}
+
+/**
+ * The deck's window as a member's block can show it: in its cells, outward, and
+ * slid inside the block where it runs off it ({@link cellsWithin}).
+ */
+function cellsOf(member: LockMember, window: LockWindow): { rows: CellSpan; cols: CellSpan } {
+  const extent = member.cells()
+  const raw = rawCells(member, window)
+  return {
+    rows: cellsWithin(raw.rows[0], raw.rows[1], extent.rows),
+    cols: cellsWithin(raw.cols[0], raw.cols[1], extent.cols),
+  }
+}
+
 /**
  * Which block a member holds, as far as the lock can tell: its currency, its
  * grid, its size and where it begins. A block a read landed differs in one of
@@ -293,8 +409,8 @@ function originOf(member: LockMember): { rows: number; cols: number } {
  */
 function blockOf(member: LockMember): string {
   const extent = member.cells()
-  const origin = originOf(member)
-  return `${member.unit()}|${stepOf(member)}|${extent.rows}×${extent.cols}|${origin.rows},${origin.cols}`
+  const at = axesOf(member)
+  return `${member.unit()}|${stepOf(member)}|${extent.rows}×${extent.cols}|${at.rows.place(0)},${at.cols.place(0)}`
 }
 
 /**
@@ -305,15 +421,8 @@ function blockOf(member: LockMember): string {
  */
 function beyondBlock(member: LockMember, window: LockWindow): { rows: CellSpan; cols: CellSpan } | null {
   if (window.unit !== 'bp' || member.unit() !== 'bp') return null
-  const step = stepOf(member)
   const extent = member.cells()
-  const origin = originOf(member)
-  const raw = (axis: AxisWindow, at: number): CellSpan => [
-    (Math.min(axis.lo, axis.hi) - at) / step,
-    (Math.max(axis.lo, axis.hi) - at) / step,
-  ]
-  const rows = raw(window.rows, origin.rows)
-  const cols = raw(window.cols, origin.cols)
+  const { rows, cols } = rawCells(member, window)
   const past = (span: CellSpan, cells: number): boolean => span[0] < -0.5 || span[1] > cells + 0.5
   return past(rows, extent.rows) || past(cols, extent.cols) ? { rows, cols } : null
 }
@@ -414,7 +523,6 @@ export class ViewportLock {
     const source = this.members.find((member) => member.id === id)
     if (source === undefined || !source.locked()) return
     const step = stepOf(source)
-    const origin = originOf(source)
     // **The deck's window as this panel can show it is not a movement**, however
     // often it is reported. A block narrower than the deck's window holds it
     // clamped or slid (`bpToCells`), and guard (2) forgives one report of that
@@ -423,14 +531,10 @@ export class ViewportLock {
     // other map onto the stretch this one happened to hold. Asked in this
     // panel's own cells, half a cell either way, exactly as a push would put it.
     if (this.current !== null && this.current.unit === source.unit()) {
-      const extent = source.cells()
-      const pushed = {
-        rows: bpToCells(shifted(this.current.rows, -origin.rows), step, extent.rows),
-        cols: bpToCells(shifted(this.current.cols, -origin.cols), step, extent.cols),
-      }
+      const pushed = cellsOf(source, this.current)
       if (cellsAgree(pushed.rows, rows) && cellsAgree(pushed.cols, cols)) return
     }
-    const window = this.windowOf(source, rows, cols)
+    const window = windowIn(source, rows, cols)
     // **Still where the deck put it** (`placed`), on the block it was put there
     // on: a redraw, not a movement — and one that can differ from the deck's
     // window by more than the clamp above, where the box is not the window's
@@ -452,17 +556,6 @@ export class ViewportLock {
     this.placed.delete(id)
     this.current = window
     this.pushTo(this.members.filter((member) => member.id !== id))
-  }
-
-  /** A report in base pairs, from where the reporting panel's block sits. */
-  private windowOf(source: LockMember, rows: CellSpan, cols: CellSpan): LockWindow {
-    const step = stepOf(source)
-    const origin = originOf(source)
-    return {
-      rows: shifted(cellsToBp(rows, step), origin.rows),
-      cols: shifted(cellsToBp(cols, step), origin.cols),
-      unit: source.unit(),
-    }
   }
 
   /**
@@ -547,6 +640,18 @@ export class ViewportLock {
   }
 
   /**
+   * {@link seed}, from a member's own cells and through its own places — the
+   * deck seeds from its first map's window this way, which on an axis of more
+   * than one sequence is not an origin and a step ({@link PlaceAxis}).
+   */
+  seedFrom(id: string, rows: CellSpan, cols: CellSpan): void {
+    if (this.current !== null) return
+    const member = this.members.find((candidate) => candidate.id === id)
+    if (member === undefined) return
+    this.current = windowIn(member, rows, cols)
+  }
+
+  /**
    * Put one panel where the deck is looking — a panel that has just arrived, or
    * one whose lock was just switched back on.
    *
@@ -608,21 +713,10 @@ export class ViewportLock {
    * it then shows ({@link LockMember.viewport}).
    */
   private place(member: LockMember, window: LockWindow): boolean {
-    const step = stepOf(member)
-    const extent = member.cells()
-    const origin = originOf(member)
-    const rows = bpToCells(shifted(window.rows, -origin.rows), step, extent.rows)
-    const cols = bpToCells(shifted(window.cols, -origin.cols), step, extent.cols)
+    const { rows, cols } = cellsOf(member, window)
     if (!member.show(rows, cols)) return false
     const shown = member.viewport?.() ?? { rows, cols }
-    this.placed.set(member.id, {
-      window: {
-        rows: shifted(cellsToBp(shown.rows, step), origin.rows),
-        cols: shifted(cellsToBp(shown.cols, step), origin.cols),
-        unit: window.unit,
-      },
-      block: blockOf(member),
-    })
+    this.placed.set(member.id, { window: windowIn(member, shown.rows, shown.cols), block: blockOf(member) })
     return true
   }
 }

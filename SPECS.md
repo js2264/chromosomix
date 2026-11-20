@@ -7170,6 +7170,27 @@ stopped being once a zoom read a window inside the region (§2): two maps whose 
 windows held blocks beginning at different places — one at 87.7 Mb, the other at 88.0 — and the
 same offset into each was two places 300 kb apart.
 
+**Across more than one sequence an origin is not enough, and each map says where every cell is**
+(`MatrixPanel.lockPlaces`, a member's `places`). The whole genome and a selection of several
+sequences lay them end to end along each axis, and a block a zoom reads inside them begins in *one*
+of them, which a position in a sequence cannot say. There the place is a point on the **line the
+view's sequences make, each its own length**, the first beginning at its own coordinate — taken from
+the block the view first drew, the region read whole, and kept through every refine, as the region
+the gate compares is (§16.4). A cell becomes a base pair of its sequence through the axes the
+picture is labelled with, then a place by where that sequence lies on the line, and back the same
+way (`ui/blockAxes.ts`, `frameOf` and `placesOnFrame`). Its own length and not its cells: every
+sequence's last cell may be short (§3.3), so a step across a sequence's end is not a step's worth of
+base pairs, and two maps at two grids counting cells would part by a short cell for every sequence
+crossed. Past either end of the block a place goes on at the block's step from its edge, which is all
+a read of the rest needs (below): the block that lands is put on the window exactly. On one sequence
+the line is that sequence, and the origin above says the same thing — and keeps saying it for a
+circle panned across its own origin (§8.15), whose axis carries the sequence twice. Counted from each
+map's origin instead, the yeast micro-C twice on the whole genome, zoomed fast, showed
+chrVII:378–632 kb on the first map and chrII:148–402 kb on the second: 378 kb into chrVII on one map
+was 378 kb into the genome on the other, whose zoom had read a block beginning in chrI. A slow pan
+brought them back together for as long as the two maps' blocks began in the same sequence; a fast
+wheel or a fast pan, or a resolution picked with *Refine on zoom* off (§3.4), let them begin in two.
+
 **Above bin level the currency is the cell index** (`panels/lock.ts`'s `LockUnit`). A cell there is a
 whole sequence and has no width in base pairs — the number a panel answers for it is the file's bin
 size — and a window converted through it put chromosomes 10–14 of a 1 kb roll-up on chromosomes 2–3
