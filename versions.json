@@ -261,6 +261,13 @@
       "title": "Draw a metagenome's map as a circle or as two lines",
       "branch": "js/circular-view",
       "date": "2026-11-20T16:08:32Z"
+    },
+    {
+      "number": 181,
+      "commit": "c37c40c",
+      "title": "Add ideogram visualization of chromosomes",
+      "branch": "js/ideogram",
+      "date": "2026-11-20T15:57:05Z"
     }
   ]
 }
