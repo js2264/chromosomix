@@ -366,6 +366,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The maps of a deck stay on one place across the whole genome (§16.3).** Zoomed or panned fast,
+  the maps of a deck on the whole genome went on moving together but showed two places: the yeast
+  micro-C twice, zoomed fast into the whole genome, showed chrVII:378–632 kb on the first map and
+  chrII:148–402 kb on the second, and a slow pan brought them back together for a while. Each map's
+  zoom reads a window of its own inside the genome, and the deck counted each map's window from where
+  its block began *in its sequence*: 378 kb into chrVII on one map was put 378 kb into the genome on
+  the other, whose block began in chrI. Slow steps let the two blocks begin in the same sequence;
+  a fast wheel, a fast pan, or a resolution picked with *refine on zoom* off did not. The deck now
+  counts the genome as its sequences laid end to end, each its own length, and puts every map on one
+  place whatever block each holds. A selection of several sequences is counted the same way.
 - **A deck turned 45° moves as one (§16.4, §17.3).** Two copies of the yeast micro-C zoomed into IV
   and then turned left the second *not following: this block spans 26.2 kb × 442.6 kb where the first
   map spans 26.2 kb × 439.8 kb. The same name resolved against different sequences*; stepped on to

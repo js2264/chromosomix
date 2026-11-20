@@ -34,8 +34,10 @@ heading above the grid steers every map. That includes going past the region the
 zoom out, a pan beyond its edge, or **Undo every pan and zoom** (<kbd>0</kbd>) back to the whole
 chromosome, and every map reads the rest of its sequence to follow. Pointing at one map marks the
 same place on the others.
-Maps stay together in base pairs, the coarser rounding outward. A window that runs off the end of a
-shorter sequence slides back inside it at the same width.
+Maps stay together in base pairs, the coarser rounding outward. On the whole genome and on a
+selection of several sequences they stay together across the sequences' ends, however fast you zoom
+or pan: the deck counts the sequences end to end, each its own length. A window that runs off the end
+of a shorter sequence slides back inside it at the same width.
 
 The chain on a cell's heading is lit while the map follows; press it to let the map go, and again to
 bring it back. A map off the chain takes its own window: draw a box on it with <kbd>⌥ Option</kbd>
