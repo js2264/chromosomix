@@ -45,7 +45,7 @@ from .viewer import TAKES_FILES, release_of, resolve_viewer, takes_files
 #: The view state's keys, in the order the app writes them (`state/ViewState.ts`).
 KEY_ORDER = (
     'uri', 'uri2', 'maps', 'view', 'genome', 'genome2', 'genomes', 'region', 'region2', 'focus',
-    'regions', 'cells', 'contacts', 'locus', 'level', 'resolution', 'transform', 'colormap',
+    'regions', 'cells', 'contacts', 'locus', 'ideogram', 'level', 'resolution', 'transform', 'colormap',
     'vmin', 'vmax', 'balance', 'score', 'oe', 'arms', 'smooth', 'op', 'flip', 'lower', 'score2', 'oe2',
     'smooth2', 'transform2', 'colormap2', 'vmin2', 'vmax2',
 )
