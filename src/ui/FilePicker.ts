@@ -46,7 +46,7 @@ import { icon, iconButton, markButton } from './icons'
 import type { IconName } from './icons'
 import { button, el } from './dom'
 import { LoadBox } from './LoadBox'
-import { markWatermark, mastheadMark } from './markSvg'
+import { mastheadMark } from './markSvg'
 import { splitUri } from './labels'
 import { connectDirectory } from '../browse/connected'
 import { CONNECT_FOLDER_TITLE, providerFronts, type ProviderId } from './connectFronts'
@@ -243,9 +243,6 @@ export class FilePicker {
         { class: 'picker-brand' },
         el('div', { class: 'picker-masthead' }, mastheadMark(), el('h1', { text: 'chromosomix' })),
       ),
-      // Half the mark in the right margin, where there is one (`styles.css`):
-      // only on the page with the tiles, which is the landing page in a window.
-      this.tilesSlot === null ? null : markWatermark(),
       el(
         'section',
         { class: 'picker-section picker-load' },

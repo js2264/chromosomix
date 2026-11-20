@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * The landing page's two inline marks (`ui/markSvg.ts`), drawn from the data
+ * The landing page's inline mark (`ui/markSvg.ts`), drawn from the data
  * `scripts/make-app-icons.py` writes (`ui/mark.generated.ts`).
  *
  * What is held here is what the stylesheet and the page's policy lean on: the
@@ -14,7 +14,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { MARK_CELLS, MARK_LANES } from '@/ui/mark.generated'
-import { armStep, markWatermark, mastheadMark } from '@/ui/markSvg'
+import { armStep, mastheadMark } from '@/ui/markSvg'
 
 describe('the mark’s data', () => {
   it('is a symmetric map, with the X lit from corner to corner', () => {
@@ -59,22 +59,8 @@ describe('mastheadMark', () => {
   })
 
   it('writes no inline style, which the page’s policy would refuse', () => {
-    for (const root of [mastheadMark(), markWatermark()]) {
-      expect(root.hasAttribute('style')).toBe(false)
-      expect(root.querySelectorAll('[style]')).toHaveLength(0)
-    }
-  })
-})
-
-describe('markWatermark', () => {
-  it('carries the map in both plates’ colours, for the theme to choose, and no animation', () => {
-    const box = markWatermark()
-    expect(box.className).toBe('picker-watermark')
-    expect(box.getAttribute('aria-hidden')).toBe('true')
-    expect(box.querySelectorAll('.cx-ink-light')).toHaveLength(1)
-    expect(box.querySelectorAll('.cx-ink-dark')).toHaveLength(1)
-    expect(box.querySelectorAll('.cx-arm, .cx-diag')).toHaveLength(0)
-    // No plate: only the cells and the lanes.
-    expect(box.querySelectorAll('path')).toHaveLength(0)
+    const root = mastheadMark()
+    expect(root.hasAttribute('style')).toBe(false)
+    expect(root.querySelectorAll('[style]')).toHaveLength(0)
   })
 })

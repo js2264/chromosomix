@@ -24,7 +24,7 @@ What this writes, and who reads it:
     index.html                   the `<link rel="icon">` data URI, rewritten in
                                  place from the constants below
     src/ui/mark.generated.ts     the mark as data, which the landing page draws
-                                 inline beside the name and in its margin
+                                 inline beside the name
 
     out/icon_{dark,light}_NNNN.png   the full ladder, for anything that wants a
                                      PNG by hand. Read by nothing; not committed.
@@ -610,10 +610,9 @@ def _path(points):
 def mark_module():
     """The mark as data, for the page to draw itself: `src/ui/mark.generated.ts`.
 
-    The landing page draws the mark twice that a PNG cannot serve: beside the
-    name, where its cells move when the pointer is over it, and as the half
-    mark in the page's right margin, whose colours follow the theme. Both are
-    built by `ui/markSvg.ts` from what this writes — the same cells, lanes,
+    The landing page draws the mark beside the name, where its cells move when
+    the pointer is over it, which a PNG cannot serve. It is built by
+    `ui/markSvg.ts` from what this writes — the same cells, lanes,
     plate and colours every PNG above is rendered from, in the favicon's
     full-bleed frame of `OUT` units a side — so there is still one description
     of the mark, and a TypeScript copy of it would be the second.
@@ -627,8 +626,8 @@ def mark_module():
     rim_w = OUT * RIM_W
     plate = _path(squircle(half, half, half, steps=24))
     rim = _path(squircle(half, half, half - rim_w / 2, steps=24))
-    (plate_hi, plate_lo) = VARIANTS["dark"]["plate"]
-    (rim_hi, rim_lo) = VARIANTS["dark"]["rim"]
+    (plate_hi, plate_lo) = VARIANTS[SHIPPED]["plate"]
+    (rim_hi, rim_lo) = VARIANTS[SHIPPED]["rim"]
     cells = ",".join(f"[{i},{j},{_num(a)}]" for i, j, a in field_cells())
     lanes = []
     for which, spec in TRACKS.items():
@@ -637,12 +636,12 @@ def mark_module():
             for x0, y0, x1, y1, level in lane_geometry(which, ox, oy, span, pitch)
         )
         lanes.append(
-            f"  {{ track: '{which}', dark: '{_hex(track_rgb(which, 'dark'))}',"
-            f" light: '{_hex(track_rgb(which, 'light'))}', rects: [{rects}] }},"
+            f"  {{ track: '{which}', colour: '{_hex(track_rgb(which, SHIPPED))}',"
+            f" rects: [{rects}] }},"
         )
     return f"""/**
- * The app's mark, as data: what `ui/markSvg.ts` draws the landing page's two
- * inline marks from.
+ * The app's mark, as data: what `ui/markSvg.ts` draws the landing page's
+ * inline mark from.
  *
  * Generated — run `npm run icons:app` after editing
  * `scripts/make-app-icons.py`, which renders every PNG of the mark and the
@@ -652,7 +651,7 @@ def mark_module():
 
 export const MARK_VIEW = {OUT}
 
-/** The plate and its rim, on the dark variant, which is the one that ships. */
+/** The plate and its rim, on the shipped variant. */
 export const MARK_PLATE = {{
   path: '{plate}',
   top: '{_hex(plate_hi)}',
@@ -672,19 +671,17 @@ export const MARK_MAP = {{
   pitch: {_num(pitch)},
   inset: {_num(CELL_GAP)},
   round: {_num(CELL_ROUND)},
-  /** The cells' colour on each plate. */
-  dark: '{_hex(VARIANTS["dark"]["cells"])}',
-  light: '{_hex(VARIANTS["light"]["cells"])}',
+  /** The cells' colour. */
+  colour: '{_hex(VARIANTS[SHIPPED]["cells"])}',
 }}
 
 /** Every drawn cell as `[row, column, intensity]`, row 0 at the top. */
 export const MARK_CELLS: readonly (readonly [number, number, number])[] = [{cells}]
 
-/** Each lane's colour on each plate, and its slivers as `[x, y, width, height, level]`. */
+/** Each lane's colour, and its slivers as `[x, y, width, height, level]`. */
 export const MARK_LANES: readonly {{
   readonly track: string
-  readonly dark: string
-  readonly light: string
+  readonly colour: string
   readonly rects: readonly (readonly [number, number, number, number, number])[]
 }}[] = [
 {chr(10).join(lanes)}

@@ -14297,15 +14297,13 @@ step at a time, the six other cells of the diagonal step back while the cross is
 settles again, in under a second. Nothing happens on a press, and nothing moves at all for a reader
 whose system asks for less motion.
 
-**Half the mark stands in the right margin**, where the margin can hold it clear of the page: the map
-and its lanes without the plate, 640 px tall, cut down its middle by the window's edge, at 40% in the
-light theme and 26% in the dark, in the colours of the light and the dark plate respectively. Only on
-the page with the store tiles (§24.2), not in a dialog's picker; only on a window at least 1560 px
-wide and 820 px tall; never a target, and hidden from a screen reader, as the masthead's mark is.
+**Nothing else of the mark is on the page.** Half of it stood faint in the right margin of a wide
+window for a while, and read as clutter beside a page whose offers are the point of it; the margin is
+empty again.
 
-**Both are one drawing with every other picture of the mark.** `scripts/make-app-icons.py` renders
+**It is one drawing with every other picture of the mark.** `scripts/make-app-icons.py` renders
 the icons, writes the favicon and writes `ui/mark.generated.ts`, the cells, lanes, plate and colours
-as data, from the same constants; the page builds its two SVGs from that data with
+as data, from the same constants; the page builds its SVG from that data with
 `createElementNS` and attributes alone, because the page's policy allows no inline `style` (§11).
 
 ## 25. A 3D structure beside the map
