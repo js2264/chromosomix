@@ -53,8 +53,20 @@ export const LINK_VIEWS: ReadonlyArray<{ view: ViewKind; meaning: string }> = [
   { view: 'cells', meaning: 'the table of an `.scool`’s cells, to pick the ones summed into the map' },
 ]
 
-/** Keys the reader takes that this page does not name: the multi-genome format's (§29). */
-export const UNDOCUMENTED_KEYS: readonly string[] = ['genome', 'genome2', 'genomes']
+/**
+ * Keys the reader takes that this page does not name: the multi-genome format's,
+ * and the circle's and two lines' drawn of it (§7.6), all dev features (§29).
+ */
+export const UNDOCUMENTED_KEYS: readonly string[] = [
+  'genome',
+  'genome2',
+  'genomes',
+  'circle',
+  'sections',
+  'lines',
+  'split',
+  'top',
+]
 
 const SMOOTHS = SMOOTH_CHOICES.map((choice) => choice.id)
 
