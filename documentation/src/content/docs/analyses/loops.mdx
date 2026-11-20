@@ -59,7 +59,7 @@ For each chunk, the count a pixel had to reach to pass, kernel by kernel, agains
 ### What to watch for
 
 - **Near the diagonal.** The nearest pixel tested is twice the outer half-width plus two bins from the diagonal, and a bin the balancer dropped takes out the pixels within the outer half-width of it. The notes say how near the scan came.
-- **Band size.** A sequence whose band would not fit is skipped and named: bring **furthest from the diagonal** down, or open a coarser resolution.
+- **Band size.** A sequence whose band would not fit is skipped and named: bring **furthest from the diagonal** down, or pick a coarser resolution on the task's **Resolution** row.
 - **Too bright for the chunks.** A pixel whose expected is past the last λ-chunk stops the run, which says so: raise the **λ-chunks**, up to 50.
 - **Nothing passed.** The run says so, and still draws the λ-chunk thresholds to show how far out of reach they were.
 

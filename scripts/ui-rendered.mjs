@@ -13,7 +13,7 @@
  * which waits for its button; a sequence the file has not got; the yeast deck
  * of two maps; the 1D browser; a workspace naming the yeast `.hic` at 4 kb,
  * dropped, and then the file and a bigWig dropped on the page it asks for them
- * on; and the lab's chicken `.hic` with a bigWig from its bucket, at 25 kb.
+ * on; and the lab's yeast `.hic` with a bigWig from its store, at 25.6 kb.
  * Where the page needs a proxy to reach the bucket, HTTPS_PROXY is handed to
  * Chromium.
  */
@@ -37,7 +37,8 @@ const OUT = process.argv[2] ?? 'gallery'
 const BASE = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const YEAST = join(ROOT, 'demo', 'yeast')
-const BUCKET = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/chicken'
+// The lab's store: the one `.hic` on its bucket, and a bigWig of the same genome.
+const STORE = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/store/yeast'
 mkdirSync(OUT, { recursive: true })
 
 const { chromium } = playwright()
@@ -201,7 +202,7 @@ try {
   from = await drop(page, [join(YEAST, 'Yeast_hic.hic'), join(YEAST, 'Yeast_ATAC.bw')])
   await step(page, 'yeast-hic-dropped', await reported(page, before, (report) => report.maps.length > 0 && report.lanes > 0), from)
 
-  // The chicken `.hic` from the bucket at 25 kb, with its insulation, named in a link.
+  // The yeast `.hic` from the lab's store at 25.6 kb, with its ATAC, named in a link.
   page = await fresh()
   await page.goto(BASE)
   await reported(page, 0)
@@ -214,14 +215,14 @@ try {
     tabs: [
       {
         version: 1,
-        state: { uri: `${BUCKET}/G2_4DNFIRKUYKP4.hic::/resolutions/25000`, view: 'region', region: '1:20000000-30000000', balance: false, transform: 'log10' },
+        state: { uri: `${STORE}/GSE151553_A364_merged.hic::/resolutions/25600`, view: 'region', region: 'chrIV:200000-1200000', balance: false, transform: 'log10' },
         tracks: [
           {
-            id: 'g2-insulation',
+            id: 'yeast-atac',
             card: 'linear',
             kind: 'track',
-            label: 'G2 insulation',
-            source: { kind: 'remote', name: 'G2_4DNFI1PRBI5L_diamond.bw', url: `${BUCKET}/G2_4DNFI1PRBI5L_diamond.bw` },
+            label: 'ATAC',
+            source: { kind: 'remote', name: 'Yeast_ATAC.bw', url: `${STORE}/Yeast_ATAC.bw` },
             visible: true,
             placement: { bottom: true, right: true },
             style: { colour: '#d55e00', size: 72, mode: 'area', limits: { auto: true, min: 0, max: 1 }, group: '', shape: 'element', radius: 7, opacity: 1, flip: false },
@@ -232,13 +233,13 @@ try {
   }
   await page.evaluate((text) => {
     const transfer = new DataTransfer()
-    transfer.items.add(new File([text], 'chicken.chromosomix.json', { type: 'application/json' }))
+    transfer.items.add(new File([text], 'yeast-store.chromosomix.json', { type: 'application/json' }))
     const zone = document.querySelector('.dropzone')
     for (const kind of ['dragenter', 'dragover', 'drop']) {
       zone.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer: transfer }))
     }
   }, JSON.stringify(session))
-  await step(page, 'chicken-hic-remote', await reported(page, before, (report) => report.maps.length > 0 && report.lanes > 0), from)
+  await step(page, 'yeast-hic-remote', await reported(page, before, (report) => report.maps.length > 0 && report.lanes > 0), from)
 } finally {
   console.log('\nfile                          seq  status  ms      maps                                         lanes')
   for (const row of rows) {

@@ -120,8 +120,9 @@ balanced cooler's weights, as lanes. Choose a column from its menu, grouped by t
 
 ## Bookmarks
 
-A bookmark keeps a place on the genome and the bin size it was found at, not the zoom, the colour
-scale or the turn. To make one:
+A bookmark keeps a place on the genome and a resolution, not the zoom, the colour scale or the turn:
+the resolution you picked, or, with none picked, the one the file was opened at, never the one
+*refine on zoom* happens to have drawn. To make one:
 
 - press the bookmark button beside **go** in the map's title bar (**Bookmark this view — the place on
   screen, at this resolution**), <kbd>B</kbd>, or **save this view** on the card;
@@ -129,7 +130,9 @@ scale or the turn. To make one:
 - under **Import**, press **regions from BED…**: every interval becomes a bookmark, named by the fourth
   column if there is one, at the map's current resolution.
 
-Click a row to go there: the whole sequence opens, zoomed to the place. The × forgets one place, and
+Click a row to go there: the whole sequence opens, zoomed to the place, with the bookmark's
+resolution picked, as if from the row above the map. A bookmark at the resolution the file was opened
+at, clicked with none picked, leaves *refine on zoom* as it is. The × forgets one place, and
 **remove all** every place on this file. A place already saved is not added twice.
 
 ## Taking annotations out

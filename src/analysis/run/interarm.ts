@@ -171,7 +171,7 @@ export const runInterArm: TaskRunner = async (job) => {
     if (n > MAX_CORRELATION_BINS) {
       job.note(
         `${name}: ${n.toLocaleString()} bins is past the ${MAX_CORRELATION_BINS.toLocaleString()}` +
-          '-bin limit on a square read whole; left out. Open the file at a coarser resolution.',
+          '-bin limit on a square read whole; left out. Run it at a coarser resolution.',
       )
       continue
     }

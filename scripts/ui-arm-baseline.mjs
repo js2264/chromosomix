@@ -16,9 +16,10 @@
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-arm-baseline.mjs [out-dir]
  *
- * The zoo is read over the network. Behind a proxy (`HTTPS_PROXY`) the browser
- * is sent through it, the dev server excepted; `GALLERY_DATA` names a folder
- * served with byte ranges and CORS that holds `PAK_MM142.mcool` instead.
+ * The map is the zoo's, which is no longer on the lab's bucket: `GALLERY_DATA`
+ * names a folder served with byte ranges and CORS that holds `PAK_MM142.mcool`
+ * (`python3 scripts/DBZ_store.py serve <folder>`). Behind a proxy (`HTTPS_PROXY`)
+ * the browser is sent through it, the dev server excepted.
  */
 
 import { createRequire } from 'node:module'
@@ -39,7 +40,14 @@ const { chromium } = playwright()
 
 const OUT = process.argv[2] ?? 'gallery'
 const BASE = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
-const DATA = process.env.GALLERY_DATA ?? 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/PAK_MM142'
+const DATA = process.env.GALLERY_DATA
+if (DATA === undefined) {
+  console.error(
+    'The DNA Bacterial Zoo’s folder (dbz/) is no longer on the lab’s bucket: serve a folder holding PAK_MM142.mcool ' +
+      '(python3 scripts/DBZ_store.py serve <folder>) and name its address in GALLERY_DATA',
+  )
+  process.exit(1)
+}
 const MAP = `${DATA}/PAK_MM142.mcool::/resolutions/8000`
 const SEQUENCE = 'LR657304.1'
 mkdirSync(OUT, { recursive: true })

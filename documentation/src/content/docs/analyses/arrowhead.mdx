@@ -48,7 +48,7 @@ The table has one row per domain, in genomic order:
 ### What to watch for
 
 - **Depth.** Arrowhead needs a deep map. When it calls nothing, the drawer gives Juicer's warning that a map with fewer than about 300 million contacts may give few domains.
-- **Resolution.** Juicer picks 5 or 10 kb for itself; here it is the map you opened. A run outside 5 to 25 kb says what Arrowhead was tuned at and what its window came to. On a budding-yeast Micro-C map at 1 kb it finds the small domains such a map shows.
+- **Resolution.** Juicer picks 5 or 10 kb for itself; here it is the one on the task's **Resolution** row: the one picked above the map, or the one the file was opened at, unless you choose another. A run outside 5 to 25 kb says what Arrowhead was tuned at and what its window came to. On a budding-yeast Micro-C map at 1 kb it finds the small domains such a map shows.
 - **Balancing.** A map is read balanced where the file has weights, a `.hic` by its own normalisation vectors. `--no-balance` is Juicer's `-k NONE`, and the drawer says when a run read the raw counts.
 
 ## Compared with Juicer

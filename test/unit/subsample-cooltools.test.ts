@@ -5,7 +5,7 @@
  * (`scripts/reprocess_with_cooltools.py`) has cooltools draw ten million of the
  * demo yeast Micro-C's 179,175,551 contacts into
  * `test/fixtures/reprocessed/subsample.cool`, and `cooler balance` balance what
- * it drew — in CI's goldens job, beside the other fixtures cooler can write, before
+ * it drew — in CI's test job, beside the other fixtures cooler can write, before
  * it runs this suite. Without it the suite skips by name.
  *
  * §6.5 promises cooltools' distribution and not its generator — a numpy stream

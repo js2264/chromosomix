@@ -178,3 +178,26 @@ describe('the feature under the pointer', () => {
     expect(unnamed.locus).toBe('IV:2,001-3,000')
   })
 })
+
+describe('which way the lane grows, from the menu', () => {
+  it('turns the lane round on a square map, and says which way it now grows', () => {
+    const { store, entry } = made('track')
+    openLaneMenu(10, 10, entry(), store, 'bottom')
+    const row = item('Grow away from the map')
+    expect(row.classList.contains('disabled')).toBe(false)
+    row.click()
+    expect(entry().style.flip).toBe(true)
+  })
+
+  it('offers no turn on a turned map, where every lane grows towards the band (§17.4)', () => {
+    const { store, entry } = made('track')
+    store.restyle(entry().id, { flip: true })
+    openLaneMenu(10, 10, entry(), store, 'bottom', undefined, null, null, [], null, true)
+    const row = item('Grow away from the map')
+    expect(row.classList.contains('disabled')).toBe(true)
+    expect(row.textContent).toContain('not while turned')
+    row.click()
+    // The square map's flip, kept for it.
+    expect(entry().style.flip).toBe(true)
+  })
+})

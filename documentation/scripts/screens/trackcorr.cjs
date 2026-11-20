@@ -13,9 +13,11 @@
 const { open, sleep, BASE, BUCKET } = require('./lib-1d3d.cjs')
 
 const OUT = process.argv[2] ?? 'screens'
-const MAP = `${BUCKET}/meneu/HiC/HiC_Mmyco_G2M.mcool::/resolutions/4000`
-const REP1 = `${BUCKET}/meneu/ATAC/ATAC_Mmyco_rep1.CPM.bw`
-const REP2 = `${BUCKET}/meneu/ATAC/ATAC_Mmyco_rep2.CPM.bw`
+const MAP = `${BUCKET}/store/meneu2025/HiC/HiC_Mmyco_G2M.mcool::/resolutions/4000`
+// The paper's ATAC, as its data release on the lab's bucket holds it: the store has no copy.
+const ATAC = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/public-data/2025_Meneu_et_al/ATAC'
+const REP1 = `${ATAC}/ATAC_Mmyco_rep1.CPM.bw`
+const REP2 = `${ATAC}/ATAC_Mmyco_rep2.CPM.bw`
 const HEIGHT = Number(process.env.SCREENS_HEIGHT ?? 900)
 
 ;(async () => {

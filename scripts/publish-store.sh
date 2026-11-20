@@ -12,7 +12,10 @@
 # and a source is one of three things:
 #
 #   s3://bucket/key   copied on the bucket's side, from the lab's own bucket or
-#                     from 4DN's or ENCODE's open-data one: nothing passes through here
+#                     from 4DN's, ENCODE's, IGV's or 1000 Genomes' open-data ones:
+#                     nothing passes through here. A file whose source is its own
+#                     place in the store is kept only there (the copy it came from
+#                     is gone): it is checked, never copied
 #   repo:<path>       a file of this repository, uploaded
 #   work:<name>       a file `scripts/make_rsg_store.py derive` wrote, uploaded
 #                     from the directory given as --work
@@ -20,6 +23,10 @@
 #   python3 scripts/make_rsg_store.py derive --work ~/rsg-store   # once: the derived files
 #   ./scripts/publish-store.sh --work ~/rsg-store --dry-run       # what would be copied
 #   ./scripts/publish-store.sh --work ~/rsg-store                 # copy, upload, verify
+#   ./scripts/publish-store.sh --only k562/ --dry-run             # one folder's files alone
+#
+# `--only` takes the lines whose path starts with what it is given and leaves the
+# rest alone, unchecked: a folder none of whose files is derived needs no --work.
 #
 # A file already on the bucket at the size its source has is left alone, so a
 # second run copies nothing. **Nothing is deleted or moved**: the files the
@@ -44,10 +51,12 @@ MANIFEST="$ROOT/demo/store/MANIFEST.tsv"
 
 WORK=''
 DRY=0
+ONLY=''
 while [ $# -gt 0 ]; do
   case "$1" in
     --work) WORK="${2:?--work needs a directory}"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
+    --only) ONLY="${2:?--only needs the start of a path, as k562/}"; shift 2 ;;
     -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
@@ -73,6 +82,7 @@ region_of() {
   case "$1" in
     4dn-open-data-public) echo us-east-1 ;;
     encode-public) echo us-west-2 ;;
+    igv.org.genomes | 1000genomes) echo us-east-1 ;;
     *) echo "$REGION" ;;
   esac
 }
@@ -120,6 +130,7 @@ LINES="$(grep -v '^#' "$MANIFEST" | tail -n +2)"
 missing=0
 while IFS="$(printf '\t')" read -r path source _; do
   [ -n "$path" ] || continue
+  case "$path" in "$ONLY"*) ;; *) continue ;; esac
   case "$source" in
     repo:*) [ -f "$ROOT/${source#repo:}" ] || { echo "missing: $path comes from ${source#repo:}, which is not here" >&2; missing=1; } ;;
     work:*)
@@ -136,17 +147,23 @@ $LINES
 EOF
 [ "$missing" = 0 ] || exit 1
 
-echo "==> s3://$BUCKET/$PREFIX/ from $MANIFEST, as $IDENTITY"
+echo "==> s3://$BUCKET/$PREFIX/${ONLY} from $MANIFEST, as $IDENTITY"
 EXPECTED="$(mktemp)"
 trap 'rm -f "$EXPECTED"' EXIT
 copied=0; current=0
 while IFS="$(printf '\t')" read -r path source _; do
   [ -n "$path" ] || continue
+  case "$path" in "$ONLY"*) ;; *) continue ;; esac
   key="$PREFIX/$path"
   case "$source" in
     s3://*)
       from="${source#s3://}"; from_bucket="${from%%/*}"; from_key="${from#*/}"
       want="$(size_on_s3 "$(region_of "$from_bucket")" "$from_bucket" "$from_key")"
+      if [ "$source" = "s3://$BUCKET/$key" ] && { [ -z "$want" ] || [ "$want" = None ]; }; then
+        # A file kept only in the store (`kept` in make_rsg_store.py): nothing to copy it from.
+        echo "FAIL: $path is kept only in the store, and is not there; there is no copy to put back" >&2
+        exit 1
+      fi
       [ -n "$want" ] && [ "$want" != None ] ||
         { unreadable "$source" "$(region_of "$from_bucket")" "$from_bucket" "$from_key"; exit 1; } ;;
     repo:*) local_file="$ROOT/${source#repo:}"; want="$(wc -c < "$local_file" | tr -d ' ')" ;;

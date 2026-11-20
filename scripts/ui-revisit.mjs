@@ -9,24 +9,32 @@
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-revisit.mjs [out-dir]     # rv01 … rv11
  *
- * Both maps are read from the lab's bucket unless GALLERY_DATA names a folder
- * served with byte ranges and CORS holding `progenitors.mcool` and
- * `G2_4DNFIRKUYKP4.hic` — 689 MB and 940 MB, the first reads a few dozen of it.
+ * GALLERY_DATA names a folder served with byte ranges and CORS holding
+ * `progenitors.mcool` and `G2_4DNFIRKUYKP4.hic` — 689 MB and 940 MB, the first
+ * reads a few dozen of it. Both were on the lab's bucket and are no longer, so
+ * there is no default: §12's table was measured on these two.
  */
 
 import { gallery, sleep } from './gallery-lib.mjs'
 
 const OUT = process.argv[2] ?? 'gallery'
-const DATA = process.env.GALLERY_DATA ?? 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo'
+const DATA = process.env.GALLERY_DATA
+if (DATA === undefined) {
+  console.error(
+    'progenitors.mcool and G2_4DNFIRKUYKP4.hic are no longer on the lab’s bucket: serve a folder holding them ' +
+      'with byte ranges and CORS and name its address in GALLERY_DATA',
+  )
+  process.exit(1)
+}
 const MAPS = [
   {
-    uri: `${DATA}${process.env.GALLERY_DATA === undefined ? '/mouse' : ''}/progenitors.mcool::/resolutions/10000`,
+    uri: `${DATA}/progenitors.mcool::/resolutions/10000`,
     // A row of the Chromosomes table, to know the open has landed.
     landed: 'chr19',
     walk: ['chr1', 'chr2', 'chr1', 'chr1:27050000-93100000', 'chr1'],
   },
   {
-    uri: `${DATA}${process.env.GALLERY_DATA === undefined ? '/chicken' : ''}/G2_4DNFIRKUYKP4.hic::/resolutions/10000`,
+    uri: `${DATA}/G2_4DNFIRKUYKP4.hic::/resolutions/10000`,
     landed: '59.83 Mb',
     walk: ['1', '2', '1', '1:27050000-93100000', '1'],
   },

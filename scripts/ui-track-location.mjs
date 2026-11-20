@@ -156,11 +156,14 @@ try {
   }
 
   // Space: off the diagonal by a drag, and back by the key. Zoomed in first,
-  // since a map fitted to its block has nowhere to be panned to.
+  // since a map fitted to its block has nowhere to be panned to — and let go
+  // of first, since every map opens held on its diagonal (§8.9).
   const [cx, cy] = [map.x + map.width * 0.5, map.y + map.height * 0.5]
   await page.mouse.move(cx, cy)
   for (let i = 0; i < 4; i++) { await page.mouse.wheel(0, -240); await sleep(300) }
   await sleep(2500)
+  await page.keyboard.press('Space')
+  await sleep(400)
   await page.mouse.move(cx, cy)
   await page.mouse.down()
   for (let i = 1; i <= 12; i++) { await page.mouse.move(cx - i * 16, cy); await sleep(20) }

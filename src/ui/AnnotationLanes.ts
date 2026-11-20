@@ -53,6 +53,7 @@ import {
   clipLane,
   drawGrip,
   drawGroupBars,
+  drawnFlip,
   gripAcross,
   gripBox,
   groupRuns,
@@ -1555,7 +1556,7 @@ export class AnnotationLanes {
             fills,
             outline,
             baseline,
-            flip: member.style.flip,
+            flip: drawnFlip(member.style, this.turned),
             ...(member.style.centre === undefined ? {} : { centre: member.style.centre }),
           }
           if (dragged === null || !hasAMovableAxis(member.kind)) {
@@ -1580,7 +1581,7 @@ export class AnnotationLanes {
                 labels: text,
                 labelBand: scaleLength(LABEL_BAND),
               },
-              { floor: reads.sashimiFloor, flip: member.style.flip },
+              { floor: reads.sashimiFloor, flip: drawnFlip(member.style, this.turned) },
             )
           }
         }
@@ -1598,7 +1599,7 @@ export class AnnotationLanes {
           const axisLimits = dragged === null ? limits : scaledTo(limits, dragged)
           const axisPaint = {
             limits: axisLimits,
-            flip: first.entry.style.flip,
+            flip: drawnFlip(first.entry.style, this.turned),
             guideColour: geometry.palette.guide,
             haloColour: geometry.palette.halo,
             font: scaleFont(LANE_FONT),
@@ -1638,7 +1639,7 @@ export class AnnotationLanes {
                     scale: scaleOf(first.entry.style),
                     ...(unitOf(first.entry.style) === undefined ? {} : { unit: unitOf(first.entry.style) }),
                   }),
-            at: labelEndFor(frame, shown, first.entry.style.flip),
+            at: labelEndFor(frame, shown, drawnFlip(first.entry.style, this.turned)),
             // A GC trace lives in the middle of its lane — yeast sits at 0.4 of
             // a 0–1 axis, which on the 46-pixel default is within a pixel of
             // where a stacked range line lands — so `0 – 1` was written along
@@ -1708,7 +1709,7 @@ export class AnnotationLanes {
         const drawn = drawArcs(ctx, frame, axis, entry.payload.data, {
           colour: entry.style.colour,
           opacity: entry.style.opacity,
-          flip: entry.style.flip,
+          flip: drawnFlip(entry.style, this.turned),
         })
         if (text) {
           label = {

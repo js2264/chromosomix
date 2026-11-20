@@ -6,7 +6,7 @@ Not a golden
 ------------
 Nothing this script writes is committed, and nothing in it was computed once and
 kept: it goes to ``test/fixtures/reprocessed/``, which is gitignored, and CI
-writes it afresh on every run, in the goldens job of ``.github/workflows/test.yml``
+writes it afresh on every run, in the test job of ``.github/workflows/test.yml``
 beside the other fixtures cooler can write and with whatever cooler and cooltools
 PyPI serves that day, before the suites read it. A reference that drifts — a
 cooler release that balances differently, a cooltools whose sample is not the one

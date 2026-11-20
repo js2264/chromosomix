@@ -6,6 +6,8 @@
  * where its name is what was typed.
  *
  *   node documentation/scripts/screens/browse-navigating.cjs [out-dir]   # nav-hint, nav-genes
+ *   node documentation/scripts/screens/webp.mjs <out-dir>/nav-hint.png \
+ *     documentation/src/assets/screens/browse/navigating-zoom-hint.webp
  *   node documentation/scripts/screens/webp.mjs <out-dir>/nav-genes.png \
  *     documentation/src/assets/screens/browse/navigating-gene-search.webp
  *   node documentation/scripts/screens/webp.mjs <out-dir>/nav-sequence.png \

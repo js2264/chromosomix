@@ -19,7 +19,7 @@
 const { BUCKET, serveFiles, start } = require('./analyses-2d-lib.cjs')
 
 const OUT = process.argv[2] ?? 'screens/analyses'
-const DIR = `${BUCKET}chicken/`
+const DIR = `${BUCKET}store/gibcus2018/`
 const RUNG = '::/resolutions/100000'
 const MAPS = [
   ['G2', 'G2_4DNFIT479GDR.mcool'],

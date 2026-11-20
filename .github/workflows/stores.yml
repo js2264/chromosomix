@@ -111,21 +111,81 @@ jobs:
         id: stamp
         run: echo "day=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
 
-      # Both portals are asked even when the first one fails, so that one run
-      # reports the state of both rather than of whichever is listed first.
-      # Either failure then fails the job and nothing below runs — which is the
-      # whole point of exit 2: the generator answers 2 when a query came back
-      # empty, and an empty catalogue must never be published over a good one.
+      # Fetched before anything is generated, because it is what a failed front
+      # end falls back on (below). Shallow, because only the tip of the branch is
+      # of interest and a full clone of a repository carrying 250 MB of demo data
+      # in its history is not a thing to do weekly. The clone is also what
+      # carries `archive/` forward: the branch is force-pushed as one orphan
+      # commit below, so the previous run's dated copies survive because they
+      # are *copied*, not because git remembers them. When the branch does not
+      # exist yet the directory is initialised as an orphan and the first push
+      # creates it.
+      - name: Fetch the stores branch
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          remote="https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
+          if git ls-remote --exit-code --heads "$remote" "$STORE_BRANCH" >/dev/null 2>&1; then
+            git clone --quiet --depth 1 --branch "$STORE_BRANCH" "$remote" published
+          else
+            echo "No $STORE_BRANCH branch yet — starting one."
+            mkdir published
+            git -C published init --quiet --initial-branch "$STORE_BRANCH"
+            git -C published remote add origin "$remote"
+          fi
+
+      # Every front end is asked even when one before it fails, so that one run
+      # reports the state of all four rather than of whichever is listed first.
       # `--check` re-reads what was written and validates it against the store
-      # contract before this step is allowed to succeed, because a store that is
-      # valid JSON and wrong parses, publishes, and draws an empty table.
+      # contract before a front end counts as finished, because a store that is
+      # valid JSON and wrong parses, publishes, and draws an empty table. The
+      # generator answers 2 when a query came back empty and 1 when a host could
+      # not be reached, after asking again for a few minutes (SPECS §24.3).
       #
-      # `out/` is gitignored, so running these two commands locally to inspect
-      # the result leaves nothing for a stray `git add -A` to pick up.
+      # **A front end that fails keeps last week's shelf, and does not hold the
+      # others back.** The publish below replaces the branch wholesale, so a store
+      # missing from `out/` would *delete* its good copy; until 2026-11 the answer
+      # was to publish nothing at all, which let one portal's outage freeze all
+      # four — 4DN's portal dropped the connection on 2, 9 and 13 November, and
+      # ENCODE, IGV and DNA Zoo went unpublished with it each time. Now whatever the failed attempt
+      # left in `out/` is removed, the files of that front end the branch holds
+      # (its store or shards, its session shelf, its sessions) are copied in, and
+      # they are published again unchanged — `generatedAt` and all, so the shelf
+      # still says how old it is. The run is then failed at its very end, after
+      # the publish and the deploy, so a portal that keeps failing is still a red
+      # run every Monday. An empty catalogue is never published over a good one,
+      # because exit 2 takes this same road.
+      #
+      # `out/` is gitignored, so running these commands locally to inspect the
+      # result leaves nothing for a stray `git add -A` to pick up.
       - name: Generate every store
+        id: generate
         run: |
           set -uo pipefail
+          shopt -s nullglob
           failed=''
+          carry() {
+            local front="$1"
+            rm -f "out/$front.json" "out/$front"-*.json out/sessions/"$front"-*.chromosomix.json
+            # The store itself is named outright, and `nullglob` only drops a
+            # *pattern* that matches nothing, so it is tested for.
+            local stores=(published/"$front"-*.json)
+            if [ -f "published/$front.json" ]; then
+              stores=("published/$front.json" "${stores[@]}")
+            fi
+            local sessions=(published/sessions/"$front"-*.chromosomix.json)
+            if [ ${#stores[@]} -eq 0 ]; then
+              echo "::warning::$front failed, and the $STORE_BRANCH branch holds no copy of it to keep: its shelf stays unpublished."
+              return
+            fi
+            mkdir -p out/sessions
+            cp "${stores[@]}" out/
+            [ ${#sessions[@]} -eq 0 ] || cp "${sessions[@]}" out/sessions/
+            local made
+            made=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("generatedAt", "an unknown date"))' "${stores[0]}")
+            echo "::warning::$front failed; its last published shelf, generated $made, is published again unchanged (${#stores[@]} stores, ${#sessions[@]} sessions)."
+          }
           for front in igv 4dn encode; do
             echo "::group::$front"
             python3 scripts/make_store.py "$front" \
@@ -139,8 +199,7 @@ jobs:
           # DNA Zoo is a bucket rather than a portal, so it is not in the loop:
           # it publishes no sessions, and its metadata is a README.json in each
           # species' own directory rather than a query. Nothing else about it is
-          # special — it fails the run the same way, for the same reason the
-          # loop does.
+          # special — it fails, and is carried, the same way the loop's are.
           echo "::group::dnazoo"
           python3 scripts/make_store.py dnazoo \
             --out out/dnazoo.json \
@@ -150,12 +209,12 @@ jobs:
 
           # Named, and outside the collapsed groups, because the groups are
           # thousands of lines of `--check` saying "valid" and the one thing
-          # worth reading is which front end did not finish. A run that lost
-          # one publishes nothing: the shelves are separate files, but the
-          # publish below replaces the branch wholesale, so a missing store would
-          # *delete* last week's good copy of it rather than leave it alone.
-          if [ -n "$failed" ]; then
-            echo "::error::These front ends failed:$failed. Nothing is published; the shelves             readers see are last week's."
+          # worth reading is which front end did not finish.
+          for front in $failed; do carry "$front"; done
+          echo "stale=${failed# }" >> "$GITHUB_OUTPUT"
+          written=(out/*.json)
+          if [ ${#written[@]} -eq 0 ]; then
+            echo "::error::No front end finished, and the $STORE_BRANCH branch holds none of them. Nothing is published."
             exit 1
           fi
 
@@ -259,34 +318,6 @@ jobs:
           path: out/
           retention-days: 90
 
-      # Shallow, because only the tip of the branch is of interest and a full
-      # clone of a repository carrying 250 MB of demo data in its history is not
-      # a thing to do weekly. Pushing from a shallow checkout is fine: its parent
-      # is the tip the remote already has. When the branch does not exist yet the
-      # directory is initialised as an orphan — no history, no `main` in it, and
-      # the first push creates the branch.
-      # Shallow, because only the tip of the branch is of interest and a full
-      # clone of a repository carrying 250 MB of demo data in its history is not
-      # a thing to do weekly. The clone is what carries `archive/` forward: the
-      # branch is force-pushed as one orphan commit below, so the previous run's
-      # dated copies survive because they are *copied*, not because git
-      # remembers them. When the branch does not exist yet the directory is
-      # initialised as an orphan and the first push creates it.
-      - name: Fetch the stores branch
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          remote="https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
-          if git ls-remote --exit-code --heads "$remote" "$STORE_BRANCH" >/dev/null 2>&1; then
-            git clone --quiet --depth 1 --branch "$STORE_BRANCH" "$remote" published
-          else
-            echo "No $STORE_BRANCH branch yet — starting one."
-            mkdir published
-            git -C published init --quiet --initial-branch "$STORE_BRANCH"
-            git -C published remote add origin "$remote"
-          fi
-
       # The current files replace whatever was there, wholesale: a shard the
       # generator stops writing — an assembly ENCODE retires — must leave the
       # branch rather than linger as a shelf nothing regenerates. `archive/` is
@@ -313,8 +344,8 @@ jobs:
           find published -mindepth 1 -maxdepth 1 \
             -not -name .git -not -name archive -exec rm -rf {} +
           cp out/*.json published/
-          mkdir -p published/sessions
-          cp out/sessions/*.chromosomix.json published/sessions/
+          mkdir -p published/sessions out/sessions
+          find out/sessions -maxdepth 1 -name '*.chromosomix.json' -exec cp -t published/sessions/ {} +
           cd published
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -374,3 +405,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow run deploy.yml --ref '${{ github.event.repository.default_branch || github.ref_name }}'
+
+      # Last, so that everything that did finish has been published and
+      # deployed first: a front end that failed was republished from last
+      # week's copy above, and this is where the run says so, in red, every week
+      # it keeps happening.
+      - name: Name the shelves that were not refreshed
+        if: steps.generate.outputs.stale != ''
+        env:
+          STALE: ${{ steps.generate.outputs.stale }}
+        run: |
+          echo "::error::These front ends failed: $STALE. Every other shelf was published; theirs are as the $STORE_BRANCH branch last had them. The 'Generate every store' step says why, and which were kept."
+          exit 1

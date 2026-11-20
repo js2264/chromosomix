@@ -12,7 +12,7 @@
 
 import { UNBINNED_NAME } from '../constants'
 import { ViewerError } from '../errors'
-import { getH5 } from '../h5/bootstrap'
+import { getH5, h5HeapBytes } from '../h5/bootstrap'
 import { DENSE_HINTS } from '../metacooler/matrix'
 import { MetaCooler } from '../metacooler/MetaCooler'
 import { POOLED_CELL_CAP, type BinPooling, type PoolPlan } from '../metacooler/pooling'
@@ -69,12 +69,14 @@ import {
   type ResampleResult,
   type SourceKind,
   type StageWindowSide,
+  type ReadPlans,
   type StatsResult,
   type WorkerRequest,
   type WorkerResponse,
 } from './protocol'
 import type { WindowRead, WindowRun } from '../edit/paint'
-import { createSource, openIndexSource, releaseSources } from './sources'
+import { createSource, openIndexSource, releaseSources, remoteBehind } from './sources'
+import type { ReadPlan } from '../sources/RemoteRangeSource'
 import { importPairs, probePairs, rungInImport, suggestBase, type PairsImport } from '../pairs/import'
 import { mcoolNameFor } from '../pairs/mcoolName'
 import { writeMcool } from '../pairs/write'
@@ -164,6 +166,13 @@ interface Session {
    * the second lock on a door the first already shut.
    */
   metacool?: boolean
+  /**
+   * What this open read and what its first view read, written down as plans
+   * the next open of the file fetches side by side (§6.1, §12); `view` stays
+   * `null` until the first view's block has been read. Absent for a source that
+   * does not write reads down — anything but a remote one.
+   */
+  plans?: { open: ReadPlan | null; view: ReadPlan | null }
   /**
    * What the method weighs of the stage's last picture (§27.5), kept here for
    * the `suggest` requests that count its suggestions off the stage's thread
@@ -688,7 +697,11 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     resample: null,
     lens,
     ...(request.metacool === undefined ? {} : { metacool: request.metacool }),
+    ...(remoteBehind(source) === null ? {} : { plans: { open: remoteBehind(source)?.recorded() ?? null, view: null } }),
   }
+  // The open's walk is written down; the first view's begins here, and ends
+  // with that view's block (`handleMatrix`).
+  remoteBehind(source)?.beginRecording()
 
   return {
     ...(pairs === null || request.binning === undefined
@@ -1232,6 +1245,89 @@ function pictureRung(open: MetaCooler, cap: number, contigs?: readonly number[])
 async function handleMatrix(
   request: Extract<WorkerRequest, { kind: 'matrix' }>,
 ): Promise<MatrixResult> {
+  const result = await readMatrix(request)
+  // The first view's block is read: its walk is the second half of the plan.
+  // Not for a stand-in, whose block is still to come, nor for a read nobody is
+  // looking at.
+  const held = session
+  if (
+    held !== null &&
+    held.plans !== undefined &&
+    held.plans.view === null &&
+    request.preview !== true &&
+    request.background !== true
+  ) {
+    const behind = remoteBehind(held.source)
+    held.plans.view = behind?.recorded() ?? null
+    behind?.stopRecording()
+  }
+  return result
+}
+
+async function readMatrix(
+  request: Extract<WorkerRequest, { kind: 'matrix' }>,
+): Promise<MatrixResult> {
+  const swap = request.balance === true ? await weighedRung(request) : null
+  if (swap === null) return readMatrixAt(request)
+  const result = await readMatrixAt(swap.request)
+  return { ...result, unweighted: swap.skipped }
+}
+
+/**
+ * A balanced read of a sibling rung that carries no weights, asked again of
+ * the nearest coarser one that does — or `null` to read it as asked (§2, §3.4).
+ *
+ * A ladder need not be balanced at every rung: the E. coli micro-C `.mcool`
+ * the lab shares stores 10 bp beside 100 bp … 10 kb and balanced every rung but
+ * the 10 bp one. A zoom with balanced counts on came down to that rung and was
+ * refused — the read reached `applyWeights` and threw, and the refusal took the
+ * place of a map that had been fine a notch before. Balanced counts at 10 bp do
+ * not exist in that file; the nearest picture that does is the 100 bp one, so
+ * that is what answers, and the block says which rungs it went round
+ * (`MatrixResult.unweighted`) so the zoom stops asking for them
+ * (`ui/refine.ts`). The pooling asked for is carried onto the coarser rung's
+ * bins, so the cell is no finer than the one planned.
+ *
+ * The open map itself is never stepped round: a file whose open map is not
+ * balanced does not offer balanced counts at all (`OpenResult.hasWeights`).
+ * Where no coarser rung carries weights either, the read goes ahead as asked
+ * and refuses as it always did.
+ */
+async function weighedRung(
+  request: Extract<WorkerRequest, { kind: 'matrix' }>,
+): Promise<{ request: Extract<WorkerRequest, { kind: 'matrix' }>; skipped: string[] } | null> {
+  const asked = request.rung
+  if (asked === undefined || asked === '') return null
+  const open = requireSession().mc
+  const mc = await mapFor(asked)
+  if (mc === open || mc.hasWeights) return null
+  const from = mc.binsize ?? 0
+  if (!(from > 0)) return null
+  const skipped = [asked]
+  const coarser = open.entries
+    .filter((name) => /^\d+$/.test(name) && Number(name) > from)
+    .sort((a, b) => Number(a) - Number(b))
+  for (const name of coarser) {
+    const isOpen = open.binsize !== null && Number(name) === open.binsize
+    const each = isOpen ? open : await mapFor(name)
+    if (!each.hasWeights) {
+      skipped.push(name)
+      continue
+    }
+    const to = each.binsize ?? Number(name)
+    const k = Math.max(1, Math.round((Math.max(1, request.binsPerCell ?? 1) * from) / to))
+    const { rung: _rung, binsPerCell: _pooling, ...rest } = request
+    return {
+      request: { ...rest, ...(isOpen ? {} : { rung: name }), ...(k > 1 ? { binsPerCell: k } : {}) },
+      skipped,
+    }
+  }
+  return null
+}
+
+async function readMatrixAt(
+  request: Extract<WorkerRequest, { kind: 'matrix' }>,
+): Promise<MatrixResult> {
   const open = requireSession().mc
   // The rung the caller named, and the request's own extents translated onto it.
   // Both are no-ops for the ordinary read, which names no rung: `mapFor` hands
@@ -1298,6 +1394,9 @@ async function handleMatrix(
       ...(request.budgetBytes === undefined ? {} : { budgetBytes: request.budgetBytes }),
     },
     hintFor(rows, cols),
+    // Called off between windows, as the pooled read always was: the zoom
+    // cancels the read it has outrun, and the one it fires next waits for this.
+    () => cancelled.has(request.id),
   )
   return atRung(mc, open, asked_, binLevelResult(mc, dense, request.genomes === true))
 }
@@ -2147,9 +2246,30 @@ async function handleContacts(request: Extract<WorkerRequest, { kind: 'contacts'
   }
 }
 
+/**
+ * What the open and its first view read, for the session to keep for the next
+ * open of this file (§6.1, §12) — and the end of writing reads down, which
+ * nothing after the first picture needs.
+ */
+function handleReadPlan(): ReadPlans | null {
+  const held = session
+  if (held === null || held.plans === undefined) return null
+  const behind = remoteBehind(held.source)
+  if (behind !== null) {
+    if (held.plans.view === null) held.plans.view = behind.recorded()
+    behind.stopRecording()
+  }
+  return held.plans
+}
+
 function handleStats(): StatsResult {
   const { source } = requireSession()
-  return { total: source.stats(), lastOp: { ...lastOp }, calls }
+  return {
+    total: source.stats(),
+    lastOp: { ...lastOp },
+    calls,
+    memory: { wasm: h5HeapBytes(), cache: source.heldBytes?.() ?? null },
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -2211,6 +2331,8 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleContacts(request)
     case 'stats':
       return handleStats()
+    case 'readPlan':
+      return handleReadPlan()
     case 'picture':
       return handlePicture(request)
     case 'suggest':
@@ -2237,12 +2359,15 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
 }
 
 async function handle(request: WorkerRequest): Promise<void> {
-  calls++
+  // The status bar's own ask for these counters is not one of them, and is no
+  // reason for the census to stand aside: it comes once a second (§12).
+  const counted = request.kind !== 'stats'
+  if (counted) calls++
   // The census and a read marked `background` go behind every other request:
   // one waits between its steps (`handleContacts`), the other before it starts.
   const background = request.kind === 'contacts' || (request.kind === 'matrix' && request.background === true)
   if (background && request.kind === 'matrix') await foreground.quiet(() => cancelled.has(request.id))
-  const ended = background ? null : foreground.begin()
+  const ended = background || !counted ? null : foreground.begin()
   const before = session?.source.stats()
   const summing = followCells(request.id)
   try {

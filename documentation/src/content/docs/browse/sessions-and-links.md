@@ -81,8 +81,10 @@ See [From the app to a script](/cli/from-the-app/), and
 ### Every view is a link
 
 The address bar always holds the front tab's view, after the `#`: the file, the view, the region, how
-the map is drawn, a second file in the same square and the maps side by side. Copy it and send it. For
-example, yeast chromosome IV on a log scale:
+the map is drawn, a second file in the same square and the maps side by side. A multi-resolution file
+opened where it lands is named alone, without that resolution, since the file alone opens there
+again ([Contact maps](/files/contact-maps/)). Copy it and send it. For example, yeast chromosome IV on
+a log scale:
 
 ```text
 https://chromosomix.app/#uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&transform=log10&balance=true

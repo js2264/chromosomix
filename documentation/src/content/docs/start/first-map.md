@@ -14,7 +14,8 @@ Go to <https://chromosomix.app/>. The landing page opens files from your disk or
 (**Load files**), a folder, bucket, Google Drive or Dropbox (**Connect a local or remote folder**), or
 a catalogue of published data (**Connect to a data store**). Under *Just looking?*,
 **Human Hi-C data** opens K562 at the MYC locus with its tracks; each example's `?` says what it
-opens.
+opens. Over the page stands the app's mark — a small contact map whose anti-diagonal makes the X
+of the name, drawing itself in when the pointer is over it.
 
 ![The landing page: play the tutorial under New here?, Load files with its drop area and URL box, the four buttons that connect a folder, a bucket, Google Drive or Dropbox, and the data store tiles with the pointer on 4DN open data.](../../../assets/screens/start/landing.webp)
 
@@ -27,12 +28,18 @@ opens.
 
 It opens on the **Chromosomes** table, beside the **General** panel, which describes the file.
 
+A map on a server is read a piece at a time, and opening one means reading a few dozen small pieces
+one after another. The app remembers which pieces a map needed, so the next time you open the same
+map in this browser it asks for all of them at once and the map opens sooner. **Human Hi-C data**
+and **Comparing data** come with their lists, so they open quickly the first time too.
+
 ![The Chromosomes table of 4DN's K562 map, a row per chromosome with its length, beside the General panel, whose File card gives its bin size, 25 kb as it opens, and a sum of 186,956,649 contacts, and whose Sequences card lists its chromosomes.](../../../assets/screens/start/chromosomes.webp)
 
 ## Pick a resolution and open a chromosome
 
-1. After **resolution**, at the end of the bar above the table, choose **250 kb**: a dropdown here, a
-   slider on a file with nine bin sizes or fewer.
+1. At the end of the bar above the table, untick **refine on zoom**, then choose **250 kb** in the
+   box beside the slider (or click its slot). Ticked, the map would be read at the resolution of the
+   screen and finer as you zoom; unticked, the resolution is yours to pick.
 2. In the Chromosomes table, press **chr15**.
 
 The blank square at the start is the short arm, with no unique sequence for reads to map to; the
@@ -40,8 +47,8 @@ checkerboard off the diagonal is the long arm's compartments.
 
 ## Move around
 
-- **Drag** pans, the **wheel** or a pinch zooms, **double-click** fits the picture. After a click on
-  the map, the arrow keys pan it; <kbd>0</kbd> fits it from anywhere.
+- **Drag** pans, the **wheel** or a pinch zooms, **double-click** shows the whole chromosome again.
+  After a click on the map, the arrow keys pan it; <kbd>0</kbd> fits it from anywhere.
 - To open a stretch rather than enlarge it, hold <kbd>⌥ Option</kbd> (<kbd>Alt</kbd> on Windows and
   Linux) and drag a box across it; add <kbd>⇧ Shift</kbd> to keep it on the diagonal.
 - Or type a place, `chr15:30,000,001-60,000,000`, and press **go**. Coordinates are 1-based and
@@ -57,8 +64,9 @@ checkerboard off the diagonal is the long arm's compartments.
 Open chr15 from 30 to 60 Mb and choose **5 kb**. Closer in, at `chr15:38,100,001-50,025,000`, the
 squares along the diagonal are domains, mostly nested, and the dots at their corners are loops.
 
-A window with more bins than the picture has room for is drawn coarser, at the *effective resolution*
-given under the title. <kbd>-</kbd> and <kbd>+</kbd> step coarser or finer.
+A window too wide for the resolution picked, 8,192 bins a side, is drawn coarser, and the
+line under the title says so; zoom in and it is drawn at the one picked. <kbd>-</kbd> and <kbd>+</kbd>
+step coarser or finer.
 
 ![chr15:38,100,001-50,025,000 at 5 kb, balanced on a log10 scale, with 4DN's compartment eigenvector, insulation score and boundaries drawn under the map.](../../../assets/screens/start/chr15-5kb.webp)
 

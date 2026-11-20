@@ -16,7 +16,7 @@ import TaskSummary from '@components/TaskSummary.astro'
 
 Open a contact map, then **Model from the map**, first on the **3D tasks** card of the **Analysis** panel. It needs no model loaded, and on a deck it models the starred map.
 
-**sequences** starts on what the map shows and takes a locus or comma-separated sequences; empty is the whole file. Each bin at the open resolution is one bead, so for a coarser model open the map at a coarser resolution. Time and memory grow with the square of the beads, with no ceiling: the line beside **run** gives the beads, the time per hundred refinement steps and the memory, and a browser that cannot give that much says so.
+**sequences** starts on what the map shows and takes a locus or comma-separated sequences; empty is the whole file. Each bin at the resolution on the task's **Resolution** row, the first of its form, is one bead: the one picked above the map, or the one the file was opened at, so for a coarser model choose a coarser one there. Time and memory grow with the square of the beads, with no ceiling: the line beside **run** gives the beads, the time per hundred refinement steps and the memory, and a browser that cannot give that much says so.
 
 The model becomes a row of the **Structures** card in the **Annotations** panel, named after what was modelled, such as `3D model · chrIV`, and opens in a structure cell of its own ([3D models beside the map](/browse/structures/)). A second run never replaces the first: it is numbered `(2)`, then `(3)`.
 

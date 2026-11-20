@@ -19,9 +19,10 @@
  *   npm run dev -- --host 127.0.0.1 --port 5173 &
  *   node scripts/ui-interarm.mjs [out-dir]
  *
- * The zoo and the *B. subtilis* demo are read over the network
- * (`GALLERY_DATA`, `GALLERY_SUBTILIS` point elsewhere). Behind a proxy (`HTTPS_PROXY`) the browser
- * is sent through it, the dev server excepted.
+ * *B. subtilis* is read over the network from the lab's store, the paper's copies
+ * (`GALLERY_SUBTILIS` points elsewhere). The zoo is no longer on the bucket, so the
+ * PAK step runs only when `GALLERY_DATA` names a folder serving `PAK_MM142.mcool`.
+ * Behind a proxy (`HTTPS_PROXY`) the browser is sent through it, the dev server excepted.
  */
 
 import { createRequire } from 'node:module'
@@ -42,23 +43,25 @@ const { chromium } = playwright()
 
 const OUT = process.argv[2] ?? 'gallery'
 const BASE = process.env.GALLERY_BASE ?? 'http://127.0.0.1:5173'
-const ZOO = process.env.GALLERY_DATA ?? 'https://rsglab-data.s3.eu-west-3.amazonaws.com/dbz/PAK_MM142'
-const SUBTILIS =
-  process.env.GALLERY_SUBTILIS ??
-  'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/subtilis/Bsubtilis_induction_45min%5Emapped_PY79%5ELW6QCG.mcool'
+// The zoo is no longer on the lab's bucket: its step runs when GALLERY_DATA names a folder serving
+// PAK_MM142.mcool (python3 scripts/DBZ_store.py serve <folder>), and is skipped otherwise.
+const ZOO = process.env.GALLERY_DATA
+// B. subtilis from the lab's store, the paper's copies (demo/subtilis/ is gone).
+const PAPER_SUBTILIS = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/store/chromosomix_paper/B_subtilis/'
+const SUBTILIS = process.env.GALLERY_SUBTILIS ?? `${PAPER_SUBTILIS}Bsubtilis_induction_45min.mcool`
 // The ParB time course as one deck: a workspace naming each map by its condition,
 // written beside the gallery and served by the dev server (`GALLERY_COURSE` to
 // point elsewhere).
-const COURSE_DIR = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/subtilis/'
+const COURSE_DIR = PAPER_SUBTILIS
 const COURSE_MAPS = [
-  ['WT', 'Bsubtilis_WT%5Emapped_PY79%5EFKEBR7.mcool'],
-  ['ΔparAB', 'Bsubtilis_dparAB%5Emapped_PY79%5ENT9IOH.mcool'],
-  ['+parB 0 min', 'Bsubtilis_induction_0min%5Emapped_PY79%5E14WJZP.mcool'],
-  ['+parB 15 min', 'Bsubtilis_induction_15min%5Emapped_PY79%5E3JNIKY.mcool'],
-  ['+parB 20 min', 'Bsubtilis_induction_20min%5Emapped_PY79%5E4WPQI3.mcool'],
-  ['+parB 30 min', 'Bsubtilis_induction_30min%5Emapped_PY79%5EYKZ54M.mcool'],
-  ['+parB 35 min', 'Bsubtilis_induction_35min%5Emapped_PY79%5EFSTYHN.mcool'],
-  ['+parB 45 min', 'Bsubtilis_induction_45min%5Emapped_PY79%5ELW6QCG.mcool'],
+  ['WT', 'Bsubtilis_WT.mcool'],
+  ['ΔparAB', 'Bsubtilis_dparAB.mcool'],
+  ['+parB 0 min', 'Bsubtilis_induction_0min.mcool'],
+  ['+parB 15 min', 'Bsubtilis_induction_15min.mcool'],
+  ['+parB 20 min', 'Bsubtilis_induction_20min.mcool'],
+  ['+parB 30 min', 'Bsubtilis_induction_30min.mcool'],
+  ['+parB 35 min', 'Bsubtilis_induction_35min.mcool'],
+  ['+parB 45 min', 'Bsubtilis_induction_45min.mcool'],
 ]
 const COURSE_RUNG = '::/resolutions/10000'
 const COURSE_FILE = join(OUT, '_parb-course.chromosomix.json')
@@ -185,6 +188,9 @@ try {
 
   // P. aeruginosa PAK: its arms are held together from the origin, and the
   // control is what is left once the decay along them is divided out.
+  if (ZOO === undefined) {
+    console.log('PAK skipped: the zoo is no longer on the lab’s bucket; name a folder serving PAK_MM142.mcool in GALLERY_DATA')
+  } else {
   page = await fresh()
   await openWithOrigin(`${ZOO}/PAK_MM142.mcool::/resolutions/8000`, 'LR657304.1', '6,374,501')
   await until('reads as circular', 60000)
@@ -207,6 +213,7 @@ try {
     }, needle)
     await sleep(800)
     await shot(name)
+  }
   }
 
   // B. subtilis, 45 minutes into ParB induction: the alignment has spread from

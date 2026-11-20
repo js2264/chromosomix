@@ -15,16 +15,23 @@ const { BUCKET, sleep, start } = require('./analyses-2d-lib.cjs')
 
 const OUT = process.argv[2] ?? 'screens/analyses'
 const SEQUENCE = process.env.SCREENS_SEQUENCE ?? 'chr7'
+// The map is the lab's store's copy; the genes it was phased by were beside the map it was copied
+// from (demo/chicken/genes.gtf.gz), which is gone: name a copy, by its address, in SCREENS_GENES.
+const GENES = process.env.SCREENS_GENES
+if (GENES === undefined) {
+  console.error('the chicken genes (demo/chicken/genes.gtf.gz) are no longer on the lab’s bucket: name a copy in SCREENS_GENES')
+  process.exit(1)
+}
 
 ;(async () => {
   const s = await start(OUT, { drawer: 460 })
   const { page } = s
   try {
-    await s.open(`#uri=${BUCKET}chicken/G2_4DNFIT479GDR.mcool::/resolutions/100000&view=region&region=${SEQUENCE}`)
+    await s.open(`#uri=${BUCKET}store/gibcus2018/G2_4DNFIT479GDR.mcool::/resolutions/100000&view=region&region=${SEQUENCE}`)
     // The genes, by their address, through the header's +.
     await page.locator('.app-head .head-add').click()
     await sleep(700)
-    await page.locator('.modal-panel input.input-url').fill(`${BUCKET}chicken/genes.gtf.gz`)
+    await page.locator('.modal-panel input.input-url').fill(GENES)
     await page.locator('.modal-panel button', { hasText: /^open$/ }).click()
     await page
       .waitForFunction(() => /genes/.test(document.querySelector('.annotation-card')?.textContent ?? ''), null, {

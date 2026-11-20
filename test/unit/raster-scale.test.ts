@@ -217,12 +217,13 @@ describe('the raster pyramid', () => {
     const g = globalThis as unknown as Record<string, { made: number }>
     const { canvas } = harness(400)
     const heatmap = new HeatmapView(canvas, { devicePixelRatio: 1 })
-    heatmap.setMatrix(block(4000))
+    // Under `LEVEL_MIN_CELLS`, so drawn whole and halved.
+    heatmap.setMatrix(block(1800))
     g['OffscreenCanvas'].made = 0
     heatmap.draw()
-    // The raster, and the three levels the reduction asks for.
+    // The raster, and the two levels the 4.5-fold reduction asks for.
     const first = g['OffscreenCanvas'].made
-    expect(first).toBe(4)
+    expect(first).toBe(3)
     // A second frame over the same pixels: a pan, a crosshair, a hover.
     heatmap.draw()
     expect(g['OffscreenCanvas'].made).toBe(first)
@@ -231,6 +232,25 @@ describe('the raster pyramid', () => {
     heatmap.setScale({ transform: 'log10', colormap: 'default', vmin: 0, vmax: 5 })
     heatmap.draw()
     expect(g['OffscreenCanvas'].made).toBeGreaterThan(first)
+  })
+
+  it('makes a large block’s level alone — no raster under it to halve — once, and again for a new colouring', () => {
+    const g = globalThis as unknown as Record<string, { made: number }>
+    const { canvas, ctx } = harness(400)
+    const heatmap = new HeatmapView(canvas, { devicePixelRatio: 1 })
+    // Past `LEVEL_MIN_CELLS`: painted level by level (`render/levels.ts`).
+    heatmap.setMatrix(block(4000))
+    g['OffscreenCanvas'].made = 0
+    heatmap.draw()
+    // One canvas, the level the tenfold reduction samples — what the halvings'
+    // third level was — and not the 4,000-pixel raster it used to be halved from.
+    expect(g['OffscreenCanvas'].made).toBe(1)
+    expect(ctx.blits[ctx.blits.length - 1].source.width).toBe(500)
+    heatmap.draw()
+    expect(g['OffscreenCanvas'].made).toBe(1)
+    heatmap.setScale({ transform: 'log10', colormap: 'default', vmin: 0, vmax: 5 })
+    heatmap.draw()
+    expect(g['OffscreenCanvas'].made).toBe(2)
   })
 })
 

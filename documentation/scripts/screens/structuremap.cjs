@@ -28,7 +28,7 @@ const HEIGHT = Number(process.env.SCREENS_HEIGHT ?? 1260)
   const s = await open(OUT, { drawer: DRAWER, height: HEIGHT })
   const { page } = s
   try {
-    await page.goto(`${BASE}/#uri=${encodeURIComponent(MAP)}&view=region&region=IV&coarsen=5000&transform=log10&balance=true`)
+    await page.goto(`${BASE}/#uri=${encodeURIComponent(MAP)}&view=region&region=IV&resolution=5000&transform=log10&balance=true`)
     await s.mapDrawn()
     await sleep(3000)
     await s.fold('Show the Annotations panel')

@@ -69,8 +69,9 @@ function serving(bodies: Record<string, string>): string[] {
 }
 
 describe('the lab’s gallery', () => {
-  // Every figure, the metagenome's included, is what the gallery draws with
-  // the dev features switch on; the last case here is what it draws with it off.
+  // Every figure is what the gallery draws with the dev features switch on; the
+  // last case here is what it draws with it off, where nothing of the
+  // multi-genome format may show.
   beforeEach(() => resetDevFeatures(true))
   afterEach(() => resetDevFeatures())
 
@@ -97,7 +98,6 @@ describe('the lab’s gallery', () => {
       'Hi-C, micro-C and PCP',
       'Splicing on human chrX',
       'Mitotic chromosome formation',
-      'Mock microbial community',
     ])
     expect(textsOf(sections[1], '.gallery-card-title')).toEqual([
       'The Chromosomix paper',
@@ -129,7 +129,7 @@ describe('the lab’s gallery', () => {
     const view = new GalleryView({ front: front as NonNullable<typeof front>, host: host(opened) })
     document.body.appendChild(view.el)
     const cards = all(view.el, '.gallery-card')
-    expect(cards.length).toBe(8)
+    expect(cards.length).toBe(7)
     // The first line is the name and the one verb, an icon with the words in its title.
     const head = cards[0].querySelector('.gallery-card-head') as HTMLElement
     expect(head.querySelector('.gallery-card-title')?.textContent).toBe('Yeast micro-C')
@@ -147,22 +147,21 @@ describe('the lab’s gallery', () => {
     expect(all(fold, '.portal-row')).toHaveLength(9)
     expect(all(fold, '.row-verb-add')).toHaveLength(9)
     // The landscape's seven, the three maps' five, human chrX's five, the time
-    // course's fifteen, the metagenome's two; then the papers: the Chromosomix
-    // paper's sixty-three, over five organisms, and the Meneu paper's sixteen.
-    expect(textsOf(view.el, '.gallery-card-more > summary').slice(0, 8)).toEqual([
+    // course's fifteen; then the papers: the Chromosomix paper's sixty-three,
+    // over five organisms, and the Meneu paper's sixteen.
+    expect(textsOf(view.el, '.gallery-card-more > summary').slice(0, 7)).toEqual([
       '9 files',
       '7 files',
       '5 files',
       '5 files',
       '15 files',
-      '2 files',
       '63 files',
       '16 files',
     ])
     // A file one figure reaches into another's folder for is one row, under
     // both: the deck's Hi-C is the Meneu paper's G1 map.
     const deck = cards[2].querySelector('.gallery-card-more') as HTMLElement
-    const meneu = cards[7].querySelector('.gallery-card-more') as HTMLElement
+    const meneu = cards[6].querySelector('.gallery-card-more') as HTMLElement
     expect(deck.textContent).toContain('Hi-C, M. mycoides, G1')
     expect(meneu.textContent).toContain('Hi-C, M. mycoides, G1')
     // …and the files no figure names: the micro-C map as a `.hic` and the

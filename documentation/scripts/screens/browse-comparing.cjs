@@ -16,8 +16,8 @@
 
 const { BUCKET, sleep, start } = require('./browse-lib.cjs')
 
-const G1 = `${BUCKET}/meneu/HiC/HiC_Mpneumo_G1.mcool`
-const G2M = `${BUCKET}/meneu/HiC/HiC_Mpneumo_G2M.mcool`
+const G1 = `${BUCKET}/store/meneu2025/HiC/HiC_Mpneumo_G1.mcool`
+const G2M = `${BUCKET}/store/meneu2025/HiC/HiC_Mpneumo_G2M.mcool`
 const MICROC = `${BUCKET}/yeast/Yeast_microC_G2M_1kb.cool`
 const at = (file, bin) => `${file}::/resolutions/${bin}`
 
@@ -57,7 +57,7 @@ const keys = () =>
 
     // One file read two ways.
     await app.open(
-      `#uri=${MICROC}&view=region&region=IV:1000000-1400000&coarsen=2000&balance=true&transform=log10` +
+      `#uri=${MICROC}&view=region&region=IV:1000000-1400000&resolution=2000&balance=true&transform=log10` +
         `&lower=true&oe2=true&transform2=log2&colormap2=RdBu_r`,
     )
     await app.until(new Function(`return (${keys})().some((k) => k.includes('◣') && k.includes('O/E'))`))

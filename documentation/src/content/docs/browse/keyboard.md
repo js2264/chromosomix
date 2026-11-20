@@ -102,8 +102,8 @@ In the dialog's order and wording. ⌘ is for a Mac, Ctrl for everything else.
 | <kbd>Space</kbd> | **Diagonal lock** | Every drag, scroll and box runs along the diagonal until pressed again. On a map |
 | <kbd>0</kbd> | **Fit the view** | On a map, every pan and zoom undone, as a double click does. In the 1D browser, the whole genome |
 | <kbd>E</kbd> | **Observed over expected** | Each cell over what its distance from the diagonal predicts: the Map card's O/E toggle. On a map |
-| <kbd>−</kbd> | **Coarser resolution** | One rung on the resolution bar. On a map |
-| <kbd>+</kbd> | **Finer resolution** | One rung on the resolution bar. On a map |
+| <kbd>−</kbd> | **Coarser resolution** | One rung on the resolution row. On a map, with *refine on zoom* unticked |
+| <kbd>+</kbd> | **Finer resolution** | One rung on the resolution row. On a map, with *refine on zoom* unticked |
 | <kbd>A</kbd> | **Manual annotations** | Your hand-drawn marks, on every map, track and model; on brings back the ones it hid |
 | <kbd>N</kbd> | **Track text** | Track names, value ranges and feature names |
 | <kbd>R</kbd> | **Track floor** | A rule along the bottom of every track lane |
@@ -146,7 +146,7 @@ Only while a 3D model is enlarged; elsewhere these letters keep the meanings abo
 | <kbd>Alt</kbd> + drag (<kbd>⌥</kbd> on a Mac) | Select a square and open it as a region, on the diagonal while it is locked |
 | <kbd>Shift</kbd> + <kbd>Alt</kbd> + drag | The same, pinned to the diagonal from the nearest bin on it |
 | <kbd>Shift</kbd> + drag | Zoom to the stretch it spans, on the diagonal, and copy its locus |
-| double click | Fit the block back to the canvas |
+| double click | The whole sequence, range or genome back on the canvas |
 | wheel | Zoom about the pointer |
 | two fingers sideways | Slide sideways, down the diagonal while it is locked (Space) |
 | <kbd>Win</kbd> + wheel (<kbd>⌘</kbd> on a Mac) | Slide the map up and down, and sideways with it |

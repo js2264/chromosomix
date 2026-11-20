@@ -150,8 +150,9 @@ export const KEYS = {
    */
   marks: 'a',
   /**
-   * One rung coarser and one finer on the resolution bar (§3.4): the same stops
-   * the bar's radios are, walked from the keyboard.
+   * One rung coarser and one finer on the resolution row (§3.4, §5.5): the slots
+   * of its slider, walked from the keyboard — a pick, which wins over *Refine on
+   * zoom*.
    *
    * Bound by what they type, unlike the digit row: `-` and `+` stand in
    * different places on QWERTY and AZERTY, and a reader goes by the mark. Either

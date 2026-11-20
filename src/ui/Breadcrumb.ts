@@ -26,6 +26,8 @@ import type { DerivedRung, Rung } from '../metacooler/coarsen'
 import type { ViewState } from '../types'
 import { el } from './dom'
 import { resolutionLabel } from '../units'
+import { ResolutionRow } from './ResolutionRow'
+import { refineEnabled, setRefineEnabled } from './refine'
 
 /** Re-exported: the label moved to `src/units.ts`, and this is where callers found it. */
 export { resolutionLabel }
@@ -139,26 +141,23 @@ export interface BreadcrumbProps {
    */
   ladder?(): ReadonlyArray<Rung & { derived?: DerivedRung }>
   /**
-   * The bin size on screen, when it is one the reader added rather than a rung.
-   *
-   * A function for {@link ladder}'s reason and for a second: under a derived
-   * rung the file is open at its *base*, so `currentEntry` says `1000` while the
-   * axis says 10 kb, and which it is changes on every patch of the hash.
+   * The bin size the map stands on — the resolution picked (§3.4), a rung the
+   * file stores or one the reader added — or `undefined` where none is and the
+   * zoom picks it. A function for {@link ladder}'s reason: it changes on every
+   * patch of the hash. Absent, the open entry is the rung stood on, which is
+   * every caller that has no picks of its own.
    */
-  coarsen?(): number | undefined
+  standing?(): number | undefined
+  /** Whether the zoom picks the resolution (§2): the tick at the head of the row. */
+  refining?(): boolean
+  /** The tick was changed (§3.4). */
+  onRefine?(on: boolean): void
   /**
-   * A rung of the **file's own** ladder was picked, by entry name.
-   *
-   * Separate from {@link onSelectEntry}, which is the plain entry picker a
-   * collection of replicates gets, because the two do different things where a
-   * derived resolution is showing: picking a stored rung there has to *stop*
-   * coarsening as well as move, and on a plain `.cool` — one rung, no entries —
-   * it has nothing to open at all and stopping is the whole of it. Falls back to
-   * {@link onSelectEntry} when a caller offers no such distinction.
+   * A rung of the ladder was picked, stored or added, by its bin size in bp.
+   * Falls back to {@link onSelectEntry}, by entry name, for a caller with no
+   * picks of its own.
    */
-  onSelectRung?(entry: string): void
-  /** A resolution the reader added was picked — its bin size, in bp. */
-  onSelectDerived?(binsize: number): void
+  onPickResolution?(binsize: number): void
   /** The `+` was pressed: offer to add a resolution the file does not store. */
   onAddResolution?(): void
   /** The × on an added resolution was pressed — take it back off the ladder. */
@@ -217,66 +216,12 @@ export function rootTable(
   return state.genome === undefined ? fallback : 'genomes'
 }
 
-/**
- * Where the resolution radios' `name` comes from.
- *
- * One group per rendered bar rather than one per application: `render` replaces
- * the whole row, and two bars alive at once — a deck's panels, a tab being torn
- * down behind the one in front — sharing a group name would let a radio in the
- * old one unset the checked radio in the new.
- */
-const GROUP_PREFIX = 'chromosomix-resolution-'
-let groups = 0
-
-/**
- * How many rungs are drawn as a row of clickable stops.
- *
- * Nine, which is most of the `.mcool`s in the wild: a `zoomify` ladder that
- * doubles from 1 kb reaches a megabase in ten rungs, and one that walks the
- * 1–2–5 series reaches it in nine. Past that the slider carries the walk on its
- * own — see {@link Breadcrumb.pushResolution}.
- *
- * It was six, on the grounds that more would push the place the reader is
- * looking at off the left of a laptop screen. It does not: a stop is a short
- * number in a condensed face, nine of them is about three hundred pixels, and
- * the trail they sit beside is right-aligned into whatever is left. What six
- * actually cost was the aim-and-click on exactly the files that have the most
- * rungs to aim at — and now, on the files somebody is most likely to *add* a
- * rung to, since adding one to an eight-rung ladder used to collapse the row.
- */
-const MAX_STOPS = 9
-
-/**
- * Which rung of a ladder is on screen, by its index.
- *
- * The reader's declared bin size where they are on one, and the open entry's
- * name otherwise — two questions with one answer, because a derived rung has no
- * entry and the entry that is open under one is its *base*. Reading
- * `currentEntry` alone would put the highlight on the 1 kb stop while the axis
- * said 3 kb.
- *
- * Out here rather than on the bar because the bar is not the only thing that
- * walks the ladder: `-` and `+` step it from the keyboard (`KEYS.coarser`,
- * `KEYS.finer`), and a key that counted from a different rung than the stop
- * that is lit would step from somewhere the reader is not.
- */
-export function rungStandingAt(
-  rungs: ReadonlyArray<Rung & { derived?: DerivedRung }>,
-  coarsen: number | undefined,
-  currentEntry: string | undefined,
-): number {
-  if (coarsen !== undefined) {
-    const at = rungs.findIndex((rung) => rung.binsize === coarsen)
-    if (at >= 0) return at
-  }
-  return Math.max(
-    0,
-    rungs.findIndex((rung) => rung.derived === undefined && rung.name === currentEntry),
-  )
-}
-
 export class Breadcrumb {
   readonly el: HTMLElement
+  /** The resolution row as last drawn; see {@link pushResolution}. */
+  private resRow: ResolutionRow | null = null
+  /** The resolution on screen, for a row drawn after it was said; see {@link showResolution}. */
+  private shownBinsize: number | null = null
 
   constructor(private readonly props: BreadcrumbProps) {
     this.el = el('nav', { class: 'breadcrumb', attrs: { 'aria-label': 'breadcrumb' } })
@@ -284,6 +229,11 @@ export class Breadcrumb {
 
   /** Re-render for a state. Safe to call on every state change. */
   render(state: ViewState | null): void {
+    // An arrow key on the slider picks, and the pick redraws the row: the new
+    // slider takes the keyboard back, or the walk stops after one rung.
+    const focused = this.resRow?.hasFocus() === true
+    this.resRow?.destroy()
+    this.resRow = null
     // Everything but the contacts box goes, and the trail is built in front of
     // it: moving a focused input — even to where it already is — blurs it.
     const tail = this.props.contacts?.el
@@ -315,6 +265,7 @@ export class Breadcrumb {
       this.props.reference.sync()
     }
     this.pushResolution()
+    if (focused) (this.resRow as ResolutionRow | null)?.focusTrack()
     // …and after it, the total the maps are drawn to (§6.5): another answer to
     // *how the picture is drawn*, at the end of the bar where those live.
     if (this.props.contacts !== undefined) {
@@ -537,24 +488,43 @@ export class Breadcrumb {
       .sort((a, b) => a.binsize - b.binsize)
   }
 
-  /** Which rung of {@link ladder} is on screen — see {@link rungStandingAt}. */
+  /**
+   * Which rung of {@link ladder} the map stands on, by its index: the one
+   * picked, or -1 while the zoom picks — the session's word for it where it has
+   * one, the open entry's name for a caller with none.
+   */
   private standingAt(rungs: ReadonlyArray<Rung & { derived?: DerivedRung }>): number {
-    return rungStandingAt(rungs, this.props.coarsen?.(), this.props.currentEntry)
+    if (this.props.standing === undefined) {
+      return Math.max(0, rungs.findIndex((rung) => rung.derived === undefined && rung.name === this.props.currentEntry))
+    }
+    const binsize = this.props.standing()
+    return binsize === undefined ? -1 : rungs.findIndex((rung) => rung.binsize === binsize)
   }
 
   /**
-   * Pick a rung, whichever kind it is.
-   *
-   * One callback out of the picker rather than two paths through it: a stop is a
-   * stop, and which of the two roads it takes — re-open the file at an entry, or
-   * stay where you are and pool — is the session's business and not the bar's.
+   * The rung the file was opened at, by index — the open entry by name, or the
+   * one stored rung of a file with no ladder — for the row to name where nothing
+   * is picked and nothing is drawn.
    */
+  private restingAt(rungs: ReadonlyArray<Rung & { derived?: DerivedRung }>): number {
+    const named = rungs.findIndex((rung) => rung.derived === undefined && rung.name === this.props.currentEntry)
+    if (named >= 0) return named
+    const stored = rungs.filter((rung) => rung.derived === undefined)
+    return stored.length === 1 ? rungs.indexOf(stored[0]) : -1
+  }
+
+  /** Take the row out of the page, letting go of what it subscribed to. */
+  destroy(): void {
+    this.resRow?.destroy()
+    this.resRow = null
+  }
+
   /**
-   * The × that takes an added resolution back off the ladder.
+   * The × that takes an added resolution back off the ladder, beside the box
+   * while that resolution is the one picked.
    *
-   * An empty fragment where the session offers no way to remove one, so the two
-   * shapes of stop — the chip a thinned ladder draws and the radio a listed one
-   * does — can both append it without asking twice.
+   * An empty placeholder where the session offers no way to remove one, so the
+   * row can place it without asking twice.
    */
   private dropButton(binsize: number, label: string): HTMLElement {
     const drop = this.props.onDropResolution
@@ -565,8 +535,7 @@ export class Breadcrumb {
       title: `Remove ${label} from this file’s ladder`,
       attrs: { 'aria-label': `Remove ${label}` },
       on: {
-        // A listed stop is a `<label>` wrapping a radio, so a press anywhere
-        // inside it selects the rung. Removing one is not selecting it.
+        // Removing a rung is not picking it: nothing around the × hears it.
         click: (event: Event) => {
           event.preventDefault()
           event.stopPropagation()
@@ -578,52 +547,19 @@ export class Breadcrumb {
     return off
   }
 
-  private pick(rung: Rung & { derived?: DerivedRung }): void {
-    if (rung.derived !== undefined) this.props.onSelectDerived?.(rung.binsize)
-    else (this.props.onSelectRung ?? this.props.onSelectEntry)?.(rung.name)
-  }
-
   /**
-   * Every rung as a dropdown, for a ladder too long to lay out as stops.
+   * Pick a rung, whichever kind it is.
    *
-   * The word `resolution` stays where it is and this sits beside it, so the row
-   * reads the way it reads at every other length — a label and its control —
-   * and the control *is* the list: a 4DN `.mcool` has eleven rungs and all
-   * eleven are in it, in the ladder's own order, each wearing the `*` and the
-   * tooltip its chip would have worn. What it replaces said less in the same
-   * space: a slider, which shows how many rungs there are and names none of
-   * them, and one chip naming the rung you are on.
-   *
-   * The × for a rung the reader added cannot live inside a `<select>`, so it
-   * follows the picker when the rung being read is one of theirs — the same
-   * button the chip carries, in the one place it can still be reached.
+   * One callback out of the row rather than two paths through it: a rung is a
+   * rung, stored or added, and how it is read is the session's business and
+   * not the bar's.
    */
-  private ladderPicker(rungs: Array<Rung & { derived?: DerivedRung }>, at: number): HTMLElement {
-    const select = el('select', {
-      class: 'select res-pick',
-      attrs: { 'aria-label': 'resolution' },
-    }) as HTMLSelectElement
-    for (const [index, rung] of rungs.entries()) {
-      select.appendChild(
-        el('option', {
-          value: String(index),
-          text: resolutionLabel(rung.binsize) + (rung.derived === undefined ? '' : '*'),
-          attrs: { title: this.rungWhy(rung) },
-        }),
-      )
-    }
-    select.value = String(at)
-    select.addEventListener('change', () => {
-      const picked = rungs[Number(select.value)]
-      if (picked !== undefined) this.pick(picked)
-    })
-    const standing = rungs[at]
-    if (standing?.derived === undefined) return select
-    const label = resolutionLabel(standing.binsize) + '*'
-    return el('span', { class: 'res-pick-wrap' }, select, this.dropButton(standing.binsize, label))
+  private pick(rung: Rung & { derived?: DerivedRung }): void {
+    if (this.props.onPickResolution !== undefined) this.props.onPickResolution(rung.binsize)
+    else if (rung.derived === undefined) this.props.onSelectEntry?.(rung.name)
   }
 
-  /** What a rung is, in bins — the same sentence its chip and its option carry. */
+  /** What a rung is, in bins — the sentence its option in the box carries. */
   private rungWhy(rung: Rung & { derived?: DerivedRung }): string {
     return rung.derived === undefined
       ? `${rung.binsize.toLocaleString('en-US')} bp per bin`
@@ -632,36 +568,19 @@ export class Breadcrumb {
   }
 
   /**
-   * The resolution, at the far end of the bar: a slider over a row of stops.
+   * The resolution, at the far end of the bar ({@link ResolutionRow}): *Refine on
+   * zoom*, a slider over the file's rungs, a box naming the resolution, and a
+   * `+` past them all (§3.4).
    *
-   * It was a `<select>` of raw bin counts — `1000`, `5000`, `50000` — sitting
-   * second in the trail. Three things were wrong with that and each of them is
-   * answered here.
-   *
-   * **It read as a step of the trail**, which it is not: a rung is the same file
-   * at a different grain, and the crumbs after it stay exactly where they were.
-   * So it goes last, past the coordinates, where the controls over the picture
-   * live.
-   *
-   * **It was in bins.** `50000` is a number a reader has to divide before it
-   * means anything, and the answer — 50 kb — is the unit every other length in
-   * this application is written in ({@link resolutionLabel}).
-   *
-   * **A dropdown hides the ladder.** A `zoomify` ladder is an *ordered* thing
-   * with a fixed number of rungs, and that is exactly what a slider over labelled
-   * stops shows: how many there are, which one you are on, and which way is
-   * finer. Both halves write the same value — the stops are real radios, so the
-   * arrow keys and a screen reader get the list, and the slider is the hand's
-   * version of the same walk.
-   *
-   * **And a `+` past the coarse end** (§3.4). The rungs a file has are the ones
-   * whoever ran `cooler zoomify` chose to write, and a reader who wants a 10 kb
-   * picture of a file that stops at 4 kb can have one for nothing: a 10 kb bin
-   * is a whole number of stored bins added up. It sits at the coarse end because
-   * that is the direction the arithmetic goes — bins can be added, never split
-   * — even though what comes back may land anywhere in the row. A resolution the
-   * reader added wears a `*`, because it is not in the file and a methods section
-   * that said it was would be wrong.
+   * At the far end because a rung is the same file at a different grain, not a
+   * step of the trail — the crumbs before it stay exactly where they were. In
+   * kilobases, never in bins, because `50000` is a number a reader has to divide
+   * before it means anything ({@link resolutionLabel}). And with a `+`, because
+   * the rungs a file has are the ones whoever ran `cooler zoomify` chose to write,
+   * and a reader who wants a 10 kb picture of a file that stops at 4 kb can have
+   * one for nothing: a 10 kb bin is a whole number of stored bins added up. A
+   * resolution the reader added wears a `*`, because it is not in the file and a
+   * methods section that said it was would be wrong.
    */
   private pushResolution(): void {
     const rungs = this.ladder()
@@ -670,123 +589,29 @@ export class Breadcrumb {
     // One rung and no way to add a second is not a ladder; one rung *and* a `+`
     // is the whole feature on a plain `.cool`, so the row is drawn for it.
     if (rungs.length < 2 && onAdd === undefined) return
-    const at = this.standingAt(rungs)
-
-    const group = `${GROUP_PREFIX}${groups++}`
-    // **Past a handful of rungs the stops stop being stops.** Eleven chips is
-    // six hundred pixels of breadcrumb, which pushes the place the reader is
-    // looking at off the left of a laptop screen — and a `.mcool` published by
-    // 4DN has eleven. Above the cap the row collapses to a dropdown beside the
-    // word (see {@link ladderPicker}), which is the one shape that still *shows*
-    // every rung: what stood here before was the slider plus a single chip, and
-    // between them they said where the walk had got to without ever saying what
-    // else there was to walk to.
-    const listed = rungs.length <= MAX_STOPS
-    const stops = el('div', {
-      class: 'res-stops',
-      attrs: listed ? { role: 'radiogroup', 'aria-label': 'resolution' } : {},
+    this.resRow = new ResolutionRow({
+      rungs,
+      at: this.standingAt(rungs),
+      shown: this.shownBinsize,
+      resting: this.restingAt(rungs),
+      refining: () => this.props.refining?.() ?? refineEnabled(),
+      onRefine: (on) => (this.props.onRefine === undefined ? setRefineEnabled(on) : this.props.onRefine(on)),
+      why: (rung) => this.rungWhy(rung),
+      onPick: (rung) => this.pick(rung),
+      ...(onAdd === undefined ? {} : { onAdd }),
+      dropButton: (rung, label) => this.dropButton(rung.binsize, label),
     })
-    // **A one-rung ladder is drawn without a slider.** There is nothing to slide
-    // along, and the comment that used to stand here said so and then disabled
-    // the control anyway — which is furniture by its own account, and against
-    // the rule §8.5 and §18.1 both state: a control that cannot keep its
-    // promise is absent, not greyed. A plain `.cool` is the commonest file a
-    // lab opens, so the dead slider was on the row every reader looks at, and a
-    // greyed track beside a single chip invites a drag that does nothing. It
-    // comes back with the second rung, which is what the `+` beside it makes.
-    const slider =
-      rungs.length < 2 || !listed
-        ? null
-        : (el('input', {
-            class: 'res-slider',
-            type: 'range',
-            title: `Drag to a coarser or finer resolution — ${rungs
-              .map((rung) => resolutionLabel(rung.binsize))
-              .join(', ')}`,
-            attrs: {
-              min: '0',
-              max: String(rungs.length - 1),
-              step: '1',
-              'aria-label': 'resolution',
-            },
-          }) as HTMLInputElement)
-    if (slider !== null) slider.value = String(at)
+    this.append(this.resRow.el)
+  }
 
-    for (const [index, rung] of rungs.entries()) {
-      // **The `*` is part of the label, not a decoration beside it.** A reader
-      // quoting `3 kb` in a methods section is quoting something this file does
-      // not contain, and the one place that fact is certain to be read is the
-      // number itself.
-      const label = resolutionLabel(rung.binsize) + (rung.derived === undefined ? '' : '*')
-      const why = this.rungWhy(rung)
-      if (!listed) continue
-      const radio = el('input', {
-        class: 'res-radio',
-        type: 'radio',
-        attrs: { name: group, value: rung.name },
-      }) as HTMLInputElement
-      radio.checked = index === at
-      radio.addEventListener('change', () => {
-        if (radio.checked) this.pick(rung)
-      })
-      const stop = el(
-        'label',
-        {
-          class: `res-stop${index === at ? ' current' : ''}${rung.derived === undefined ? '' : ' res-added'}`,
-          title: why,
-        },
-        radio,
-        el('span', { text: label }),
-      )
-      // Taking one back off, on the stop it is about. Not offered for the
-      // file's own rungs, which are not the reader's to remove — and that
-      // asymmetry is the second thing the `*` is saying.
-      if (rung.derived !== undefined) stop.appendChild(this.dropButton(rung.binsize, label))
-      stops.appendChild(stop)
-    }
-
-    // On `change`, not `input`: dragging across a five-rung ladder would
-    // otherwise re-open the file at every rung it passed over, which is four
-    // reads nobody asked for and a picture that flickers through them.
-    slider?.addEventListener('change', () => {
-      const picked = rungs[Number(slider.value)]
-      if (picked !== undefined && rungs.indexOf(picked) !== at) this.pick(picked)
-    })
-
-    this.append(
-      el(
-        'div',
-        {
-          class: 'crumb-res',
-          title:
-            'How finely this file is drawn — the rungs of its own zoomify ladder. ' +
-            'A coarser rung is a smaller read and a blockier picture; the place on screen does ' +
-            'not change.',
-        },
-        el('span', { class: 'res-label', text: 'resolution' }),
-        ...(slider === null ? [] : [slider]),
-        ...(listed ? [stops] : [this.ladderPicker(rungs, at)]),
-        ...(onAdd === undefined
-          ? []
-          : [
-              el(
-                'button',
-                {
-                  class: 'btn btn-icon res-add',
-                  type: 'button',
-                  attrs: {
-                    'aria-label': 'Add a resolution',
-                    title:
-                      'Look at this map at a resolution the file does not store — any whole ' +
-                      'number of its own bins added up.',
-                  },
-                  on: { click: () => onAdd() },
-                },
-                icon('plus', { size: 12 }),
-              ),
-            ]),
-      ),
-    )
+  /**
+   * The resolution the map on screen is drawn at, in base pairs (§2): what the
+   * row's slider and box follow while *Refine on zoom* picks it, greyed — a
+   * reading, not a control.
+   */
+  showResolution(binsize: number | null): void {
+    this.shownBinsize = binsize
+    this.resRow?.setShown(binsize)
   }
 
   /**

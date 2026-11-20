@@ -19,10 +19,16 @@
  * map has drawn, so its wait is a short one: the task needs only the framing.
  */
 
-const { BASE, BUCKET, sleep, start } = require('./analyses-2d-lib.cjs')
+const { BASE, sleep, start } = require('./analyses-2d-lib.cjs')
 
 const OUT = process.argv[2] ?? 'screens/analyses'
-const SCOOL = process.env.SCREENS_SCOOL ?? `${BUCKET}mouse/nagano_1MB_raw.scool`
+// Nagano et al.'s cells were on the lab's bucket (demo/mouse/nagano_1MB_raw.scool) and are no
+// longer: name a copy, by its address, in SCREENS_SCOOL.
+const SCOOL = process.env.SCREENS_SCOOL
+if (SCOOL === undefined) {
+  console.error('nagano_1MB_raw.scool is no longer on the lab’s bucket: name a copy of it in SCREENS_SCOOL')
+  process.exit(1)
+}
 
 ;(async () => {
   const s = await start(OUT, { drawer: Number(process.env.SCREENS_DRAWER ?? 430) })

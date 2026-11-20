@@ -138,21 +138,44 @@ export class MetadataIndex implements MetaRowIndex {
     this.columns = [
       ...discoverTable('genomes', this.genomes),
       ...discoverTable('contigs', this.contigs),
-      // A `/bins` column is offered from its dtype alone, because that is all
-      // that can be known without reading it. Its `kind` is therefore the
-      // dtype's own answer rather than {@link classify}'s — a numeric bins
-      // column is a measurement, which is what a weight is, and a text one is a
-      // set of labels. The columns that name the bin are left out for the same
-      // reason they are everywhere else: the address is the axis.
-      ...options.binColumns
-        .filter(({ name }) => !['chrom', 'start', 'end'].includes(name))
-        .map(({ name, text }) => ({
-          table: 'bins' as const,
-          column: name,
-          kind: (text ? 'qualitative' : 'quantitative') as MetaKind,
-          rows: Math.round(this.binOffsets[this.binOffsets.length - 1]),
-        })),
+      ...this.binDescriptors(options.binColumns),
     ]
+  }
+
+  /**
+   * A `/bins` column is offered from its dtype alone, because that is all that
+   * can be known without reading it. Its `kind` is therefore the dtype's own
+   * answer rather than {@link classify}'s — a numeric bins column is a
+   * measurement, which is what a weight is, and a text one is a set of labels.
+   * The columns that name the bin are left out for the same reason they are
+   * everywhere else: the address is the axis.
+   */
+  private binDescriptors(binColumns: ReadonlyArray<{ name: string; text: boolean }>): MetaColumn[] {
+    return binColumns
+      .filter(({ name }) => !['chrom', 'start', 'end'].includes(name))
+      .map(({ name, text }) => ({
+        table: 'bins' as const,
+        column: name,
+        kind: (text ? 'qualitative' : 'quantitative') as MetaKind,
+        rows: Math.round(this.binOffsets[this.binOffsets.length - 1]),
+      }))
+  }
+
+  /**
+   * The `/bins` columns, told after the index was built (§8.12, §12).
+   *
+   * Listing them is a walk of a cooler's HDF5 object headers — four round trips
+   * on a remote map — and nothing in the first picture needs it, so the session
+   * asks once the map has drawn (`Session.setUpAnnotations`). A column already
+   * offered is left as it is, with whatever levels its reads have fixed.
+   */
+  addBinColumns(binColumns: ReadonlyArray<{ name: string; text: boolean }>): void {
+    const offered = new Set(this.columns.filter((it) => it.table === 'bins').map((it) => it.column))
+    const added = this.binDescriptors(binColumns).filter((it) => !offered.has(it.column))
+    if (added.length === 0) return
+    ;(this.columns as MetaColumn[]).push(...added)
+    this.version++
+    this.options.onChange()
   }
 
   /** Which generation of the held values this is; see {@link MetaSource}. */

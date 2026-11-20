@@ -18,7 +18,9 @@ import { FIELD_NAME } from '@/annotations/fields'
 import type { LaneEdge, StoredEntry } from '@/annotations/types'
 import { isRefusal, type SessionConfig } from '@/state/SessionConfig'
 import { buildWorkspaceFile, parseWorkspaceFile } from '@/state/workspace'
-import { demoFigure } from '@/ui/examples'
+import { readFileSync } from 'node:fs'
+
+import { DEMO_BUCKET, demoFigure } from '@/ui/examples'
 import {
   CHICKEN_G2,
   CHICKEN_MITOSIS,
@@ -54,6 +56,16 @@ function landing(options: { store?: boolean; example?: (example: ExampleSession)
     ...(options.store === false ? {} : { onStore: () => undefined }),
     ...(options.example === undefined ? {} : { onExample: options.example }),
   })
+}
+
+/** The lab's store, as its manifest lists it: each path under `demo/store/` and where it was copied from. */
+function storeSources(): Map<string, string> {
+  // From the repository's root, which the tests run in: a jsdom module's own URL is not a file's.
+  const lines = readFileSync(`${process.cwd()}/demo/store/MANIFEST.tsv`, 'utf8')
+    .split('\n')
+    .filter((line) => line !== '' && !line.startsWith('#'))
+    .slice(1)
+  return new Map(lines.map((line) => line.split('\t') as [string, string]))
 }
 
 const tip = (): HTMLElement | null => document.querySelector<HTMLElement>('.question-tip:not(.hidden)')
@@ -209,26 +221,26 @@ describe('Human Hi-C data', () => {
     }
   })
 
-  it('reads every file over HTTPS from the consortium that published it', () => {
+  it('reads every file over HTTPS from the lab’s store, each a copy its manifest says the source of', () => {
     const tab = readBack(humanConfig())
     const ids = tab.tracks.map((row) => row.id)
     expect(new Set(ids).size).toBe(ids.length)
-    const hosts = new Set<string>()
-    for (const row of tab.tracks) {
-      expect(row.source.kind).toBe('remote')
-      const url = new URL(row.source.url ?? '')
-      expect(url.protocol).toBe('https:')
-      hosts.add(url.host)
+    const copied = storeSources()
+    for (const uri of [HUMAN_MAP, ...tab.tracks.map((row) => row.source.url ?? '')]) {
+      expect(uri.startsWith(`${DEMO_BUCKET}store/k562/`), uri).toBe(true)
+      expect(new URL(uri).protocol).toBe('https:')
     }
-    expect([...hosts].sort()).toEqual([
-      '1000genomes.s3.amazonaws.com',
-      '4dn-open-data-public.s3.amazonaws.com',
-      'encode-public.s3.amazonaws.com',
-      's3.amazonaws.com',
-    ])
-    // UCSC's copy of the gene model carries no CORS header; IGV's own does.
+    for (const row of tab.tracks) expect(row.source.kind).toBe('remote')
+    // Where each came from: 4DN's map and tracks, ENCODE's tracks, IGV's genes
+    // and bands — UCSC's copy of the gene model carries no CORS header, IGV's
+    // own does — and 1000 Genomes' FASTA.
+    const from = (uri: string): string | undefined => copied.get(uri.slice(`${DEMO_BUCKET}store/`.length))
+    expect(from(HUMAN_MAP)).toMatch(/^s3:\/\/4dn-open-data-public\/.*\/4DNFI18UHVRO\.mcool$/)
+    const sources = tab.tracks.map((row) => from(row.source.url ?? ''))
+    expect(sources.every((source) => source !== undefined)).toBe(true)
+    expect(new Set(sources.map((source) => source?.split('/')[2])).size).toBe(4)
     const genes = tab.tracks.find((row) => row.kind === 'gtf')
-    expect(genes?.source.url).toMatch(/^https:\/\/s3\.amazonaws\.com\/igv\.org\.genomes\/hg38\//)
+    expect(from(genes?.source.url ?? '')).toBe('s3://igv.org.genomes/hg38/ncbiRefSeq.txt.gz')
     expect(genes?.primary).toBe(true)
     // The sequence is read by range, through the index named beside it.
     const sequence = tab.tracks.find((row) => row.kind === 'sequence')
@@ -270,8 +282,11 @@ describe('Comparing data', () => {
       { auto: false, min: -1, max: 1 },
       { auto: false, min: -1, max: 1 },
     ])
-    for (const row of tab.tracks) {
-      expect(new URL(row.source.url ?? '').host).toBe('4dn-open-data-public.s3.amazonaws.com')
+    // 4DN's files, as the lab's store holds them for its own card of the same paper.
+    const copied = storeSources()
+    for (const uri of [CHICKEN_G2, CHICKEN_MITOSIS, ...tab.tracks.map((row) => row.source.url ?? '')]) {
+      expect(uri.startsWith(`${DEMO_BUCKET}store/gibcus2018/`), uri).toBe(true)
+      expect(copied.has(uri.slice(`${DEMO_BUCKET}store/`.length)), uri).toBe(true)
     }
   })
 })

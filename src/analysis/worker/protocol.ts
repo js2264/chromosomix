@@ -66,6 +66,13 @@ export interface BlockInput {
   colExtent: [number, number]
   /** Bins summed per cell, or 1. Mirrors `AnalysisFraming.binsPerCell`. */
   binsPerCell: number
+  /**
+   * The bin size, in bp, of the rung the block was read from. Mirrors
+   * `AnalysisFraming.binsize`: a block of another rung, at the same extents and
+   * pooling, is another map's bins. Absent from a lender that cannot say,
+   * which is then believed to be at the framing's.
+   */
+  binsize?: number
 }
 
 /**

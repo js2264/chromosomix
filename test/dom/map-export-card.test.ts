@@ -13,6 +13,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { MatrixPanel } from '@/ui/MatrixPanel'
+import type { MatrixResult } from '@/worker/protocol'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
 let teardown: DomTeardown
@@ -109,5 +110,42 @@ describe('the map’s Export card', () => {
     expect(names[0]).toMatch(/-\d{8}-\d{6}\.pdf$/)
     expect(names[0]).not.toMatch(/dpi/)
     expect(names[1]).toMatch(/-\d{8}-\d{6}-300dpi\.png$/)
+  })
+})
+
+/** Chromosome IV's first 64 kb, a bin to a cell. */
+function block(): MatrixResult {
+  return {
+    nrows: 64,
+    ncols: 64,
+    values: new Float32Array(64 * 64).fill(1),
+    rowExtent: [0, 64],
+    colExtent: [0, 64],
+    rowGroups: [{ label: 'IV', start: 0, end: 64, unitStart: 0 }],
+    colGroups: [{ label: 'IV', start: 0, end: 64, unitStart: 0 }],
+    level: 'bin',
+    binsPerCell: 1,
+  } as unknown as MatrixResult
+}
+
+describe('a figure is the picture on screen (§19.2)', () => {
+  it('is drawn from the block on screen at once, reading nothing', async () => {
+    // A figure used to read the framed window at the resolution picked before
+    // it drew. It is what the reader sees: the block on screen, its grid and its
+    // colours, whatever the picker says.
+    const panel = map()
+    panel.setData(block(), 'IV')
+    const said: string[] = []
+    const note = panel.exportEl.querySelector('.export-note')
+    if (note === null) throw new Error('no note')
+    new MutationObserver(() => said.push(note.textContent ?? '')).observe(note, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    })
+    savePicker()
+    panel.savePlot()
+    await vi.waitFor(() => expect(note.textContent).toMatch(/\.pdf · /))
+    expect(said.some((line) => /reading/.test(line))).toBe(false)
   })
 })

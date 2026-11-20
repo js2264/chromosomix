@@ -10,7 +10,7 @@ const { open, sleep, BASE, BUCKET } = require('./lib-1d3d.cjs')
 
 const OUT = process.argv[2] ?? 'screens'
 const MAP = `${BASE}/demo/ecoli/Ecoli.mcool::/resolutions/10000`
-const FASTA = `${BUCKET}/ecoli_naps/ecoli_k12_mg1655.fa`
+const FASTA = `${BUCKET}/store/ecoli/ecoli_k12_mg1655.fa`
 
 ;(async () => {
   const s = await open(OUT, { drawer: Number(process.env.SCREENS_DRAWER ?? 720) })

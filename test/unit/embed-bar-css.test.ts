@@ -12,7 +12,8 @@
  *    *together* — a zero-height break ordered between the trail and them, since
  *    plain wrapping takes the last item, the box, away from the resolution;
  * 2. then the brand's name goes, its mark staying;
- * 3. then, at a phone's width, the contacts box — never the resolution.
+ * 3. then, at a phone's width, the contacts box and the resolution's slider —
+ *    never the resolution, whose box stays.
  *
  * A text test, as `deck-plot-css.test.ts` is, because jsdom has no layout.
  */
@@ -77,14 +78,17 @@ describe('the embed’s bar in a narrowing frame', () => {
     expect(controls).toMatch(/\.embed-bar \.breadcrumb > \.crumb-res,\s*\.embed-bar \.breadcrumb > \.crumb-contacts \{\s*order: 2/)
   })
 
-  it('lets a phone’s frame keep every resolution, as wrapping stops rather than a slider off its edge', () => {
-    expect(declarationsIn(noBox, '.embed-bar .crumb-res > .res-slider')).toMatch(/display: none/)
-    expect(declarationsIn(noBox, '.embed-bar .res-stops')).toMatch(/flex-wrap: wrap/)
+  it('lets a phone’s frame keep every resolution, in the box, rather than a slider off its edge', () => {
+    // The slider and its two end labels go; the box beside them is the same
+    // choice, every rung in it, one press away.
+    expect(declarationsIn(noBox, '.embed-bar .crumb-res > .res-scale')).toMatch(/display: none/)
+    expect(declarationsIn(noBox, '.embed-bar .crumb-res')).toMatch(/flex-wrap: wrap/)
+    expect(css).not.toMatch(/\.res-pick\s*\{[^}]*display: none/)
   })
 
   it('never puts the resolution away', () => {
     for (const block of mediaBlocks()) {
-      // The control itself, not a part of it: its slider may go where its stops stay.
+      // The control itself, not a part of it: its slider may go where its box stays.
       expect(block.body, `@media (max-width: ${block.rem}rem)`).not.toMatch(/\.crumb-res\s*\{[^}]*display: none/)
     }
   })

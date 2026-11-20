@@ -60,7 +60,7 @@
  */
 
 import { FeatureBuilder } from './featureset'
-import { forEachRow, isInteger } from './parse'
+import { isInteger, parseWith, type RowParser, type RowVisitor } from './parse'
 import { DETAIL_SEP, type FeatureSet } from './types'
 
 /** The ten columns of a `genePred`, once whatever is in front of them is skipped. */
@@ -101,53 +101,95 @@ const GENEPRED_NAME = /(\.(genepred|genepredext|refflat)(\.txt)?(\.gz)?|refgene\
  *   file is making, and no BED, peak table or headed TSV makes it by accident.
  */
 export function genePredOffset(columns: string[]): number {
-  for (const offset of [0, 1, 2]) {
-    if (columns.length < offset + GENEPRED_COLUMNS) continue
-    if (holdsAt(columns, offset)) return offset
-  }
-  return -1
+  return genePredRow(columns)?.at ?? -1
 }
 
-function holdsAt(columns: string[], at: number): boolean {
+/** A row that passed {@link genePredOffset}'s test: where it passed, and the two exon lists it read. */
+interface GenePredRow {
+  at: number
+  starts: number[]
+  ends: number[]
+}
+
+/**
+ * {@link genePredOffset}, keeping what the test read. The exon lists are most of
+ * a row and the test has to read them whole, so the parse takes them from here
+ * rather than reading them a second time.
+ */
+function genePredRow(columns: string[]): GenePredRow | null {
+  for (let offset = 0; offset <= 2; offset++) {
+    if (columns.length < offset + GENEPRED_COLUMNS) continue
+    const exons = exonsAt(columns, offset)
+    if (exons !== null) return { at: offset, starts: exons[0], ends: exons[1] }
+  }
+  return null
+}
+
+/** The row's exon starts and ends, where the ten columns at `at` hold together; `null` where not. */
+function exonsAt(columns: string[], at: number): [number[], number[]] | null {
   const strand = columns[at + 2]
-  if (strand !== '+' && strand !== '-') return false
-  for (const step of [3, 4, 5, 6, 7]) {
-    if (!isInteger(columns[at + step])) return false
+  if (strand !== '+' && strand !== '-') return null
+  for (let step = 3; step <= 7; step++) {
+    if (!isInteger(columns[at + step])) return null
   }
   const txStart = Number(columns[at + 3])
   const txEnd = Number(columns[at + 4])
   const cdsStart = Number(columns[at + 5])
   const cdsEnd = Number(columns[at + 6])
   const exonCount = Number(columns[at + 7])
-  if (!(txEnd > txStart) || exonCount < 1) return false
+  if (!(txEnd > txStart) || exonCount < 1) return null
   // A non-coding transcript writes `cdsStart == cdsEnd`, conventionally at
   // `txEnd`, so the span may be empty — but it may not be outside the gene.
-  if (cdsStart < txStart || cdsEnd > txEnd || cdsEnd < cdsStart) return false
+  if (cdsStart < txStart || cdsEnd > txEnd || cdsEnd < cdsStart) return null
   const starts = listOf(columns[at + 8])
   const ends = listOf(columns[at + 9])
-  if (starts === null || ends === null) return false
-  if (starts.length !== exonCount || ends.length !== exonCount) return false
-  if (starts[0] !== txStart || ends[exonCount - 1] !== txEnd) return false
+  if (starts === null || ends === null) return null
+  if (starts.length !== exonCount || ends.length !== exonCount) return null
+  if (starts[0] !== txStart || ends[exonCount - 1] !== txEnd) return null
   for (let i = 0; i < exonCount; i++) {
-    if (ends[i] < starts[i]) return false
-    if (i > 0 && starts[i] < ends[i - 1]) return false
+    if (ends[i] < starts[i]) return null
+    if (i > 0 && starts[i] < ends[i - 1]) return null
   }
-  return true
+  return [starts, ends]
 }
 
-/** A comma-separated list of whole numbers, or `null` when it is not one. */
+/**
+ * A comma-separated list of whole numbers, or `null` when it is not one.
+ *
+ * Empty parts are skipped (a UCSC list ends in a comma); every other part is
+ * {@link isInteger}'s shape and not negative. Read a character at a time
+ * rather than split, tested and converted: two lists a transcript, ten numbers
+ * a list, on a table of 190,000 transcripts.
+ */
 function listOf(value: string | undefined): number[] | null {
   if (value === undefined || value === '') return null
-  const parts = value.split(',').filter((part) => part !== '')
-  if (parts.length === 0) return null
   const out: number[] = []
-  for (const part of parts) {
-    if (!isInteger(part)) return null
-    const number = Number(part)
-    if (number < 0) return null
-    out.push(number)
+  const length = value.length
+  let at = 0
+  while (at <= length) {
+    let end = value.indexOf(',', at)
+    if (end < 0) end = length
+    if (end > at) {
+      let i = at
+      const sign = value.charCodeAt(i)
+      if (sign === 43 || sign === 45) i++ // '+' '-'
+      if (i >= end) return null
+      let number = 0
+      for (; i < end; i++) {
+        const code = value.charCodeAt(i)
+        if (code < 48 || code > 57) return null
+        number = number * 10 + (code - 48)
+      }
+      // Past fifteen digits a running sum can round where the platform's
+      // parse does not; `Number` is the arbiter, as it was.
+      if (end - at > 15) number = Number(value.slice(at, end))
+      else if (sign === 45) number = -number
+      if (number < 0) return null
+      out.push(number)
+    }
+    at = end + 1
   }
-  return out
+  return out.length === 0 ? null : out
 }
 
 /**
@@ -205,22 +247,26 @@ export function sniffGenePred(text: string, fileName = ''): boolean {
  * A row that validates nowhere is skipped and counted, never guessed at.
  */
 export function parseGenePred(text: string): FeatureSet {
+  return parseWith(text, genePredParser())
+}
+
+/** {@link parseGenePred}, a row at a time; see {@link RowParser}. */
+export function genePredParser(): RowParser<FeatureSet> {
   const builder = new FeatureBuilder()
   let skipped = 0
   let coding = 0
 
-  forEachRow(text, (columns) => {
-    const at = genePredOffset(columns)
-    if (at < 0) {
+  const row: RowVisitor = (columns) => {
+    const read = genePredRow(columns)
+    if (read === null) {
       skipped++
       return
     }
+    const { at, starts, ends } = read
     const txStart = Number(columns[at + 3])
     const txEnd = Number(columns[at + 4])
     const cdsStart = Number(columns[at + 5])
     const cdsEnd = Number(columns[at + 6])
-    const starts = listOf(columns[at + 8]) ?? []
-    const ends = listOf(columns[at + 9]) ?? []
 
     // Absolute already — this is the one line that would have been wrong had
     // the BED12 path been reused, whose two lists are a size and an offset from
@@ -246,17 +292,20 @@ export function parseGenePred(text: string): FeatureSet {
       ...(exons.length === 0 ? {} : { exons }),
       ...(cdsEnd > cdsStart ? { cds: [cdsStart, cdsEnd] as [number, number] } : {}),
     })
-  })
-
-  if (builder.length === 0) {
-    throw new Error(
-      `No usable rows: all ${skipped} lines failed the genePred test — a name, a contig, a strand, ` +
-        'four coordinates, an exon count and two comma-separated lists of that length.',
-    )
   }
-  const set = builder.finish()
-  codingOf.set(set, coding)
-  return set
+
+  const done = (): FeatureSet => {
+    if (builder.length === 0) {
+      throw new Error(
+        `No usable rows: all ${skipped} lines failed the genePred test — a name, a contig, a strand, ` +
+          'four coordinates, an exon count and two comma-separated lists of that length.',
+      )
+    }
+    const set = builder.finish()
+    codingOf.set(set, coding)
+    return set
+  }
+  return { row, done }
 }
 
 /**

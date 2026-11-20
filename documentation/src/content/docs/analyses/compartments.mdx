@@ -14,7 +14,7 @@ Compartments finds the checkerboard of a chromosome's two kinds of chromatin, ea
 
 ## Running it
 
-Open the map at a resolution that suits compartments: on a mammalian genome 250 kb is usual, 100 kb the fine end. To phase the result, load a gene model such as a GTF, a track, or the genome's FASTA ([Tracks and features](/files/tracks/), [Reference sequences](/files/sequences/)). In the **Analysis** panel (<kbd>4</kbd>), choose **Compartments**, check **Phasing**, and press **run**.
+Run it at a resolution that suits compartments: on a mammalian genome 250 kb is usual, 100 kb the fine end. Pick it in the row above the map, with **refine on zoom** unticked, or on the task's own **Resolution** row, the first of its form. To phase the result, load a gene model such as a GTF, a track, or the genome's FASTA ([Tracks and features](/files/tracks/), [Reference sequences](/files/sequences/)). In the **Analysis** panel (<kbd>4</kbd>), choose **Compartments**, check **Phasing**, and press **run**.
 
 E1, and E2 and E3 with **components** at 2 or 3, land in the **Tracks** card of the **Annotations** panel, marked `*`, with **A/B compartments** beside E1. The drawer holds the **Components** table, the saddle (with **draw the saddle** on) and notes on the phasing and on bins with too little data.
 
@@ -77,7 +77,7 @@ The saddle sorts a sequence's bins by E1 into **quantile groups** (50 by default
 
 ### What to watch for
 
-- **Size.** A matrix past 8,192 bins a side is refused: under **cis only** that sequence is skipped and named; otherwise the run says what to untick or how coarse to open the file. Under **Lieberman-Aiden 2009** the cost grows as the cube of the bins, and past about 2,000 the price beside **run** names a resolution that fits.
+- **Size.** A matrix past 8,192 bins a side is refused: under **cis only** that sequence is skipped and named; otherwise the run says what to untick or how coarse a resolution to pick. Under **Lieberman-Aiden 2009** the cost grows as the cube of the bins, and past about 2,000 the price beside **run** names a resolution that fits.
 - **A chromosome with no compartments.** E1 still carries whatever dominates its map; a small **of contacts** and a weak **r with phasing** give it away.
 - **Circular sequences.** A sequence ticked **circular** in the Chromosomes table is divided by its decay the short way round.
 - **Bacterial chromosomes.** Where the two arms are held together, the map has a second diagonal, and divided by the distance decay alone E1 follows the arms rather than compartments: on a *Pseudomonas aeruginosa* map, the distance from the origin. **Expected** at **decay along both arms**, under **cis only**, removes both diagonals within **window along the arms** bins (0 is the whole chromosome), and on that map E1 then follows GC content. The arms are read from the origin in the Chromosomes table, the first base unless set; [Inter-arm alignment](/analyses/interarm/) measures the second diagonal.

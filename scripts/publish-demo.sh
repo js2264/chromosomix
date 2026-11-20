@@ -9,6 +9,14 @@
 # leaves alone. `test/unit/demo-examples.test.ts` checks the copy on disk, so a
 # demo that would 404 on the site fails in CI first.
 #
+# Four folders of `demo/` stay on disk and are never published: `ecoli/`,
+# `human/`, `metagenomics/` and `yeast-mpneumoniae/`, which the tests read from
+# disk and the gallery and documentation scripts from the dev server, and which
+# the app does not read at all (the store's `human/` is copied from `human/`).
+# Their copies on the bucket were deleted; uploading them again would undo that.
+# The exclusions are written out in both syncs below, quoted: a pattern held in
+# a variable and expanded unquoted, as `$DRY` is, would be globbed.
+#
 #   ./scripts/publish-demo.sh              # sync, then verify
 #   ./scripts/publish-demo.sh --dry-run    # print what would be uploaded
 #   ./scripts/publish-demo.sh --cors       # (re)apply the bucket CORS policy
@@ -174,6 +182,7 @@ aws s3 sync "$SRC" "s3://$BUCKET/$PREFIX/" \
   --size-only \
   --exclude '*.json' \
   --exclude 'store/*' \
+  --exclude 'ecoli/*' --exclude 'human/*' --exclude 'metagenomics/*' --exclude 'yeast-mpneumoniae/*' \
   --content-type application/octet-stream \
   --cache-control 'public, max-age=31536000, immutable' \
   $DRY
@@ -188,6 +197,7 @@ aws s3 sync "$SRC" "s3://$BUCKET/$PREFIX/" \
   --exclude '*' \
   --include '*.json' \
   --exclude 'store/*' \
+  --exclude 'ecoli/*' --exclude 'human/*' --exclude 'metagenomics/*' --exclude 'yeast-mpneumoniae/*' \
   --content-type application/json \
   --cache-control 'public, max-age=300' \
   $DRY

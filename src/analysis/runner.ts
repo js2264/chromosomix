@@ -448,6 +448,15 @@ export interface RunTarget {
    * it would answer a task about the edit with the file as it was.
    */
   edit?: ReferenceEdit
+  /**
+   * The resolution this map is summed to, in base pairs, where it is read at the
+   * deck's (§16.2) from a rung of its own that divides it rather than one that
+   * stores it — a companion beside a first map at 25 kb that has 5 kb and no
+   * 25 kb. On the target rather than the framing because a batch frames every
+   * map by one picture and each map reaches that grid from its own ladder;
+   * absent where the framing's {@link AnalysisFraming.coarsen} says it all.
+   */
+  coarsen?: number
   /** What to call it while a batch is being worked through. */
   label: string
 }
@@ -1197,8 +1206,16 @@ export class AnalysisRunner {
    */
   private recordable(job: Job, provenance: Provenance): Provenance {
     const uri = job.target.uri
-    if (uri === '' || uri === provenance.framing.uri) return provenance
-    return { ...provenance, framing: { ...provenance.framing, uri } }
+    // …and the resolution it was summed to, where it was summed for itself: a
+    // command reading the rung it opened, without `--coarsen`, is the same
+    // wrong experiment one flag short.
+    const coarsen = job.target.coarsen
+    const sameUri = uri === '' || uri === provenance.framing.uri
+    if (sameUri && (coarsen === undefined || coarsen === provenance.framing.coarsen)) return provenance
+    return {
+      ...provenance,
+      framing: { ...provenance.framing, ...(sameUri ? {} : { uri }), ...(coarsen === undefined ? {} : { coarsen }) },
+    }
   }
 
   /**
@@ -1231,9 +1248,10 @@ export class AnalysisRunner {
     // runs is the same URI and a different map, and a mount kept for the name
     // alone would answer the second question with the first one's cells.
     // At the resolution the framing names, where the reader added it (§3.4):
-    // the framing's rather than the target's, because a batch frames every map
-    // by the starred one's picture, and that picture is at this resolution.
-    const coarsen = job.framing.coarsen
+    // the framing's, because a batch frames every map by the starred one's
+    // picture, and that picture is at this resolution — unless this map reaches
+    // the deck's resolution by summing a rung of its own (§16.2).
+    const coarsen = source.coarsen ?? job.framing.coarsen
     const key = mountKey(source.uri, source.cells, source.binning, source.resample, source.edit, coarsen)
     if (this.mounted === key) return
     this.setState(job.task.id, {
@@ -1572,8 +1590,11 @@ export class AnalysisRunner {
           ...(target.resample === undefined ? {} : { resample: target.resample }),
           // …and at the resolution this one is read at, where the reader added
           // it: a stratum is a separation in bins, and two maps compared stratum
-          // by stratum have to be cut on one grid (§3.4).
-          ...(job.framing.coarsen === undefined ? {} : { coarsen: job.framing.coarsen }),
+          // by stratum have to be cut on one grid (§3.4) — or where that map
+          // sums a rung of its own to reach the deck's (§16.2).
+          ...((target.coarsen ?? job.framing.coarsen) === undefined
+            ? {}
+            : { coarsen: target.coarsen ?? job.framing.coarsen }),
         })
       }
       if (peers.length > 0) inputs.peers = peers
@@ -1639,7 +1660,7 @@ export class AnalysisRunner {
     // and balanced by the coarse bins' weights — two estimates of one picture,
     // and a run that took one for some tasks and the other for the rest would
     // disagree with itself.
-    if (job.framing.coarsen !== undefined) return null
+    if (job.framing.coarsen !== undefined || job.target.coarsen !== undefined) return null
     return job.target.map === host ? this.host.block() : null
   }
 
@@ -1742,7 +1763,8 @@ function blockMatches(block: BlockInput, framing: AnalysisFraming): boolean {
     block.rowExtent[1] === framing.rows[1] &&
     block.colExtent[0] === framing.cols[0] &&
     block.colExtent[1] === framing.cols[1] &&
-    block.binsPerCell === framing.binsPerCell
+    block.binsPerCell === framing.binsPerCell &&
+    (block.binsize === undefined || block.binsize === framing.binsize)
   )
 }
 

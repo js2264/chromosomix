@@ -52,6 +52,8 @@ const KEY = 'deck-lead-test'
 function leadPanel() {
   const state = { listened: 0, released: 0 }
   const panel = {
+    setRegridListener: () => {},
+    reachViewport: () => {},
     setViewportListener: (listener: unknown) => {
       if (listener === null) state.released++
       else state.listened++
@@ -70,6 +72,14 @@ function leadPanel() {
     bpPerCell: () => 1000,
     cellCount: () => ({ rows: 400, cols: 400 }),
     blockLevel: () => 'bin',
+    // The region as first drawn, and where its first cell sits (`panels/lock.ts`):
+
+    // a block read whole, as every block here is.
+
+    frameSpan: () => null,
+
+    lockOrigin: () => ({ rows: 0, cols: 0 }),
+
     blockSpan: () => ({ rows: 400_000, cols: 400_000, sequences: { rows: 1, cols: 1 } }),
     viewport: () => ({ rows: [0, 400], cols: [0, 400] }),
     get hasBlock(): boolean {

@@ -30,6 +30,7 @@ import type { Suggested } from '../edit/suggest'
 import type { PictureContacts } from '../metacooler/picture'
 import type { NameContext, NameMatch } from '../genome/naming'
 import type { S3Credential } from '../s3/sigv4'
+import type { ReadPlan } from '../sources/RemoteRangeSource'
 import type { Column, Extent, Info, Layout, ParsedRange, SourceStats, Table } from '../types'
 import type { Census, ResampleMode } from '../metacooler/resample'
 import type { PairStats } from '../pairs/stats'
@@ -119,6 +120,12 @@ type SourceLocation =
        * one order that works.
        */
       headers?: Record<string, string>
+      /**
+       * The chunks this open is known to read, fetched side by side as it
+       * starts (§6.1, §12): what the same open read the last time, or what an
+       * example ships with. See `RemoteRangeOptions.plan`.
+       */
+      plan?: ReadPlan
     }
 
 /**
@@ -674,6 +681,14 @@ export interface MatrixResult {
    */
   source?: { rows: Extent; cols: Extent }
   /**
+   * Sibling rungs a **balanced** read went round because they carry no
+   * weights, as `OpenResult.entries` names them: the rung asked for, and any
+   * coarser one stepped over on the way to the one that answered (§2). Absent
+   * for every read that came from where it was asked. The zoom reads it to
+   * stop asking those rungs for balanced counts (`ui/refine.ts`).
+   */
+  unweighted?: string[]
+  /**
    * Whole sequences summed into one cell, where the axis had more of them than
    * the picture has pixels. Absent, or 1, for every axis with room for a cell
    * per sequence — which is every cooler and most assemblies.
@@ -836,6 +851,16 @@ export interface GenomeLinksResult {
   pixels: number
 }
 
+/**
+ * The two halves of a remote open's walk, as plans (§6.1, §12): the open's own
+ * reads, and the first view's after it. `null` for a half the reader did not
+ * write down — a local file, or a view that has not been read.
+ */
+export interface ReadPlans {
+  open: ReadPlan | null
+  view: ReadPlan | null
+}
+
 export interface StatsResult {
   /** Everything the byte source has fetched since the file was opened. */
   total: SourceStats
@@ -843,6 +868,13 @@ export interface StatsResult {
   lastOp: SourceStats
   /** Number of worker requests served. */
   calls: number
+  /**
+   * Bytes this reader worker holds that the main thread cannot see: the HDF5
+   * runtime's memory and the byte cache of the file's source — `null` where it
+   * has neither to report. What the status bar adds to the main thread's heap
+   * (§12).
+   */
+  memory?: { wasm: number | null; cache: number | null }
 }
 
 /** Every request kind, mapped to what it resolves with. */
@@ -862,6 +894,7 @@ export interface ResultMap {
   overviewSidecar: OverviewResult
   validateDeep: DeepValidation
   stats: StatsResult
+  readPlan: ReadPlans | null
   exportMcool: McoolExport
   exportLifted: LiftedExport
   resample: ResampleResult
@@ -1030,6 +1063,12 @@ export type WorkerRequest =
        * waits until the views' own reads have been answered (§12).
        */
       background?: boolean
+      /**
+       * A coarse stand-in for the read after it (§7.2): what the reader writes
+       * down of a first view's walk (`readPlan`) goes on past it, to the block
+       * it stands in for.
+       */
+      preview?: boolean
     }
   | {
       id: number
@@ -1092,6 +1131,11 @@ export type WorkerRequest =
    */
   | { id: number; kind: 'contacts' }
   | { id: number; kind: 'stats' }
+  /**
+   * What the open and its first view read, as plans the next open of the same
+   * file can fetch side by side (§6.1, §12) — and the end of writing them down.
+   */
+  | { id: number; kind: 'readPlan' }
   /**
    * The stage's whole-genome picture (§27.9), at the finest rung of the ladder
    * that fits `cells` a side — pooled a few bins a cell where none does.

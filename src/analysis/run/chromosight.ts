@@ -144,7 +144,7 @@ export const runChromosight: TaskRunner = async (job) => {
       `${skipped.length} sequence${skipped.length === 1 ? '' : 's'} would need a band bigger ` +
         `than a scan can hold, and ${skipped.length === 1 ? 'was' : 'were'} skipped: ` +
         `${namesOf(skipped)}. The band is the scan distance times the sequence — bring ` +
-        '“furthest from the diagonal” down, or open the file at a coarser resolution.',
+        '“furthest from the diagonal” down, or run it at a coarser resolution.',
     )
   }
   if (units.length === 0) {
@@ -152,7 +152,7 @@ export const runChromosight: TaskRunner = async (job) => {
       skipped.length === 0
         ? 'No sequence in this file is long enough for this template.'
         : 'Every sequence in this file would need a band bigger than a scan can hold. Bring ' +
-          '“furthest from the diagonal” down, or open the file at a coarser resolution.',
+          '“furthest from the diagonal” down, or run it at a coarser resolution.',
     )
     return []
   }

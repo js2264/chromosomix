@@ -47,17 +47,30 @@ export async function createSource(spec: SourceSpec, watch?: ReadWatch): Promise
   }
   const reading = spec.reading ?? ''
   const reused = borrowRemote(spec.url, reading)
-  if (reused !== null) return reused
+  if (reused !== null) {
+    // The same file again — another rung, a second open — whose plan may still
+    // name chunks this mount has not read, or has let go of (§6.1, §12).
+    const behind = remoteBehind(reused)
+    if (behind !== null) {
+      if (spec.plan !== undefined && spec.reading !== 'fine') await behind.prefetch(spec.plan)
+      behind.keepRecording()
+    }
+    return reused
+  }
   // Present only for a private bucket or a host that wants a key; `undefined` is
   // the public path and is the one every demo takes. See `SourceSpec` on why
   // both arrive with the URL rather than being configured on this worker.
   const access = accessOf(spec)
   try {
-    return keep(
-      spec.url,
-      reading,
-      await RemoteRangeSource.open(spec.url, {
+    // Every read of the open that follows is written down, for the plan the
+    // next open of this file fetches ahead (§6.1, §12; `reader.worker.ts`).
+    const opened = await RemoteRangeSource.open(spec.url, {
         ...access,
+        // What this open read the last time, fetched side by side as it starts
+        // (§6.1, §12). Not for a source read in small pieces: its plan's chunks
+        // would be a different size, and its reader chose bandwidth over round
+        // trips.
+        ...(spec.plan === undefined || spec.reading === 'fine' ? {} : { plan: spec.plan }),
         // `fine` is the other half of the gate's answer: read the scattered
         // metadata in small pieces rather than dragging a whole chunk across for
         // every 500-byte record of it.
@@ -68,8 +81,9 @@ export async function createSource(spec: SourceSpec, watch?: ReadWatch): Promise
               ...(watch?.onRead === undefined ? {} : { onRead: watch.onRead.bind(watch) }),
             }
           : {}),
-      }),
-    )
+    })
+    opened.beginRecording()
+    return keep(spec.url, reading, opened)
   } catch (err) {
     if (err instanceof ViewerError && err.code === 'remote-compressed') {
       // Retained like any other remote source, and here it matters most: this
@@ -261,7 +275,7 @@ function retained(source: ByteSource): ByteSource {
   // Forwarded only where the source has one, so a borrower falls back exactly
   // as it would on the source itself — a `.hic` walk asks after it by name.
   const exact = source.readExact?.bind(source)
-  return {
+  const lent: ByteSource = {
     id: source.id,
     size: source.size,
     isRemote: source.isRemote,
@@ -273,6 +287,21 @@ function retained(source: ByteSource): ByteSource {
       // Deliberately empty: {@link releaseSources} owns this one.
     },
   }
+  lentFrom.set(lent, source)
+  return lent
+}
+
+/** Each lent view, and the source it lends. */
+const lentFrom = new WeakMap<ByteSource, ByteSource>()
+
+/**
+ * The remote source behind `source` — itself, or the one a lent view of it
+ * lends — for the reads it writes down and the plans it fetches ahead (§6.1,
+ * §12). `null` for anything that is not read by range from a host.
+ */
+export function remoteBehind(source: ByteSource): RemoteRangeSource | null {
+  const behind = lentFrom.get(source) ?? source
+  return behind instanceof RemoteRangeSource ? behind : null
 }
 
 /** The mounted remote file for `url`, if this worker still holds it. */

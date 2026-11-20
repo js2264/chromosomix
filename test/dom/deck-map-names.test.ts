@@ -80,7 +80,7 @@ describe('the list of maps a track can be drawn on', () => {
   it('falls back to the file for a companion nobody has named', () => {
     const deck = deckWithNames({})
     deck.add({ kind: 'remote', uri: 'https://x.example.org/rep2.mcool::resolutions/1000' })
-    expect(deck.mapList[1].label).toBe('rep2.mcool::1000')
+    expect(deck.mapList[1].label).toBe('rep2.mcool')
   })
 
   it('asks under the address the panel is actually reading', () => {

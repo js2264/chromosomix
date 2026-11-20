@@ -74,7 +74,6 @@ import { button, dragHasFiles, dragHasMapRow, el, fmt, readMapRow, type MapRow }
 import { dragHasFileRow } from '../ui/fileDrag'
 import { filesFrom } from '../ui/chooseFiles'
 import { tabAmong } from '../ui/tabWalk'
-import { resolutionLabel } from '../units'
 import {
   canvasToPng,
   copyPngToClipboard,
@@ -458,14 +457,12 @@ export interface PanelDeckProps {
    */
   onLeadScale?(scale: ScaleState): void
   /**
-   * Read the session's own map at this bin size — "fix all resolutions".
-   *
-   * Only reachable when the star is on a companion: it is the one direction the
-   * deck cannot take itself, because changing the lead's rung means reopening
-   * the file the session *is* — the breadcrumb's own entry picker, from the
-   * other end.
+   * The resolution every map is read at (§16.2), asked live: the first map's
+   * pick, else the bin size its zoom is reading at while *Refine on zoom*
+   * picks (`zoom`), else its open rung — `Session.deckResolution`. `null` where
+   * there is nothing to follow yet.
    */
-  onLeadBinsize?(binsize: number): boolean
+  resolution?(): { binsize: number; zoom: boolean } | null
   /**
    * The bin size the session's own file is at, or `undefined`.
    *
@@ -829,19 +826,6 @@ export class PanelDeck {
    */
   private placed: readonly Slot[] = []
 
-  /**
-   * The bin size the session's own map was last seen at.
-   *
-   * Watched rather than told, because there is no one place to be told from: a
-   * reader changes the first map's resolution from the breadcrumb's own picker,
-   * a link can arrive naming another rung, and *fix all resolutions* can move it
-   * from the deck's bar. All three end in the same place — the session reopens
-   * its file — so the deck notices the number change and takes every companion
-   * with it (§16.2). `undefined` until the first view lands, which is why the
-   * first sighting only records: a companion already opens on the first map's
-   * bin size (§3.4) and has nothing to be moved to.
-   */
-  private leadBinsize: number | undefined
   private state: ViewState | null = null
   /**
    * The `maps` value this deck last wrote, so it does not act on its own echo.
@@ -1087,6 +1071,7 @@ export class PanelDeck {
     if (this.lead !== null && this.lead !== panel) {
       this.lead.setDeckExport(null)
       this.lead.setViewportListener(null)
+      this.lead.setRegridListener(null)
       this.lead.setLaneListener(null)
       this.lead.setHoverListener(null)
       this.lead.setLaneHoverListener(null)
@@ -1111,9 +1096,15 @@ export class PanelDeck {
       unit: () => lockUnit(panel),
       bpPerCell: () => panel.bpPerCell(),
       cells: () => panel.cellCount(),
+      origin: () => panel.lockOrigin(),
       locked: () => this.leadLocked,
       show: (rows, cols) => panel.showViewport(rows, cols),
+      viewport: () => panel.viewport(),
+      reach: (rows, cols) => panel.reachViewport(rows, cols),
     })
+    // A block landing under it — the rest of the deck's window it was asked to
+    // read, or its own zoom's — puts it back on the deck's window (§16.3).
+    panel.setRegridListener(() => this.lock.landed(LEAD))
     panel.setViewportListener((rows, cols) => {
       this.lock.report(LEAD, rows, cols)
       // A report is also the first word that a new block is drawn.
@@ -1163,11 +1154,18 @@ export class PanelDeck {
    * through the height of the window they are looking at.
    *
    * Companions are released back to their own boxes when the lead is not turned,
-   * which is what makes this leave a square deck exactly as it was.
+   * which is what makes this leave a square deck exactly as it was — and so is a
+   * companion that is **not following**, at its own zoom over its own window:
+   * the first map's reach is a function of the first map's zoom, and cutting a
+   * band another zoom is drawing to it re-cut that band on every notch of a
+   * wheel over the other map, a picture changing height under nobody's hand.
    */
   private syncTurnReach(): void {
     const reach = this.lead?.turnReach() ?? null
-    for (const slot of this.slots) slot.panel?.map?.setTurnReach(reach)
+    for (const slot of this.slots) {
+      const following = reach !== null && this.leadLocked && this.lockNote(slot) === null
+      slot.panel?.map?.setTurnReach(following ? reach : null)
+    }
   }
 
   /**
@@ -1187,17 +1185,11 @@ export class PanelDeck {
     if (this.place !== null && this.place !== place) this.lock.reset()
     this.place = place
 
-    // The session's own map may have changed rung since the last view — from the
-    // breadcrumb's picker, from a link, or from this deck's own button — and
-    // every companion follows it there. Before the panels are handed the state,
-    // so a companion that is about to re-read does it once at the new resolution
-    // rather than twice.
-    const binsize = this.props.binsize?.()
-    if (binsize !== undefined && binsize > 0) {
-      const moved = this.leadBinsize !== undefined && this.leadBinsize !== binsize
-      this.leadBinsize = binsize
-      if (moved) this.followLeadResolution(binsize)
-    }
+    // A pick, ticked or unticked — the first map's resolution may have moved
+    // with this view, and every companion follows it there in place (§16.2).
+    // Before the panels are handed the state, so a companion about to re-read
+    // reads once, at the deck's resolution.
+    this.followResolution()
 
     this.state = state
     if (this.published === null || this.published.value !== state.maps) {
@@ -1356,61 +1348,14 @@ export class PanelDeck {
     this.warn('')
   }
 
-  /** The bin size the deck is being asked to put every panel on. */
-  private starredBinsize(): number | undefined {
-    if (this.starred === null) return undefined
-    const panel = this.starredPanel
-    if (panel !== null) return panel.binsize()
-    return this.props.binsize?.()
-  }
-
   /**
-   * Read every panel at the starred map's bin size — the *match all
-   * resolutions* press.
-   *
-   * An action for {@link matchScales}'s reason, and **exact** for
-   * {@link MapPanel.useBinsize}'s: a file that has not got that level stays
-   * where it is and says so under its own map, rather than being moved to the
-   * nearest thing and leaving the deck at two resolutions under a button that
-   * has just claimed one. The first map is named in the deck's own line instead,
-   * since it is the one panel with no frame of its own to be told in.
+   * Every map to the deck's resolution (§16.2), in place: the first map's pick,
+   * else what its zoom reads at, else its open rung. Called on every view and
+   * whenever the first map's zoom moves to another bin size, so the maps
+   * locked to it read that bin size beside its own read rather than after it.
    */
-  private matchResolutions(): void {
-    const binsize = this.starredBinsize()
-    if (binsize === undefined || !Number.isFinite(binsize) || binsize <= 0) return
-    const refused: string[] = []
-    if (this.starred !== LEAD_MAP && this.props.onLeadBinsize?.(binsize) === false) {
-      refused.push(this.props.leadName?.() ?? 'the first map')
-    }
-    for (const slot of this.slots) {
-      if (slot.id === this.starred || slot.panel === null) continue
-      if (!slot.panel.useBinsize(binsize)) refused.push(fileLabel(slot.panel.uri))
-    }
-    this.warn(
-      refused.length === 0
-        ? ''
-        : `${refused.join(', ')} ${refused.length === 1 ? 'has' : 'have'} no ` +
-          `${resolutionLabel(binsize)} level and stayed where ${refused.length === 1 ? 'it is' : 'they are'}.`,
-    )
-  }
-
-  /**
-   * Take every companion to the resolution the session's own map just moved to.
-   *
-   * A reader who changes the first map's rung means the deck, not one cell of
-   * it: the whole claim a deck makes is that its pictures are of one place and
-   * can be read against each other, and half of them at 1 kb beside the rest at
-   * 10 kb is a claim it is no longer making. The same rule
-   * {@link matchResolutions} follows — exact, or the panel stays where it is and
-   * says why — because *this file has not got that level* is a fact about the
-   * file that no amount of good intention changes.
-   *
-   * Watched from {@link apply} rather than reported by the session, so every
-   * road to a new rung arrives here: the breadcrumb's picker, a link, and the
-   * deck's own button.
-   */
-  private followLeadResolution(binsize: number): void {
-    for (const slot of this.slots) slot.panel?.useBinsize(binsize)
+  followResolution(): void {
+    for (const slot of this.slots) slot.panel?.followResolution()
   }
 
   /**
@@ -1518,6 +1463,7 @@ export class PanelDeck {
     // mounted view, so a listener left on it would go on reporting into a lock
     // nothing can reach, once per frame, for as long as that view is on screen.
     this.lead?.setViewportListener(null)
+    this.lead?.setRegridListener(null)
     this.lead?.setLaneListener(null)
     this.lead?.setHoverListener(null)
     this.lead?.setLaneHoverListener(null)
@@ -1564,8 +1510,10 @@ export class PanelDeck {
       if (panel === null || id === from) return
       // Two blocks that are not one place — a companion reading a window of its
       // own (§16.3) — share no cell origin, so the pointer is carried as the
-      // contact it is over rather than as a cell index.
-      if (this.placeOf(id) !== fromPlace) {
+      // contact it is over rather than as a cell index. Nor do two blocks of one
+      // place at bin level, once a zoom has read each a window of its own (§2):
+      // a cell index counts from where each block begins.
+      if (this.placeOf(id) !== fromPlace || (source.blockLevel() === 'bin' && panel.blockLevel() === 'bin')) {
         const contact = cell === null ? null : source.contactAt(cell)
         panel.showHoverEcho(contact === null ? null : panel.cellOfContact(contact))
         return
@@ -2016,6 +1964,7 @@ export class PanelDeck {
         if (isMapRef(slot.ref)) this.noteLook(slot.ref.uri, { ...look, locked: slot.locked })
       },
       preferBinsize: () => this.props.binsize?.(),
+      resolution: () => this.props.resolution?.() ?? null,
       onResolved: (uri) => this.resolveRef(slot, uri),
       onDragChange: (dragging) => this.setArranging(dragging),
       // Against the *slot's* ref rather than the one captured above, for
@@ -2112,10 +2061,22 @@ export class PanelDeck {
       unit: () => lockUnit(map),
       bpPerCell: () => map.bpPerCell(),
       cells: () => map.cellCount(),
+      origin: () => map.lockOrigin(),
       locked: () => this.lockNote(slot) === null,
       show: (rows, cols) => map.showViewport(rows, cols),
+      viewport: () => map.viewport(),
+      reach: (rows, cols) => map.reachViewport(rows, cols),
     })
-    map.setViewportListener((rows, cols) => this.lock.report(slot.id, rows, cols))
+    map.setRegridListener(() => this.lock.landed(slot.id))
+    map.setViewportListener((rows, cols) => {
+      // Only a map drawing the deck's place speaks for its window: one still
+      // drawing the place just left redraws while its new block is on its way,
+      // and the lock, cleared by the navigation, took that for the first word
+      // about the new place (`MapPanel.drawnFor`).
+      const drawn = slot.panel?.drawnFor() ?? null
+      if (drawn !== null && placeKey(drawn) !== this.place) return
+      this.lock.report(slot.id, rows, cols)
+    })
     map.setHoverListener((cell) => this.echoHover(slot.id, map, cell))
     map.setLaneHoverListener((at) => this.echoLaneHover(slot.id, map, at))
     // Before the lock and before the note: a panel that has just cut its band
@@ -2170,7 +2131,7 @@ export class PanelDeck {
     // one is the same wrong window as a report in the wrong one, arriving
     // before anybody has had the chance to correct it.
     const unit = lockUnit(lead)
-    this.lock.seed(view.rows, view.cols, unit === 'cell' ? 1 : lead.bpPerCell(), unit)
+    this.lock.seed(view.rows, view.cols, unit === 'cell' ? 1 : lead.bpPerCell(), unit, lead.lockOrigin())
   }
 
   /**
@@ -2219,19 +2180,42 @@ export class PanelDeck {
     // at 1 kb and 5 kb, that they spanned 16 kb and 80 kb and that the same
     // names had resolved against different sequences — the false accusation
     // this whole gate exists to avoid making (§16.4).
-    const mine = map.blockSpan()
-    const theirs = lead.blockSpan()
+    // The **regions**, as each view first drew them, and not the blocks on
+    // screen: a zoom reads a window inside the region (§2), and two maps whose
+    // zooms read different windows have blocks of different spans over one
+    // place — which this used to call the same name resolved against two
+    // sequences, and let the companion off the lock for.
+    // Each held to the cell **its** span was rounded to: the cell of the block
+    // first drawn, not the one a zoom has read since. A chromosome first drawn
+    // at 1.6 kb spans up to 1.6 kb more than it is long, and measured against
+    // a 100 bp cell beside a companion first drawn at another grid, the same
+    // chromosome in the same file was refused as another sequence.
+    const mine = map.frameSpan() ?? { ...map.blockSpan(), bpPerCell: map.bpPerCell() }
+    const theirs = lead.frameSpan() ?? { ...lead.blockSpan(), bpPerCell: lead.bpPerCell() }
     const rows = spansAgree(
-      { spanBp: mine.rows, bpPerCell: map.bpPerCell() },
-      { spanBp: theirs.rows, bpPerCell: lead.bpPerCell() },
+      { spanBp: mine.rows, bpPerCell: mine.bpPerCell },
+      { spanBp: theirs.rows, bpPerCell: theirs.bpPerCell },
       Math.max(mine.sequences.rows, theirs.sequences.rows),
     )
     const cols = spansAgree(
-      { spanBp: mine.cols, bpPerCell: map.bpPerCell() },
-      { spanBp: theirs.cols, bpPerCell: lead.bpPerCell() },
+      { spanBp: mine.cols, bpPerCell: mine.bpPerCell },
+      { spanBp: theirs.cols, bpPerCell: theirs.bpPerCell },
       Math.max(mine.sequences.cols, theirs.sequences.cols),
     )
     if (rows && cols) {
+      // **A band beside a square** has rows that mean two things: distance from
+      // the diagonal up the side of one, a place up the side of the other. The
+      // turn is the deck's (§17.3), so this is a map whose block has no
+      // diagonal to turn on while the first map's has, or one a frame behind a
+      // press — and the frames above are both squares, which is what lets two
+      // bands be compared at all, so they would not have caught it.
+      if (map.isTurned() !== lead.isTurned()) {
+        return (
+          `not following: ${map.isTurned() ? 'this map is turned and the first map is square' : 'the first map is turned and this map is square'}. ` +
+          'Up the side of a band is distance from the diagonal and up the side of a square map ' +
+          'is a place, so one row window would be two different things.'
+        )
+      }
       if (level === null || level === 'bin') return null
       // Above bin level the deck carries the **cell index** ({@link lockUnit}),
       // and that is only honest while cell `i` is the same sequence on both
@@ -2252,28 +2236,17 @@ export class PanelDeck {
       )
     }
 
-    // A turned panel's rows are **separation**, not position, so a row
-    // disagreement there is a different fact from a column one and must not
-    // borrow its sentence. The deck cuts every companion's band to the first
-    // map's reach, in base pairs ({@link syncTurnReach}), so two bands agree by
-    // construction — except where a companion's block does not hold that much,
-    // since a band cannot be deeper than its block has cells
-    // (`render/rotate.ts`'s `turnDepthFor`). That is a real reason not to share
-    // a row window, and is nothing whatever to do with the sequences agreeing.
-    // Telling a reader their files resolved one name against different
-    // sequences when they did not is worse than not telling them anything: it
-    // is a claim they may act on. A cell is half a bin under a turn and height
-    // is half of separation, so the number a reader wants is twice the lock's.
-    if (map.isTurned() && lead.isTurned() && cols) {
-      return (
-        'not following while turned: this band reaches ' +
-        `${fmt.bp(mine.rows * 2)} from the diagonal where the first map ` +
-        `reaches ${fmt.bp(theirs.rows * 2)}. The deck cuts every band to the first map’s reach, ` +
-        'and this map’s block does not hold that much — so one row window would be two ' +
-        'distances. Turning the deck back off puts this panel in step.'
-      )
-    }
-
+    // **No second refusal for a turned pair.** One used to compare how deep the
+    // two bands were cut, and it never had a fact to stand on: the frames it
+    // read were cut at whatever zoom each map held when its block went in, so
+    // a lead stepped on to chrV from deep inside IV said it reached 1.6 kb and
+    // its companion was refused on that until the deck was squared. And the
+    // lock does not need the bands to agree. Up the side the window is base
+    // pairs of separation on both, so one row window is one distance, and a
+    // band its block holds less of is shown the window clamped, as a square
+    // map is beside a longer one (`panels/lock.ts`). Refused, it was never
+    // pushed and so never asked to read the rest — a companion stuck where the
+    // refusal found it while the first map went back to the whole chromosome.
     return (
       'not following: this block spans ' +
       `${fmt.bp(mine.rows)} × ${fmt.bp(mine.cols)} where the ` +
@@ -2306,6 +2279,12 @@ export class PanelDeck {
     // reading somewhere the others are not is two places under one chain.
     if (slot.locked) slot.panel?.clearOwnPlace()
     slot.panel?.syncLock()
+    // A band on the chain is cut to the first map's reach, and one off it to
+    // its own box ({@link syncTurnReach}).
+    this.syncTurnReach()
+    // On the chain it reads at the deck's resolution, the zoom's included; off
+    // it, at its own zoom's, unless a resolution is picked (§16.2).
+    slot.panel?.followResolution()
     // Recorded beside the scale, because to a reader it is the same kind of
     // decision about the same map: *this one is not like the others*. Only a
     // slot with a file behind it — a vacancy has no key to be remembered under.
@@ -3666,6 +3645,7 @@ export class PanelDeck {
     this.leadLocked = !this.leadLocked
     // Kept per file, as a companion's chain is with its look (§16.6).
     this.rememberLead()
+    this.syncTurnReach()
     if (this.leadLocked) {
       this.seedFromLead()
       this.lock.catchUp(LEAD)
@@ -3833,16 +3813,6 @@ export class PanelDeck {
     })
     share.disabled = this.starred === null
 
-    const resolutions = button('match all resolutions', () => this.matchResolutions(), {
-      class: 'btn deck-resolutions',
-      title:
-        this.starred === null
-          ? unstarred
-          : `Read every panel at ${starName}’s bin size; a file with no such level stays where ` +
-            'it is and says so under its own map.',
-    })
-    resolutions.disabled = this.starred === null
-
     // The preset row's honest replacement, and the only control here that is
     // about the deck's *shape*. Without it a deck that arrived in a link could
     // never be reshaped at all: a `+` only ever grows one.
@@ -3978,7 +3948,7 @@ export class PanelDeck {
       // Only where a map can be: a deck beside the 1D browser holds tracks and
       // structures (§25.3), and a press to match maps' scales there was
       // a button with nothing to act on.
-      ...(cellsOnly ? [] : [share, resolutions]),
+      ...(cellsOnly ? [] : [share]),
       columns,
       save,
       copy,

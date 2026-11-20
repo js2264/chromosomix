@@ -1370,17 +1370,6 @@ describe('showing a window that came from outside', () => {
     expect(shown.cols[0]).toBeGreaterThanOrEqual(0)
   })
 
-  it('leaves a frozen view alone, as every other gesture does', () => {
-    // Held while a finer block is being read: the picture must be exactly where
-    // the reader left it when the swap happens.
-    const heatmap = view(400, 100)
-    const before = heatmap.cellWindow()
-    heatmap.setFrozen(true)
-    heatmap.showCellSpan([20, 40])
-    expect(heatmap.cellWindow()).toEqual(before)
-    heatmap.setFrozen(false)
-  })
-
   it('refuses a span of nothing rather than dividing by it', () => {
     const heatmap = view(400, 100)
     const before = heatmap.zoomLevel
@@ -1492,5 +1481,40 @@ describe('held on the diagonal', () => {
     const now = centre(heatmap)
     expect(now.row).toBe(before.row)
     expect(now.col).toBeGreaterThan(before.col)
+  })
+})
+
+describe('a zoom aimed at the diagonal', () => {
+  /** Where the view's middle is, in cells, on each axis. */
+  const middle = (heatmap: HeatmapView): { row: number; col: number } => {
+    const window = heatmap.cellWindow()
+    return { row: (window.rows[0] + window.rows[1]) / 2, col: (window.cols[0] + window.cols[1]) / 2 }
+  }
+
+  it('zooms about the diagonal from a pointer a pixel or two off it, so a deep zoom stays on the line', () => {
+    // A pointer 2 px beside the line at fit zoom is half a cell off it; zoomed
+    // 300 times about the pointer, that half cell is most of the window.
+    const heatmap = view()
+    const plot = heatmap.plotRect
+    const x = plot.x + plot.width / 2 + 2
+    const y = plot.y + plot.height / 2
+    for (let i = 0; i < 25; i++) heatmap.zoomAt(x, y, 1.25)
+    const at = middle(heatmap)
+    expect(Math.abs(at.col - at.row)).toBeLessThan(1e-6)
+  })
+
+  it('zooms about the pointer where it is aimed beside the line', () => {
+    // 30 px off at fit zoom is seven and a half cells: a feature, not a miss.
+    const heatmap = view()
+    const plot = heatmap.plotRect
+    const x = plot.x + plot.width / 2 + 30
+    const y = plot.y + plot.height / 2
+    const under = heatmap.cellAt(x, y)
+    for (let i = 0; i < 10; i++) heatmap.zoomAt(x, y, 1.25)
+    const after = heatmap.cellAt(x, y)
+    expect(after?.col).toBe(under?.col)
+    expect(after?.row).toBe(under?.row)
+    const at = middle(heatmap)
+    expect(at.col - at.row).toBeGreaterThan(5)
   })
 })

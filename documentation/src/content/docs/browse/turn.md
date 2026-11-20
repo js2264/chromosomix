@@ -19,8 +19,10 @@ icon is the shape a press gives: a triangle, or a square once turned. A link ask
   A circular sequence framed across its origin with **ori** turns like any other.
 - A map opens square unless its link says otherwise, and once turned stays turned as you move around
   the same file.
-- In a [deck](/browse/deck/) it turns every map, and every band reaches as far from the diagonal as
-  the first map's.
+- A press keeps the stretch of genome you are looking at: zoomed onto 600–930 kb, the band shows
+  600–930 kb across, and pressed again the map is square on that stretch, on its diagonal.
+- In a [deck](/browse/deck/) it turns every map, and every band following the first map reaches as
+  far from the diagonal as the first map's. A map moving on its own keeps its own depth.
 
 ## Reading a turned map
 
@@ -53,7 +55,8 @@ band reads the lower file. A ratio or a difference stays one band.
 ## Tracks and marks
 
 Every track is drawn under the band, whichever edge of the square map it was on, and a track on two
-edges appears once. Turn the map back and each track is where you put it.
+edges appears once, and every track grows up towards the band. Turn the map back and each track is
+where you put it, growing the way it did there.
 
 Marks follow the places they name:
 
@@ -71,9 +74,10 @@ A call further from the diagonal than the band reaches is not drawn.
 On a turned map, every drag works along the bottom axis:
 
 - a plain **drag** pans along the axis;
+- <kbd>Shift</kbd>-drag, in either direction, zooms to the stretch and copies its coordinates; the
+  map's corner says *⇧ + drag to zoom*;
 - <kbd>⌥ Option</kbd>-drag (<kbd>Alt</kbd> on Windows and Linux) selects a full-height band and
-  opens that stretch as a window; the map's corner says *⌥ + drag to zoom into a stretch*;
-- <kbd>Shift</kbd>-drag, in either direction, zooms to the stretch and copies its coordinates.
+  opens that stretch as a window of its own; the corner says *⌥ + drag to refocus on a stretch*.
 
 **draw on map**, on the **Manual annotations** card, is the exception: it reads both ends of the
 drag in the square, so press over one contact and let go over another to draw the rectangle they

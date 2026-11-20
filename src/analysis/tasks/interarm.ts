@@ -86,7 +86,8 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
       ...free,
       refusal:
         `Every ticked sequence is past ${MAX_CORRELATION_BINS.toLocaleString()} bins, and the ` +
-        'square is read whole. Open the file at a coarser resolution.',
+        'square is read whole. Pick a coarser resolution in the crumb row or on the task’s ' +
+        'Resolution row.',
     }
   }
   const widest = usable.reduce((most, contig) => Math.max(most, contig.bins), 0)

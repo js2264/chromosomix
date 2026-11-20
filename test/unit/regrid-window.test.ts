@@ -48,7 +48,7 @@ function axisFor(binsPerCell: number, from = 0, to = IV_LENGTH) {
   }
 }
 
-/** What `MatrixPanel.framedEdges` produces from a visible window. */
+/** What `MatrixPanel.shownEdges` produces from a visible window. */
 function edges(fromBp: number, toBp: number) {
   return { from: { contig: 'IV', bp: fromBp }, to: { contig: 'IV', bp: toBp } }
 }

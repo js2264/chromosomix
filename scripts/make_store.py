@@ -158,6 +158,7 @@ import io
 import json
 import logging
 import re
+import ssl
 import sys
 import time
 import urllib.error
@@ -698,6 +699,24 @@ def host_of(url: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+#: Statuses that are a server's load, or its gateway's, rather than an answer
+#: about the request: the same request is usually answered a minute later. They
+#: are asked again; every other status is the caller's to read, and is never
+#: retried — 4DN's JSON-bodied 404 is *zero results*, a bucket's 404 is a README
+#: that is not there, and ENCODE's 403 to a paged query has a fix of its own
+#: (`--page-size 0`) that asking again would only delay.
+UNAVAILABLE = frozenset({408, 425, 429, 500, 502, 503, 504})
+
+#: Seconds waited before each new attempt at a request the host would not
+#: answer: a connection refused, reset or dropped before a status line came
+#: back, or a status in {@link UNAVAILABLE}. Six attempts and under four minutes
+#: of waiting, which outlasts a gateway's bad minute; a portal that is down for
+#: longer than that fails the run, and the workflow republishes its last good
+#: shelf (`.github/workflows/stores.yml`) rather than holding every other one
+#: back with it.
+UNAVAILABLE_WAITS = (2.0, 10.0, 30.0, 60.0, 120.0)
+
+
 def _request(url: str, accept: str) -> Any:
     """One GET, answering the open response — or a ``SystemExit`` naming the host.
 
@@ -705,27 +724,59 @@ def _request(url: str, accept: str) -> Any:
     gigabyte and reading it into memory to split it into lines would be a
     gigabyte of string on top of a gigabyte of bytes. Callers that want the
     whole thing say so; the manifest reader streams.
+
+    **Asked again when the host would not answer**, which is two failures the
+    weekly run met and gave up on at the first try: ENCODE's search answered
+    ``504 Gateway Time-out`` on 2026-10-26, and 4DN's dropped the connection
+    during its TLS handshake (``UNEXPECTED_EOF_WHILE_READING``) on 2026-11-02, 11
+    and 13. Each was one request, and each cost the run. A connection failure is
+    retried unless it is a certificate that is not the host's, which no second
+    attempt will change; a status only when it is in {@link UNAVAILABLE}. A
+    response that arrives and is then cut off is {@link _read}'s, not this
+    function's.
     """
     request = urllib.request.Request(
         url, headers={"Accept": accept, "User-Agent": USER_AGENT}
     )
-    log.debug("GET %s", url)
-    try:
-        return urllib.request.urlopen(request, timeout=TIMEOUT)
-    except urllib.error.HTTPError as error:
-        body = b""
+    attempts = len(UNAVAILABLE_WAITS) + 1
+    for attempt in range(1, attempts + 1):
+        log.debug("GET %s", url)
         try:
-            body = error.read()
-        except Exception:  # noqa: BLE001 - the body is a courtesy, not a requirement
-            pass
-        raise _HttpFailure(error.code, error.reason, url, body) from error
-    except urllib.error.URLError as error:
-        raise SystemExit(
-            f"Could not reach {url}\n"
-            f"  {error.reason}\n"
-            "  Nothing was written. A store is only replaced by a run that succeeded, so the "
-            "previously published one is still the one readers see."
-        ) from error
+            return urllib.request.urlopen(request, timeout=TIMEOUT)
+        except urllib.error.HTTPError as error:
+            body = b""
+            try:
+                body = error.read()
+            except Exception:  # noqa: BLE001 - the body is a courtesy, not a requirement
+                pass
+            if error.code not in UNAVAILABLE or attempt == attempts:
+                raise _HttpFailure(error.code, error.reason, url, body, attempt) from error
+            said = f"HTTP {error.code} {error.reason}"
+        except urllib.error.URLError as error:
+            reason = error.reason
+            transient = isinstance(reason, OSError) and not isinstance(
+                reason, ssl.SSLCertVerificationError
+            )
+            if not transient or attempt == attempts:
+                times = f" ({attempt} attempts)" if attempt > 1 else ""
+                raise SystemExit(
+                    f"Could not reach {url}\n"
+                    f"  {reason}{times}\n"
+                    "  Nothing was written. A store is only replaced by a run that succeeded, so the "
+                    "previously published one is still the one readers see."
+                ) from error
+            said = str(reason)
+        pause = UNAVAILABLE_WAITS[attempt - 1]
+        log.warning(
+            "%s did not answer (%s). Asking again in %.0fs (%d of %d).",
+            url,
+            said,
+            pause,
+            attempt + 1,
+            attempts,
+        )
+        time.sleep(pause)
+    raise AssertionError("unreachable: the last attempt raises")
 
 
 #: How many times a read that was cut off is tried again, and how long the
@@ -748,9 +799,10 @@ def _read(url: str, accept: str) -> bytes:
 
     Read errors only. An HTTP status is a decision and is re-raised for the
     caller to interpret — 4DN's JSON-bodied 404 is *zero results* and must not
-    be retried into a failure — and a connection that never opened is already a
-    sentence from {@link _request}. What is retried is the case where the host
-    agreed to answer and then stopped talking.
+    be retried into a failure — and a connection that never opened, or a
+    gateway that answered 5xx, has already been asked again by {@link _request}.
+    What is retried here is the case where the host agreed to answer and then
+    stopped talking.
     """
     last = ""
     for attempt in range(READ_ATTEMPTS):
@@ -783,12 +835,21 @@ def _read(url: str, accept: str) -> bytes:
 class _HttpFailure(Exception):
     """An HTTP status the caller may still want to interpret (see 4DN's 404)."""
 
-    def __init__(self, code: int, reason: Any, url: str, body: bytes) -> None:
+    def __init__(
+        self, code: int, reason: Any, url: str, body: bytes, attempts: int = 1
+    ) -> None:
         super().__init__(f"HTTP {code} from {url}")
         self.code = code
         self.reason = reason
         self.url = url
         self.body = body
+        self.attempts = attempts
+
+    @property
+    def said(self) -> str:
+        """The status as a message quotes it, with how often it was asked."""
+        times = f", {self.attempts} times" if self.attempts > 1 else ""
+        return f"HTTP {self.code} {self.reason}{times}"
 
 
 def fetch_json(url: str) -> dict:
@@ -823,7 +884,7 @@ def fetch_json(url: str) -> dict:
         )
         raise SystemExit(
             f"{failure.url}\n"
-            f"  answered HTTP {failure.code} {failure.reason}.{paged}\n"
+            f"  answered {failure.said}.{paged}\n"
             "  Nothing was written. Check the portal's status page, then rerun; if the query "
             "itself is wrong the body above says so."
         ) from failure
@@ -993,7 +1054,7 @@ def fetch_lines(url: str) -> Iterator[str]:
     except _HttpFailure as failure:
         raise SystemExit(
             f"{failure.url}\n"
-            f"  answered HTTP {failure.code} {failure.reason}.\n"
+            f"  answered {failure.said}.\n"
             "  Nothing was written. This is the file ENCODE rewrites at the root of its public "
             "bucket every day; a 404 here means it has been moved or renamed."
         ) from failure
@@ -1026,7 +1087,7 @@ def fetch_xml(url: str) -> bytes:
             pass
         raise SystemExit(
             f"{failure.url}\n"
-            f"  answered HTTP {failure.code} {failure.reason}. {detail}\n"
+            f"  answered {failure.said}. {detail}\n"
             "  Files under the prefix may still open by URL; only building a catalogue from it "
             "needs `s3:ListBucket` for anonymous callers."
         ) from failure

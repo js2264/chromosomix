@@ -17,7 +17,7 @@ import { parseUri } from '../uri'
 /** Groups a `.metacool` must carry, per `schema.is_metacooler`. */
 const METACOOL_GROUPS = ['genomes', 'contigs', 'bins', 'pixels', 'indexes'] as const
 
-/** Attribute keys `MetaCooler.info` casts to plain integers. */
+/** Attribute keys `MetaCooler.info` casts to plain integers, where they hold a whole number. */
 const INFO_INT_KEYS = [
   'bin-size',
   'format-version',
@@ -585,9 +585,16 @@ function decodeAttr(value: AttrValue): unknown {
   }
 }
 
-/** Python's `int(x)` under a suppressed `ValueError`/`TypeError`: cast or keep. */
+/**
+ * `MetaCooler.info`'s cast of a counted field: Python's `int(x)` under a
+ * suppressed `ValueError`/`TypeError`, kept only where it equals `float(x)`.
+ * A whole number or an integer literal becomes an integer; a fractional number
+ * is kept, so a float-count map's `sum` is its sum rather than its floor
+ * (metacooler `c3d91ce`, which stopped flooring it); anything else is kept.
+ * JS has one numeric type, so a number is already what the cast would make.
+ */
 function looseInt(value: unknown): unknown {
-  if (typeof value === 'number') return Number.isFinite(value) ? Math.trunc(value) : value
+  if (typeof value === 'number') return value
   if (typeof value === 'string') {
     const parsed = pyInt(value)
     return parsed === null ? value : parsed

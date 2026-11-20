@@ -11,9 +11,11 @@
 const { open, sleep, BASE, BUCKET } = require('./lib-1d3d.cjs')
 
 const OUT = process.argv[2] ?? 'screens'
-const REP1 = `${BUCKET}/meneu/ATAC/ATAC_Mmyco_rep1.CPM.bw`
-const REP2 = `${BUCKET}/meneu/ATAC/ATAC_Mmyco_rep2.CPM.bw`
-const PEAKS = `${BUCKET}/meneu/ATAC/ATAC_Mmyco_rep1.narrowPeak`
+// The paper's ATAC, as its data release on the lab's bucket holds it: the store has no copy.
+const ATAC = 'https://rsglab-data.s3.eu-west-3.amazonaws.com/public-data/2025_Meneu_et_al/ATAC'
+const REP1 = `${ATAC}/ATAC_Mmyco_rep1.CPM.bw`
+const REP2 = `${ATAC}/ATAC_Mmyco_rep2.CPM.bw`
+const PEAKS = `${ATAC}/ATAC_Mmyco_rep1.narrowPeak`
 
 ;(async () => {
   const s = await open(OUT, { drawer: Number(process.env.SCREENS_DRAWER ?? 900) })

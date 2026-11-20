@@ -332,10 +332,12 @@ describe('the colour clip', () => {
     box.dispatchEvent(new Event('change'))
   }
 
-  it('opens in auto, with nothing to hand back and nothing to say', () => {
+  it('opens in auto, with nothing to say', () => {
     const { clip } = make()
     expect(clip.el.classList.contains('clip-manual')).toBe(false)
-    expect(clip.el.querySelector<HTMLButtonElement>('.clip-auto')?.disabled).toBe(true)
+    // Never disabled: auto is measured on what is in view, so asking again in
+    // auto is asking for the range of where the reader is now (§7.1).
+    expect(clip.el.querySelector<HTMLButtonElement>('.clip-auto')?.disabled).toBe(false)
     // **No caption until a block has been scaled.** It used to print
     // `auto · 0 – 1` from the placeholder the control starts on, which behind
     // the whole-genome gate is a caption for a picture that is not there.

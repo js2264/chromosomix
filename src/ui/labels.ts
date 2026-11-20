@@ -47,11 +47,20 @@ export function entryLabel(uri: string): string | undefined {
   return group.split('/').filter((part) => part !== '').pop()
 }
 
-/** The last path segment of a URI, plus the entry name when there is one. */
+/**
+ * The last path segment of a URI, plus the entry name when it names a map.
+ *
+ * `rep.mmetacool::sampleA` is another map from `rep.mmetacool::sampleB`, so a
+ * sample of a collection is named. A **rung of a ladder** is not — an
+ * `.mcool`'s `::25000`, a zoomify `.mmetacool`'s `::1000`, any entry that is a
+ * bin size: it is where the file was opened, which the zoom and a pick read
+ * past in place (§2, §3.4), so a tab or a crumb reading `file.mcool::25000`
+ * over a map drawn at 500 kb was naming a resolution that was not on screen.
+ */
 export function fileLabel(uri: string): string {
   const base = fileBaseLabel(uri)
   const entry = entryLabel(uri)
-  return entry === undefined ? base : `${base}::${entry}`
+  return entry === undefined || /^\d+$/.test(entry) ? base : `${base}::${entry}`
 }
 
 /**

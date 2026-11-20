@@ -123,7 +123,9 @@ describe('what the list says about a step', () => {
 
   it('says beside it the file, the resolution and what the step set', () => {
     expect(stepDetail(at('view=region&region=IV&oe=1'))).toBe('Yeast.mcool · 1 kb · O/E')
-    expect(stepDetail(at('view=region&region=IV&coarsen=3000'))).toBe('Yeast.mcool · 3 kb*')
+    // A resolution picked, by the key it has now and the one it had.
+    expect(stepDetail(at('view=region&region=IV&resolution=3000'))).toBe('Yeast.mcool · 3 kb')
+    expect(stepDetail(at('view=region&region=IV&coarsen=3000'))).toBe('Yeast.mcool · 3 kb')
   })
 
   it('leaves the file out where it is the one on screen, and keeps what the step set', () => {

@@ -26,8 +26,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { MatrixPanel } from '@/ui/MatrixPanel'
-import { setMapSize } from '@/ui/mapSize'
-import { MIN_TURN_WIDTH, setTurnBox } from '@/ui/turnBox'
+import { getMapSize, setMapSize } from '@/ui/mapSize'
+import { MIN_TURN_WIDTH, getTurnBox, setTurnBox } from '@/ui/turnBox'
 import type { MatrixResult } from '@/worker/protocol'
 import { setUpDom, type DomTeardown } from '../support/dom'
 
@@ -228,6 +228,17 @@ describe('a square map', () => {
     return raw === '' ? null : Number.parseInt(raw, 10)
   }
 
+  /**
+   * The height a square map may have, as the stylesheet resolves it: the wrap's
+   * `max-height`, which is `--map-budget` less the stacks over and under the map.
+   * jsdom resolves no `clamp()`, so the test says the number outright.
+   */
+  const budget = (fit: Harness, px: number): void => {
+    const wrap = fit.grid.querySelector<HTMLElement>('.heatmap-wrap')
+    if (wrap === null) throw new Error('no wrap')
+    wrap.style.maxHeight = `${px}px`
+  }
+
   it('is drawn at all the room there is, until somebody says otherwise', () => {
     const fit = harness(false)
     fit.panel.setData(block(64), 'IV')
@@ -261,6 +272,46 @@ describe('a square map', () => {
     // The store tells every panel, so nothing else has to be called here — the
     // one in the reader's hand and the others of a deck all redraw.
     expect(sizeOf(fit)).toBeGreaterThan(300)
+  })
+
+  it('gives up both sides to a track grown under it, rather than leaving a rectangle by accident', () => {
+    // The reported case. The stacks over and under the map come out of its
+    // height budget, and the grid's own box does not move when the map gives up
+    // the height a lane took — so the box was never fitted again: the old side
+    // stood as the width under a ceiling that had come down, and the next touch
+    // of an edge snapped it to the square it should have been all along.
+    const fit = harness(false)
+    fit.panel.setData(block(64), 'IV')
+    budget(fit, 700)
+    fit.paint()
+    expect(sizeOf(fit)).toBe(600)
+    // A stack under the map thickens, and the budget comes down with it. What a
+    // deck's floor does, and what a lane's own height does, go through one place.
+    budget(fit, 450)
+    fit.panel.setLaneFloor({ top: 0, right: 0, bottom: 250, left: 0 })
+    expect(sizeOf(fit)).toBe(450)
+  })
+
+  it('keeps the size the reader dragged through Fit the view, which undoes pan and zoom alone', () => {
+    // A square map's size and a band's are the reader's, and Fit the view —
+    // its button, `0`, a double click on the plot, Home on the focused map —
+    // gives back the whole domain without touching either (§7.2, §17.2).
+    setMapSize(300)
+    const fit = harness(false)
+    fit.panel.setData(block(64), 'IV')
+    budget(fit, 700)
+    fit.paint()
+    expect(sizeOf(fit)).toBe(300)
+    fit.panel.fit()
+    expect(getMapSize()).toBe(300)
+    expect(sizeOf(fit)).toBe(300)
+
+    setTurnBox({ width: 500 })
+    const band = harness(true)
+    band.panel.setData(block(64), 'IV')
+    band.panel.fit()
+    expect(getTurnBox()).toEqual({ width: 500, height: null })
+    expect(getMapSize()).toBe(300)
   })
 
   it('offers four handles, where a band offers three', () => {

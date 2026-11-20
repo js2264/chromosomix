@@ -68,7 +68,7 @@ import { byteRange, contigsOf as contigsOfIndex, parseFai, residuesIn, type FaiR
 import { FASTA_NAME, guessedIndexUrl } from '../sidecar'
 import { interactSummary, isInteractSchema, parseInteract, sniffInteract } from '../interact'
 import { longRangeSummary, parseLongRange, sniffLongRange } from '../longrange'
-import { genePredSummary, isGenePredSchema, parseGenePred, sniffGenePred } from '../genepred'
+import { genePredParser, genePredSummary, isGenePredSchema, sniffGenePred } from '../genepred'
 import { cytoBandLengths, cytoBandSummary, parseCytoBand, sniffCytoBand } from '../cytoband'
 import { junctionSummary, parseJunctions, sniffJunctions } from '../junctions'
 import {
@@ -87,10 +87,12 @@ import {
   type TwoBitRecord,
 } from '../twobit'
 import {
+  bedParser,
+  bedpeParser,
   decodeAnnotationBytes,
+  gtfParser,
   parseBed,
-  parseBedpe,
-  parseGtf,
+  parseCooperatively,
   sniffFormat,
 } from '../parse'
 import type {
@@ -1106,7 +1108,7 @@ async function assemblyOf(source: WireSource, report: Report): Promise<AssemblyR
     return { format: 'longrange', contigs: endsOfPairs(data), origin: 'features', exact: false }
   }
   if (sniffGenePred(text, source.name)) {
-    const data = parseGenePred(text)
+    const data = await parseCooperatively(text, genePredParser())
     recent = { key: cacheKey(source), format: 'genepred', features: data }
     const ends = new Map<string, number>()
     for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
@@ -1140,12 +1142,12 @@ async function assemblyOf(source: WireSource, report: Report): Promise<AssemblyR
 
   const format = sniffFormat(text, source.name)
   if (format === 'bedpe') {
-    const data = parseBedpe(text)
+    const data = await parseCooperatively(text, bedpeParser(text))
     recent = { key: cacheKey(source), format, features: null }
     return { format, contigs: endsOfPairs(data), origin: 'features', exact: false }
   }
 
-  const data = format === 'gtf' ? parseGtf(text) : parseBed(text, source.name)
+  const data = await parseCooperatively(text, format === 'gtf' ? gtfParser(text) : bedParser(text, source.name))
   recent = { key: cacheKey(source), format, features: data }
   const ends = new Map<string, number>()
   for (let i = 0; i < data.length; i++) note(ends, data.contigs[data.contig[i]], data.end[i])
@@ -1688,7 +1690,7 @@ async function load(
   // They are written in the order a reader is most likely to bring one.
   if (sniffInteract(text, source.name)) return loadInteract(text, mapContigs)
   if (sniffLongRange(text, source.name)) return loadLongRange(text, mapContigs)
-  if (sniffGenePred(text, source.name)) return loadGenePred(text, mapContigs)
+  if (sniffGenePred(text, source.name)) return await loadGenePred(text, mapContigs)
   if (sniffBedMethyl(text, source.name)) return loadBedMethyl(entry, text, mapContigs)
 
   const signal = sniffSignal(text)
@@ -1696,7 +1698,7 @@ async function load(
 
   const format: DetectedFormat = sniffFormat(text, source.name)
   if (format === 'bedpe') {
-    const data = parseBedpe(text)
+    const data = await parseCooperatively(text, bedpeParser(text))
     const renaming = renameContigs(data.contigs, mapContigs)
     return {
       format,
@@ -1707,7 +1709,10 @@ async function load(
     }
   }
 
-  const data = format === 'gtf' ? parseGtf(text) : parseBed(text, source.name)
+  // Each of these four gives the thread back as it goes (`forEachRowCooperatively`):
+  // a gene model or a loop list is the biggest text a tab opens, and the lanes
+  // beside it ask the same thread for their windows meanwhile.
+  const data = await parseCooperatively(text, format === 'gtf' ? gtfParser(text) : bedParser(text, source.name))
   // Deliberately *not* cached. This branch is about to hand `data` to the main
   // thread by transfer, so an entry made here would be detached before anything
   // could read it — the cache exists for the other order, where a genome was
@@ -1784,8 +1789,8 @@ function loadLongRange(text: string, mapContigs: NamedSequence[]): LoadResult {
  * *transcripts*, and how many of them code is the thing that explains a lane
  * with no thick spans in it.
  */
-function loadGenePred(text: string, mapContigs: NamedSequence[]): LoadResult {
-  const data = parseGenePred(text)
+async function loadGenePred(text: string, mapContigs: NamedSequence[]): Promise<LoadResult> {
+  const data = await parseCooperatively(text, genePredParser())
   const renaming = renameContigs(data.contigs, mapContigs)
   return {
     format: 'genepred',

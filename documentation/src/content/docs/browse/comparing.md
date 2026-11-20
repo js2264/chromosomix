@@ -15,7 +15,7 @@ file read another way.
 The first file is drawn above the diagonal, the second below; the diagonal itself is the first
 file's.
 
-![Hi-C maps of yeast chromosome IV from G1 and from G2/M cells in one square at 4 kb, G1 above the diagonal and G2/M below with its far corner paler, and the two files listed on the Contact maps card under ◥ and ◣.](../../../assets/screens/browse/comparing-two-files.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/meneu/HiC/HiC_Mpneumo_G1.mcool::/resolutions/4000&uri2=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/meneu/HiC/HiC_Mpneumo_G2M.mcool::/resolutions/4000&view=region&region=IV&balance=true&transform=log10")
+![Hi-C maps of yeast chromosome IV from G1 and from G2/M cells in one square at 4 kb, G1 above the diagonal and G2/M below with its far corner paler, and the two files listed on the Contact maps card under ◥ and ◣.](../../../assets/screens/browse/comparing-two-files.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/store/meneu2025/HiC/HiC_Mpneumo_G1.mcool::/resolutions/4000&uri2=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/store/meneu2025/HiC/HiC_Mpneumo_G2M.mcool::/resolutions/4000&view=region&region=IV&balance=true&transform=log10")
 
 - Each file has a row on the card, `◥` upper and `◣` lower. The lower row's eye hides the lower
   triangle and keeps the file open; its **×** closes it. Closing the first file leaves the second as
@@ -23,8 +23,13 @@ file's.
 - **swap sides** puts the other file above the diagonal.
 - A name typed on a row is used wherever the map is named.
 - Hovering a cell gives both files' counts.
-- The link carries the second file as `uri2`. On a change of resolution it follows at the same bin
-  size, or the card says it has none.
+- The link carries the second file as `uri2`. Pick another resolution the file stores and the first
+  file is opened at it, with the second following at the same bin size, or the card says it has none;
+  a resolution you added on the open one is drawn for both. While *refine on zoom* picks, both files
+  are read at the resolution they were opened at, their bins summed to the size of the screen until
+  you zoom in far enough for their own.
+- A link or a workspace that names both opens them at once: the upper triangle is drawn as soon as
+  the first file has its block, and the lower one joins it when the second file has its own.
 
 ### What the two files must share
 
@@ -60,7 +65,7 @@ A ratio opens on `log2` and a difference on a linear scale, both on a diverging 
 the files agree (1 or 0), so only the disagreement shows. **split** gives the map its own scale
 back. The link carries the choice as `op`.
 
-![The log2 ratio of G2/M over G1 Hi-C across the whole of yeast chromosome IV at 8 kb on RdBu_r, red along the diagonal where G2/M has more contacts and blue further out, beside the Map card with compare set to ratio and O/E greyed.](../../../assets/screens/browse/comparing-ratio.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/meneu/HiC/HiC_Mpneumo_G2M.mcool::/resolutions/8000&uri2=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/meneu/HiC/HiC_Mpneumo_G1.mcool::/resolutions/8000&view=region&region=IV&balance=true&op=ratio&transform=log2&colormap=RdBu_r")
+![The log2 ratio of G2/M over G1 Hi-C across the whole of yeast chromosome IV at 8 kb on RdBu_r, red along the diagonal where G2/M has more contacts and blue further out, beside the Map card with compare set to ratio and O/E greyed.](../../../assets/screens/browse/comparing-ratio.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/store/meneu2025/HiC/HiC_Mpneumo_G2M.mcool::/resolutions/8000&uri2=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/store/meneu2025/HiC/HiC_Mpneumo_G1.mcool::/resolutions/8000&view=region&region=IV&balance=true&op=ratio&transform=log2&colormap=RdBu_r")
 
 - **A ratio needs contacts in both files.** A cell empty in either is drawn in the ramp's middle
   colour, and the readout says there is no value. A difference keeps its zeros.
@@ -83,7 +88,7 @@ To draw, say, balanced counts above the diagonal and their O/E below:
 While it is on, a dot marks the **◣ lower** tab. Switched off, the triangle mirrors again and keeps
 its settings for next time.
 
-![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb at 2 kb, balanced in log10 above the diagonal and its O/E in log2 on RdBu_r below, each with its own key in the corner, marked ◥ and ◣, beside the Map card open on its lower tab with own reading on.](../../../assets/screens/browse/comparing-lower-reading.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&coarsen=2000&balance=true&transform=log10&lower=true&oe2=true&transform2=log2&colormap2=RdBu_r")
+![A Micro-C map of yeast chromosome IV from 1.0 to 1.4 Mb at 2 kb, balanced in log10 above the diagonal and its O/E in log2 on RdBu_r below, each with its own key in the corner, marked ◥ and ◣, beside the Map card open on its lower tab with own reading on.](../../../assets/screens/browse/comparing-lower-reading.webp "live: #uri=https://rsglab-data.s3.eu-west-3.amazonaws.com/demo/yeast/Yeast_microC_G2M_1kb.cool&view=region&region=IV:1000000-1400000&resolution=2000&balance=true&transform=log10&lower=true&oe2=true&transform2=log2&colormap2=RdBu_r")
 
 Each reading has its own colour scale and key, `◥` or `◣`. The readout names the reading under the
 pointer, and a saved figure carries both keys and a second caption line. The window, resolution,

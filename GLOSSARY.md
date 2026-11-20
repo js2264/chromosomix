@@ -313,16 +313,25 @@ One complete dataset inside a container — a nested metacool in an `.mmetacool`
 
 Opening a container at its root is an error that lists what is inside; the app answers it by opening
 one — a ladder's landing rung (§9), a collection's first entry — and offering the rest in the entry
-picker (§3.4).
+picker (§3.4). A sample of a collection is part of the map's name, `samples.mmetacool::rep1`, being
+another map; a [rung](#rung) is not.
 
 ### rung
 
 One level of a resolution ladder, as a bin size (`src/ui/refine.ts`). A sibling rung is a different
-[bin space](#bin-space) entirely, which is why moving between them is a reopen rather than a
-navigation. A rung the reader adds — a whole number of a stored rung's bins, summed as it is read —
-is a **derived rung**, marked `*` (`3 kb*`) and never preferred over a stored one
-(`src/metacooler/coarsen.ts`, §3.4). A task run while the map is drawn at one reads the map summed to
-it (`src/metacooler/coarseMap.ts`; `--coarsen` in the shell).
+[bin space](#bin-space) entirely, so windows cross between rungs through base pairs; moving to one is
+a **pick** — `resolution=` in the hash, read in place where the reader stands, the file left open at
+the entry it was opened at — rather than a reopen (§3.4, §5.5). A rung the reader adds — a whole
+number of a stored rung's bins, summed as it is read — is a **derived rung**, marked `*` (`3 kb*`) and
+never preferred over a stored one (`src/metacooler/coarsen.ts`, §3.4). A task run with one picked, in
+the crumb row or on its own *Resolution* row, reads the map summed to it
+(`src/metacooler/coarseMap.ts`; `--coarsen` in the shell).
+
+The rung a file is **opened at** is where it was opened — the grid its windows are counted in, the
+rung a task reads with nothing picked — and not what is on screen, which the zoom or a pick decides.
+So it is no part of the file's name (`fileLabel`: `sample.mcool`, never `sample.mcool::25000`; a run
+says `sample.mcool · 25 kb`), and the address bar leaves it out where it is the **landing rung**, a
+third of the way up from the finest (`src/state/landing.ts`, §3.5, §9).
 
 ### `__unbinned__`
 
@@ -443,6 +452,12 @@ which are filled from a drop, a file chooser or a URL (§16.9). `MAX_PANELS` (64
 against arithmetic rather than a policy: the real limit is bytes, since the per-map read budget is
 this tab's budget divided by the number of maps, a cell that holds no file taking no share (§16.7).
 
+Its maps are read at one resolution, the **deck's resolution** (`Session.deckResolution`, §16.2): the
+lead's pick, else — while *Refine on zoom* picks — the bin size the lead's zoom is reading at, else
+the lead's open rung. Each companion reads it on its own ladder (`pickOnLadder`), at its nearest
+stored rung where it has not got that one, and says so under its heading; one off the chain follows
+a pick but not the lead's zoom.
+
 ### vacant
 
 An empty cell — one a `+` drew and nothing has filled, or a link's memory of a *local* companion —
@@ -472,9 +487,11 @@ feature search reads, and the one a task's parameter defaults to (§5.8, §18.2)
 ### lock, chain
 
 What makes a deck's maps one navigation (`src/panels/lock.ts`, §16.3). Its currency is **base
-pairs** rather than cells, so a 1 kb map and a 5 kb one follow each other honestly, the coarser
-rounding outward to show at least what was asked for; and it has one owner — each map reports where
-it is and the lock decides, so no two maps ever speak to each other. A map's **chain**, in its
+pairs** of the sequence rather than cells, so a 1 kb map and a 5 kb one follow each other honestly,
+the coarser rounding outward to show at least what was asked for — each map telling it where its
+block begins (`MatrixPanel.lockOrigin`), since a block a zoom refined is a window from inside the
+region; and it has one owner — each map reports where it is and the lock decides, so no two maps
+ever speak to each other. A map's **chain**, in its
 heading, says whether it follows. Off the chain, a box drawn with ⌥ held on a companion reads that
 window for that map alone, shown as a pill in its heading until it is given back.
 
@@ -742,11 +759,16 @@ quietly by any view whose block has no diagonal to measure from.
 ### refine
 
 Reading finer data as you zoom: passing what the block in hand can show reads the window again at a
-finer grid — one bounded read, the map held still while it happens, never below the file's own bins
-(`src/ui/refine.ts`). Off by default, a preference turned on by the palette's *Refine on zoom*; the
-alternative is one read per view and a zoom that magnifies it. On the editing stage the same idea
-places a point: a suggestion's cut is placed again at the map's finer rungs, *refined at 1 kb*
-(§27.5).
+finer grid — one bounded, screen-sized read from the stored rung nearest a cell to each pixel, made
+where a zoom inward pauses, the map going on taking every gesture while it happens and the block
+landing where the gesture has got to, never below the finest rung the file stores, whichever was
+opened (`src/ui/refine.ts`, §2). **On by default**: *Refine on zoom* is the tick at the head of the
+resolution row and a command in the palette, a preference kept by the browser; ticked, the rest of
+the row is greyed and follows the map, and unticked, the reader picks. A resolution **picked** wins
+over it — a map whose link names one is drawn at it, as memory allows — and off with nothing
+picked, the rung opened is read that way: the window read once, and a zoom inside it that magnifies
+it. On the editing stage the same idea places a point: a suggestion's cut is placed again at the
+map's finer rungs, *refined at 1 kb* (§27.5).
 
 ---
 

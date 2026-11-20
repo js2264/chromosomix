@@ -372,7 +372,7 @@ function estimate(context: AnalysisContext, params: Params): CostEstimate {
         skipped > 0
           ? 'Every chosen sequence would need a band bigger than a scan can hold. The band is ' +
             'the scan distance times the sequence, so there are two ways in: bring “furthest ' +
-            'from the diagonal” down, or open the file at a coarser resolution.'
+            'from the diagonal” down, or pick a coarser resolution on the task’s Resolution row.'
           : 'Tick at least one sequence.',
     }
   }
@@ -435,7 +435,7 @@ function availability(context: AnalysisContext): TaskAvailability {
   if (longest <= smallest) {
     return waitingFor(
       `No sequence in this file is longer than the smallest template (${smallest} bins). ` +
-        'Open it at a finer resolution.',
+        'Pick a finer resolution in the crumb row.',
     )
   }
   return READY

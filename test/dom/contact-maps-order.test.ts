@@ -187,6 +187,8 @@ describe('the Contact maps card’s order (§16.9)', () => {
 
 function leadPanel(): MatrixPanel {
   return {
+    setRegridListener: () => {},
+    reachViewport: () => {},
     setViewportListener: () => {},
     setDeckExport: () => {},
     setCardFor: () => {},
@@ -202,6 +204,14 @@ function leadPanel(): MatrixPanel {
     bpPerCell: () => 1000,
     cellCount: () => ({ rows: 400, cols: 400 }),
     blockLevel: () => 'bin',
+    // The region as first drawn, and where its first cell sits (`panels/lock.ts`):
+
+    // a block read whole, as every block here is.
+
+    frameSpan: () => null,
+
+    lockOrigin: () => ({ rows: 0, cols: 0 }),
+
     blockSpan: () => ({ rows: 400_000, cols: 400_000, sequences: { rows: 1, cols: 1 } }),
     viewport: () => ({ rows: [0, 400], cols: [0, 400] }),
     get hasBlock(): boolean {
