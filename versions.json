@@ -256,6 +256,13 @@
   ],
   "pulls": [
     {
+      "number": 179,
+      "commit": "7f01627",
+      "title": "Landing page: remove the half mark from the right margin",
+      "branch": "remove-landing-watermark",
+      "date": "2026-11-19T13:02:08Z"
+    },
+    {
       "number": 168,
       "commit": "bf0eeff",
       "title": "Draw a metagenome's map as a circle or as two lines, a dev feature (§7.6)",
