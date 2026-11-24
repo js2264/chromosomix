@@ -9,11 +9,14 @@
  * curation changed. The contigs table names each contig's genome. The File
  * card counts the MAGs and the elements apart, says the binning is curated and
  * by how many steps, and the Binning QC card sets the file's pool beside the
- * curated one where the two differ.
+ * curated one where the two differ. The heading's word on the genomes says
+ * how many steps the session is drawn through, opens the stage, and puts the
+ * file's binning back.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { CurationChip } from '@/curate/CurationChip'
 import { resetDevFeatures } from '@/state/devFeatures'
 import { ContigsTable } from '@/ui/ContigsTable'
 import { GenomesTable } from '@/ui/GenomesTable'
@@ -165,5 +168,30 @@ describe('the File and Binning QC cards under a curation', () => {
     const mge = { columns: ['name', 'mge'], data: { name: ['__unbinned__', 'A', 'E'], mge: ['', 'False', 'True'] } }
     expect(countKinds(mge)).toEqual({ mags: 1, elements: 1 })
     expect(countKinds({ columns: ['name'], data: { name: ['A'] } })).toBeNull()
+  })
+})
+
+describe('the heading’s word on the genomes (§33.4)', () => {
+  it('says as in the file, or curated and by how many steps, lit while curated, and opens the stage or puts the file back', () => {
+    let steps = 0
+    const pressed: string[] = []
+    const chip = new CurationChip({ steps: () => steps, onOpen: () => pressed.push('open'), onRevert: () => pressed.push('revert') })
+    document.body.appendChild(chip.el)
+    const button = chip.el.querySelector('.crumb-genomes-button') as HTMLButtonElement
+    const revert = chip.el.querySelector('.crumb-genomes-revert') as HTMLButtonElement
+    expect(chip.el.textContent).toBe('genomesas in the file')
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(revert.classList.contains('hidden')).toBe(true)
+    steps = 1
+    chip.sync()
+    expect(button.textContent).toBe('curated · 1 step')
+    steps = 7
+    chip.sync()
+    expect(button.textContent).toBe('curated · 7 steps')
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    expect(revert.classList.contains('hidden')).toBe(false)
+    button.click()
+    revert.click()
+    expect(pressed).toEqual(['open', 'revert'])
   })
 })
