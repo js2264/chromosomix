@@ -508,7 +508,9 @@ export class GenomeList {
     const word = SECTION_WORD[row.section]
     const count =
       row.section === 'pool'
-        ? `${counted(row.contigs, 'contig')} · ${fmt.bp(row.length)}${row.shown !== row.contigs ? ` · ${fmt.int(row.shown)} shown` : ''}`
+        ? row.shown !== row.contigs
+          ? `${fmt.int(row.shown)} of ${counted(row.contigs, 'contig')}`
+          : `${counted(row.contigs, 'contig')} · ${fmt.bp(row.length)}`
         : `${fmt.int(row.genomes)}${row.shown !== row.genomes ? ` · ${fmt.int(row.shown)} shown` : ''}`
     const title = el('span', { class: 'curate-section-title', text: word })
     const countNode = el('span', { class: 'curate-section-count', text: count })

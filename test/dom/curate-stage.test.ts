@@ -266,11 +266,17 @@ describe('the curation stage', () => {
 
   it('opens a new genome’s name for typing once B has made it and it is counted', async () => {
     const { ctx } = await open()
+    // The stage hands the list the keyboard a frame after it opens: past that.
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
     ctx().model.selectContigs([18])
     key('b')
-    await settle()
-    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
-    const input = document.querySelector('.curate-rename') as HTMLInputElement | null
+    // Counted, then drawn: a few frames at most.
+    let input: HTMLInputElement | null = null
+    for (let k = 0; k < 20 && input === null; k++) {
+      await settle()
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+      input = document.querySelector('.curate-rename')
+    }
     expect(input?.value).toBe('curated_MAG_1')
   })
 })

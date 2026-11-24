@@ -221,6 +221,11 @@
   text-overflow: ellipsis;
   color: var(--text);
 }
+/* A genome's short name whole, before its change chip: the chip gives way. */
+.curate-row-genome .curate-row-name {
+  flex: 0 1 auto;
+  min-width: min(11ch, 100%);
+}
 
 .curate-row-contig .curate-row-name {
   color: var(--text-dim);
@@ -231,7 +236,11 @@
 }
 
 .curate-change {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+  margin-right: auto;
 }
 
 .curate-row-length,
@@ -298,9 +307,10 @@
 }
 
 .curate-row-suggested {
-  flex: 0 0 1.2rem;
+  flex: 0 0 auto;
+  min-width: 1.2rem;
   height: 1.2rem;
-  padding: 0;
+  padding: 0 0.25rem;
   border: 0;
   border-radius: 999px;
   background: var(--accent);

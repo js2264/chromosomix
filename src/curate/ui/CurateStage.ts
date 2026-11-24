@@ -60,9 +60,9 @@ export interface CurateParts {
   scatter(ctx: CurateContext): CuratePane
   selection(ctx: CurateContext, hooks: { rename(id: string): void; closeUp(): void; choose(kind: 'move' | 'merge' | 'link', anchor?: HTMLElement): void }): CurateCard
   suggestions(ctx: CurateContext, hooks: { frame(s: Suggestion): void }): CurateCard
-  history(ctx: CurateContext): CurateCard
+  history(ctx: CurateContext, options: { store: CurationStore }): CurateCard
   exporting(ctx: CurateContext, options: { stem: string; store: CurationStore }): CurateCard
-  about(ctx: CurateContext): CurateCard
+  about(ctx: CurateContext, options: { network: () => CurationNetworkResult | null }): CurateCard
   chooser(ctx: CurateContext, kind: 'move' | 'merge' | 'link', anchor: HTMLElement, onChoose: (target: CurateDropTarget) => void): CurateChooser
 }
 
@@ -136,6 +136,8 @@ export class CurateStage {
   private inkHeld: StageInk | null = null
   private readonly data: CurateData
   private network: Cancellable<CurationNetworkResult> | null = null
+  /** The contacts' read, once done: what *about the map* says of it. */
+  private networkSummary: CurationNetworkResult | null = null
   /** Where the contacts' read stands, on the stage's root for scripts (`data-contacts`). */
   private set networkState(state: 'gated' | 'reading' | 'read' | 'failed' | 'cancelled') {
     this.root.dataset.contacts = state
@@ -243,9 +245,9 @@ export class CurateStage {
         choose: (kind, anchor) => this.openChooser(kind, anchor),
       }),
       suggestions: props.parts.suggestions(this.ctx, { frame: (s) => this.frameSuggestion(s) }),
-      history: props.parts.history(this.ctx),
+      history: props.parts.history(this.ctx, { store }),
       export: props.parts.exporting(this.ctx, { stem: props.stem, store }),
-      about: props.parts.about(this.ctx),
+      about: props.parts.about(this.ctx, { network: () => this.networkSummary }),
     }
     this.cards.push(...Object.values(this.cardOf))
     this.side = el('div', { class: 'curate-side-body' }, modesCard)
@@ -413,6 +415,7 @@ export class CurateStage {
         if (this.closed || this.network !== request) return
         this.network = null
         this.networkState = 'read'
+        this.networkSummary = summary
         this.data.background = summary.background.rho
         this.hideStatus()
         this.model.recount(0)

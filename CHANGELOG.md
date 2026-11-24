@@ -46,8 +46,7 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   contig's genome; the File card counts MAGs and elements apart and says the binning is curated; the
   Binning QC card sets the file's pool beside the curated one. The heading's word reads `genomes ·
   curated · 7 steps`, and its arrow puts the file's binning back, carrying the view to where a
-  renamed or merged genome went. A workspace and a link carry the curation. Not yet: the stage that
-  makes one.
+  renamed or merged genome went. A workspace and a link carry the curation.
 
 ### Changed
 

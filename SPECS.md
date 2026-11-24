@@ -17285,10 +17285,10 @@ the whole session drawn through the curated binning. It is the whole-metagenome 
 which edits one genome's scaffolds.
 
 **Status: being built.** Every subsection below describes what will be, and says *built* as it lands:
-so far the model of a curation and its store (§33.2), the stage's frame, list, review and keys
-(§33.3), the session drawn through the curated binning (§33.4), and the method — the contig network,
-affinity, the background, the suggestions and their confidence, and miComplete's numbers from the
-markers (§33.5). It is a **dev feature** (§29), `curate`, throughout. The design it was written from — the
+so far the model of a curation and its store (§33.2), the stage — its frame, list, review, keys,
+contact map, scatter, cards and chooser (§33.3) —, the session drawn through the curated binning
+(§33.4), the method — the contig network, affinity, the background, the suggestions and their
+confidence, and miComplete's numbers from the markers (§33.5) — and the tables (§33.8). It is a **dev feature** (§29), `curate`, throughout. The design it was written from — the
 decisions and who made them, the method with the numbers it was held to on the mock community — is
 `docs/genome-curation.md`. §13's first rule is untouched: **the app never modifies a file it
 opened.** A curation is a lens over the file, and what it produces is new files.
@@ -17467,8 +17467,9 @@ stage opened again does not read it again.
 *Built*: the frame, the list, the order, the colours, the names, the drop grammar, the readout, the
 modes, the questions, the band and its price, auto and its holding back, the keys and the contacts'
 read (`curate/ui/CurateStage.ts`, `curate/model.ts`, `curate/questions.ts`, `curate/price.ts`,
-`curate/order.ts`, `curate/colours.ts`, `curate/names.ts`, `curate/drop.ts`, `curate/listRows.ts`).
-*Being built*: the three pictures and the inspector's cards.
+`curate/order.ts`, `curate/colours.ts`, `curate/names.ts`, `curate/drop.ts`, `curate/listRows.ts`);
+the contact map and the GC × coverage scatter (`curate/ui/ContactPane.ts`, `ScatterPane.ts`); the
+inspector's cards and the chooser (`curate/ui/cards/`, `Chooser.ts`). *Being built*: the host map.
 
 ### 33.4 The session through the curated binning
 
@@ -17548,7 +17549,7 @@ overview and a task's pass read every pixel, as without a curation; a balanced r
 column whole, once.
 
 *Built*: all of the above (`metacooler/curationLens.ts`, `curate/places.ts`,
-`curate/CurationChip.ts`). *Not yet*: the stage the heading's word opens (§33.3); a genome's edit
+`curate/CurationChip.ts`). *Not yet*: a genome's edit
 (§27.10) checked against the curated genome's contigs, which is kept and applied by the contigs it
 names; the command line, whose line for a task on a curated map says it measures the file as it is;
 and a deck's companions, drawn as their files are.
@@ -17634,7 +17635,10 @@ modifies a file it opened (§13). Each through the save dialog (§26.6), named a
 Tab-separated, one header line, numbers to four significant places. The card prints the two commands
 with a copy button each, and says what a reassignment keeps of the file: metaTOR's clustering rounds
 as they were, a changed genome's own columns as they were, and no weight that depends on the
-assignment. *Built* (`curate/exports.ts`); *being built*, the card.
+assignment. *Built* (`curate/exports.ts`, `curate/ui/cards/ExportCard.ts`): on MM133, the four
+tables of a curation of sixteen steps, given to `metacooler reassign` and then `annotate`, make a
+map whose binning reads back as the stage's — every contig's genome, every genome's kind and every
+link.
 
 ### 33.9 Costs
 

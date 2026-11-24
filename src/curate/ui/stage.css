@@ -75,10 +75,15 @@
 .curate-readout {
   flex: 1 1 auto;
   font-size: calc(var(--step--1) * var(--text-scale, 1));
+  line-height: 1.25;
   min-width: 0;
+  /* Two lines where one does not hold it all: the tally is the stage's state. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
