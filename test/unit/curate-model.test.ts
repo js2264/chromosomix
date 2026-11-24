@@ -82,17 +82,25 @@ describe('the controller', () => {
     expect(model.answer?.genomes.length).toBe(4)
   })
 
-  it('lays out the MAGs, an organism’s fragments side by side, then the elements, and keeps the order across a step', async () => {
+  it('lays out the MAGs in the file’s order, then the elements, and keeps the order across a step', async () => {
     const { model, store } = setup()
     await model.settled()
     const order = model.order
-    expect(order[order.length - 1]).toBe('P')
-    expect(Math.abs(order.indexOf('X1') - order.indexOf('X2'))).toBe(1)
+    expect(order).toEqual(['X1', 'X2', 'Y', 'Z', 'P'])
     // A new genome made of X2's contigs sits beside X2.
     store.apply({ op: 'create', id: 'curated:1', name: 'half', kind: 'mag', contigs: ['x4', 'x5'] })
     await model.settled()
     expect(model.order.indexOf('curated:1')).toBe(model.order.indexOf('X2') + 1)
     expect(model.order.filter((id) => id !== 'curated:1')).toEqual(order)
+  })
+
+  it('tidies on demand: an organism’s fragments side by side, its element beside it', async () => {
+    const { model } = setup()
+    await model.settled()
+    model.tidy()
+    const order = model.order
+    expect(Math.abs(order.indexOf('X1') - order.indexOf('X2'))).toBe(1)
+    expect(order[order.length - 1]).toBe('P')
   })
 
   it('moves a genome whose kind changes to its kind’s block', async () => {

@@ -244,14 +244,27 @@ export class CurateModel {
     return this.orderHeld.map((id) => index.get(id)).filter((g): g is number => g !== undefined)
   }
 
-  /** Lay the genomes out afresh: densest pairs side by side (`curate/order.ts`). */
-  reorder(): void {
+  /**
+   * Lay the genomes out afresh, densest pairs side by side (`curate/order.ts`):
+   * *tidy*, asked for — never after a step, so nothing moves under the hand.
+   */
+  tidy(): void {
     if (this.answerHeld === null) return
-    this.orderHeld = this.freshOrder(this.answerHeld)
+    this.orderHeld = this.chainedOrder(this.answerHeld)
     this.emit('state')
   }
 
+  /**
+   * The order the stage opens on: the file's — MAGs, then elements, each in
+   * the file's order, a genome a step created after them. A binner's sibling
+   * bins are neighbours there (metaTOR's `…_00700_00001`, `…_00700_00002`), and
+   * it is the order the reader knows.
+   */
   private freshOrder(answer: CurationStateResult): string[] {
+    return answer.genomes.map((genome) => genome.id)
+  }
+
+  private chainedOrder(answer: CurationStateResult): string[] {
     const size = (g: number): number => answer.genomes[g].length
     const mags: number[] = []
     const elements: number[] = []
