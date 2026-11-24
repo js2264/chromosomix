@@ -1,1 +1,27 @@
 /* The curation stage (SPECS §33.3): cards. Tokens only, both themes from the app's own. */
+
+/* ---- The card (cards/card.ts): shared by every card of the inspector ---- */
+
+/* The body stands under the heading with the card's own rhythm. */
+.curate-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+/* A name in a heading keeps its case: the heading's words are uppercased, a
+   genome's name is not a word to shout. */
+.curate-card .edit-card-head .is-name {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+}
+
+.curate-card-acts {
+  margin-top: 0.15rem;
+}
+
+.curate-card-acts .edit-act {
+  white-space: nowrap;
+}
