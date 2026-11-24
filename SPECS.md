@@ -17593,7 +17593,11 @@ one at 80%); the links metaTOR did not make, 11 of 12; the one unlink, metaTOR's
 **Quality.** Where the map holds each contig's marker genes (`metator markers`), a genome's
 Completeness, Redundancy, Weighted completeness and Weighted redundancy are miComplete's own
 arithmetic over its contigs' markers — rounding to the last bit, Python's half to even on the binary
-value — under the set with the higher weighted completeness. *Built* (`curate/quality.ts`).
+value — under the set with the higher weighted completeness. For a genome as the binner wrote it
+these are miComplete's numbers exactly; for one a curation regroups they are an **estimate**: the
+genes were found under the file's binning, and miComplete run on the new group trains its gene
+finder on that group alone — on MM133, 23 of 28 curated groups come out the same, and a chimera of
+two organisms 1.67 redundant where miComplete says 1.18. *Built* (`curate/quality.ts`).
 
 ### 33.6 What the review learns
 
