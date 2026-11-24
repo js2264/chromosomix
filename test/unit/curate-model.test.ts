@@ -11,8 +11,8 @@ import { describe, expect, it } from 'vitest'
 import { CuratedBinning, fileBinning, type Curation } from '../../src/genome/curation'
 import { stateAnswer } from '../../src/curate/answer'
 import { AUTO_THRESHOLD, INITIAL_WEIGHTS, OFFER_FLOOR } from '../../src/curate/method'
-import { CurateModel, describeSuggestion, displayPercent, type CurateChange, type CurateClient } from '../../src/curate/model'
-import type { KindWeights } from '../../src/curate/suggest'
+import { CurateModel, describeSuggestion, displayPercent, queueOrder, type CurateChange, type CurateClient } from '../../src/curate/model'
+import type { KindWeights, Suggestion } from '../../src/curate/suggest'
 import { CurationStore } from '../../src/state/curation'
 import type { CurationStateResult } from '../../src/worker/curateProtocol'
 import { community } from '../support/curateCommunity'
@@ -47,6 +47,15 @@ function setup(options: { hold?: boolean } = {}): {
   model.subscribe((change) => changes.push(change))
   return { model, store, asked, changes }
 }
+
+describe('the queue’s order', () => {
+  const s = (kind: Suggestion['kind'], confidence: number, key = `${kind}${confidence}`): Suggestion =>
+    ({ key, kind, confidence }) as Suggestion
+  it('puts the likely first, and among them merges, moves, recruits, then links; the surest first in a kind', () => {
+    const list = [s('link', 0.99), s('recruit', 0.6), s('merge', 0.3), s('move', 0.7), s('merge', 0.55), s('unlink', 0.8), s('merge', 0.95)]
+    expect(list.sort(queueOrder).map((x) => x.key)).toEqual(['merge0.95', 'merge0.55', 'move0.7', 'recruit0.6', 'link0.99', 'unlink0.8', 'merge0.3'])
+  })
+})
 
 describe('the controller', () => {
   it('counts the file’s binning on open, and again after every step', async () => {
@@ -94,13 +103,14 @@ describe('the controller', () => {
     expect(model.order.slice(-2)).toEqual(['P', 'Z'])
   })
 
-  it('offers the suggestions at the floor or more, the surest first, and drops one turned down', async () => {
+  it('offers the suggestions at the floor or more, the likely merges first, and drops one turned down', async () => {
     const { model } = setup()
     await model.settled()
     const offered = model.offered()
     expect(offered.length).toBeGreaterThan(0)
     expect(offered.every((s) => s.confidence >= OFFER_FLOOR)).toBe(true)
-    for (let k = 1; k < offered.length; k++) expect(offered[k - 1].confidence).toBeGreaterThanOrEqual(offered[k].confidence)
+    for (let k = 1; k < offered.length; k++) expect(queueOrder(offered[k - 1], offered[k])).toBeLessThan(0)
+    expect(offered[0].kind).toBe('merge')
     const merge = offered.find((s) => s.kind === 'merge')
     expect(merge).toBeDefined()
     if (merge === undefined) return

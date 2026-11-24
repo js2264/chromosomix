@@ -355,16 +355,18 @@ export class CurateModel {
   }
 
   /**
-   * The suggestions on offer: at {@link OFFER_FLOOR} or more and not turned
-   * down, the surest first.
+   * The suggestions on offer — at {@link OFFER_FLOOR} or more and not turned
+   * down — in the order a curator answers them: the likely ones first, and
+   * among them the merges, then the moves, the recruits and the host links,
+   * since a merge changes every affinity of the genome it makes (on MM133 one
+   * merge answers eighteen moves between three fragments); the surest first
+   * within a kind.
    */
   offered(): Suggestion[] {
     const answer = this.answerHeld
     if (answer === null) return []
     const rejected = new Set(this.store.learned.rejected)
-    return answer.suggestions
-      .filter((s) => s.confidence >= OFFER_FLOOR && !rejected.has(s.key))
-      .sort((a, b) => b.confidence - a.confidence || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    return answer.suggestions.filter((s) => s.confidence >= OFFER_FLOOR && !rejected.has(s.key)).sort(queueOrder)
   }
 
   /** The suggestions on offer at {@link LIKELY} or more. */
@@ -648,6 +650,16 @@ export class CurateModel {
       linksDropped: [...fileLinks].filter((key) => !liveLinks.has(key)).length,
     }
   }
+}
+
+/** Where each kind is answered in the queue: what changes the most first. */
+const KIND_RANK: Record<Suggestion['kind'], number> = { merge: 0, move: 1, recruit: 2, link: 3, unlink: 3 }
+
+/** The queue's order (see {@link CurateModel.offered}). */
+export function queueOrder(a: Suggestion, b: Suggestion): number {
+  const likelyA = a.confidence >= LIKELY ? 0 : 1
+  const likelyB = b.confidence >= LIKELY ? 0 : 1
+  return likelyA - likelyB || KIND_RANK[a.kind] - KIND_RANK[b.kind] || b.confidence - a.confidence || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)
 }
 
 /** A suggestion as the history keeps it: its words, its confidence, what it rested on. */
