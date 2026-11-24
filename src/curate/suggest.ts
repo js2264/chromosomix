@@ -19,6 +19,7 @@
  * tell two plasmids of one host apart (`docs/genome-curation.md` §5.3).
  */
 
+import { fmt } from '../units'
 import type { CuratedBinning, CurationStep } from '../genome/curation'
 import {
   affinity,
@@ -471,7 +472,7 @@ function contigSuggestions(
       words: `recruit ${list.length.toLocaleString('en-US')} contigs into ${target.name}`,
       confidence: Math.min(...list.map((s) => s.confidence)),
       features: list[list.length - 1].features,
-      evidence: [`${formatLength(length)}`, `each at ${percent(SURE)} or more`, `${grouped(list.reduce((sum, s) => sum + s.contacts, 0))} contacts`],
+      evidence: [fmt.bp(length), `each at ${percent(SURE)} or more`, `${grouped(list.reduce((sum, s) => sum + s.contacts, 0))} contacts`],
       genomes: [g],
       contigs,
       affinity: Math.min(...list.map((s) => s.affinity)),
@@ -577,9 +578,3 @@ function links(
   return out
 }
 
-/** A length in the app's display form: `412 kb`, `1.65 Mb`. */
-export function formatLength(bp: number): string {
-  if (bp >= 1e6) return `${(bp / 1e6).toFixed(2)} Mb`
-  if (bp >= 1e3) return `${(bp / 1e3).toFixed(bp >= 1e5 ? 0 : 1)} kb`
-  return `${Math.round(bp)} bp`
-}
