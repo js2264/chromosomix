@@ -18,6 +18,7 @@ import { CuratedBinning } from '../genome/curation'
 import type { MetaCooler } from '../metacooler/MetaCooler'
 import { readFileBinning, type FileBinningRead } from '../curate/base'
 import { background, tally, visibility } from '../curate/method'
+import { focusPicture } from '../curate/focus'
 import { binContigs, NetworkBuilder } from '../curate/network'
 import { curationState, methodBinning, neighbourLists, type CurationEvidence } from '../curate/suggest'
 import type { CurationBaseResult, CurationFocusResult, CurationNetworkResult, CurationRequest, CurationStateResult } from './curateProtocol'
@@ -159,25 +160,35 @@ export function handleCurationState(mc: MetaCooler, request: Extract<CurationReq
 export function handleCurationFocus(mc: MetaCooler, request: Extract<CurationRequest, { kind: 'curationFocus' }>): CurationFocusResult {
   const { evidence } = evidenceOf(mc)
   const contigs = Int32Array.from(request.contigs)
-  const at = new Map<number, number>()
-  contigs.forEach((c, k) => at.set(c, k))
-  const i: number[] = []
-  const j: number[] = []
-  const contacts: number[] = []
+  const slot = new Map<number, number>()
   contigs.forEach((c, k) => {
+    if (!slot.has(c)) slot.set(c, k)
+  })
+  // Each pair once, from the side of its lower slot, then sorted by slot so a
+  // readout finds a pair by binary search whatever order the contigs came in.
+  const found: Array<[number, number, number]> = []
+  contigs.forEach((c, k) => {
+    if (slot.get(c) !== k) return
     for (let n = evidence.offsets[c]; n < evidence.offsets[c + 1]; n++) {
-      const other = at.get(evidence.neighbours[n])
+      const other = slot.get(evidence.neighbours[n])
       if (other === undefined || other <= k) continue
-      i.push(k)
-      j.push(other)
-      contacts.push(evidence.counts[n])
+      found.push([k, other, evidence.counts[n]])
     }
   })
-  return {
+  found.sort((x, y) => x[0] - y[0] || x[1] - y[1])
+  const within = Float64Array.from(contigs, (c) => evidence.network.within[c])
+  const t = Float64Array.from(contigs, (c) => evidence.visibility[c])
+  let total = 0
+  for (let c = 0; c < evidence.visibility.length; c++) total += evidence.visibility[c]
+  const answer = {
     contigs,
-    i: Int32Array.from(i),
-    j: Int32Array.from(j),
-    contacts: Float64Array.from(contacts),
-    within: Float64Array.from(contigs, (c) => evidence.network.within[c]),
+    i: Int32Array.from(found, (f) => f[0]),
+    j: Int32Array.from(found, (f) => f[1]),
+    contacts: Float64Array.from(found, (f) => f[2]),
+    within,
+    visibility: t,
+    total,
+    background: evidence.background.rho,
   }
+  return { ...answer, picture: focusPicture(contigs.length, answer, evidence.background.rho) }
 }

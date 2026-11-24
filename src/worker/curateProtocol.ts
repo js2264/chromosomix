@@ -10,6 +10,7 @@
 
 import type { BaseBinning, Curation, CuratedLink, FileBinning, GenomeKind } from '../genome/curation'
 import type { Background } from '../curate/method'
+import type { FocusContacts, FocusPicture } from '../curate/focus'
 import type { Quality } from '../curate/quality'
 import type { ContigPlaces, GenomePairs, HostPair, KindWeights, Suggestion } from '../curate/suggest'
 
@@ -66,16 +67,26 @@ export interface CurationStateResult {
   suggestions: Suggestion[]
 }
 
-/** The contacts among some contigs, each pair once, for the stage's close-up. */
-export interface CurationFocusResult {
-  /** The contigs asked, as indices of the file's. */
+/**
+ * The contacts among some contigs, each pair once, for the stage's close-up:
+ * the numbers its readout shows, and the picture it draws (`curate/focus.ts`).
+ */
+export interface CurationFocusResult extends FocusContacts {
+  /** The contigs asked, in the order asked, as indices of the file's. */
   contigs: Int32Array
-  /** Pairs `i < j` of indices into {@link contigs}, and their contacts. */
+  /** Pairs `i < j` of indices into {@link contigs}, sorted by `i` then `j`, and their contacts. */
   i: Int32Array
   j: Int32Array
   contacts: Float64Array
   /** Each contig's contacts within itself. */
   within: Float64Array
+  /** Each contig's visibility, and every contig's of the map summed. */
+  visibility: Float64Array
+  total: number
+  /** The network's background ratio. */
+  background: number
+  /** One cell a contig; `null` past `FOCUS_PICTURE_CAP` contigs. */
+  picture: FocusPicture | null
 }
 
 /** The requests, as `WorkerRequest` members. */
