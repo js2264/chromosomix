@@ -10,10 +10,11 @@
  * So the keys are written here once, beside the reader's own list
  * (`state/ViewState.ts`'s `KEY_ORDER`), and the test holds the two to each
  * other in both directions: no key documented that the reader does not take,
- * none taken that the page leaves out but those of the multi-genome format,
- * which is a dev feature (§29.5) and is named nowhere a reader without the
- * switch can see. Every value list that the app keeps as a list — views,
- * transforms, colour maps, comparisons, smoothings — is read from that list.
+ * none taken that the page leaves out but those of the dev features — the
+ * multi-genome format's and the ideogram view's (§29.5) — which are named
+ * nowhere a reader without the switch can see. Every value list that the app
+ * keeps as a list — views, transforms, colour maps, comparisons, smoothings —
+ * is read from that list.
  */
 
 import { COLORMAP_NAMES } from '../render/colormaps'
@@ -53,8 +54,11 @@ export const LINK_VIEWS: ReadonlyArray<{ view: ViewKind; meaning: string }> = [
   { view: 'cells', meaning: 'the table of an `.scool`’s cells, to pick the ones summed into the map' },
 ]
 
-/** Keys the reader takes that this page does not name: the multi-genome format's (§29). */
-export const UNDOCUMENTED_KEYS: readonly string[] = ['genome', 'genome2', 'genomes']
+/**
+ * Keys the reader takes that this page does not name: the dev features' (§29) —
+ * the multi-genome format's and the ideogram's.
+ */
+export const UNDOCUMENTED_KEYS: readonly string[] = ['genome', 'genome2', 'genomes', 'ideogram']
 
 const SMOOTHS = SMOOTH_CHOICES.map((choice) => choice.id)
 
