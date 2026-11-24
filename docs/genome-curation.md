@@ -261,7 +261,8 @@ From the stage's export card, each a new file through the save dialog (§26.6), 
 
 | File | What it holds |
 |---|---|
-| `<map>.contig-genome.tsv` | `contig_name	genome_name`, a header and every contig of the file — an unbinned one as `__unbinned__` — so `metacooler reassign --contigs` makes the curated binning the map's, elements included |
+| `<map>.contig-genome.tsv` | `contig_name	genome_name`, a header and every contig of the file — an unbinned one as `__unbinned__` — so `metacooler reassign --contigs` makes the curated binning the map's |
+| `<map>.genomes.tsv` | every curated genome with metaTOR's `mge` (`True`/`False`) and a MAG's elements (`n_mges`, `mges`), for `metacooler annotate --genomes --replace` after the reassignment — without it a renamed or new element is not an element when the map is opened again, since `reassign` carries the file's columns by name and metaTOR's rounds as they were |
 | `<map>.elements.tsv` | one row per element: its name, its contigs, its length and its hosts |
 | `<map>.element-hosts.tsv` | one row per element and MAG in contact: the affinity, the contacts, the share, the confidence, and whether a link holds between them — from the file, taken, added by the hand or turned down — and who decided it |
 
@@ -301,7 +302,34 @@ asserted on the demo map with its truth table.
 
 ## 8. The stage
 
-*(Written with the stage's design; see SPECS §33.3.)*
+Three concepts were written by independent designers — *evidence-led* (the contact evidence leads,
+one selection lit in every picture), *queue-led* (the suggestions drive, as grouped questions with
+their price) and *object-led* (genomes and contigs picked up and put down, every drop previewed) —
+and scored by two judges on intuitiveness, speed, fit with the house, scale, how buildable, and
+polish. Both judges put the evidence-led concept first, and named what to graft from the others; the
+stage is that synthesis (SPECS §33.3):
+
+- **From the evidence-led concept**: the frame — the genome list on the left, never off the screen;
+  the pictures in the middle; the inspector's cards on the right — one selection and one hover lit in
+  every part; the list's anatomy, filter and chips; the drop grammar; cells drawn at their lower bound,
+  so thin evidence reads pale; Escape innermost first, never closing the stage.
+- **From the queue-led concept**: one large picture with the other two as live thumbnails, the large
+  one following the review; **questions, not pairs** — an organism's fragments one question at its
+  weakest needed join, moves by where from and to, recruits by where to, an element's links together —
+  in dependency order, merges first; the **price** printed before any key, in metaTOR's grades, `--warn`
+  for a demotion and `--ok` for high quality; the running tally on the readout's idle line; bulk
+  answers that hold back what would lower a grade.
+- **From the object-led concept**: the genomes **chained** so an organism's fragments are side by side,
+  kept across steps — on MM133 all five fragmented organisms one block each, where the file's order
+  joins one —; short names, a section's shared prefix printed once; one undo for a gesture's steps; the
+  close-up built from the contact network; drop targets docked at the list's foot.
+- **The judges' pitfalls, met**: the stage's order is its own, and the session's is `reassign`'s
+  (§4); the headline numbers are the **weighted** pair, with metaTOR's grades in full (none under half
+  complete); the export adds the `genomes` table for `annotate`, and says what a reassignment keeps;
+  the price names the markers a step makes duplicated; a name a contig has, or a colon, is refused.
+- **Left for later**: a question weighing an element's held hosts against each other (an unlink is
+  suggested only for a link the method gives under 15%, so *Y. pseudotuberculosis*'s plasmid keeps
+  its file link to *Y. enterocolitica* until the reader drops it).
 
 ---
 
@@ -322,7 +350,8 @@ off, none of it is drawn and a kept curation is left in storage as it was. It is
    pass; the method and the quality, held to the truth and to miComplete.
 4. The stage: the genomes list, the three pictures, the inspector, the modes, the exports.
 5. The lens: the session through the curated binning, and the heading's word.
-6. SPECS §33, the documentation site's page, the gallery.
+6. SPECS §33 and the gallery. The documentation site documents no dev feature (SPECS §32.3), so the
+   stage has no page there until it is public.
 
 ---
 
