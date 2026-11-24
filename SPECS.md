@@ -17171,7 +17171,8 @@ release's root copy is built, before anything is published; and **a page still m
 section a task cites that the notebook no longer has, stop the data script.
 
 **Dev features are absent from the site** as from every static text around the app (§29.5): the
-multi-genome format and everything that needs it, editing the reference, the dot plot, and the switch.
+multi-genome format and everything that needs it, editing the reference, the dot plot, curating the
+genomes, and the switch.
 
 ### 32.4 The look
 
