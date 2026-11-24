@@ -16789,6 +16789,10 @@ What is dev, and what switched off means for each:
   storage as it was. The dot plot in the stage's corner (§27.3) is the stage's, and goes with it.
 - **`dotplot`** — the task, and with it the view on screen its figure is drawn as (§28.2); the view of
   its own in the link, once it is built (§28). Switched off, the task is not in the Analysis panel.
+- **`curate`** — curating a metagenome's binning (§33): the stage, its keys, the heading's word on the
+  genomes, the palette's *Curate the genomes*, the curation kept with a file, and every surface of the
+  lens the session is drawn through. Never without `metacool`, whose maps it curates. Switched off,
+  none of it is drawn and a kept curation is left in storage as it was.
 
 ### 29.4 What a dev feature left in a session
 
@@ -17258,3 +17262,86 @@ in place of main's tree; and **no commit in its footer**, so a page a push did n
 bytes as the push before and the archive branch stores it once. Its links are the pull-request
 suite's to check, at the root. **Documentation that does not build does not stop the preview**: the
 app is published without it, and the pull request's comment says so and links the run.
+
+## 33. Curating the genomes
+
+A stage where the reader curates a metagenome's binning — moves contigs between genomes, merges the
+fragments of one organism, recruits the contigs binning left out, gathers mobile genetic elements and
+says which genomes host them — guided by suggestions the app computes from the contacts and the
+marker genes, with every genome's completeness and redundancy recomputed as each step is made, and
+the whole session drawn through the curated binning. It is the whole-metagenome sibling of §27.10,
+which edits one genome's scaffolds.
+
+**Status: being built.** Every subsection below describes what will be, and says *built* as it lands:
+so far the model of a curation and its store (§33.2), and the method — the contig network, affinity,
+the background, the suggestions and their confidence, and miComplete's numbers from the markers
+(§33.5). It is a **dev feature** (§29), `curate`, throughout. The design it was written from — the
+decisions and who made them, the method with the numbers it was held to on the mock community — is
+`docs/genome-curation.md`. §13's first rule is untouched: **the app never modifies a file it
+opened.** A curation is a lens over the file, and what it produces is new files.
+
+### 33.2 A curation
+
+The **original** binning is the file's: each contig in the genome `/contigs/genome_id` names, or in
+none — `__unbinned__`, the **pool**, never a genome (§7.4). A genome is a **MAG**, or a **mobile
+element** when its name is a cluster's of metaTOR's round `mge` or its `mge` column says `True`; the
+clusters of round `mge` are elements even where the file did not make them genomes, and their contigs
+the element's. Its **host links** are round `mge`'s `hosts`. Every contig is in exactly one MAG, one
+element or the pool — by construction, since a contig's genome is one value — and a host link joins an
+element to a MAG and is never a membership.
+
+A **curation** is an ordered **history** of **steps** with a cursor, folded over the original:
+`move` contigs to a genome or the pool, `create` a genome of contigs (a MAG or an element), `merge`
+genomes of one kind under the first's name, `dissolve` a genome into the pool, `rename`, `retype` a
+MAG as an element or back (its links go), `link` and `unlink`. Steps name contigs and genome **ids** —
+a genome of the file's stored name, kept through renames; a created one, the id its step minted — so
+a step means what it meant when it was made, and one that no longer applies (a genome merged away, a
+contig the file lacks, an operation a newer build wrote) changes nothing. Each carries who made it —
+the reader, a suggestion, auto mode — when, and for a suggestion what it rested on. **Undo** and
+**redo** move the cursor; a step after an undo drops the steps past it. *Built* (`genome/curation.ts`,
+`genome/history.ts`, `state/curation.ts`).
+
+**It is a fact about the file**, kept as the reference edit is (§27.2): per file, in a saved workspace
+and a shared link. It carries a fingerprint of the binning it was made on — the contigs' names and
+lengths, which genome holds each, the genomes in order with their counts and kinds, and the links —
+and is **kept, not applied**, on a file whose binning differs, naming what differs first: `A held 3
+contigs when the curation was made and holds 2 here`.
+
+### 33.5 The method
+
+**The contig network.** One pass over the stored pixels sums the raw counts between every two
+contigs' bins, a pixel within one contig kept apart as its own; each contact once whichever triangles
+the map stores. Rows arrive sorted, so a contig's partners are summed in one dense row and emitted
+when the next contig's rows begin: the memory is the contigs and the pairs, never the pixels — 263,961
+pairs, a few megabytes, on the mock community. *Built* (`curate/network.ts`).
+
+**Affinity** is how densely a set of contigs `X` meets a genome `g`, against how densely `g`'s own
+contigs meet each other: `A(X, g) = O_Xg · t_g / (2 · t_X · O_gg)` — the contacts observed over the
+contacts random ligation expects (`t_X · t_g / T`, `t` the contacts of each with every other contig),
+over the same ratio for the genome with itself, so the library's depth, the genome's abundance and the
+contig's own visibility cancel. **1 is as densely as the genome's own contigs**; spurious ligation is
+a few hundredths. Between two genomes it is symmetric, `O_ab / (2 √(O_aa · O_bb))`. A genome with no
+contact between two of its contigs takes the median density of those that have one. Two guards make
+it safe on a few contacts: its **lower bound**, scaled by the one-sided 90% Poisson bound of the
+contacts it rests on (`χ²(0.1; 2o) / 2`, to ten digits of SciPy's); and the **background** — the rate
+of spurious ligation, the median observed over expected of every two MAGs, measured from the file's
+own binning (0.0237 on the mock community) — out of which a suggestion's contacts must stand,
+`P(Poisson) ≤ 10⁻³`.
+
+**The suggestions**, each a logistic over a few features with its weights' reasons in
+`curate/method.ts`, offered at 15%, at the top of review from 50%, taken by auto mode from 80%:
+**merge** two MAGs (affinity, contacts, the marker genes they share); **recruit** an unbinned contig
+into the MAG it meets most densely, past the next; **move** a contig to a MAG it meets more densely
+than its own, against a prior that the binning put it there; **link** an element to a MAG (affinity,
+the share of the element's contacts with MAGs); **unlink** a link whose own confidence is under 15%.
+Recruits at 80% or more into one MAG are one suggestion. **A contig the method takes to be misplaced
+explains its own contacts**: whatever it carries between its MAG and another is not counted for their
+merge, nor for a link, until its move is answered. Counted again after every step. *Built*
+(`curate/suggest.ts`): on the mock community, the merges at 50% are 13 of 13 right; the recruits,
+314 contigs and 1.58 Mb at 96.6% (98.6% at 80%); the links metaTOR did not make, 11 of 12; the one
+unlink, metaTOR's *Vibrio* phage on a *Corynebacterium* MAG.
+
+**Quality.** Where the map holds each contig's marker genes (`metator markers`), a genome's
+Completeness, Redundancy, Weighted completeness and Weighted redundancy are miComplete's own
+arithmetic over its contigs' markers — rounding to the last bit, Python's half to even on the binary
+value — under the set with the higher weighted completeness. *Built* (`curate/quality.ts`).

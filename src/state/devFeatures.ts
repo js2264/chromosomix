@@ -38,6 +38,12 @@ export const DEV_FEATURES = {
   edit: 'Editing the reference is not validated yet.',
   /** Two sequences on two axes (§28). */
   dotplot: 'The dot plot is not validated yet.',
+  /**
+   * Curating a metagenome's binning (§33): the stage, its keys, the heading's
+   * word on the genomes and the lens the session is drawn through. Never
+   * without `metacool`, whose maps it curates.
+   */
+  curate: 'Curating a metagenome’s binning is not validated yet.',
 } as const
 
 export type DevFeature = keyof typeof DEV_FEATURES
