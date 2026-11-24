@@ -264,10 +264,10 @@
   "pulls": [
     {
       "number": 182,
-      "commit": "b7427bc",
+      "commit": "94fe203",
       "title": "Draw a metagenome's map as a circle or as two lines",
       "branch": "js/circular-view",
-      "date": "2026-11-20T16:08:32Z"
+      "date": "2026-11-24T20:54:30Z"
     }
   ]
 }
