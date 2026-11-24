@@ -314,3 +314,23 @@ describe('as it would be', () => {
     expect(model.shown).toBe(model.answer)
   })
 })
+
+describe('the preview, drawn or priced', () => {
+  it('prices a step without drawing it until asked, and counts the file’s binning once a step is made', async () => {
+    const { model, store } = setup()
+    await model.settled()
+    expect(model.fileAnswer).toBe(model.answer)
+    model.preview({ op: 'merge', into: 'X1', genomes: ['X2'] }, false)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(model.previewed).not.toBeNull()
+    expect(model.shown).toBe(model.answer)
+    model.drawPreview(true)
+    expect(model.shown).toBe(model.previewed)
+    expect(model.previewing).toBe(true)
+    store.apply({ op: 'merge', into: 'X1', genomes: ['X2'] })
+    await model.settled()
+    expect(model.fileAnswer?.genomes.length).toBe(5)
+    expect(model.answer?.genomes.length).toBe(4)
+  })
+})

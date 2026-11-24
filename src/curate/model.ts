@@ -96,6 +96,9 @@ export class CurateModel {
   private autoRun: { stopped: boolean } | null = null
   private waiters: Array<() => void> = []
   private previewHeld: { key: string; step: CurationStep; answer: CurationStateResult | null } | null = null
+  /** Whether the pictures draw the preview (Space held), or it is only priced. */
+  private previewDrawn = false
+  private fileHeld: CurationStateResult | null = null
   private previewTicket = 0
   private previewRequest: Cancellable<CurationStateResult> | null = null
   private readonly listeners = new Set<(change: CurateChange) => void>()
@@ -222,9 +225,30 @@ export class CurateModel {
     for (const resolve of waiting) resolve()
   }
 
+  private countingFile = false
+
+  /** Count the file's own binning once, for what a genome was before the curation. */
+  private countFile(): void {
+    if (this.countingFile) return
+    this.countingFile = true
+    this.client.state(null, this.weights).promise.then(
+      (answer) => {
+        this.countingFile = false
+        if (this.disposed || (this.fileHeld?.counted === true && !answer.counted)) return
+        this.fileHeld = answer
+        this.emit('state')
+      },
+      () => {
+        this.countingFile = false
+      },
+    )
+  }
+
   private take(answer: CurationStateResult): void {
     const first = this.answerHeld === null
     this.answerHeld = answer
+    if (this.store.applied === 0 && answer.counted) this.fileHeld = answer
+    else if (this.fileHeld === null || !this.fileHeld.counted) this.countFile()
     this.staleHeld = false
     this.errorHeld = null
     if (first) this.orderHeld = this.freshOrder(answer)
@@ -246,13 +270,17 @@ export class CurateModel {
    * counted, kept by the step (asking the same twice counts once) and dropped
    * by any step made. `null` lets go of it.
    */
-  preview(step: CurationStep | null): void {
+  preview(step: CurationStep | null, draw = true): void {
     if (step === null) {
       this.clearPreview()
       return
     }
     const key = JSON.stringify(step)
-    if (this.previewHeld?.key === key) return
+    if (this.previewHeld?.key === key) {
+      this.drawPreview(draw)
+      return
+    }
+    this.previewDrawn = draw
     this.previewRequest?.cancel()
     const ticket = ++this.previewTicket
     this.previewHeld = { key, step, answer: null }
@@ -282,9 +310,29 @@ export class CurateModel {
     return this.previewHeld?.answer ?? null
   }
 
-  /** What the pictures draw: the binning as it would be while one is previewed and counted, else as it is. */
+  /** What the pictures draw: the binning as it would be while a preview is drawn and counted, else as it is. */
   get shown(): CurationStateResult | null {
-    return this.previewHeld?.answer ?? this.answerHeld
+    return (this.previewDrawn ? this.previewHeld?.answer : null) ?? this.answerHeld
+  }
+
+  /** Draw the preview held, or only price it: Space held and let go in review. */
+  drawPreview(on: boolean): void {
+    if (on === this.previewDrawn) return
+    this.previewDrawn = on
+    if (this.previewHeld?.answer !== null && this.previewHeld !== null) this.emit('preview')
+  }
+
+  /** Whether the pictures draw a preview now. */
+  get previewing(): boolean {
+    return this.previewDrawn && this.previewHeld?.answer !== null && this.previewHeld !== null
+  }
+
+  /**
+   * The file's own binning, counted: what a genome was before the curation —
+   * the first answer where nothing is applied, else counted once on its own.
+   */
+  get fileAnswer(): CurationStateResult | null {
+    return this.fileHeld
   }
 
   private clearPreview(): void {
@@ -293,6 +341,7 @@ export class CurateModel {
     this.previewRequest?.cancel()
     this.previewRequest = null
     this.previewHeld = null
+    this.previewDrawn = false
     if (!this.disposed) this.emit('preview')
   }
 

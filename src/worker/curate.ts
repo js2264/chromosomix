@@ -20,7 +20,7 @@ import { readFileBinning, type FileBinningRead } from '../curate/base'
 import { background, tally, visibility } from '../curate/method'
 import { focusPicture } from '../curate/focus'
 import { binContigs, NetworkBuilder } from '../curate/network'
-import { stateAnswer } from '../curate/answer'
+import { bareAnswer, stateAnswer } from '../curate/answer'
 import { methodBinning, neighbourLists, type CurationEvidence } from '../curate/suggest'
 import type { CurationBaseResult, CurationFocusResult, CurationNetworkResult, CurationRequest, CurationStateResult } from './curateProtocol'
 
@@ -133,8 +133,11 @@ function evidenceOf(mc: MetaCooler): { kept: Held; evidence: CurationEvidence } 
 }
 
 export function handleCurationState(mc: MetaCooler, request: Extract<CurationRequest, { kind: 'curationState' }>): CurationStateResult {
-  const { kept, evidence } = evidenceOf(mc)
-  return stateAnswer(evidence, CuratedBinning.of(kept.read.base, request.curation), request.weights ?? {})
+  const kept = keptRead(mc)
+  const binning = CuratedBinning.of(kept.read.base, request.curation)
+  // Before the contacts are read: what the markers and the binning say alone.
+  if (kept.evidence === null) return bareAnswer(binning, kept.read.base.lengths, kept.read.markers)
+  return stateAnswer(kept.evidence, binning, request.weights ?? {})
 }
 
 export function handleCurationFocus(mc: MetaCooler, request: Extract<CurationRequest, { kind: 'curationFocus' }>): CurationFocusResult {

@@ -14,6 +14,7 @@
  */
 
 import './ui/styles.css'
+import './curate/ui/curate.css'
 
 import { App } from './app/App'
 import { embedded } from './embed'

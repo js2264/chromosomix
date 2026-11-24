@@ -47,3 +47,18 @@ describe('the suggestions on a small community', () => {
     expect(after.quality[merged.indexOfId('X1') ?? -1]?.completeness).toBe(1)
   })
 })
+
+describe('before the contacts are read', () => {
+  it('answers the genomes, their quality and the links, and nothing the contacts make', async () => {
+    const { bareAnswer } = await import('../../src/curate/answer')
+    const { base, evidence } = community()
+    const bare = bareAnswer(CuratedBinning.of(base, null), base.lengths, evidence.markers)
+    expect(bare.counted).toBe(false)
+    expect(bare.genomes.map((genome) => genome.name)).toEqual(['X1', 'X2', 'Y', 'Z', 'P'])
+    expect(bare.genomes[3].quality?.completeness).toBe(1)
+    expect(bare.genomes[4].quality).toBeNull()
+    expect(bare.links).toEqual([{ element: 'P', mag: 'Z', fromFile: true }])
+    expect(bare.suggestions).toEqual([])
+    expect(bare.contigs.best.length).toBe(base.names.length)
+  })
+})

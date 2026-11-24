@@ -1,0 +1,349 @@
+/* The curation stage's genome list (SPECS §33.3). */
+
+/* ---------------------------------------------------------------------------
+   The genome list.
+   ------------------------------------------------------------------------- */
+
+.curate-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  container-type: inline-size;
+  background: var(--bg);
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+}
+
+.curate-list-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem 0.45rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.curate-filter {
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--text);
+  font: inherit;
+}
+.curate-filter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.curate-filter-note {
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+.curate-filter-missing {
+  color: var(--warn);
+}
+
+.curate-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.curate-sorts {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.curate-sort-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+.curate-sort {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.05rem 0.2rem;
+}
+
+.curate-list-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.curate-list-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  outline: none;
+}
+.curate-list-scroll:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.curate-list-spacer {
+  width: 1px;
+}
+
+.curate-row,
+.curate-list-sticky {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.55rem 0 0.35rem;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.curate-row:hover {
+  background: var(--bg-sunken);
+}
+
+.curate-row.is-lit {
+  background: var(--bg-muted);
+}
+
+/* A selected row: a fill and a rule, its text as it was (§26.3). */
+.curate-row.is-selected {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.curate-row.is-active {
+  outline: 1px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+/* What the suggestion in review names: its disc in the margin. */
+.curate-row.is-current::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.curate-row-section,
+.curate-list-sticky {
+  gap: 0.35rem;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  cursor: pointer;
+}
+.curate-list-sticky {
+  z-index: 2;
+  pointer-events: none;
+}
+.curate-row-section.is-drop-target,
+.curate-row-genome.is-drop-target {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  background: var(--accent-soft);
+}
+
+.curate-section-chevron {
+  display: inline-flex;
+  width: 1rem;
+  justify-content: center;
+}
+.curate-section-count {
+  margin-left: auto;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.curate-row-disclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.curate-row-disclosure:hover {
+  color: var(--accent);
+}
+
+/* A MAG's swatch is filled, an element's a ring, in the genome's own hue. */
+.curate-swatch {
+  flex: 0 0 auto;
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  background: var(--swatch);
+}
+.curate-swatch-element {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--swatch);
+}
+
+.curate-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.curate-row-contig .curate-row-name {
+  color: var(--text-dim);
+}
+
+.curate-row-indent {
+  flex: 0 0 1.35rem;
+}
+
+.curate-change {
+  flex: 0 0 auto;
+}
+
+.curate-row-length,
+.curate-row-gc,
+.curate-row-complete,
+.curate-row-redundant {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  text-align: right;
+}
+.curate-row-length {
+  width: 4.1rem;
+}
+.curate-row-gc {
+  width: 3.6rem;
+  color: var(--text-faint);
+}
+.curate-row-redundant {
+  width: 2.2rem;
+}
+.curate-row-redundant.is-warn {
+  color: var(--warn);
+}
+
+.curate-row-quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 0 0 auto;
+  width: 4.4rem;
+  justify-content: flex-end;
+}
+.curate-row-quality.is-none {
+  color: var(--text-faint);
+}
+
+.curate-bar {
+  position: relative;
+  width: 1.6rem;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: var(--bg-muted);
+  overflow: hidden;
+}
+.curate-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--text-dim);
+}
+.curate-bar-fill.is-high {
+  background: var(--ok);
+}
+
+.curate-row-hosts {
+  flex: 0 0 auto;
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-dim);
+}
+.curate-row-hosts.is-faint {
+  color: var(--text-faint);
+}
+
+.curate-row-suggested {
+  flex: 0 0 1.2rem;
+  height: 1.2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.curate-row-suggested.is-none {
+  background: none;
+  cursor: default;
+}
+
+.curate-row-offer {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--accent);
+}
+.curate-row-moved {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-faint);
+}
+
+.curate-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg-raised);
+  color: var(--text);
+  font: inherit;
+}
+.curate-rename.is-refused {
+  border-color: var(--danger);
+}
+
+/* Narrow: the length goes first, then the GC. */
+@container (max-width: 300px) {
+  .curate-row-length {
+    display: none;
+  }
+}
+@container (max-width: 250px) {
+  .curate-row-gc,
+  .curate-change {
+    display: none;
+  }
+}

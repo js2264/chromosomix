@@ -45,6 +45,12 @@ export interface CurationNetworkResult {
 export interface CurationStateResult {
   /** The curated binning's own fingerprint: the stage drops an answer to a binning it has left. */
   fingerprint: string
+  /**
+   * Whether the contacts were read: before the network's pass, the genomes,
+   * their quality and the links are answered, and the pairs, the hosts, the
+   * contigs' places and the suggestions are empty.
+   */
+  counted: boolean
   /** Each curated genome, in the binning's order. */
   genomes: Array<{
     id: string
