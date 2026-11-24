@@ -59,7 +59,35 @@ export function hostAnchors(
 ): Map<string, string | null> {
   const { kept, allowed } = options
   const can = (id: string | undefined): id is string => id !== undefined && rank.has(id) && (allowed === undefined || allowed.has(id))
-  const best = new Map<number, { mag: number; affinity: number; rank: number }>()
+  const best = bestHosts(genomes, pairs, rank, allowed)
+  // Each element's linked MAG earliest in the order, one pass over the links.
+  const linked = new Map<string, string>()
+  for (const link of links) {
+    if (!can(link.mag)) continue
+    const held = linked.get(link.element)
+    if (held === undefined || (rank.get(link.mag) as number) < (rank.get(held) as number)) linked.set(link.element, link.mag)
+  }
+  const out = new Map<string, string | null>()
+  for (const genome of genomes) {
+    if (genome.kind !== 'element') continue
+    const held = kept?.get(genome.id) ?? null
+    out.set(genome.id, held !== null && can(held) ? held : (best.get(genome.id)?.mag ?? linked.get(genome.id) ?? null))
+  }
+  return out
+}
+
+/**
+ * Each element's densest MAG by the pairs, by id, with their affinity: the
+ * MAG earlier in the order on a tie. Only the MAGs `rank` names (and
+ * `allowed`, where given) count; an element meeting none has no entry.
+ */
+export function bestHosts(
+  genomes: readonly HostGenome[],
+  pairs: PairList,
+  rank: ReadonlyMap<string, number>,
+  allowed?: ReadonlySet<string>,
+): Map<string, { mag: string; affinity: number }> {
+  const best = new Map<string, { mag: string; affinity: number; rank: number }>()
   for (let k = 0; k < pairs.a.length; k++) {
     let e = pairs.a[k]
     let m = pairs.b[k]
@@ -67,33 +95,14 @@ export function hostAnchors(
     if (genomes[e]?.kind !== 'element' || genomes[m]?.kind !== 'mag') continue
     const affinity = pairs.affinity[k]
     if (!(affinity > 0)) continue
-    const id = genomes[m].id
-    if (!can(id)) continue
-    const r = rank.get(id) as number
-    const held = best.get(e)
-    if (held === undefined || affinity > held.affinity || (affinity === held.affinity && r < held.rank)) best.set(e, { mag: m, affinity, rank: r })
+    const mag = genomes[m].id
+    const r = rank.get(mag)
+    if (r === undefined || (allowed !== undefined && !allowed.has(mag))) continue
+    const element = genomes[e].id
+    const held = best.get(element)
+    if (held === undefined || affinity > held.affinity || (affinity === held.affinity && r < held.rank)) best.set(element, { mag, affinity, rank: r })
   }
-  const out = new Map<string, string | null>()
-  genomes.forEach((genome, g) => {
-    if (genome.kind !== 'element') return
-    const held = kept?.get(genome.id) ?? null
-    if (held !== null && can(held)) {
-      out.set(genome.id, held)
-      return
-    }
-    const found = best.get(g)
-    if (found !== undefined) {
-      out.set(genome.id, genomes[found.mag].id)
-      return
-    }
-    let linked: string | null = null
-    for (const link of links) {
-      if (link.element !== genome.id || !can(link.mag)) continue
-      if (linked === null || (rank.get(link.mag) as number) < (rank.get(linked) as number)) linked = link.mag
-    }
-    out.set(genome.id, linked)
-  })
-  return out
+  return new Map([...best].map(([element, { mag, affinity }]) => [element, { mag, affinity }]))
 }
 
 /** Each MAG's place in an order: the MAGs it names, then those it does not, in the genomes' order. */
