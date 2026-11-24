@@ -593,14 +593,11 @@ export class CurateModel {
     return true
   }
 
-  /** Rename a genome; refused for a name another genome has, or the pool's. */
+  /** Rename a genome; refused, with the reason, for a name {@link nameRefusal} refuses. */
   rename(id: string, name: string): string | null {
     const wanted = name.trim()
-    if (wanted === '') return 'A genome needs a name.'
-    if (wanted === UNBINNED) return `${UNBINNED} is the pool's name.`
-    if (/[\t\n\r]/.test(wanted) || /[^\x20-\x7e]/.test(wanted)) return 'A genome’s name is plain ASCII, without tabs.'
-    const taken = this.answerHeld?.genomes.some((genome) => genome.name === wanted && genome.id !== id) ?? false
-    if (taken) return `Another genome is named ${wanted}.`
+    const refused = nameRefusal(wanted, this.answerHeld?.genomes.filter((genome) => genome.id !== id).map((genome) => genome.name) ?? [])
+    if (refused !== null) return refused
     if (this.genome(id)?.name === wanted) return null
     this.store.apply({ op: 'rename', genome: id, name: wanted })
     return null
@@ -683,6 +680,24 @@ export class CurateModel {
     }
   }
 }
+
+/**
+ * Why a genome cannot have this name, or `null`: metacooler takes ASCII names
+ * only, metaTOR's host lists split on commas, and a word a table means *no
+ * genome* by (`NA`, `nan`, `-1`, `__unbinned__`, …, in any case) would be read
+ * by `metacooler reassign` as the pool.
+ */
+export function nameRefusal(name: string, others: readonly string[]): string | null {
+  if (name === '') return 'A genome needs a name.'
+  if (UNBINNED_WORDS.has(name.toLowerCase())) return `${name} is how a table says unbinned: metacooler would read this genome as none.`
+  if (/[^\x21-\x7e]/.test(name)) return 'Names go to metacooler, which takes ASCII letters, digits and signs, without spaces.'
+  if (name.includes(',')) return 'A name holds no comma: metaTOR lists genomes with them.'
+  if (others.includes(name)) return `Another genome is named ${name}.`
+  return null
+}
+
+/** The words a contigs table means *no genome* by (metacooler's `_UNBINNED_SENTINELS`). */
+const UNBINNED_WORDS = new Set([UNBINNED.toLowerCase(), 'na', 'nan', 'n/a', 'nd', 'n/d', '-1'])
 
 /** Where each kind is answered in the queue: what changes the most first. */
 const KIND_RANK: Record<Suggestion['kind'], number> = { merge: 0, move: 1, recruit: 2, link: 3, unlink: 3 }
