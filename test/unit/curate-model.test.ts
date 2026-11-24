@@ -380,3 +380,138 @@ describe('auto, holding back', () => {
     expect(model.heldBack).toEqual([{ key: expect.stringMatching(/^merge:/), words: 'merge X2 into X1', why: 'it would make X1 contaminated' }])
   })
 })
+
+describe('what the review answers while a step is counted (§33.3)', () => {
+  it('answers nothing until the step is counted: a second Y never takes the question twice', async () => {
+    const { model, store, asked } = setup({ hold: true })
+    asked[0].resolve()
+    await model.settled()
+    model.setMode('review')
+    const head = model.current
+    if (head === null) throw new Error('nothing in review')
+    model.accept(head)
+    expect(model.stale).toBe(true)
+    // The queue is the binning's before the step: what it shows is not asked.
+    expect(model.current).toBeNull()
+    const before = store.curation.history.length
+    if (model.current !== null) model.accept(model.current)
+    expect(store.curation.history.length).toBe(before)
+    for (const ask of asked) ask.resolve()
+    await model.settled()
+    expect(model.current).not.toBeNull()
+    expect(model.queue().some((q) => q.key === head.key)).toBe(false)
+  })
+
+  it('leaves the rest of a question after one member is turned down, and moves on after one taken whole', async () => {
+    const { model } = setup()
+    await model.settled()
+    model.setMode('review')
+    model.setCurrent('host:P')
+    expect(model.moveMember(1)).toBe(true)
+    const first = model.current
+    if (first === null) throw new Error('no member')
+    const other = model.currentQuestion?.members.find((m) => m.key !== first.key)
+    model.reject(first)
+    await model.settled()
+    // The member left is in review, not the queue's head.
+    expect(model.current?.members.map((m) => m.key)).toEqual([other?.key])
+    // A question taken whole: the one after it along.
+    const queue = model.queue()
+    model.setCurrent(queue[0].key)
+    const next = queue[1]?.key
+    model.accept(queue[0])
+    await model.settled()
+    if (next !== undefined && model.queue().some((q) => q.key === next)) expect(model.currentQuestion?.key).toBe(next)
+  })
+
+  it('steps out of a member when its question leaves the queue', async () => {
+    const { model, store } = setup()
+    await model.settled()
+    model.setMode('review')
+    model.setCurrent('host:P')
+    model.moveMember(1)
+    model.moveMember(1)
+    expect(model.member).toEqual({ at: 1, of: 2 })
+    // P linked to Y and unlinked from Z by hand: the question is answered.
+    store.applyAll([{ step: { op: 'link', element: 'P', mag: 'Y' } }, { step: { op: 'unlink', element: 'P', mag: 'Z' } }])
+    await model.settled()
+    expect(model.queue().some((q) => q.key === 'host:P')).toBe(false)
+    expect(model.member).toBeNull()
+  })
+
+  it('previews a question’s every step together, and lets go of the price on leaving review', async () => {
+    const { model } = setup()
+    await model.settled()
+    model.setMode('review')
+    model.setCurrent('host:P')
+    const question = model.current
+    if (question === null) throw new Error('no question')
+    model.preview(question.steps, false)
+    expect(model.previewSteps).toEqual(question.steps)
+    expect(model.previewStep).toBeNull()
+    await Promise.resolve()
+    await Promise.resolve()
+    // Both steps drawn: P hosted by Y, and by Z no longer.
+    expect(model.previewed?.links.map((link) => `${link.element}>${link.mag}`)).toEqual(['P>Y'])
+    model.setMode('manual')
+    expect(model.previewSteps).toBeNull()
+  })
+})
+
+describe('auto, against the reader’s own steps', () => {
+  it('stops on an undo, and never takes a question priced on a binning changed since', async () => {
+    const { model, store, asked } = setup({ hold: true })
+    asked[0].resolve()
+    await model.settled()
+    const run = model.runAuto()
+    // Auto is pricing its first question; the reader undoes nothing and makes a step meanwhile.
+    await Promise.resolve()
+    await Promise.resolve()
+    store.apply({ op: 'rename', genome: 'Z', name: 'Zeta' })
+    model.undo()
+    for (const ask of asked) ask.resolve()
+    await Promise.resolve()
+    expect(await run).toBe(0)
+    expect(store.curation.history.every((entry) => entry.by === 'reader')).toBe(true)
+  })
+})
+
+describe('the acts refuse what would make nothing', () => {
+  it('merges one kind at a time, unbins only what is binned, and never renames to an emptied genome’s name', async () => {
+    const { model, store } = setup()
+    await model.settled()
+    model.selectGenomes(['P', 'Y'])
+    expect(model.mergeSelected()).toBe(false)
+    expect(store.applied).toBe(0)
+    // u0, contig 18, is in the pool already.
+    model.selectContigs([18])
+    expect(model.moveSelected(null)).toBe(false)
+    expect(store.applied).toBe(0)
+    // Only the contigs not in Y already move.
+    model.selectContigs([3, 7])
+    expect(model.moveSelected('Y')).toBe(true)
+    expect(store.curation.history[0].step).toEqual({ op: 'move', contigs: ['y5'], to: 'Y' })
+    // X2 emptied by moves, not merged: its name stays taken.
+    store.apply({ op: 'move', contigs: ['x3', 'x4', 'x5'], to: 'X1' })
+    await model.settled()
+    expect(model.answer?.genomes.some((genome) => genome.id === 'X2')).toBe(false)
+    expect(model.rename('Y', 'X2')).toBe('Another genome is named X2.')
+  })
+
+  it('mints a genome id once: a turned-down suggestion of an undone genome never holds for a new one', async () => {
+    const { model, store } = setup()
+    await model.settled()
+    model.selectContigs([18])
+    expect(model.createFromSelected('mag')).toBe('curated:1')
+    await model.settled()
+    // u0 is X's: the new genome is offered to merge with X's halves; turned down.
+    const merge = model.offered().find((s) => s.key.includes('curated:1'))
+    if (merge === undefined) throw new Error('no suggestion names the new genome')
+    model.reject(merge)
+    model.undo()
+    store.apply({ op: 'rename', genome: 'Z', name: 'Zeta' })
+    expect(store.curation.history.some((entry) => entry.step.op === 'create')).toBe(false)
+    model.selectContigs([18])
+    expect(model.createFromSelected('mag')).toBe('curated:2')
+  })
+})

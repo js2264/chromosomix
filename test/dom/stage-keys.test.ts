@@ -45,6 +45,21 @@ function press(key: string, target: EventTarget = window): KeyboardEvent {
 }
 
 describe('a stage’s keys', () => {
+  it('leave Enter to a focused button and the arrows to a focused grip', () => {
+    const { root, heard } = stage()
+    const close = document.createElement('button')
+    const grip = document.createElement('div')
+    grip.setAttribute('role', 'separator')
+    grip.tabIndex = 0
+    root.append(close, grip)
+    expect(press('Enter', close).defaultPrevented).toBe(false)
+    expect(press('ArrowLeft', grip).defaultPrevented).toBe(false)
+    // Elsewhere they are the stage's.
+    press('Enter', root)
+    press('ArrowLeft', close)
+    expect(heard).toEqual(['Enter', 'ArrowLeft'])
+  })
+
   it('are answered while the stage is on top, and taken whole when the stage takes them', () => {
     const { heard } = stage()
     expect(press('m').defaultPrevented).toBe(true)

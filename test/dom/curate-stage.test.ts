@@ -55,7 +55,7 @@ function card(name: string): CurateCard {
   return { element, update: () => {} }
 }
 
-async function open(): Promise<{ stage: CurateStage; store: CurationStore; told: string[]; ctx: () => CurateContext }> {
+async function open(options: { failing?: () => boolean } = {}): Promise<{ stage: CurateStage; store: CurationStore; told: string[]; ctx: () => CurateContext }> {
   const { base, evidence } = community()
   const store = new CurationStore(`curate-stage-${++keys}`, base, fileBinning(base), () => 0)
   const told: string[] = []
@@ -82,7 +82,10 @@ async function open(): Promise<{ stage: CurateStage; store: CurationStore; told:
     base: { base, file: fileBinning(base), elements: { count: 1, fromRoundOnly: 0 }, gc: null, markerSets: ['Bact4'], pixels: 100, networkHeld: false },
     requests: {
       network: () => ({ promise: Promise.resolve(summary), cancel: () => {} }),
-      state: (curation, weights) => ({ promise: Promise.resolve(stateAnswer(evidence, CuratedBinning.of(base, curation), weights)), cancel: () => {} }),
+      state: (curation, weights) => ({
+        promise: options.failing?.() === true ? Promise.reject(new Error('the worker stopped')) : Promise.resolve(stateAnswer(evidence, CuratedBinning.of(base, curation), weights)),
+        cancel: () => {},
+      }),
       focus: () => ({ promise: new Promise<CurationFocusResult>(() => {}), cancel: () => {} }),
     },
     parts,
@@ -173,5 +176,78 @@ describe('the curation stage', () => {
     key('n')
     await settle()
     expect(store.learned.rejected).toContain(next?.key)
+  })
+
+  it('answers once for a key held down, and nothing while the step just taken is counted', async () => {
+    const { store } = await open()
+    ;(document.querySelector('[data-mode="review"]') as HTMLButtonElement).click()
+    await settle()
+    // The head question, merge X2 into X1, is one step.
+    key('y')
+    key('y', { repeat: true })
+    key('y')
+    expect(store.curation.history.map((entry) => entry.step.op)).toEqual(['merge'])
+    await settle()
+    expect(document.querySelector('.curate-band-words')?.textContent).not.toMatch(/weighing/)
+  })
+
+  it('ends a drag the browser took over, dropping nothing', async () => {
+    const { ctx, store } = await open()
+    ctx().startDrag({ kind: 'genomes', ids: ['X2'] }, new PointerEvent('pointerdown', { clientX: 10, clientY: 10 }))
+    expect(document.querySelector('.curate-ghost')).not.toBeNull()
+    window.dispatchEvent(new PointerEvent('pointercancel'))
+    expect(document.querySelector('.curate-ghost')).toBeNull()
+    expect(ctx().dragging).toBeNull()
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 10, clientY: 10 }))
+    expect(store.applied).toBe(0)
+  })
+
+  it('closes on Escape the innermost thing: the keys sheet, then a field’s text, and only then the selection', async () => {
+    const { ctx } = await open()
+    const escape = (): void => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    }
+    ctx().model.selectGenomes(['Y'])
+    key('?')
+    expect(document.querySelector('.curate-keys')).not.toBeNull()
+    escape()
+    expect(document.querySelector('.curate-keys')).toBeNull()
+    expect(ctx().model.selection.genomes).toEqual(['Y'])
+    const filter = document.querySelector('.curate-filter') as HTMLInputElement
+    filter.focus()
+    filter.value = 'X'
+    escape()
+    expect(filter.value).toBe('')
+    expect(ctx().model.selection.genomes).toEqual(['Y'])
+    escape()
+    expect(document.activeElement).not.toBe(filter)
+    escape()
+    expect(ctx().model.selection.genomes).toEqual([])
+  })
+
+  it('says a count that failed, with a press to count again, and drops it once counted', async () => {
+    let failing = false
+    const { store } = await open({ failing: () => failing })
+    failing = true
+    store.apply({ op: 'rename', genome: 'Z', name: 'Zeta' })
+    await settle()
+    const status = document.querySelector('.curate-status') as HTMLElement
+    expect(status.classList.contains('hidden')).toBe(false)
+    expect(status.textContent).toMatch(/counting the binning failed: the worker stopped/)
+    failing = false
+    ;(status.querySelector('button') as HTMLButtonElement).click()
+    await settle()
+    expect(status.classList.contains('hidden')).toBe(true)
+  })
+
+  it('says why M and L make nothing: two kinds to merge, contigs to link', async () => {
+    const { ctx, store } = await open()
+    ctx().model.selectGenomes(['P', 'Y'])
+    key('m')
+    expect(store.applied).toBe(0)
+    expect(document.querySelector('.curate-readout')?.textContent).toBe('Merge MAGs with MAGs and elements with elements.')
+    ctx().model.selectContigs([3])
+    key('l')
+    expect(document.querySelector('.curate-readout')?.textContent).toMatch(/^Select an element/)
   })
 })

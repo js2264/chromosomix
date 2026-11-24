@@ -1,8 +1,9 @@
 /**
  * A stage's keys (SPECS §26.4, §33.3): one listener on the window, in the
  * capture phase, that answers only while its stage is the dialog on top and
- * leaves a field's keys to the field, an open menu's to the menu, and a focused
- * button's Space to the button.
+ * leaves a field's keys to the field, an open menu's to the menu, a focused
+ * button's Space and Enter to the button, and a focused grip's arrows to the
+ * grip.
  *
  * The three guards are the three ways a stage's keys went wrong before it was
  * shared: a rename box whose letters were the stage's, a menu whose ↓ also
@@ -36,11 +37,23 @@ export function onTop(root: Element): boolean {
   return topDialog()?.contains(root) === true
 }
 
-/** Whether a key belongs to something on the stage before the stage: a field, a menu, a button's Space. */
+/** What Enter presses on its own: a button, a link, a menu row, a tab. */
+const ENTER_TAKERS = 'button, a[href], summary, select, [role="button"], [role="menuitem"], [role="tab"]'
+/** What the arrows move on their own: a grip, a slider. */
+const ARROW_TAKERS = '[role="separator"], [role="slider"], input[type="range"], select'
+
+/**
+ * Whether a key belongs to something on the stage before the stage: a field,
+ * a menu, a focused button's Space and Enter, a focused grip's arrows.
+ */
 export function keyBelongsElsewhere(event: KeyboardEvent): boolean {
   if (isTypingTarget(event.target)) return true
   if (menuIsOpen()) return true
-  return event.key === ' ' && wantsSpace(event.target)
+  if (event.key === ' ') return wantsSpace(event.target)
+  if (!(event.target instanceof Element)) return false
+  if (event.key === 'Enter') return event.target.closest(ENTER_TAKERS) !== null
+  if (event.key.startsWith('Arrow')) return event.target.closest(ARROW_TAKERS) !== null
+  return false
 }
 
 /**

@@ -15536,8 +15536,8 @@ structure* card however many models the deck draws.
   (`inDialog`, an element inside it) and is heard while that dialog is on top: the enlarged 3D
   model's letters (§25.3), which are the session's commands. A stage listens through `ui/stageKeys.ts`,
   which answers only while the stage is the dialog on top, and leaves a field's keys to the field, an
-  open menu's to the menu (whose ↓ would otherwise also move the stage's selection) and a focused
-  button's Space to the button.
+  open menu's to the menu (whose ↓ would otherwise also move the stage's selection), a focused
+  button's Space and Enter to the button, and a focused grip's arrows to the grip.
 - **A toggle command is titled once, by its noun**, and wears its state as a chip — *Crosshair* `on`
   — in the palette and the shortcuts dialog alike. Titled by its outcome, *Show crosshair*, it read
   as the state, and the dialog printed whatever the app happened to be doing when it was opened.
@@ -17345,9 +17345,10 @@ contigs when the curation was made and holds 2 here`.
 
 *Curate the genomes* — the palette's, or a press on the heading's word on the genomes (§33.4) —
 opens a stage on the whole window (`stageDialog`, §27.3's shell), titled `Curate the genomes ·
-<map>`. **Escape never closes it**: it cancels the innermost thing — a chooser, a drag, a rename, an
-auto run, the selection — and `×` alone closes it, which loses nothing: every step is kept with the
-file as it is made, and the session is redrawn through the curation (§33.4).
+<map>`. **Escape never closes it**: it cancels the innermost thing — the keys' sheet, a chooser, a
+drag, a rename, a field's text (and then the field: the keyboard goes back to the list), an auto
+run, the selection — and `×` alone closes it, which loses nothing: every step is kept with the file
+as it is made, and the session is redrawn through the curation (§33.4).
 
 **Three columns.** The **genome list** on the left never leaves the screen, so whatever is held can
 be dropped on it. The **pictures** fill the middle: one **large**, the other two **small** beside it
@@ -17424,18 +17425,30 @@ completeness and redundancy before → after, `--warn` where a grade falls (`con
 lower`), `--ok` where one reaches high quality, and the markers it makes present twice — what a rise
 in redundancy is made of. `Y` takes a question whole, one gesture; `N` turns every member down; ← →
 move between questions, ↓ ↑ answer a question's members one by one, `Space` held draws every picture
-as the question would leave the binning. **Auto** takes the questions at 80% or more in that order,
+as the question would leave the binning — every step of it, an element's link and unlink together. **Auto** takes the questions at 80% or more in that order,
 one gesture each, counting again between two, two hundred at most a run, and **holds back**, naming
 it and why, any that would lower a MAG's grade (`merge 00700_00002 into 00700_00001: it would make
 00700_00001 contaminated`).
 
 **Keys**, printed on their controls, live while the stage is on top (§26.4): `1 2 3` the large
 picture; `M` merge the selected genomes, or *move to…* the selected contigs, *merge into…* one
-genome; `L` link the selected element to the selected MAG, or *link to…*; `B` and `E` a new MAG or
+genome — MAGs with MAGs and elements with elements, the readout saying so otherwise; `L` link the
+selected element to the selected MAG, or *link to…* for elements or one MAG; `B` and `E` a new MAG or
 element of the selected contigs, or the selected genomes made one; `Delete` unbins contigs,
 dissolves genomes, unlinks a selected element and MAG; `F2`/`R` rename; `Enter` the selected
 genomes' contigs close up, `⇧Enter` back; `/` the list's filter; ⌘Z, ⇧⌘Z undo and redo; `Y N ← → ↓ ↑
-Space` in review; `0 + −` the picture under the pointer; `?` this list.
+Space` in review; `0 + −` the picture under the pointer; `?` this list. Enter presses a focused
+button and the arrows move a focused grip, as everywhere (§26.4). An act that would make nothing —
+contigs moved where they are, the pool's contigs unbinned — makes no step.
+
+**One answer a press.** A question is answered only once the binning it was asked of is counted: Y
+or N pressed while the step just made is counted answers nothing (the band says *weighing…*), and a
+key held down answers once — a question just taken is still in the queue of the binning before it.
+After an answer review moves on: past a question answered whole, to the next along; inside a
+question, to the members left. An undo stops an auto run, and auto asks a question again where a
+step was made while it was priced, never taking one priced on another binning. A genome a step makes
+gets an id never used before (`curated:N`), so what was turned down for one undone never holds for
+the next.
 
 **The contacts' read.** The stage opens at once: before the contacts are read, the list, the
 quality, the cards and the scatter's colours work from the file and its markers. The pass over every

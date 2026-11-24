@@ -55,6 +55,8 @@ export const AUTO_MOST = 200
 
 /** The prefix of the ids the stage mints for a genome a step creates. */
 const MINTED = 'curated:'
+/** A minted id inside a step's id or a suggestion's key. */
+const MINTED_ID = /curated:(\d+)/g
 
 export interface CurateModelOptions {
   /** How long after a step the count is asked, in ms: steps in a burst are counted once. */
@@ -95,12 +97,16 @@ export class CurateModel {
   private hoverContig = -1
   private modeHeld: CurateMode = 'manual'
   private currentKey: string | null = null
-  /** Inside the current question: which of its members is answered alone, or `null` for the whole. */
-  private memberAt: number | null = null
+  /**
+   * Inside the current question: the member answered alone, by key, or `null`
+   * for the whole — by key, so a question regrouped by a count keeps it, and one
+   * that left the queue does not hand it to another.
+   */
+  private memberKey: string | null = null
   private queueHeld: { answer: CurationStateResult; rejected: string; list: Question[] } | null = null
   private autoRun: { stopped: boolean } | null = null
   private waiters: Array<() => void> = []
-  private previewHeld: { key: string; step: CurationStep; answer: CurationStateResult | null } | null = null
+  private previewHeld: { key: string; steps: readonly CurationStep[]; answer: CurationStateResult | null } | null = null
   /** Whether the pictures draw the preview (Space held), or it is only priced. */
   private previewDrawn = false
   private fileHeld: CurationStateResult | null = null
@@ -276,17 +282,19 @@ export class CurateModel {
   // -------------------------------------------------------------------------
 
   /**
-   * Count the binning as it would be with one more step — the review's Space
-   * held, a suggestion hovered, a drop about to be made — as a step is
-   * counted, kept by the step (asking the same twice counts once) and dropped
-   * by any step made. `null` lets go of it.
+   * Count the binning as it would be with one more step, or a question's
+   * steps together — the review's Space held, a suggestion hovered, a drop
+   * about to be made — as a step is counted, kept by the steps (asking the
+   * same twice counts once) and dropped by any step made. `null` lets go of
+   * it.
    */
-  preview(step: CurationStep | null, draw = true): void {
-    if (step === null) {
+  preview(what: CurationStep | readonly CurationStep[] | null, draw = true): void {
+    const steps = what === null ? [] : isStepList(what) ? what : [what]
+    if (steps.length === 0) {
       this.clearPreview()
       return
     }
-    const key = JSON.stringify(step)
+    const key = JSON.stringify(steps.length === 1 ? steps[0] : steps)
     if (this.previewHeld?.key === key) {
       this.drawPreview(draw)
       return
@@ -294,14 +302,14 @@ export class CurateModel {
     this.previewDrawn = draw
     this.previewRequest?.cancel()
     const ticket = ++this.previewTicket
-    this.previewHeld = { key, step, answer: null }
-    const request = this.client.state(withCurationStep(this.store.curation, step, 'reader', 0), this.weights)
+    this.previewHeld = { key, steps, answer: null }
+    const request = this.client.state(withSteps(this.store.curation, steps, 'reader'), this.weights)
     this.previewRequest = request
     request.promise.then(
       (answer) => {
         if (ticket !== this.previewTicket || this.disposed || this.previewHeld?.key !== key) return
         this.previewRequest = null
-        this.previewHeld = { key, step, answer }
+        this.previewHeld = { key, steps, answer }
         this.emit('preview')
       },
       () => {
@@ -311,9 +319,15 @@ export class CurateModel {
     this.emit('preview')
   }
 
-  /** The step previewed, counted or not. */
+  /** The step previewed, counted or not, where it is one step; `null` with none, or several ({@link previewSteps}). */
   get previewStep(): CurationStep | null {
-    return this.previewHeld?.step ?? null
+    const steps = this.previewHeld?.steps
+    return steps?.length === 1 ? steps[0] : null
+  }
+
+  /** The steps previewed, counted or not: one, or a question's every step. */
+  get previewSteps(): readonly CurationStep[] | null {
+    return this.previewHeld?.steps ?? null
   }
 
   /** The binning as it would be, once counted; `null` while counting or with no preview. */
@@ -493,10 +507,13 @@ export class CurateModel {
 
   setMode(mode: CurateMode): void {
     if (mode === this.modeHeld) return
+    const leaving = this.modeHeld === 'review'
     this.modeHeld = mode
     if (mode !== 'auto' && this.autoRun !== null) this.autoRun.stopped = true
     this.currentKey = mode === 'review' ? (this.queue()[0]?.key ?? null) : null
-    this.memberAt = null
+    this.memberKey = null
+    // The review priced its question with a preview nobody else asked for.
+    if (leaving) this.clearPreview()
     this.emit('mode')
   }
 
@@ -547,11 +564,22 @@ export class CurateModel {
     return list
   }
 
-  /** The question in review: the one chosen if it is still asked, else the first. */
+  /**
+   * The question in review: the one chosen if it is still asked (by its key, or
+   * a member's), else the first; `null` while a step is counted — the queue is
+   * then the binning's before it, which still holds a question just taken, and
+   * a second Y would take it twice.
+   */
   get currentQuestion(): Question | null {
-    if (this.modeHeld !== 'review') return null
+    if (this.modeHeld !== 'review' || this.staleHeld) return null
+    return this.questionOf(this.currentKey) ?? this.queue()[0] ?? null
+  }
+
+  /** The question of the queue with this key, or with a member of this key. */
+  private questionOf(key: string | null): Question | undefined {
+    if (key === null) return undefined
     const list = this.queue()
-    return list.find((q) => q.key === this.currentKey) ?? list[0] ?? null
+    return list.find((q) => q.key === key) ?? list.find((q) => q.members.some((m) => m.key === key))
   }
 
   /**
@@ -560,35 +588,42 @@ export class CurateModel {
    */
   get current(): Question | null {
     const question = this.currentQuestion
-    if (question === null || this.memberAt === null || question.members.length < 2) return question
-    const member = question.members[Math.min(this.memberAt, question.members.length - 1)]
+    const at = this.memberIndex(question)
+    if (question === null || at < 0) return question
+    const member = question.members[at]
     return { ...member, members: [member], steps: [member.step] }
   }
 
   /** Which member of the current question is answered alone, and of how many; `null` for the whole. */
   get member(): { at: number; of: number } | null {
     const question = this.currentQuestion
-    if (question === null || this.memberAt === null || question.members.length < 2) return null
-    return { at: Math.min(this.memberAt, question.members.length - 1), of: question.members.length }
+    const at = this.memberIndex(question)
+    return question === null || at < 0 ? null : { at, of: question.members.length }
+  }
+
+  /** Where the member stepped into is in a question: `-1` for the whole, or a member it no longer has. */
+  private memberIndex(question: Question | null): number {
+    if (question === null || this.memberKey === null || question.members.length < 2) return -1
+    return question.members.findIndex((m) => m.key === this.memberKey)
   }
 
   /** Review the question with this key, whole. */
   setCurrent(key: string): void {
-    const question = this.queue().find((q) => q.key === key || q.members.some((m) => m.key === key))
-    const next = question?.key ?? key
-    if (next === this.currentKey && this.memberAt === null) return
+    const next = this.questionOf(key)?.key ?? key
+    if (next === this.currentKey && this.memberKey === null) return
     this.currentKey = next
-    this.memberAt = null
+    this.memberKey = null
     this.emit('current')
   }
 
-  /** The next question in review, or the previous one; wraps. */
+  /** The next question in review, or the previous one; wraps. Nothing while a step is counted. */
   moveCurrent(by: 1 | -1): void {
+    const question = this.currentQuestion
+    if (question === null) return
     const list = this.queue()
-    if (list.length === 0) return
-    const at = Math.max(0, list.findIndex((q) => q.key === this.currentQuestion?.key))
+    const at = Math.max(0, list.indexOf(question))
     this.currentKey = list[(at + by + list.length) % list.length].key
-    this.memberAt = null
+    this.memberKey = null
     this.emit('current')
   }
 
@@ -596,15 +631,43 @@ export class CurateModel {
   moveMember(by: 1 | -1): boolean {
     const question = this.currentQuestion
     if (question === null || question.members.length < 2) return false
-    if (this.memberAt === null) {
+    const at = this.memberIndex(question)
+    if (at < 0) {
       if (by < 0) return false
-      this.memberAt = 0
+      this.memberKey = question.members[0].key
     } else {
-      const next = this.memberAt + by
-      this.memberAt = next < 0 ? null : Math.min(next, question.members.length - 1)
+      const next = at + by
+      this.memberKey = next < 0 ? null : question.members[Math.min(next, question.members.length - 1)].key
     }
+    // The question by its own key from here, whatever key brought it.
+    this.currentKey = question.key
     this.emit('current')
     return true
+  }
+
+  /**
+   * In review, where an answer leaves the reader: a member answered alone
+   * leaves the rest of its question; a question answered whole, the next one
+   * along — chosen before the answer changes the queue.
+   */
+  private moveOnFrom(answered: ReadonlySet<string>): void {
+    if (this.modeHeld !== 'review') return
+    const list = this.queue()
+    const question = this.questionOf(this.currentKey) ?? list[0]
+    // A suggestion answered from its card, not the one in review: review stays.
+    if (question === undefined || !question.members.some((m) => answered.has(m.key))) return
+    const at = this.memberIndex(question)
+    const left = question.members.filter((m) => !answered.has(m.key))
+    if (at >= 0 && left.length > 0) {
+      // By a member's key: the question regroups once the answer is counted.
+      const next = left[Math.min(at, left.length - 1)]
+      this.currentKey = next.key
+      this.memberKey = left.length > 1 ? next.key : null
+      return
+    }
+    const k = list.indexOf(question)
+    this.currentKey = list[k + 1]?.key ?? list[k - 1]?.key ?? null
+    this.memberKey = null
   }
 
   /**
@@ -617,13 +680,10 @@ export class CurateModel {
     let learned = this.store.learned
     for (const member of members) learned = this.learnedFrom(member, true, learned)
     const said = describeSuggestion(suggestion)
+    this.moveOnFrom(new Set(members.map((member) => member.key)))
     if (steps.length === 1) this.store.apply(steps[0], by, said)
     else this.store.applyAll(steps.map((step) => ({ step, by, suggestion: said })))
     this.store.keepLearned(learned)
-    if (this.modeHeld === 'review') {
-      this.currentKey = null
-      this.memberAt = null
-    }
   }
 
   /** Turn a suggestion down, or a question's every member: none is offered again, and each answer is learned. */
@@ -634,14 +694,7 @@ export class CurateModel {
       learned = this.learnedFrom(member, false, learned)
       if (!learned.rejected.includes(member.key)) learned = { ...learned, rejected: [...learned.rejected, member.key] }
     }
-    if (this.modeHeld === 'review') {
-      // The next question along, before this one leaves the queue.
-      const list = this.queue()
-      const at = list.findIndex((q) => q.key === this.currentQuestion?.key)
-      const inside = this.memberAt !== null
-      if (!inside) this.currentKey = list[at + 1]?.key ?? list[at - 1]?.key ?? null
-      this.memberAt = null
-    }
+    this.moveOnFrom(new Set(members.map((member) => member.key)))
     this.store.keepLearned(learned)
   }
 
@@ -712,8 +765,17 @@ export class CurateModel {
         const next = this.queue().find((q) => q.confidence >= AUTO_THRESHOLD && !asked.has(q.key))
         if (next === undefined) break
         asked.add(next.key)
+        const priced = this.store.curation
         const why = await this.demotes(next)
         if (run.stopped || this.disposed) break
+        // A step made while it was priced — a card's act — and it is asked
+        // again on the binning as it now is; one turned down meanwhile, never.
+        if (this.store.curation !== priced || this.staleHeld) {
+          asked.delete(next.key)
+          continue
+        }
+        const rejected = new Set(this.store.learned.rejected)
+        if (next.members.some((member) => rejected.has(member.key))) continue
         if (why !== null) {
           this.heldBackList = [...this.heldBackList, { key: next.key, words: next.words, why }]
           continue
@@ -728,13 +790,16 @@ export class CurateModel {
     return steps
   }
 
-  /** Why taking a question would lower a MAG's grade, or `null`: counted as a preview is, apart from it. */
+  /**
+   * Why taking a question would lower a MAG's grade, or `null`: its steps
+   * together, counted as a preview is, apart from it.
+   */
   private async demotes(question: Question): Promise<string | null> {
     const before = this.answerHeld
-    if (before === null || question.steps.length !== 1) return null
-    const step = question.steps[0]
-    if (step.op === 'link' || step.op === 'unlink' || step.op === 'rename') return null
-    const after = await this.client.state(withCurationStep(this.store.curation, step, 'auto', 0), this.weights).promise.catch(() => null)
+    if (before === null) return null
+    // A link moves no contig: no genome's markers change.
+    if (question.steps.every((step) => step.op === 'link' || step.op === 'unlink' || step.op === 'rename')) return null
+    const after = await this.client.state(withSteps(this.store.curation, question.steps, 'auto'), this.weights).promise.catch(() => null)
     if (after === null) return null
     const worse = priceOf(before, after).find((row) => priceVerdict(row) === 'demoted')
     if (worse === undefined) return null
@@ -759,12 +824,20 @@ export class CurateModel {
     return contigs.map((c) => names[c]).filter((name): name is string => name !== undefined)
   }
 
-  /** Move the selected contigs to a genome, or to the pool (`null`). */
+  /**
+   * Move the selected contigs to a genome, or to the pool (`null`): those not
+   * there already — `false`, and no step, when none would move.
+   */
   moveSelected(to: string | null): boolean {
     const contigs = this.selectionHeld.contigs
     if (contigs.length === 0) return false
     if (to !== null && this.genome(to) === undefined) return false
-    this.store.apply({ op: 'move', contigs: this.namesOf(contigs), to })
+    // The binning as it stands, step just made included: the answer may lag.
+    const binning = this.store.binning
+    const target = to === null ? -1 : (binning.indexOfId(to) ?? -2)
+    const moving = contigs.filter((c) => binning.genomeOf[c] !== target)
+    if (moving.length === 0) return false
+    this.store.apply({ op: 'move', contigs: this.namesOf(moving), to })
     this.selectionHeld = { genomes: to === null ? [] : [to], contigs }
     this.emit('selection')
     return true
@@ -813,10 +886,15 @@ export class CurateModel {
     return true
   }
 
-  /** Merge the selected genomes into the longest of them, which keeps its name. */
+  /**
+   * Merge the selected genomes into the longest of them, which keeps its name:
+   * MAGs or elements, one kind at a time (`false` for both, as the drop
+   * refuses them).
+   */
   mergeSelected(into?: string): boolean {
     const ids = this.selectionHeld.genomes.filter((id) => this.genome(id) !== undefined)
     if (ids.length < 2) return false
+    if (new Set(ids.map((id) => this.genome(id)?.kind)).size > 1) return false
     const survivor = into !== undefined && ids.includes(into) ? into : [...ids].sort((a, b) => (this.genome(b)?.length ?? 0) - (this.genome(a)?.length ?? 0))[0]
     this.store.apply({ op: 'merge', into: survivor, genomes: ids.filter((id) => id !== survivor) })
     this.selectionHeld = { genomes: [survivor], contigs: [] }
@@ -838,7 +916,10 @@ export class CurateModel {
   rename(id: string, name: string): string | null {
     const wanted = name.trim()
     this.contigNames ??= new Set(this.store.file.names)
-    const refused = nameRefusal(wanted, this.answerHeld?.genomes.filter((genome) => genome.id !== id).map((genome) => genome.name) ?? [], this.contigNames)
+    // Every live genome's name, an emptied one's too: the fold keeps them taken.
+    const binning = this.store.binning
+    const own = binning.nameOfId(id)
+    const refused = nameRefusal(wanted, [...binning.takenNames].filter((taken) => taken !== own), this.contigNames)
     if (refused !== null) return refused
     if (this.genome(id)?.name === wanted) return null
     this.store.apply({ op: 'rename', genome: id, name: wanted })
@@ -867,23 +948,37 @@ export class CurateModel {
     return true
   }
 
+  /** Undo the last step; an auto run stops first, as the reader has taken the binning back. */
   undo(): void {
+    this.stopAuto()
     this.store.undo()
   }
 
   redo(): void {
+    this.stopAuto()
     this.store.redo()
   }
 
   goTo(count: number): void {
+    this.stopAuto()
     this.store.goTo(count)
   }
 
-  /** A fresh id for a genome a step creates: one no genome of the file and no step has. */
+  /**
+   * A fresh id for a genome a step creates, never one used before: past every
+   * `curated:N` a step made — undone and dropped ones too, as far as the
+   * suggestions turned down remember them, since a key turned down for the
+   * old genome must not hold for a new one — and no genome's name of the file.
+   */
   private mintId(): string {
     const taken = new Set(this.store.file.genomes.map((genome) => genome.name))
-    for (const entry of this.store.curation.history) if (entry.step.op === 'create') taken.add(entry.step.id)
-    for (let n = 1; ; n++) if (!taken.has(`${MINTED}${n}`)) return `${MINTED}${n}`
+    let most = 0
+    const seen = (text: string): void => {
+      for (const found of text.matchAll(MINTED_ID)) most = Math.max(most, Number(found[1]))
+    }
+    for (const entry of this.store.curation.history) if (entry.step.op === 'create') seen(entry.step.id)
+    for (const key of this.store.learned.rejected) seen(key)
+    for (let n = most + 1; ; n++) if (!taken.has(`${MINTED}${n}`)) return `${MINTED}${n}`
   }
 
   // -------------------------------------------------------------------------
@@ -960,6 +1055,18 @@ export function describeSuggestion(suggestion: Suggestion): string {
 /** A confidence as a whole percent, never 100 — no suggestion is certain. */
 export function displayPercent(confidence: number): number {
   return Math.min(99, Math.max(0, Math.round(confidence * 100)))
+}
+
+/** Whether a preview is a list of steps rather than one. */
+function isStepList(what: CurationStep | readonly CurationStep[]): what is readonly CurationStep[] {
+  return Array.isArray(what)
+}
+
+/** A curation with these steps made after it, as one gesture would make them. */
+function withSteps(curation: Curation, steps: readonly CurationStep[], by: 'reader' | 'auto'): Curation {
+  let next = curation
+  for (const step of steps) next = withCurationStep(next, step, by, 0)
+  return next
 }
 
 function combine<T>(now: readonly T[], given: readonly T[], how: SelectHow): T[] {

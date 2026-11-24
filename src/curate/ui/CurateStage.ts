@@ -36,6 +36,7 @@ import type { CurationStore } from '../../state/curation'
 import { fmt } from '../../units'
 import type { CurationBaseResult, CurationFocusResult, CurationNetworkResult, CurationStateResult } from '../../worker/curateProtocol'
 import type { CurateContext, CurateData, CurateDragged, CurateDropTarget, CurateFrame, CuratePane } from './context'
+import { chooseStep } from './Chooser'
 import { GenomeList } from './GenomeList'
 
 /** A card of the inspector. */
@@ -48,6 +49,8 @@ export interface CurateCard {
 /** What a chooser leaves open: the stage closes it with Escape. */
 export interface CurateChooser {
   close(): void
+  /** Whether it is still open: a chooser closes itself on a press outside it, or a resize. */
+  readonly open?: boolean
 }
 
 /** The parts the stage is built from. */
@@ -99,6 +102,9 @@ const PANE_WORD: Record<PaneName, string> = { contacts: 'contacts', hosts: 'host
 const PANE_TAB: Record<PaneName, string> = { contacts: 'contacts', hosts: 'hosts', scatter: 'scatter' }
 const PANE_KEY: Record<PaneName, string> = { contacts: '1', hosts: '2', scatter: '3' }
 
+/** What a mode button says while there is nothing to answer. */
+const NOTHING_TO_ANSWER = 'Nothing to answer: the suggestions come once the contacts are read.'
+
 /** Narrower than this, the centre shows the large picture alone, with tabs. */
 const NARROW = 840
 /** A held drag rests this long on a target before the pictures draw it made. */
@@ -119,6 +125,7 @@ export class CurateStage {
   private readonly panes: Record<PaneName, CuratePane & { closeUp?(): void; back?(): void }>
   private readonly cards: CurateCard[] = []
   private readonly modes: Record<'manual' | 'review' | 'auto', HTMLButtonElement>
+  private readonly modeTitles: Record<'manual' | 'review' | 'auto', string>
   private readonly undoButton: HTMLButtonElement
   private readonly redoButton: HTMLButtonElement
   private readonly side: HTMLElement
@@ -213,10 +220,15 @@ export class CurateStage {
     this.large = this.chosen = (PANES as readonly string[]).includes(remembered ?? '') ? (remembered as PaneName) : 'contacts'
 
     // The inspector.
+    this.modeTitles = {
+      manual: 'The suggestions are drawn and listed, and never apply themselves',
+      review: 'Work through the suggestions, merges first: Y takes one, N turns it down, and every answer teaches the ranking',
+      auto: `Take every suggestion at ${Math.round(AUTO_THRESHOLD * 100)}% or more, the surest first, each a step to undo like any other`,
+    }
     this.modes = {
-      manual: this.modeButton('manual', 'The suggestions are drawn and listed, and never apply themselves'),
-      review: this.modeButton('review', 'Work through the suggestions, merges first: Y takes one, N turns it down, and every answer teaches the ranking'),
-      auto: this.modeButton('auto', `Take every suggestion at ${Math.round(AUTO_THRESHOLD * 100)}% or more, the surest first, each a step to undo like any other`),
+      manual: this.modeButton('manual', this.modeTitles.manual),
+      review: this.modeButton('review', this.modeTitles.review),
+      auto: this.modeButton('auto', this.modeTitles.auto),
     }
     const modesCard = el(
       'section',
@@ -309,12 +321,14 @@ export class CurateStage {
           colours.clear()
           coloursDark = isDark
         }
-        const held = colours.get(id)
-        if (held !== undefined) return held
         const answer = stage.model.answer
+        // By kind too: a genome retyped is drawn in its new kind's lightness.
         const kind = answer?.genomes.find((genome) => genome.id === id)?.kind ?? fileGenomes[fileIndex.get(id) ?? -1]?.kind ?? 'mag'
+        const key = `${kind}\t${id}`
+        const held = colours.get(key)
+        if (held !== undefined) return held
         const colour = genomeColour(slotOf(fileIndex.get(id) ?? -1, id, fileGenomes.length), kind, isDark)
-        colours.set(id, colour)
+        colours.set(key, colour)
         return colour
       },
       shortName(id: string): string {
@@ -389,7 +403,7 @@ export class CurateStage {
     this.showStatus('reading every contact between contigs…', 0, true)
     const request = this.props.requests.network((done, total) => {
       if (this.closed || this.network !== request) return
-      this.showStatus('reading every contact between contigs…', total > 0 ? done / total : null, true)
+      this.progress(total > 0 ? done / total : null)
     })
     this.network = request
     request.promise.then(
@@ -406,7 +420,10 @@ export class CurateStage {
         this.network = null
         const cancelled = error instanceof Error && /cancel|abort/i.test(error.message)
         this.networkState = cancelled ? 'cancelled' : 'failed'
-        this.showStatus(cancelled ? 'reading the contacts: cancelled' : `reading the contacts failed: ${error instanceof Error ? error.message : String(error)}`, null, false, 'read them again')
+        this.showStatus(cancelled ? 'reading the contacts: cancelled' : `reading the contacts failed: ${error instanceof Error ? error.message : String(error)}`, null, false, {
+          label: 'read them again',
+          run: () => this.readNetwork(),
+        })
       },
     )
   }
@@ -414,25 +431,52 @@ export class CurateStage {
   private showGate(gate: { pixels: number; bytes: number | null }): void {
     this.networkState = 'gated'
     const sentence = `The maps, the hosts and the suggestions read every contact between contigs once: ${fmt.int(gate.pixels)} stored pixels${gate.bytes === null ? '' : `, ${fmt.bytes(gate.bytes)} to download`}.`
-    this.showStatus(sentence, null, false, 'read every contact')
+    this.showStatus(sentence, null, false, { label: 'read every contact', run: () => this.readNetwork() })
   }
 
-  private showStatus(text: string, fraction: number | null, cancellable: boolean, action?: string): void {
+  /** The row's text and bar, while it reads: moved on each report, never rebuilt, so its cancel keeps the focus. */
+  private statusParts: { text: HTMLElement; fill: HTMLElement; words: string } | null = null
+  /** What the status row says: the contacts' read, or a count that failed. */
+  private statusOf: 'network' | 'count' | null = null
+
+  private showStatus(text: string, fraction: number | null, cancellable: boolean, action?: { label: string; run: () => void }, of: 'network' | 'count' = 'network'): void {
     const bar = el('div', { class: 'curate-status-bar' })
     const fill = el('div', { class: 'curate-status-fill' })
-    if (fraction !== null) fill.style.width = `${Math.round(fraction * 100)}%`
-    else fill.classList.add('is-waiting')
     bar.appendChild(fill)
-    const parts: HTMLElement[] = [el('span', { class: 'curate-status-text', text: fraction === null ? text : `${text} ${Math.round(fraction * 100)}%` })]
+    const words = el('span', { class: 'curate-status-text' })
+    const parts: HTMLElement[] = [words]
     if (cancellable) parts.push(bar, el('button', { class: 'btn-link', text: 'cancel', attrs: { type: 'button' }, on: { click: () => this.network?.cancel() } }))
-    else if (action !== undefined) parts.push(el('button', { class: 'btn', text: action, attrs: { type: 'button' }, on: { click: () => this.readNetwork() } }))
+    else if (action !== undefined) parts.push(el('button', { class: 'btn', text: action.label, attrs: { type: 'button' }, on: { click: action.run } }))
     this.status.replaceChildren(...parts)
     this.status.classList.remove('hidden')
+    this.statusParts = cancellable ? { text: words, fill, words: text } : null
+    this.statusOf = of
+    if (cancellable) this.progress(fraction)
+    else words.textContent = text
+  }
+
+  /** The read's bar and percentage, moved. */
+  private progress(fraction: number | null): void {
+    const parts = this.statusParts
+    if (parts === null) return
+    parts.fill.classList.toggle('is-waiting', fraction === null)
+    parts.fill.style.width = fraction === null ? '' : `${Math.round(fraction * 100)}%`
+    parts.text.textContent = fraction === null ? parts.words : `${parts.words} ${Math.round(fraction * 100)}%`
   }
 
   private hideStatus(): void {
     this.status.classList.add('hidden')
     this.status.replaceChildren()
+    this.statusParts = null
+    this.statusOf = null
+  }
+
+  /** A count that failed, said, with a press to count again; gone with the next answer. */
+  private paintCountError(): void {
+    const error = this.model.error
+    if (error !== null) {
+      this.showStatus(`counting the binning failed: ${error}`, null, false, { label: 'count again', run: () => this.model.recount(0) }, 'count')
+    } else if (this.statusOf === 'count') this.hideStatus()
   }
 
   // -------------------------------------------------------------------------
@@ -441,6 +485,7 @@ export class CurateStage {
 
   private changed(change: CurateChange): void {
     if (this.closed) return
+    if (change === 'state' || change === 'error') this.paintCountError()
     if (change === 'state') this.fillCoverage()
     this.list.update(change)
     for (const pane of Object.values(this.panes)) pane.update(change)
@@ -448,7 +493,23 @@ export class CurateStage {
     if (change === 'mode') this.arrangeSide()
     if (change === 'state' || change === 'mode' || change === 'current' || change === 'counting' || change === 'error' || change === 'preview') this.paintChrome()
     if (change === 'mode' || change === 'current' || change === 'state') this.followReview()
+    // A drag, a chooser or a card let go of the preview the review priced its
+    // question with: priced again, once nothing else holds one.
+    if (change === 'preview' && this.model.mode === 'review' && this.model.previewSteps === null && this.dragging === null) this.repriceSoon()
     this.paintReadout()
+  }
+
+  private repricing = false
+
+  private repriceSoon(): void {
+    if (this.repricing) return
+    this.repricing = true
+    queueMicrotask(() => {
+      this.repricing = false
+      if (this.closed || this.dragging !== null || this.model.mode !== 'review' || this.model.previewSteps !== null) return
+      const current = this.model.current
+      if (current !== null) this.model.preview(current.steps, this.space)
+    })
   }
 
   /** The scatter's height: Hi-C contacts per kb, once the contacts are read. */
@@ -467,7 +528,7 @@ export class CurateStage {
     for (const [mode, button] of Object.entries(this.modes) as Array<['manual' | 'review' | 'auto', HTMLButtonElement]>) {
       button.setAttribute('aria-pressed', String(model.mode === mode))
       button.disabled = mode !== 'manual' && offered === 0 && model.mode !== mode
-      if (button.disabled) button.title = 'Nothing to answer: the suggestions come once the contacts are read.'
+      button.title = button.disabled ? NOTHING_TO_ANSWER : this.modeTitles[mode]
     }
     this.undoButton.disabled = !this.props.store.canUndo
     this.redoButton.disabled = !this.props.store.canRedo
@@ -520,7 +581,7 @@ export class CurateStage {
     const price = el('div', { class: 'curate-band-price' })
     const before = model.answer
     const after = model.previewed
-    if (before !== null && after !== null && JSON.stringify(model.previewStep) === JSON.stringify(current.step)) {
+    if (before !== null && after !== null && JSON.stringify(model.previewSteps) === JSON.stringify(current.steps)) {
       const rows = priceOf(before, after).filter((row) => row.kind === 'mag')
       if (rows.length === 0) price.append(el('span', { class: 'curate-band-price-none', text: current.kind === 'link' || current.kind === 'unlink' ? 'no genome’s quality changes' : 'no marker genes to price it by' }))
       for (const row of rows.slice(0, 3)) {
@@ -577,7 +638,7 @@ export class CurateStage {
     const current = model.current
     for (const pane of Object.values(this.panes)) pane.showSuggestion(current)
     if (current === null) return
-    model.preview(current.step, this.space)
+    model.preview(current.steps, this.space)
     this.setLarge(current.kind === 'link' || current.kind === 'unlink' ? 'hosts' : 'contacts')
     this.ctx.frame({
       genomes: current.genomes.map((g) => model.answer?.genomes[g]?.id).filter((id): id is string => id !== undefined),
@@ -711,7 +772,14 @@ export class CurateStage {
       text: mode,
       title,
       attrs: { type: 'button', 'aria-pressed': String(mode === 'manual'), 'data-mode': mode },
-      on: { click: () => this.model.setMode(mode) },
+      on: {
+        click: () => {
+          this.model.setMode(mode)
+          // The keyboard back to the list: Space on the button pressed it again
+          // instead of holding the review's preview.
+          this.list.focus()
+        },
+      },
     })
   }
 
@@ -805,12 +873,17 @@ export class CurateStage {
       }
       this.endDrag()
     }
+    // A gesture the browser took over — a touch turned into a scroll — ends
+    // the drag where it is, dropping nothing.
+    const cancel = (): void => this.endDrag()
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up, { once: true })
+    window.addEventListener('pointercancel', cancel, { once: true })
     this.dragEnd = () => {
       window.clearTimeout(rest)
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', cancel)
       lit?.classList.remove('is-drop-target')
       ghost.remove()
       document.body.classList.remove('is-curate-dragging')
@@ -824,6 +897,8 @@ export class CurateStage {
     this.dragging = null
     this.model.preview(null)
     this.ctx.say(null)
+    // In review, the question's price again: the drag's preview replaced it.
+    if (this.model.mode === 'review') this.repriceSoon()
   }
 
   /** What is under a point: a list row or section head, or a picture's target. */
@@ -849,7 +924,9 @@ export class CurateStage {
   // Acts the keys make.
   // -------------------------------------------------------------------------
 
+  /** The selected genomes' contigs, close up: the contact map large, and kept large by the steps made there. */
   private closeUp(): void {
+    this.chosen = 'contacts'
     this.setLarge('contacts')
     this.panes.contacts.closeUp?.()
   }
@@ -859,9 +936,8 @@ export class CurateStage {
     const anchor = at ?? (this.cardOf.selection.element.querySelector('.edit-act') as HTMLElement | null) ?? this.cardOf.selection.element
     this.chooser = this.props.parts.chooser(this.ctx, kind, anchor, (target) => {
       this.chooser = null
-      const selection = this.model.selection
-      const dragged: CurateDragged = selection.contigs.length > 0 ? { kind: 'contigs', contigs: selection.contigs } : { kind: 'genomes', ids: selection.genomes }
-      this.model.drop(dragged, target)
+      // As the chooser planned it: one MAG selected, the element chosen is linked to it.
+      chooseStep(this.ctx, kind, target)
     })
   }
 
@@ -900,6 +976,8 @@ export class CurateStage {
       case 'Y':
       case 'n':
       case 'N': {
+        // Held down, a key repeats: one press is one answer.
+        if (event.repeat) return true
         const current = model.current
         if (current === null) return false
         if (key === 'y' || key === 'Y') model.accept(current)
@@ -919,21 +997,32 @@ export class CurateStage {
         if (model.mode !== 'review' || model.current === null) return false
         if (!event.repeat) {
           this.space = true
-          model.preview(model.current.step, true)
+          model.preview(model.current.steps, true)
           model.drawPreview(true)
         }
         return true
       case 'm':
       case 'M':
-        if (selection.genomes.length >= 2 && selection.contigs.length === 0) model.mergeSelected()
-        else if (selection.contigs.length > 0) this.openChooser('move')
+        if (selection.genomes.length >= 2 && selection.contigs.length === 0) {
+          if (!model.mergeSelected()) this.flash('Merge MAGs with MAGs and elements with elements.')
+        } else if (selection.contigs.length > 0) this.openChooser('move')
         else if (selection.genomes.length === 1) this.openChooser('merge')
         else return false
         return true
       case 'l':
-      case 'L':
-        if (!this.linkSelected()) this.openChooser('link')
+      case 'L': {
+        if (this.linkSelected()) return true
+        // The chooser lists the MAGs for elements, or the elements for one MAG.
+        const kinds = selection.genomes.map((id) => model.answer?.genomes.find((genome) => genome.id === id)?.kind)
+        const elements = kinds.length > 0 && kinds.every((kind) => kind === 'element')
+        const oneMag = kinds.length === 1 && kinds[0] === 'mag'
+        if (selection.contigs.length > 0 || !(elements || oneMag)) {
+          this.flash('Select an element to link to a MAG, or one MAG to link elements to.')
+          return true
+        }
+        this.openChooser('link')
         return true
+      }
       case 'b':
       case 'B':
       case 'e':
@@ -1019,26 +1108,50 @@ export class CurateStage {
 
   /** Escape: the innermost thing, never the stage. */
   private escape(): void {
+    const sheet = this.root.querySelector('.curate-keys')
+    if (sheet !== null) {
+      sheet.remove()
+      return
+    }
     if (this.chooser !== null) {
+      // One that closed itself (a press outside it) is let go of, and Escape goes on.
+      const open = this.chooser.open !== false
       this.chooser.close()
       this.chooser = null
-      return
+      if (open) return
     }
     if (this.dragging !== null) {
       this.endDrag()
       return
     }
     if (this.list.isRenaming) return
+    // A field's Escape: its text gone, then the keyboard back to the list — the selection stays.
+    const typing = document.activeElement
+    if ((typing instanceof HTMLInputElement || typing instanceof HTMLTextAreaElement) && this.root.parentElement?.closest('.modal-backdrop')?.contains(typing) === true) {
+      if (typing.value !== '') {
+        typing.value = ''
+        typing.dispatchEvent(new Event('input', { bubbles: true }))
+      } else this.list.focus()
+      return
+    }
     if (this.model.running) {
       this.model.stopAuto()
       return
     }
-    if (this.model.previewStep !== null && this.model.mode !== 'review') {
+    if (this.model.previewSteps !== null && this.model.mode !== 'review') {
       this.model.preview(null)
       return
     }
     const selection = this.model.selection
     if (selection.genomes.length > 0 || selection.contigs.length > 0) this.model.clearSelection()
+  }
+
+  /** A word in the readout for a moment: why a key made nothing. */
+  private flash(text: string): void {
+    this.ctx.say(text)
+    window.setTimeout(() => {
+      if (this.sayHeld === text) this.ctx.say(null)
+    }, 2600)
   }
 
   /** The keys, in a popover. */

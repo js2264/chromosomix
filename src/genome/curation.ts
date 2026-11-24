@@ -216,16 +216,32 @@ export class CuratedBinning {
   readonly links: readonly CuratedLink[]
   /** The steps applied: nought for the file's binning as it is. */
   readonly applied: number
+  /**
+   * Every genome's name a step may not give another — the live ones, those
+   * emptied by moves included, since a move back would find them — by id.
+   */
+  private readonly live: ReadonlyMap<string, string>
   private readonly byId: Map<string, number>
   private readonly byName: Map<string, number>
 
-  private constructor(genomeOf: Int32Array, genomes: CuratedGenome[], links: CuratedLink[], applied: number) {
+  private constructor(genomeOf: Int32Array, genomes: CuratedGenome[], links: CuratedLink[], applied: number, live: ReadonlyMap<string, string>) {
     this.genomeOf = genomeOf
     this.genomes = genomes
     this.links = links
     this.applied = applied
+    this.live = live
     this.byId = new Map(genomes.map((genome, g) => [genome.id, g]))
     this.byName = new Map(genomes.map((genome, g) => [genome.name, g]))
+  }
+
+  /** The names a rename may not take: every live genome's, an emptied one's too. */
+  get takenNames(): ReadonlySet<string> {
+    return new Set(this.live.values())
+  }
+
+  /** A live genome's name by id, emptied or not; `undefined` for one merged away, dissolved, or never made. */
+  nameOfId(id: string): string | undefined {
+    return this.live.get(id)
   }
 
   /** The file's binning through a curation, or as it is with none. */
@@ -379,7 +395,8 @@ export class CuratedBinning {
       const m = slotOf.get(link.mag)
       return e !== undefined && m !== undefined && index[e] >= 0 && index[m] >= 0
     })
-    return new CuratedBinning(genomeOf, genomes, kept, steps.length)
+    const named = new Map(slots.filter((slot) => !slot.gone).map((slot) => [slot.id, slot.name]))
+    return new CuratedBinning(genomeOf, genomes, kept, steps.length, named)
   }
 
   /** The genome of this id, as an index into {@link genomes}. */
