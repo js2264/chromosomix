@@ -353,3 +353,30 @@ describe('the preview, drawn or priced', () => {
     expect(model.answer?.genomes.length).toBe(4)
   })
 })
+
+describe('auto, holding back', () => {
+  it('holds back a step that would lower a MAG’s grade, and names why', async () => {
+    const { base, evidence } = community()
+    const store = new CurationStore(`curate-model-${++keys}`, base, fileBinning(base), () => 0)
+    const quality = (wc: number, wr: number) => ({ set: 'S', present: 1, markers: 4, hits: 1, completeness: wc, redundancy: wr, weightedCompleteness: wc, weightedRedundancy: wr, duplicated: [] })
+    const client: CurateClient = {
+      state(curation) {
+        const answer = stateAnswer(evidence, CuratedBinning.of(base, curation))
+        const merged = (curation?.cursor ?? 0) > 0 || (curation?.history.length ?? 0) > 0
+        // As it stands: X1 a high-quality MAG and one sure merge into it; merged, contaminated.
+        answer.genomes = answer.genomes.map((genome) => (genome.id === 'X1' ? { ...genome, quality: merged ? quality(0.95, 1.4) : quality(0.95, 1.0) } : genome))
+        if (!merged) {
+          const sure = answer.suggestions.find((s) => s.kind === 'merge')
+          answer.suggestions = sure === undefined ? [] : [{ ...sure, confidence: 0.95 }]
+        } else answer.suggestions = []
+        return { promise: Promise.resolve(answer), cancel: () => {} }
+      },
+    }
+    const model = new CurateModel(store, client, { schedule: (run) => (run(), () => {}) })
+    await model.settled()
+    const steps = await model.runAuto()
+    expect(steps).toBe(0)
+    expect(store.applied).toBe(0)
+    expect(model.heldBack).toEqual([{ key: expect.stringMatching(/^merge:/), words: 'merge X2 into X1', why: 'it would make X1 contaminated' }])
+  })
+})

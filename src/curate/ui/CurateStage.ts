@@ -21,7 +21,7 @@ import { readInk } from '../../edit/draw'
 import { POOL_COLOUR, POOL_RGBA, genomeColour, slotOf, type GenomeColour } from '../colours'
 import { CurateModel, displayPercent, type Cancellable, type CurateChange, type CurateClient } from '../model'
 import { sharedPrefix, shortName } from '../names'
-import { priceLines, priceOf, priceVerdict } from '../price'
+import { newlyDuplicated, priceLines, priceOf, priceVerdict } from '../price'
 import type { Suggestion } from '../suggest'
 import { AUTO_THRESHOLD } from '../method'
 import { watchTheme } from '../../ui/analysisPlots'
@@ -519,6 +519,7 @@ export class CurateStage {
         const lines = priceLines(row)
         const verdict = priceVerdict(row)
         if (lines === null) continue
+        const twice = newlyDuplicated(row)
         price.append(
           el(
             'span',
@@ -528,6 +529,16 @@ export class CurateStage {
             verdict === 'demoted' ? ` · ${row.gradeAfter === 'contaminated' ? 'contaminated' : 'a grade lower'}` : verdict === 'promoted' ? ' · high quality' : '',
           ),
         )
+        // What a rise in redundancy is made of, named: two organisms, or a
+        // contig the genome has the like of already.
+        if (twice.length > 0)
+          price.append(
+            el('span', {
+              class: 'curate-band-price-row is-warn',
+              text: `${twice.length === 1 ? 'a marker' : `${twice.length} markers`} twice: ${twice.slice(0, 4).join(', ')}${twice.length > 4 ? '…' : ''}`,
+              title: twice.join(', '),
+            }),
+          )
       }
     } else price.append(el('span', { class: 'curate-band-price-none', text: 'pricing…' }))
     this.band.replaceChildren(line, price)

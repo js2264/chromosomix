@@ -98,6 +98,17 @@ export function priceVerdict(row: PriceRow): 'demoted' | 'promoted' | null {
   return null
 }
 
+/**
+ * The markers a step makes duplicated that none of a row's sources held
+ * twice: what a rise in redundancy is made of — two organisms, or a contig a
+ * genome has the like of already.
+ */
+export function newlyDuplicated(row: PriceRow): string[] {
+  if (row.after === null) return []
+  const before = new Set(row.from.flatMap((f) => f.quality?.duplicated ?? []))
+  return row.after.duplicated.filter((marker) => !before.has(marker))
+}
+
 /** `64% + 35% → 99%` and `1.01 + 1.00 → 1.04`: a row's numbers, weighted, in a line each. */
 export function priceLines(row: PriceRow): { completeness: string; redundancy: string } | null {
   if (row.after === null) return null

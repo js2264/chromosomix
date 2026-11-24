@@ -48,6 +48,8 @@ export interface Quality {
   redundancy: number
   weightedCompleteness: number
   weightedRedundancy: number
+  /** The markers present twice or more: what a redundancy above 1 is made of. */
+  duplicated: string[]
 }
 
 /**
@@ -137,6 +139,7 @@ export function qualityOf(set: MarkerSet, counts: ArrayLike<number>): Quality {
   let hits = 0
   let weighted = 0
   let duplicated = 0
+  const twice: string[] = []
   for (let k = 0; k < set.markers.length; k++) {
     const n = counts[k] ?? -1
     if (n < 0) continue
@@ -148,13 +151,16 @@ export function qualityOf(set: MarkerSet, counts: ArrayLike<number>): Quality {
     hits += n
     // A marker present twice or more weighs once in the redundancy, whatever
     // its copies (`attribute_weights`).
-    if (n > 1) duplicated += w
+    if (n > 1) {
+      duplicated += w
+      twice.push(set.markers[k])
+    }
   }
   const markers = set.markers.length
   if (present === 0) {
     // miComplete divides by the markers present for the redundancy and catches
     // the division by nought, and writes 0 for both weighted numbers.
-    return { set: set.name, present, markers, hits, completeness: 0, redundancy: 0, weightedCompleteness: 0, weightedRedundancy: 0 }
+    return { set: set.name, present, markers, hits, completeness: 0, redundancy: 0, weightedCompleteness: 0, weightedRedundancy: 0, duplicated: twice }
   }
   // The weighted redundancy is over the weighted completeness before it is
   // rounded, as miComplete computes it.
@@ -170,6 +176,7 @@ export function qualityOf(set: MarkerSet, counts: ArrayLike<number>): Quality {
     redundancy: pyRound(hits / present, 4),
     weightedCompleteness,
     weightedRedundancy,
+    duplicated: twice,
   }
 }
 

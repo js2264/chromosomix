@@ -347,3 +347,33 @@
     display: none;
   }
 }
+
+/* The dock: three drop targets at the list's foot, lit while something is held. */
+.curate-dock {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.3rem;
+  padding: 0.4rem 0.5rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-sunken);
+}
+.curate-dock-target {
+  padding: 0.3rem 0.2rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text-faint);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  transition: border-color 120ms, color 120ms, background 120ms;
+}
+body.is-curate-dragging .curate-dock-target {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.curate-dock-target.is-drop-target {
+  background: var(--accent-soft);
+  border-style: solid;
+}

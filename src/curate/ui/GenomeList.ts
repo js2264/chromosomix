@@ -170,11 +170,21 @@ export class GenomeList {
     })
     this.scroller.appendChild(this.spacer)
     this.sticky = el('div', { class: 'curate-list-sticky hidden', attrs: { 'aria-hidden': 'true' } })
+    // Three drop targets that never scroll away: what is held dropped here makes
+    // a new MAG, a new element, or goes to the pool.
+    const dock = el(
+      'div',
+      { class: 'curate-dock', attrs: { 'aria-label': 'Drop here' } },
+      el('div', { class: 'curate-dock-target', text: '+ new MAG', title: 'Drop contigs here for a new MAG of them, or genomes to make them MAGs', attrs: { 'data-drop-section': 'mags' } }),
+      el('div', { class: 'curate-dock-target', text: '+ new element', title: 'Drop contigs here for a new element of them, or genomes to make them elements', attrs: { 'data-drop-section': 'elements' } }),
+      el('div', { class: 'curate-dock-target', text: 'unbinned', title: 'Drop contigs here to unbin them, or genomes to dissolve them', attrs: { 'data-drop-section': 'pool' } }),
+    )
     this.element = el(
       'section',
       { class: 'curate-list', attrs: { 'data-pane': 'list' } },
       el('div', { class: 'curate-list-head' }, this.filterBox, this.filterNote, this.chipRow, sorts),
       el('div', { class: 'curate-list-body' }, this.scroller, this.sticky),
+      dock,
     )
     this.unsubscribe.push(ctx.model.subscribe((change) => this.update(change)))
     this.unsubscribe.push(ctx.onFrame((target) => this.frameOn(target)))

@@ -20,6 +20,7 @@ import { AUTO_THRESHOLD, INITIAL_WEIGHTS, learn, LIKELY, OFFER_FLOOR } from './m
 import { dropPlan, type DropPlan } from './drop'
 import { chainOrder, elementOrder, keepOrder } from './order'
 import { questions, type Question } from './questions'
+import { priceOf, priceVerdict } from './price'
 import type { KindWeights, Suggestion } from './suggest'
 import type { CurateDragged, CurateDropTarget } from './ui/context'
 
@@ -679,11 +680,20 @@ export class CurateModel {
     return this.autoRun !== null
   }
 
+  /** What the last auto run held back, and why: a step that would have lowered a genome's grade. */
+  get heldBack(): ReadonlyArray<{ key: string; words: string; why: string }> {
+    return this.heldBackList
+  }
+
+  private heldBackList: Array<{ key: string; words: string; why: string }> = []
+
   /**
-   * Take every suggestion at {@link AUTO_THRESHOLD} or more, the surest first,
-   * one step each, counting again between two — what one takes changes what
-   * the next is. Stops when none is left, at {@link AUTO_MOST} steps, or when
-   * stopped; never takes one suggestion twice.
+   * Take every question at {@link AUTO_THRESHOLD} or more, in the queue's
+   * order, one gesture each, counting again between two — what one takes
+   * changes what the next is. A step that would lower a MAG's grade is held
+   * back, and named ({@link heldBack}): a bulk answer never makes a genome
+   * worse unseen. Stops when none is left, at {@link AUTO_MOST} steps, or when
+   * stopped; never asks one question twice.
    *
    * @returns The steps it made.
    */
@@ -691,17 +701,24 @@ export class CurateModel {
     if (this.autoRun !== null) return 0
     const run = { stopped: false }
     this.autoRun = run
+    this.heldBackList = []
     this.emit('mode')
-    const taken = new Set<string>()
+    const asked = new Set<string>()
     let steps = 0
     try {
       while (!run.stopped && steps < most) {
         await this.settled()
         if (run.stopped || this.disposed || this.errorHeld !== null) break
-        const best = this.sure().find((s) => !taken.has(s.key))
-        if (best === undefined) break
-        taken.add(best.key)
-        this.accept(best, 'auto')
+        const next = this.queue().find((q) => q.confidence >= AUTO_THRESHOLD && !asked.has(q.key))
+        if (next === undefined) break
+        asked.add(next.key)
+        const why = await this.demotes(next)
+        if (run.stopped || this.disposed) break
+        if (why !== null) {
+          this.heldBackList = [...this.heldBackList, { key: next.key, words: next.words, why }]
+          continue
+        }
+        this.accept(next, 'auto')
         steps++
       }
     } finally {
@@ -709,6 +726,19 @@ export class CurateModel {
       if (!this.disposed) this.emit('mode')
     }
     return steps
+  }
+
+  /** Why taking a question would lower a MAG's grade, or `null`: counted as a preview is, apart from it. */
+  private async demotes(question: Question): Promise<string | null> {
+    const before = this.answerHeld
+    if (before === null || question.steps.length !== 1) return null
+    const step = question.steps[0]
+    if (step.op === 'link' || step.op === 'unlink' || step.op === 'rename') return null
+    const after = await this.client.state(withCurationStep(this.store.curation, step, 'auto', 0), this.weights).promise.catch(() => null)
+    if (after === null) return null
+    const worse = priceOf(before, after).find((row) => priceVerdict(row) === 'demoted')
+    if (worse === undefined) return null
+    return `it would make ${worse.name} ${worse.gradeAfter === 'contaminated' ? 'contaminated' : `${worse.gradeAfter ?? 'ungraded'} quality`}`
   }
 
   /** Stop an auto run after the step it is making. */
