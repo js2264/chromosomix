@@ -5655,10 +5655,15 @@ export class Session {
       // edit, are the ones the edit was made on rather than the ones the
       // reader now answers with (§27.7).
       const pairs = contigPairs(contigs)
-      const file = { names: pairs.map(([name]) => name), lengths: pairs.map(([, length]) => length) }
+      const answered = { names: pairs.map(([name]) => name), lengths: pairs.map(([, length]) => length) }
+      // A kept edit is checked against the file's sequences, never the edited
+      // ones the reader answers with while the session is drawn through it: it
+      // was refused after a reload, a workspace or a link, the stage opened on
+      // an empty history, and its first step overwrote the edit being drawn.
+      const file = this.lens?.edit.original ?? answered
       const rows = genome === undefined ? [] : this.contigRowsOf(genome)
       const original =
-        genome === undefined ? (this.lens?.edit.original ?? file) : { names: rows.map((row) => row.name), lengths: rows.map((row) => row.length), genome }
+        genome === undefined ? file : { names: rows.map((row) => row.name), lengths: rows.map((row) => row.length), genome }
       const store = new EditStore(key, original, undefined, file)
       store.subscribe(() => this.referenceChip?.sync())
       this.editHeld = { key, store }

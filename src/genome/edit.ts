@@ -648,6 +648,11 @@ function apply(state: Folded, step: EditStep, original: OriginalAssembly, ids: I
     }
     case 'layout':
       return laidOut(step, original, ids)
+    default:
+      // A step this build does not know — a workspace written by a newer one —
+      // changes nothing: it stays in the history, and the fold goes on past it
+      // rather than failing the open it is replayed in (§29.4).
+      return state
   }
 }
 

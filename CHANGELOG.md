@@ -366,6 +366,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **An edit of the reference kept with a file is drawn again after a reload, a workspace or a link
+  (§27.7).** The stage checked the kept edit against the sequences the reader answered with — which,
+  with the session drawn through that very edit, were the edited ones — and refused it as made on
+  another assembly: it opened on an empty history, the first step overwrote the edit being drawn, and
+  the heading's revert arrow put the word back to *as in the file* while the map stayed edited. The
+  edit is checked against the file's own sequences now.
+- **A step this build does not know no longer fails the open (§29.4).** A workspace or a link from a
+  newer build whose edit held an operation this one has never heard of threw while the edit was
+  replayed, inside the reader's open, so the session was lost. The step is kept in the history,
+  changes nothing, and is named there as *a step this version does not know*.
 - **The maps of a deck stay on one place across the whole genome (§16.3).** Zoomed or panned fast,
   the maps of a deck on the whole genome went on moving together but showed two places: the yeast
   micro-C twice, zoomed fast into the whole genome, showed chrVII:378–632 kb on the first map and
