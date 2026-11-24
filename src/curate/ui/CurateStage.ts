@@ -485,12 +485,14 @@ export class CurateStage {
       this.band.replaceChildren(el('span', { class: 'curate-band-words', text: model.stale ? 'review · weighing…' : 'review · nothing left to answer' }))
       return
     }
-    const offered = model.offered()
-    const at = offered.findIndex((s) => s.key === current.key)
+    const queue = model.queue()
+    const question = model.currentQuestion
+    const at = queue.findIndex((q) => q.key === question?.key)
+    const member = model.member
     const line = el(
       'div',
       { class: 'curate-band-line' },
-      el('span', { class: 'curate-band-where', text: `review · ${at + 1} of ${fmt.int(offered.length)}` }),
+      el('span', { class: 'curate-band-where', text: `review · ${at + 1} of ${fmt.int(queue.length)}${member === null ? '' : ` · ${member.at + 1} of its ${member.of}`}` }),
       el('span', { class: 'curate-band-words', text: `${this.shortWords(current)} · ${displayPercent(current.confidence)}%` }),
       el(
         'span',
@@ -502,6 +504,7 @@ export class CurateStage {
         keyBadge('arrowleft', { class: 'kbd-inline' }),
         keyBadge('arrowright', { class: 'kbd-inline' }),
         ' the others ',
+        ...(question !== null && question.members.length > 1 ? [keyBadge('arrowdown', { class: 'kbd-inline' }), keyBadge('arrowup', { class: 'kbd-inline' }), ' one by one '] : []),
         keyBadge('space', { class: 'kbd-inline' }),
         ' held: as it would be',
       ),
@@ -892,6 +895,10 @@ export class CurateStage {
         if (model.mode !== 'review') return false
         model.moveCurrent(key === 'ArrowRight' ? 1 : -1)
         return true
+      case 'ArrowDown':
+      case 'ArrowUp':
+        if (model.mode !== 'review') return false
+        return model.moveMember(key === 'ArrowDown' ? 1 : -1)
       case ' ':
         if (model.mode !== 'review' || model.current === null) return false
         if (!event.repeat) {

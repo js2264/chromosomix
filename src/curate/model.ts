@@ -19,6 +19,7 @@ import type { CurationStateResult } from '../worker/curateProtocol'
 import { AUTO_THRESHOLD, INITIAL_WEIGHTS, learn, LIKELY, OFFER_FLOOR } from './method'
 import { dropPlan, type DropPlan } from './drop'
 import { chainOrder, elementOrder, keepOrder } from './order'
+import { questions, type Question } from './questions'
 import type { KindWeights, Suggestion } from './suggest'
 import type { CurateDragged, CurateDropTarget } from './ui/context'
 
@@ -93,6 +94,9 @@ export class CurateModel {
   private hoverContig = -1
   private modeHeld: CurateMode = 'manual'
   private currentKey: string | null = null
+  /** Inside the current question: which of its members is answered alone, or `null` for the whole. */
+  private memberAt: number | null = null
+  private queueHeld: { answer: CurationStateResult; rejected: string; list: Question[] } | null = null
   private autoRun: { stopped: boolean } | null = null
   private waiters: Array<() => void> = []
   private previewHeld: { key: string; step: CurationStep; answer: CurationStateResult | null } | null = null
@@ -490,7 +494,8 @@ export class CurateModel {
     if (mode === this.modeHeld) return
     this.modeHeld = mode
     if (mode !== 'auto' && this.autoRun !== null) this.autoRun.stopped = true
-    this.currentKey = mode === 'review' ? (this.offered()[0]?.key ?? null) : null
+    this.currentKey = mode === 'review' ? (this.queue()[0]?.key ?? null) : null
+    this.memberAt = null
     this.emit('mode')
   }
 
@@ -526,46 +531,115 @@ export class CurateModel {
     return this.store.learned.rejected.map((key) => ({ key, suggestion: byKey.get(key) ?? null }))
   }
 
-  /** The suggestion in review: the one chosen if it is still on offer, else the surest. */
-  get current(): Suggestion | null {
+  /**
+   * The review's questions (`curate/questions.ts`): the suggestions on offer
+   * grouped as a curator decides them, in the queue's order. Counted once per
+   * answer and per what was turned down.
+   */
+  queue(): Question[] {
+    const answer = this.answerHeld
+    if (answer === null) return []
+    const rejected = this.store.learned.rejected.join('\n')
+    if (this.queueHeld?.answer === answer && this.queueHeld.rejected === rejected) return this.queueHeld.list
+    const list = questions(this.offered(), answer, this.store.file.names).sort(queueOrder)
+    this.queueHeld = { answer, rejected, list }
+    return list
+  }
+
+  /** The question in review: the one chosen if it is still asked, else the first. */
+  get currentQuestion(): Question | null {
     if (this.modeHeld !== 'review') return null
-    const offered = this.offered()
-    return offered.find((s) => s.key === this.currentKey) ?? offered[0] ?? null
+    const list = this.queue()
+    return list.find((q) => q.key === this.currentKey) ?? list[0] ?? null
   }
 
-  /** Review the suggestion with this key. */
+  /**
+   * What review answers now: the current question, or the one member of it
+   * the reader stepped into (↓).
+   */
+  get current(): Question | null {
+    const question = this.currentQuestion
+    if (question === null || this.memberAt === null || question.members.length < 2) return question
+    const member = question.members[Math.min(this.memberAt, question.members.length - 1)]
+    return { ...member, members: [member], steps: [member.step] }
+  }
+
+  /** Which member of the current question is answered alone, and of how many; `null` for the whole. */
+  get member(): { at: number; of: number } | null {
+    const question = this.currentQuestion
+    if (question === null || this.memberAt === null || question.members.length < 2) return null
+    return { at: Math.min(this.memberAt, question.members.length - 1), of: question.members.length }
+  }
+
+  /** Review the question with this key, whole. */
   setCurrent(key: string): void {
-    if (key === this.currentKey) return
-    this.currentKey = key
+    const question = this.queue().find((q) => q.key === key || q.members.some((m) => m.key === key))
+    const next = question?.key ?? key
+    if (next === this.currentKey && this.memberAt === null) return
+    this.currentKey = next
+    this.memberAt = null
     this.emit('current')
   }
 
-  /** The next suggestion on offer in review, or the previous one; wraps. */
+  /** The next question in review, or the previous one; wraps. */
   moveCurrent(by: 1 | -1): void {
-    const offered = this.offered()
-    if (offered.length === 0) return
-    const at = Math.max(0, offered.findIndex((s) => s.key === this.current?.key))
-    this.currentKey = offered[(at + by + offered.length) % offered.length].key
+    const list = this.queue()
+    if (list.length === 0) return
+    const at = Math.max(0, list.findIndex((q) => q.key === this.currentQuestion?.key))
+    this.currentKey = list[(at + by + list.length) % list.length].key
+    this.memberAt = null
     this.emit('current')
   }
 
-  /** Take a suggestion: its step, marked as the suggestion's, and the answer learned. */
-  accept(suggestion: Suggestion, by: 'suggestion' | 'auto' = 'suggestion'): void {
-    const learned = this.learnedFrom(suggestion, true)
-    this.store.apply(suggestion.step, by, describeSuggestion(suggestion))
-    this.store.keepLearned(learned)
-    if (this.modeHeld === 'review' && this.currentKey === suggestion.key) this.currentKey = null
+  /** Into the current question's members (↓), to the next one, or back out of them (↑ from the first). */
+  moveMember(by: 1 | -1): boolean {
+    const question = this.currentQuestion
+    if (question === null || question.members.length < 2) return false
+    if (this.memberAt === null) {
+      if (by < 0) return false
+      this.memberAt = 0
+    } else {
+      const next = this.memberAt + by
+      this.memberAt = next < 0 ? null : Math.min(next, question.members.length - 1)
+    }
+    this.emit('current')
+    return true
   }
 
-  /** Turn a suggestion down: it is not offered again, and the answer is learned. */
-  reject(suggestion: Suggestion): void {
-    const learned = this.learnedFrom(suggestion, false)
-    if (!learned.rejected.includes(suggestion.key)) learned.rejected = [...learned.rejected, suggestion.key]
-    if (this.modeHeld === 'review' && this.currentKey === suggestion.key) {
-      // The next one along, before this one leaves the list.
-      const offered = this.offered()
-      const at = offered.findIndex((s) => s.key === suggestion.key)
-      this.currentKey = offered[at + 1]?.key ?? offered[at - 1]?.key ?? null
+  /**
+   * Take a suggestion, or a question whole: its steps, one gesture marked as
+   * the suggestion's, and every member's answer learned.
+   */
+  accept(suggestion: Suggestion | Question, by: 'suggestion' | 'auto' = 'suggestion'): void {
+    const members = 'members' in suggestion ? suggestion.members : [suggestion]
+    const steps = 'steps' in suggestion ? suggestion.steps : [suggestion.step]
+    let learned = this.store.learned
+    for (const member of members) learned = this.learnedFrom(member, true, learned)
+    const said = describeSuggestion(suggestion)
+    if (steps.length === 1) this.store.apply(steps[0], by, said)
+    else this.store.applyAll(steps.map((step) => ({ step, by, suggestion: said })))
+    this.store.keepLearned(learned)
+    if (this.modeHeld === 'review') {
+      this.currentKey = null
+      this.memberAt = null
+    }
+  }
+
+  /** Turn a suggestion down, or a question's every member: none is offered again, and each answer is learned. */
+  reject(suggestion: Suggestion | Question): void {
+    const members = 'members' in suggestion ? suggestion.members : [suggestion]
+    let learned = this.store.learned
+    for (const member of members) {
+      learned = this.learnedFrom(member, false, learned)
+      if (!learned.rejected.includes(member.key)) learned = { ...learned, rejected: [...learned.rejected, member.key] }
+    }
+    if (this.modeHeld === 'review') {
+      // The next question along, before this one leaves the queue.
+      const list = this.queue()
+      const at = list.findIndex((q) => q.key === this.currentQuestion?.key)
+      const inside = this.memberAt !== null
+      if (!inside) this.currentKey = list[at + 1]?.key ?? list[at - 1]?.key ?? null
+      this.memberAt = null
     }
     this.store.keepLearned(learned)
   }
@@ -587,8 +661,7 @@ export class CurateModel {
     return this.store.learned.answers
   }
 
-  private learnedFrom(suggestion: Suggestion, accepted: boolean): CurationLearned {
-    const learned = this.store.learned
+  private learnedFrom(suggestion: Suggestion, accepted: boolean, learned: CurationLearned = this.store.learned): CurationLearned {
     // An unlink is a link's confidence the other way round: taking one says the
     // link was wrong.
     const kind: LearnedKind = suggestion.kind === 'unlink' ? 'link' : suggestion.kind

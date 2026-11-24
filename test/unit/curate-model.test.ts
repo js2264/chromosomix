@@ -165,23 +165,39 @@ describe('the controller', () => {
     expect(model.answer?.links.some((link) => link.element === 'P' && link.mag === 'Z')).toBe(false)
   })
 
-  it('reviews one suggestion at a time, the next along after an answer', async () => {
-    const { model } = setup()
+  it('reviews one question at a time, the next along after an answer, a question’s members one by one', async () => {
+    const { model, store } = setup()
     await model.settled()
     expect(model.current).toBeNull()
     model.setMode('review')
-    const offered = model.offered()
-    expect(model.current?.key).toBe(offered[0].key)
+    const queue = model.queue()
+    expect(model.current?.key).toBe(queue[0].key)
     model.moveCurrent(1)
-    expect(model.current?.key).toBe(offered[1].key)
+    expect(model.current?.key).toBe(queue[1].key)
     model.moveCurrent(-1)
     model.moveCurrent(-1)
-    expect(model.current?.key).toBe(offered[offered.length - 1].key)
-    const turnedDown = offered[0]
+    expect(model.current?.key).toBe(queue[queue.length - 1].key)
+    // The element's two answers — link P to Y, unlink it from Z — are one question.
+    const host = queue.find((q) => q.key === 'host:P')
+    expect(host?.members.map((m) => m.kind).sort()).toEqual(['link', 'unlink'])
+    model.setCurrent('host:P')
+    expect(model.moveMember(1)).toBe(true)
+    expect(model.member).toEqual({ at: 0, of: 2 })
+    expect(model.current?.key).toBe(host?.members[0].key)
+    expect(model.moveMember(-1)).toBe(true)
+    expect(model.member).toBeNull()
+    // Taken whole: both steps, one gesture, one undo.
+    model.accept(model.current as NonNullable<typeof model.current>)
+    expect(store.curation.history.map((entry) => entry.step.op).sort()).toEqual(['link', 'unlink'])
+    store.undo()
+    expect(store.applied).toBe(0)
+    await model.settled()
+    const turnedDown = model.queue()[0]
     model.setCurrent(turnedDown.key)
     model.reject(turnedDown)
     await model.settled()
-    expect(model.current?.key).toBe(offered[1].key)
+    expect(model.queue().some((q) => q.key === turnedDown.key)).toBe(false)
+    expect(model.current?.key).not.toBe(turnedDown.key)
   })
 
   it('auto takes every sure suggestion, one step each, and stops when none is left', async () => {
