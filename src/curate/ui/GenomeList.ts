@@ -175,8 +175,8 @@ export class GenomeList {
     const dock = el(
       'div',
       { class: 'curate-dock', attrs: { 'aria-label': 'Drop here' } },
-      el('div', { class: 'curate-dock-target', text: '+ new MAG', title: 'Drop contigs here for a new MAG of them, or genomes to make them MAGs', attrs: { 'data-drop-section': 'mags' } }),
-      el('div', { class: 'curate-dock-target', text: '+ new element', title: 'Drop contigs here for a new element of them, or genomes to make them elements', attrs: { 'data-drop-section': 'elements' } }),
+      el('div', { class: 'curate-dock-target', text: '+ MAG', title: 'Drop contigs here for a new MAG of them, or genomes to make them MAGs', attrs: { 'data-drop-section': 'mags' } }),
+      el('div', { class: 'curate-dock-target', text: '+ element', title: 'Drop contigs here for a new element of them, or genomes to make them elements', attrs: { 'data-drop-section': 'elements' } }),
       el('div', { class: 'curate-dock-target', text: 'unbinned', title: 'Drop contigs here to unbin them, or genomes to dissolve them', attrs: { 'data-drop-section': 'pool' } }),
     )
     this.element = el(
@@ -439,7 +439,10 @@ export class GenomeList {
     const counted = el('span', { class: 'curate-section-count', text: count })
     const holder = el('span', { class: 'curate-section-chevron' })
     holder.appendChild(chevron)
-    return [holder, title, counted]
+    // The prefix every name of the section shares, printed once here.
+    const prefix = row.section === 'pool' ? '' : this.ctx.prefixOf(row.section === 'mags' ? 'mag' : 'element')
+    if (prefix === '') return [holder, title, counted]
+    return [holder, title, el('span', { class: 'curate-section-prefix', text: `${prefix}…`, title: `Every name here begins ${prefix}` }), counted]
   }
 
   private genomeContent(node: HTMLElement, row: Extract<ListRow, { kind: 'genome' }>): void {
@@ -466,7 +469,7 @@ export class GenomeList {
     swatch.style.setProperty('--swatch', colour.css)
     const change = derived.changes.genomes[row.genome]
     const chip = changeChip(change)
-    const name = el('span', { class: 'curate-row-name', text: genome.name, title: `${genome.name} · ${fmt.int(genome.contigs)} contigs · ${fmt.bp(genome.length)}` })
+    const name = el('span', { class: 'curate-row-name', text: this.ctx.shortName(genome.id), title: `${genome.name} · ${fmt.int(genome.contigs)} contigs · ${fmt.bp(genome.length)}` })
     const parts: Array<HTMLElement | null> = [
       disclosure,
       swatch,
@@ -490,7 +493,7 @@ export class GenomeList {
         )
       }
     } else {
-      const hosts = derived.answer.links.filter((link) => link.element === genome.id).map((link) => derived.answer.genomes.find((g) => g.id === link.mag)?.name ?? link.mag)
+      const hosts = derived.answer.links.filter((link) => link.element === genome.id).map((link) => this.ctx.shortName(link.mag))
       const text = hosts.length === 0 ? 'no host' : hosts.length === 1 ? `→ ${hosts[0]}` : `${hosts.length} hosts`
       parts.push(el('span', { class: `curate-row-hosts${hosts.length === 0 ? ' is-faint' : ''}`, text, title: hosts.length === 0 ? 'Linked to no MAG.' : `Hosted by ${hosts.join(', ')}.` }))
     }
@@ -533,7 +536,7 @@ export class GenomeList {
     const was = derived.changes.fileGenomeOf[c]
     const now = derived.answer.genomeOf[c] < 0 ? null : derived.answer.genomes[derived.answer.genomeOf[c]].id
     if (best !== undefined) {
-      const target = best.genomes[0] === undefined ? '' : (derived.answer.genomes[best.genomes[0]]?.name ?? '')
+      const target = best.genomes[0] === undefined ? '' : this.ctx.shortName(derived.answer.genomes[best.genomes[0]]?.id ?? '')
       parts.push(el('span', { class: 'curate-row-offer', text: `→ ${target} ${Math.min(99, Math.round(best.confidence * 100))}%`, title: best.words }))
     } else if (was !== now) {
       const from = was === null ? 'from the pool' : `from ${this.fileName(was)}`
@@ -542,9 +545,9 @@ export class GenomeList {
     node.append(...parts)
   }
 
-  /** A file genome's name now, by its id: its new name where it was renamed. */
+  /** A file genome's name now, by its id, short: its new name where it was renamed. */
   private fileName(id: string): string {
-    return this.derived?.answer.genomes.find((genome) => genome.id === id)?.name ?? id
+    return this.derived?.answer.genomes.some((genome) => genome.id === id) === true ? this.ctx.shortName(id) : id
   }
 
   /** Selection, hover, the keyboard's row and the review's marks, on the rows drawn: classes only. */

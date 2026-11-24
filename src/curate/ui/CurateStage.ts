@@ -23,7 +23,7 @@ import { CurateModel, displayPercent, type Cancellable, type CurateChange, type 
 import { sharedPrefix, shortName } from '../names'
 import { newlyDuplicated, priceLines, priceOf, priceVerdict } from '../price'
 import type { Suggestion } from '../suggest'
-import { AUTO_THRESHOLD } from '../method'
+import { AUTO_THRESHOLD, LIKELY } from '../method'
 import { watchTheme } from '../../ui/analysisPlots'
 import { keyBadge, withKey } from '../../ui/commands'
 import { el } from '../../ui/dom'
@@ -55,7 +55,7 @@ export interface CurateParts {
   contacts(ctx: CurateContext): CuratePane & { closeUp?(): void; back?(): void }
   hosts(ctx: CurateContext): CuratePane
   scatter(ctx: CurateContext): CuratePane
-  selection(ctx: CurateContext, hooks: { rename(id: string): void; closeUp(): void; choose(kind: 'move' | 'merge' | 'link'): void }): CurateCard
+  selection(ctx: CurateContext, hooks: { rename(id: string): void; closeUp(): void; choose(kind: 'move' | 'merge' | 'link', anchor?: HTMLElement): void }): CurateCard
   suggestions(ctx: CurateContext, hooks: { frame(s: Suggestion): void }): CurateCard
   history(ctx: CurateContext): CurateCard
   exporting(ctx: CurateContext, options: { stem: string; store: CurationStore }): CurateCard
@@ -95,6 +95,8 @@ export interface CurateStageProps {
 const PANES = ['contacts', 'hosts', 'scatter'] as const
 type PaneName = (typeof PANES)[number]
 const PANE_WORD: Record<PaneName, string> = { contacts: 'contacts', hosts: 'hosts', scatter: 'GC × coverage' }
+/** A picture's tab: one short word, so the readout beside the tabs keeps its room. */
+const PANE_TAB: Record<PaneName, string> = { contacts: 'contacts', hosts: 'hosts', scatter: 'scatter' }
 const PANE_KEY: Record<PaneName, string> = { contacts: '1', hosts: '2', scatter: '3' }
 
 /** Narrower than this, the centre shows the large picture alone, with tabs. */
@@ -169,7 +171,7 @@ export class CurateStage {
         title: withKey(`Show the ${PANE_WORD[name]} large`, PANE_KEY[name]),
         on: { click: () => this.choose(name) },
       })
-      tab.append(el('span', { text: PANE_WORD[name] }), keyBadge(PANE_KEY[name], { class: 'kbd-inline' }))
+      tab.append(el('span', { text: PANE_TAB[name] }), keyBadge(PANE_KEY[name], { class: 'kbd-inline' }))
       this.tabs.appendChild(tab)
     }
     const tidy = el('button', {
@@ -226,7 +228,7 @@ export class CurateStage {
       selection: props.parts.selection(this.ctx, {
         rename: (id) => this.list.startRename(id),
         closeUp: () => this.closeUp(),
-        choose: (kind) => this.openChooser(kind),
+        choose: (kind, anchor) => this.openChooser(kind, anchor),
       }),
       suggestions: props.parts.suggestions(this.ctx, { frame: (s) => this.frameSuggestion(s) }),
       history: props.parts.history(this.ctx),
@@ -488,26 +490,32 @@ export class CurateStage {
     const queue = model.queue()
     const question = model.currentQuestion
     const at = queue.findIndex((q) => q.key === question?.key)
+    const likely = queue.filter((q) => q.confidence >= LIKELY).length
     const member = model.member
+    const where =
+      at < likely
+        ? `review · ${at + 1} of ${fmt.int(likely)}${queue.length > likely ? ` · ${fmt.int(queue.length - likely)} less sure after` : ''}`
+        : `review · less sure · ${at + 1 - likely} of ${fmt.int(queue.length - likely)}`
+    const keys = el(
+      'span',
+      { class: 'curate-band-keys' },
+      keyBadge('y', { class: 'kbd-inline' }),
+      ' take ',
+      keyBadge('n', { class: 'kbd-inline' }),
+      ' turn down ',
+      keyBadge('←', { class: 'kbd-inline' }),
+      keyBadge('→', { class: 'kbd-inline' }),
+      ' the others ',
+      ...(question !== null && question.members.length > 1 ? [keyBadge('↓', { class: 'kbd-inline' }), keyBadge('↑', { class: 'kbd-inline' }), ' one by one '] : []),
+      keyBadge(' ', { class: 'kbd-inline' }),
+      ' held: as it would be',
+    )
     const line = el(
       'div',
       { class: 'curate-band-line' },
-      el('span', { class: 'curate-band-where', text: `review · ${at + 1} of ${fmt.int(queue.length)}${member === null ? '' : ` · ${member.at + 1} of its ${member.of}`}` }),
-      el('span', { class: 'curate-band-words', text: `${this.shortWords(current)} · ${displayPercent(current.confidence)}%` }),
-      el(
-        'span',
-        { class: 'curate-band-keys' },
-        keyBadge('y', { class: 'kbd-inline' }),
-        ' take ',
-        keyBadge('n', { class: 'kbd-inline' }),
-        ' turn down ',
-        keyBadge('arrowleft', { class: 'kbd-inline' }),
-        keyBadge('arrowright', { class: 'kbd-inline' }),
-        ' the others ',
-        ...(question !== null && question.members.length > 1 ? [keyBadge('arrowdown', { class: 'kbd-inline' }), keyBadge('arrowup', { class: 'kbd-inline' }), ' one by one '] : []),
-        keyBadge('space', { class: 'kbd-inline' }),
-        ' held: as it would be',
-      ),
+      el('span', { class: 'curate-band-where', text: `${where}${member === null ? '' : ` · ${member.at + 1} of its ${member.of}`}` }),
+      el('span', { class: 'curate-band-words', text: `${this.shortWords(current)} · ${displayPercent(current.confidence)}%`, title: current.words }),
+      keys,
     )
     const price = el('div', { class: 'curate-band-price' })
     const before = model.answer
@@ -593,11 +601,8 @@ export class CurateStage {
     const mags = answer.genomes.filter((genome) => genome.kind === 'mag')
     const elements = answer.genomes.length - mags.length
     let pooled = 0
-    let pooledLength = 0
-    answer.genomeOf.forEach((g, c) => {
-      if (g >= 0) return
-      pooled++
-      pooledLength += this.props.store.file.lengths[c] ?? 0
+    answer.genomeOf.forEach((g) => {
+      if (g < 0) pooled++
     })
     const tally = this.model.tally()
     const file = this.model.fileAnswer
@@ -605,7 +610,7 @@ export class CurateStage {
     const fileElements = (file?.genomes.length ?? answer.genomes.length) - fileMags
     const counted = (n: number, one: string, many: string): string => `${fmt.int(n)} ${n === 1 ? one : many}`
     const was = (now: number, then: number, one: string, many: string): string => (now === then ? counted(now, one, many) : `${many} ${fmt.int(then)} → ${fmt.int(now)}`)
-    const parts = [was(mags.length, fileMags, 'MAG', 'MAGs'), was(elements, fileElements, 'element', 'elements'), `${counted(pooled, 'unbinned contig', 'unbinned contigs')} (${fmt.bp(pooledLength)})`]
+    const parts = [was(mags.length, fileMags, 'MAG', 'MAGs'), was(elements, fileElements, 'element', 'elements'), `${fmt.int(pooled)} unbinned`]
     if (tally === null || tally.steps === 0) parts.push('as in the file')
     else {
       parts.push(`${fmt.int(tally.steps)} step${tally.steps === 1 ? '' : 's'}`)
@@ -849,9 +854,9 @@ export class CurateStage {
     this.panes.contacts.closeUp?.()
   }
 
-  private openChooser(kind: 'move' | 'merge' | 'link'): void {
+  private openChooser(kind: 'move' | 'merge' | 'link', at?: HTMLElement): void {
     this.chooser?.close()
-    const anchor = (this.cardOf.selection.element.querySelector('.edit-act') as HTMLElement | null) ?? this.cardOf.selection.element
+    const anchor = at ?? (this.cardOf.selection.element.querySelector('.edit-act') as HTMLElement | null) ?? this.cardOf.selection.element
     this.chooser = this.props.parts.chooser(this.ctx, kind, anchor, (target) => {
       this.chooser = null
       const selection = this.model.selection
@@ -1043,26 +1048,27 @@ export class CurateStage {
       existing.remove()
       return
     }
-    const rows: Array<[string, string]> = [
-      ['1 2 3', 'the contacts, the hosts or the scatter large'],
-      ['y n', 'take or turn down the suggestion in review'],
-      ['arrowleft arrowright', 'the previous or next suggestion, in review'],
-      ['space', 'held, in review: the binning as it would be'],
-      ['m', 'merge the selected genomes; move the selected contigs to…'],
-      ['l', 'link the selected element to the selected MAG'],
-      ['b e', 'a new MAG, a new element, of the selected contigs'],
-      ['delete', 'unbin the contigs, dissolve the genome, or unlink'],
-      ['r', 'rename the selected genome (or F2)'],
-      ['enter', 'the contigs of the selected genomes, close up'],
-      ['/', 'filter the list'],
-      ['mod+z', 'undo; with Shift, redo'],
-      ['0 + -', 'fit and zoom the picture under the pointer'],
+    const rows: Array<[string[], string]> = [
+      [['1', '2', '3'], 'the contacts, the hosts or the scatter large'],
+      [['y', 'n'], 'take or turn down the question in review'],
+      [['←', '→'], 'the previous or next question, in review'],
+      [['↓', '↑'], 'a question’s members one by one, in review'],
+      [[' '], 'held, in review: the binning as it would be'],
+      [['m'], 'merge the selected genomes; move the selected contigs to…'],
+      [['l'], 'link the selected element to the selected MAG'],
+      [['b', 'e'], 'a new MAG, a new element, of the selected contigs'],
+      [['delete'], 'unbin the contigs, dissolve the genome, or unlink'],
+      [['r', 'F2'], 'rename the selected genome'],
+      [['enter'], 'the contigs of the selected genomes, close up'],
+      [['/'], 'filter the list'],
+      [['mod+z', 'mod+shift+z'], 'undo, redo'],
+      [['0', '+', '-'], 'fit and zoom the picture under the pointer'],
     ]
     const sheet = el('div', { class: 'curate-keys', attrs: { role: 'dialog', 'aria-label': 'Keys on this stage' } })
     sheet.append(el('h3', { class: 'edit-card-head', text: 'keys on this stage' }))
     for (const [keys, words] of rows) {
       const cell = el('span', { class: 'curate-keys-keys' })
-      for (const k of keys.split(' ')) cell.appendChild(keyBadge(k, { class: 'kbd-inline' }))
+      for (const k of keys) cell.appendChild(keyBadge(k, { class: 'kbd-inline' }))
       sheet.append(el('div', { class: 'curate-keys-row' }, cell, el('span', { text: words })))
     }
     sheet.append(el('button', { class: 'btn-link', text: 'close', attrs: { type: 'button' }, on: { click: () => sheet.remove() } }))

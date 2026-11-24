@@ -119,10 +119,10 @@ describe('the curation stage', () => {
 
   it('says the tally in the readout, and the steps once one is made', async () => {
     const { store } = await open()
-    expect(document.querySelector('.curate-readout')?.textContent).toBe('4 MAGs · 1 element · 1 unbinned contig (50.0 kb) · as in the file')
+    expect(document.querySelector('.curate-readout')?.textContent).toBe('4 MAGs · 1 element · 1 unbinned · as in the file')
     store.apply({ op: 'merge', into: 'X1', genomes: ['X2'] })
     await settle()
-    expect(document.querySelector('.curate-readout')?.textContent).toBe('MAGs 4 → 3 · 1 element · 1 unbinned contig (50.0 kb) · 1 step · 3 contigs moved')
+    expect(document.querySelector('.curate-readout')?.textContent).toBe('MAGs 4 → 3 · 1 element · 1 unbinned · 1 step · 3 contigs moved')
   })
 
   it('makes a picture large from its key, and undoes and redoes from theirs', async () => {
@@ -161,7 +161,7 @@ describe('the curation stage', () => {
     await settle()
     const band = document.querySelector('.curate-band') as HTMLElement
     expect(band.classList.contains('hidden')).toBe(false)
-    expect(band.querySelector('.curate-band-where')?.textContent).toMatch(/^review · 1 of \d+$/)
+    expect(band.querySelector('.curate-band-where')?.textContent).toMatch(/^review · 1 of \d+( · \d+ less sure after)?$/)
     expect(band.querySelector('.curate-band-words')?.textContent).toMatch(/^merge X2 into X1 · \d+%$/)
     expect(textsOf(band, '.curate-band-price-row')[0]).toBe('X1 complete 50% + 50% → 100% · redundant 1.00 + 1.00 → 1.00 · high quality')
     expect(told).toContain('contacts:merge')
