@@ -84,10 +84,14 @@ await page.fill('.curate-filter', '00700_')
 await sleep(300)
 await page.click('.curate-filter-note .btn-link').catch(() => console.log('no "select them"'))
 await sleep(500)
-console.log('selection:', await page.evaluate(() => document.querySelector('.curate-selection-card, .edit-card')?.textContent?.replace(/\s+/g, ' ').slice(0, 300)))
+console.log('selection:', await page.evaluate(() => document.querySelector('[data-card="selection"]')?.textContent?.replace(/\s+/g, ' ').slice(0, 300)))
 await shot('cu05-one-organism')
 await page.fill('.curate-filter', '')
 await sleep(200)
+// The selection let go of, so review's pictures show the question alone.
+await page.keyboard.press('Escape')
+await page.keyboard.press('Escape')
+await sleep(300)
 
 // Review: the questions, each with its price.
 await page.click('[data-mode="review"]')
@@ -138,7 +142,7 @@ if (scatter !== null) {
     }
     await page.mouse.up()
     await sleep(500)
-    console.log('lasso selected:', await page.evaluate(() => document.querySelectorAll('.curate-row.is-selected').length))
+    console.log('lasso selected:', await page.evaluate(() => document.querySelector('[data-card="selection"] .edit-card-head')?.textContent))
     await shot('cu11-lasso')
   }
 }
