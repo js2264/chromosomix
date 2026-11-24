@@ -18,12 +18,16 @@
  *
  * The furniture is drawn over it every frame on one canvas that also takes the
  * hand: the bars (a genome's colour, its short name where a block is ten
- * pixels, a ◆ before an element's; a close-up's contigs as a staircase of their
- * lengths under their genomes' names), the selection (an accent outline, never
- * a wash), the genome lit in every pane (its row and column dashed), the
- * suggestions (a merge an L at its cell's corner, a link a ring, an unlink a
- * cross, in the accent over a halo, as large as a cell; the review's thicker,
- * with its number).
+ * pixels, a ◆ before an element's, else a name on a plate the sections' labels
+ * keep clear of; a close-up's contigs as a staircase of their lengths under
+ * their genomes' names), the selection (an accent outline, never a wash), the
+ * genome lit in every pane (its row and column dashed), the suggestions (a
+ * merge an L at its cell's corner, a link a ring, an unlink a cross, in the
+ * accent over a halo, as large as a cell). The question the stage shows — the
+ * review's, whole — is drawn thicker at every cell it rests on (each pair of an
+ * organism's fragments, each link and unlink of a host question), with the
+ * number the review's band gives it; while a step is previewed, the genome it
+ * makes is outlined. The key sits under the map, as a figure's.
  *
  * The hand: a press on the diagonal or a bar selects a genome (a contig, close
  * up), off it the pair; ⌘ toggles, ⇧ extends along the order; a drag along
@@ -42,14 +46,15 @@ import { FOCUS_PICTURE_CAP, focusContactsOf, pairRatio } from '../focus'
 import { colormapColor, colormapCss, DEFAULT_UI_COLORMAP } from '../../render/colormaps'
 import { Scale } from '../../render/scale'
 import { figurePaper } from '../../ui/canvasPalette'
-import { isMac, keyBadge, keyLabel, withKey } from '../../ui/commands'
+import { isMac, keyBadge, keyLabel, wantsSpace, withKey } from '../../ui/commands'
 import { el } from '../../ui/dom'
 import { iconButton } from '../../ui/icons'
 import { getTextScale, scaleFont, subscribeTextScale } from '../../ui/textScale'
 import { fmt } from '../../units'
 import type { CurationFocusResult, CurationStateResult } from '../../worker/curateProtocol'
-import { lowerAffinity } from '../method'
+import { LIKELY, lowerAffinity } from '../method'
 import { displayPercent, type Cancellable, type CurateChange, type CurateSelection } from '../model'
+import { redundancyText } from '../price'
 import type { Suggestion } from '../suggest'
 import type { CurateContext, CurateDropTarget, CurateFrame, CuratePane } from './context'
 import {
@@ -59,18 +64,22 @@ import {
   cellMapOf,
   clampView,
   centredView,
+  clearPlace,
   closeUpAxis,
   genomeAxis,
   genomeMap,
   isIdentity,
   lengthShare,
+  markedPairs,
   pairOf,
   placeLabels,
+  questionNumber,
   ratioText,
   ratioTicks,
   runsOf,
   sameUnits,
   spanAt,
+  stepTargets,
   type CloseUpAxis,
   type GenomeAxis,
   type GenomeMap,
@@ -111,11 +120,28 @@ const RING_PX = 10
 const HELD_PX = 10
 /** The most suggestion marks drawn at once, the surest first, besides those naming the selection. */
 const MARKS_MOST = 64
-/** The key: its size, in CSS pixels. */
+/** The key's ramp: its size, in CSS pixels; and the key's gap under the map. */
 const KEY_WIDTH = 168
 const KEY_HEIGHT = 30
+const KEY_GAP = 10
 /** A double click within this long of a click that narrowed the selection opens what was selected before it. */
 const DOUBLE_MS = 600
+/** How long a word the pane says for itself stays on the readout, in ms. */
+const FLASH_MS = 2600
+/** A name's plate across a bar: its thickness, in CSS pixels. */
+const PLATE_THICK = 15
+
+/** A name on a plate across a bar, where the blocks are too narrow to hold one: laid out before anything is drawn, so a section's label keeps clear of it. */
+interface Plate {
+  edge: 'top' | 'left'
+  /** Its middle along the bar. */
+  along: number
+  label: string
+  /** Its length across the bar, from where it starts by the strip. */
+  width: number
+  strong: boolean
+  element: boolean
+}
 
 type Level = 'genomes' | 'contigs'
 
@@ -212,9 +238,15 @@ function sameTarget(a: CurateDropTarget | null, b: CurateDropTarget | null): boo
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
-function typing(target: EventTarget | null): boolean {
-  const node = target as HTMLElement | null
-  return node !== null && (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA' || node.tagName === 'SELECT' || node.isContentEditable === true)
+/** A question's members (`curate/questions.ts`), or a suggestion alone. */
+function membersOf(s: Suggestion): readonly Suggestion[] {
+  return (s as { members?: readonly Suggestion[] }).members ?? [s]
+}
+
+/** The overlay's words for a screen reader, at each level. */
+const OVERLAY_LABEL: Record<Level, string> = {
+  genomes: 'The contacts between genomes: press the diagonal for a genome, drag along it for a run, press Enter for their contigs',
+  contigs: 'The contacts between the contigs of the genomes shown: press a contig, drag along the diagonal for a run, press a genome’s name for its contigs',
 }
 
 export class ContactPane implements CuratePane {
@@ -223,6 +255,7 @@ export class ContactPane implements CuratePane {
   private readonly head: HTMLElement
   private readonly crumbs: HTMLElement
   private readonly act: HTMLButtonElement
+  private readonly keyBox: HTMLElement
   private readonly keyTitle: HTMLElement
   private readonly keyRamp: HTMLCanvasElement
   private readonly plot: HTMLElement
@@ -277,7 +310,11 @@ export class ContactPane implements CuratePane {
   /** A drag in flight over the map: the genome level holds still under it. */
   private dragOver = false
   private said: string | null = null
-  private featuredKey: string | null = null
+  private flashTimer = 0
+  /** The suggestion, or the question whole, the stage shows; the review's current one stands in where none is. */
+  private shown: Suggestion | null = null
+  /** The last one framed: shown again after a count, it is not framed again, so a view moved away stays. */
+  private framedKey: string | null = null
   private disposed = false
   private readonly offs: Array<() => void> = []
 
@@ -292,6 +329,8 @@ export class ContactPane implements CuratePane {
     this.act.append(el('span', { text: 'close-up' }), keyBadge('enter', { class: 'kbd-inline' }))
     this.keyTitle = el('span', { class: 'curate-key-title', text: 'affinity' })
     this.keyRamp = el('canvas', { class: 'curate-key-ramp', attrs: { role: 'img' } })
+    // The key under the map, as a figure's: the head keeps its room for the crumb.
+    this.keyBox = el('div', { class: 'curate-contact-key hidden' }, this.keyTitle, this.keyRamp)
     const tools = el(
       'div',
       { class: 'curate-contact-tools' },
@@ -299,24 +338,14 @@ export class ContactPane implements CuratePane {
       iconButton('zoom-out', withKey('Zoom out', '-'), () => this.zoomBy(1.25), { class: 'btn btn-icon', size: 14 }),
       iconButton('zoom-in', withKey('Zoom in', '+'), () => this.zoomBy(0.8), { class: 'btn btn-icon', size: 14 }),
     )
-    this.head = el(
-      'div',
-      { class: 'curate-contact-head' },
-      this.crumbs,
-      this.act,
-      el('div', { class: 'curate-contact-key' }, this.keyTitle, this.keyRamp),
-      tools,
-    )
+    this.head = el('div', { class: 'curate-contact-head' }, this.crumbs, this.act, tools)
     this.picture = el('canvas', { class: 'curate-contact-picture', attrs: { 'aria-hidden': 'true' } })
     this.overlay = el('canvas', {
       class: 'curate-contact-overlay',
-      attrs: {
-        tabindex: '0',
-        'aria-label': 'The contacts between genomes: press the diagonal for a genome, drag along it for a run, press Enter for their contigs',
-      },
+      attrs: { tabindex: '0', 'aria-label': OVERLAY_LABEL.genomes },
     })
     this.note = el('div', { class: 'curate-contact-note hidden', attrs: { role: 'status' } })
-    this.plot = el('div', { class: 'curate-contact-plot' }, this.picture, this.overlay, this.note)
+    this.plot = el('div', { class: 'curate-contact-plot' }, this.picture, this.overlay, this.keyBox, this.note)
     this.element = el('section', { class: 'curate-contact', attrs: { 'data-pane': 'contacts', 'data-view': 'genomes', 'data-ready': 'false', 'data-large': 'true' } }, this.head, this.plot)
     this.wire()
     this.offs.push(ctx.onFrame((target) => this.frameOn(target)))
@@ -373,6 +402,7 @@ export class ContactPane implements CuratePane {
     this.element.classList.toggle('is-small', !large)
     this.element.dataset.large = String(large)
     this.overlay.tabIndex = large ? 0 : -1
+    this.showKey()
     this.layoutDirty = true
     this.pictureDirty = true
     this.keyDirty = true
@@ -380,10 +410,19 @@ export class ContactPane implements CuratePane {
     this.schedule()
   }
 
+  /**
+   * The suggestion the stage shows — the review's current question, whole,
+   * or one a card framed —, marked until another is shown: framed once, as
+   * it is first shown, so a view the reader moves since is left where it is
+   * when the stage shows it again after a count.
+   */
   showSuggestion(suggestion: Suggestion | null): void {
-    this.featuredKey = suggestion?.key ?? null
+    this.shown = suggestion
     this.overlay.dataset.current = suggestion?.key ?? ''
-    if (suggestion !== null) this.frameSuggestion(suggestion)
+    if (suggestion !== null && suggestion.key !== this.framedKey) {
+      this.framedKey = suggestion.key
+      this.frameSuggestion(suggestion)
+    }
     this.schedule()
   }
 
@@ -419,6 +458,7 @@ export class ContactPane implements CuratePane {
   dispose(): void {
     this.disposed = true
     cancelAnimationFrame(this.frameId)
+    window.clearTimeout(this.flashTimer)
     this.request?.cancel()
     this.request = null
     for (const off of this.offs) off()
@@ -441,7 +481,7 @@ export class ContactPane implements CuratePane {
       if (g >= 0) ids.add(answer.genomes[g].id)
     }
     if (ids.size === 0) {
-      this.ctx.say('Select genomes, in the list or on the map, then press Enter for their contigs.')
+      this.flash('Select genomes, in the list or on the map, then press Enter for their contigs.')
       return
     }
     const order = new Map(this.ctx.model.order.map((id, k) => [id, k]))
@@ -515,6 +555,8 @@ export class ContactPane implements CuratePane {
     if (this.level === 'genomes') this.buildGenomes(drawn)
     else this.buildCloseUp(drawn)
     this.element.dataset.view = this.level
+    if (this.overlay.getAttribute('aria-label') !== OVERLAY_LABEL[this.level]) this.overlay.setAttribute('aria-label', OVERLAY_LABEL[this.level])
+    this.showKey()
     this.pictureDirty = true
     this.keyDirty = true
     if (this.namesWidth() !== this.bar.names) this.layoutDirty = true
@@ -830,8 +872,10 @@ export class ContactPane implements CuratePane {
     const size = this.large ? names + NAMES_GAP + strip + gap : strip + gap
     const pad = this.large ? PAD : PAD_SMALL
     const far = this.large ? PAD_FAR : PAD_SMALL
+    // Under the map, the key's room; right of it, room for a review's number.
+    const below = this.large ? Math.max(far, this.keyHeight() + KEY_GAP + PAD_SMALL) : PAD_SMALL
     const availW = width - pad - far - size
-    const availH = height - pad - far - size
+    const availH = height - pad - below - size
     const side = Math.max(0, Math.floor(Math.min(availW, availH)))
     const x = pad + size + Math.max(0, Math.floor((availW - side) / 2))
     const y = pad + size + Math.max(0, Math.floor((availH - side) / 2))
@@ -843,6 +887,9 @@ export class ContactPane implements CuratePane {
       node.style.width = `${w}px`
       node.style.height = `${h}px`
     }
+    // The key's right edge on the map's, as a figure's legend.
+    this.keyBox.style.right = `${Math.max(PAD_SMALL, width - x - side)}px`
+    this.keyBox.style.top = `${y + side + KEY_GAP}px`
     place(this.picture, x, y, side, side)
     this.picture.width = Math.round(side * this.dpr)
     this.picture.height = Math.round(side * this.dpr)
@@ -891,6 +938,8 @@ export class ContactPane implements CuratePane {
 
   private draw(): void {
     if (this.disposed) return
+    // A window moved to a screen of another density keeps its size: crisp again on the next frame.
+    if (window.devicePixelRatio > 0 && window.devicePixelRatio !== this.dpr) this.layoutDirty = true
     if (this.layoutDirty) this.layout()
     if (this.pictureDirty) this.paintPicture()
     this.paintOverlay()
@@ -923,6 +972,9 @@ export class ContactPane implements CuratePane {
     g.putImageData(this.image, 0, 0)
   }
 
+  /** What the review's question marks, for a script driving the stage: the cells (or spans) and the number drawn. */
+  private marked: { cells: string[]; number: number | null } = { cells: [], number: null }
+
   private paintOverlay(): void {
     const g = this.overlay.getContext('2d')
     const geo = this.geometry()
@@ -930,19 +982,24 @@ export class ContactPane implements CuratePane {
     this.overlay.dataset.map = `${this.map.x} ${this.map.y} ${this.map.size}`
     this.overlay.dataset.cells = String(this.units)
     this.overlay.dataset.domain = [vx0, vx1, geo.y0, geo.y1].map((v) => v.toFixed(3)).join(' ')
-    if (g === null) return
-    g.setTransform(1, 0, 0, 1, 0, 0)
-    g.clearRect(0, 0, this.overlay.width, this.overlay.height)
-    if (this.map.size <= 0 || this.units <= 0) return
-    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
-    if (this.ctx.dragging === null && this.dropLit !== null) {
-      this.dropLit = null
-      this.dragOver = false
+    this.marked = { cells: [], number: null }
+    if (g !== null) {
+      g.setTransform(1, 0, 0, 1, 0, 0)
+      g.clearRect(0, 0, this.overlay.width, this.overlay.height)
     }
-    const ink = this.ctx.ink()
-    const paper = paperInk()
-    if (this.level === 'genomes' && this.genomes !== null) this.drawGenomes(g, geo, this.genomes, ink, paper)
-    else if (this.level === 'contigs' && this.close !== null) this.drawCloseUp(g, geo, this.close, ink, paper)
+    if (g !== null && this.map.size > 0 && this.units > 0) {
+      g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
+      if (this.ctx.dragging === null && this.dropLit !== null) {
+        this.dropLit = null
+        this.dragOver = false
+      }
+      const ink = this.ctx.ink()
+      const paper = paperInk()
+      if (this.level === 'genomes' && this.genomes !== null) this.drawGenomes(g, geo, this.genomes, ink, paper)
+      else if (this.level === 'contigs' && this.close !== null) this.drawCloseUp(g, geo, this.close, ink, paper)
+    }
+    this.overlay.dataset.featured = this.marked.cells.join(' ')
+    this.overlay.dataset.number = this.marked.number === null ? '' : String(this.marked.number)
   }
 
   // --- Shared strokes ---------------------------------------------------------
@@ -1093,8 +1150,12 @@ export class ContactPane implements CuratePane {
     const pointerHit = this.pointer !== null && this.large && this.press?.kind !== 'pan' ? this.hitAt(this.pointer.x, this.pointer.y) : null
     const dropSlot = this.dropLit?.kind === 'genome' && !this.dropRefused ? slotOfId(this.dropLit.id) : -1
 
+    // The names on plates first, where blocks are too narrow to hold them: a
+    // section's label on the bar keeps clear of them.
+    const plates = this.large ? this.genomePlates(g, geo, drawn, { selected, lit, pointer: pointerHit }) : []
+
     // The bars.
-    for (const edge of ['top', 'left'] as const) this.genomeBar(g, edge, geo, drawn, ink, { selected: new Set(selected), lit, drop: dropSlot, pointer: pointerHit })
+    for (const edge of ['top', 'left'] as const) this.genomeBar(g, edge, geo, drawn, ink, { selected: new Set(selected), lit, drop: dropSlot, pointer: pointerHit, plates })
 
     // Over the map: the rules, the suggestions, what is lit, and the selection
     // last, so no halo drawn after it eats into its outline.
@@ -1108,6 +1169,13 @@ export class ContactPane implements CuratePane {
     const current = answer === model.answer && answer.counted && this.large
     const featured = current ? this.featured() : null
     if (current) this.genomeMarks(g, geo, drawn, paper, new Set(selection.genomes.map((id) => this.indexOf.get(id) ?? -1)), featured)
+    else if (this.large && answer !== model.answer && model.previewing) {
+      // As it would be: what the step previewed makes, outlined, so it is found among the cells that moved.
+      for (const id of stepTargets(model.previewSteps ?? [])) {
+        const s = slotOfId(id)
+        if (s >= 0) this.outline(g, geo, paper, s, s + 1, 2.25, [5, 3])
+      }
+    }
     if (lit >= 0) this.bands(g, geo, paper, lit, lit + 1)
     if (pointerHit !== null && pointerHit.where === 'map' && !pointerHit.diagonal && this.ctx.dragging === null) this.cellOutline(g, geo, paper, pointerHit.row, pointerHit.col)
     for (const [from, to] of runsOf(holding)) this.outline(g, geo, paper, from, to, 1.5, [4, 3])
@@ -1115,7 +1183,7 @@ export class ContactPane implements CuratePane {
     if (dropSlot >= 0) this.outline(g, geo, paper, dropSlot, dropSlot + 1, 2.75)
     g.restore()
     if (featured !== null) this.genomeDisc(g, geo, drawn, paper, featured)
-    if (this.large) this.genomeLabels(g, geo, drawn, ink, { selected, lit, pointer: pointerHit })
+    for (const plate of plates) this.drawPlate(g, ink, plate)
   }
 
   /** Rules between genomes where cells are wide, and the edge between the MAGs and the elements always. */
@@ -1156,19 +1224,29 @@ export class ContactPane implements CuratePane {
     g.globalAlpha = 1
   }
 
-  /** The suggestion in review: the one shown, else the review's current one. */
+  /**
+   * The question shown: the one the stage showed — the review's current
+   * question whole, or one a card framed —, else in review the current one.
+   * Kept as given, never looked up by its key: a question of several
+   * suggestions has a key of its own, which no suggestion wears.
+   */
   private featured(): Suggestion | null {
     const model = this.ctx.model
-    const key = this.featuredKey ?? (model.mode === 'review' ? (model.current?.key ?? null) : null)
-    if (key === null) return null
-    return this.offered.find((s) => s.key === key) ?? model.answer?.suggestions.find((s) => s.key === key) ?? null
+    return this.shown ?? (model.mode === 'review' ? model.current : null)
+  }
+
+  /** A question's number as the review's band and the suggestions card print it; `null` for one the queue does not hold. */
+  private numberOf(s: Suggestion): number | null {
+    return questionNumber(this.ctx.model.queue(), s.key, LIKELY)
   }
 
   /**
    * The merges, the links and the unlinks on offer at their cells, and —
    * close enough to tell one cell from the next — the links held: a merge in
    * both triangles, as a block of contacts is; a link or an unlink once, at
-   * the MAG's row and the element's column.
+   * the MAG's row and the element's column. The question shown is drawn
+   * whole and over the rest, thicker: a merge of an organism's fragments at
+   * every pair among them, a host question at each of its links and unlinks.
    */
   private genomeMarks(g: CanvasRenderingContext2D, geo: Geometry, drawn: GenomesDrawn, paper: StageInk, selected: ReadonlySet<number>, featured: Suggestion | null): void {
     const { axis, answer } = drawn
@@ -1183,22 +1261,33 @@ export class ContactPane implements CuratePane {
         this.haloed(g, paper, paper.dim, 1, () => g.arc(cx, cy, half * 1.16 - 0.5, 0, 2 * Math.PI), [], 1.5)
       }
     }
+    // The question shown and its members are drawn once, as the question.
+    const asked = new Set(featured === null ? [] : [featured.key, ...membersOf(featured).map((member) => member.key)])
     let marked = 0
     for (const s of this.offered) {
       if (s.kind !== 'merge' && s.kind !== 'link' && s.kind !== 'unlink') continue
-      if (featured !== null && s.key === featured.key) continue
+      if (asked.has(s.key)) continue
       const names = s.genomes.some((gi) => selected.has(gi))
       if (marked >= MARKS_MOST && !names) continue
       marked++
       this.genomeMark(g, geo, paper, s.kind, slot(s.genomes[0]), slot(s.genomes[1]), false)
     }
     if (featured === null) return
-    if (featured.kind === 'merge' || featured.kind === 'link' || featured.kind === 'unlink') {
-      this.genomeMark(g, geo, paper, featured.kind, slot(featured.genomes[0]), slot(featured.genomes[1]), true)
-    } else {
-      // A recruit or a move: its target genome, outlined.
+    const idOf = (gi: number): string => answer.genomes[gi]?.id ?? ''
+    for (const pair of markedPairs(featured)) {
+      const a = slot(pair.a)
+      const b = slot(pair.b)
+      if (a < 0 || b < 0 || a === b) continue
+      this.genomeMark(g, geo, paper, pair.kind, a, b, true)
+      this.marked.cells.push(a < b ? `${idOf(pair.a)}×${idOf(pair.b)}` : `${idOf(pair.b)}×${idOf(pair.a)}`)
+    }
+    if (featured.kind === 'recruit' || featured.kind === 'move') {
+      // A recruit or a move: the genome it brings contigs into, outlined.
       const target = slot(featured.genomes[0])
-      if (target >= 0) this.outline(g, geo, paper, target, target + 1, 2.25, [5, 3])
+      if (target >= 0) {
+        this.outline(g, geo, paper, target, target + 1, 2.25, [5, 3])
+        this.marked.cells.push(idOf(featured.genomes[0]))
+      }
     }
   }
 
@@ -1273,20 +1362,38 @@ export class ContactPane implements CuratePane {
     }
   }
 
-  /** The review's number, beside its mark in the upper triangle. */
+  /**
+   * The review's number — the question's, as the band and the card print it
+   * — beside its marks in the upper triangle: past the corner of the one
+   * furthest up and right, where a merge's L opens from; a recruit's or a
+   * move's beside its genome's own cell.
+   */
   private genomeDisc(g: CanvasRenderingContext2D, geo: Geometry, drawn: GenomesDrawn, paper: StageInk, featured: Suggestion): void {
-    const at = this.offered.findIndex((s) => s.key === featured.key)
-    if (at < 0) return
+    const number = this.numberOf(featured)
+    if (number === null) return
     const slot = (gi: number | undefined): number => (gi === undefined || gi < 0 ? -1 : (drawn.axis.slotOf[gi] ?? -1))
-    const a = slot(featured.genomes[0])
-    const b = featured.kind === 'recruit' || featured.kind === 'move' ? a : slot(featured.genomes[1])
-    if (a < 0 || b < 0) return
-    const row = Math.min(a, b)
-    const col = Math.max(a, b)
+    let row = Number.POSITIVE_INFINITY
+    let col = Number.NEGATIVE_INFINITY
+    const pairs = markedPairs(featured)
+    for (const pair of pairs) {
+      const a = slot(pair.a)
+      const b = slot(pair.b)
+      if (a < 0 || b < 0 || a === b) continue
+      row = Math.min(row, a, b)
+      col = Math.max(col, a, b)
+    }
+    if (pairs.length === 0) {
+      const target = slot(featured.genomes[0])
+      if (target >= 0) {
+        row = target
+        col = target
+      }
+    }
+    if (!Number.isFinite(row) || !Number.isFinite(col)) return
     const { cx, cy } = this.cellBox(geo, row, col)
     if (cx < this.map.x || cx > this.map.x + this.map.size || cy < this.map.y || cy > this.map.y + this.map.size) return
-    // Up and right of the cell's corner, where the merge's L opens from.
-    this.disc(g, paper, geo.X(col + 1) + 9, geo.Y(row) - 9, at + 1)
+    this.disc(g, paper, geo.X(col + 1) + 9, geo.Y(row) - 9, number)
+    this.marked.number = number
   }
 
   /** A bar's coordinates: along it, and across it outward from the map, to the canvas's. */
@@ -1302,7 +1409,7 @@ export class ContactPane implements CuratePane {
     geo: Geometry,
     drawn: GenomesDrawn,
     ink: StageInk,
-    marks: { selected: ReadonlySet<number>; lit: number; drop: number; pointer: Hit | null },
+    marks: { selected: ReadonlySet<number>; lit: number; drop: number; pointer: Hit | null; plates: readonly Plate[] },
   ): void {
     const { axis, answer } = drawn
     const n = axis.genomes.length
@@ -1383,10 +1490,12 @@ export class ContactPane implements CuratePane {
           this.name(g, edge, along, c0, this.ctx.shortName(genome.id), genome.kind === 'element', names, chosen ? ink.accent : ink.text, chosen ? ink.accent : ink.dim)
         }
       } else {
-        const sections: Array<[number, number, string]> = []
-        if (axis.mags > 0) sections.push([0, axis.mags, `MAGs · ${fmt.int(axis.mags)}`])
-        if (axis.mags < n) sections.push([axis.mags, n, `elements · ${fmt.int(n - axis.mags)}`])
-        for (const [from, to, label] of sections) this.dimension(g, edge, Math.max(start, P(from)), Math.min(end, P(to)), c0 + names / 2, [label], ink)
+        const sections: Array<[number, number, string[]]> = []
+        if (axis.mags > 0) sections.push([0, axis.mags, [`MAGs · ${fmt.int(axis.mags)}`, 'MAGs']])
+        if (axis.mags < n) sections.push([axis.mags, n, [`elements · ${fmt.int(n - axis.mags)}`, 'elements']])
+        const across = c0 + names / 2
+        const blocked = this.blockedBy(marks.plates, edge, across)
+        for (const [from, to, labels] of sections) this.dimension(g, edge, Math.max(start, P(from)), Math.min(end, P(to)), across, labels, ink, ink.dim, '600', blocked)
       }
     }
     g.restore()
@@ -1447,17 +1556,46 @@ export class ContactPane implements CuratePane {
 
   /**
    * A label along a bar over a stretch, with a rule either side to its ends —
-   * a dimension line: a section's name and count, a close-up genome's.
+   * a dimension line: a section's name and count, a close-up genome's. Its
+   * first form that fits whole, in the middle or as near it as the name
+   * plates standing across the line (`blocked`) leave room, else the last cut
+   * to the room; none where even that would run into a plate.
    */
-  private dimension(g: CanvasRenderingContext2D, edge: 'top' | 'left', a0: number, a1: number, c: number, labels: readonly string[], ink: StageInk, colour = ink.dim, weight = '600'): void {
+  private dimension(
+    g: CanvasRenderingContext2D,
+    edge: 'top' | 'left',
+    a0: number,
+    a1: number,
+    c: number,
+    labels: readonly string[],
+    ink: StageInk,
+    colour = ink.dim,
+    weight = '600',
+    blocked: ReadonlyArray<readonly [number, number]> = [],
+  ): void {
     if (a1 - a0 < 6) return
     g.font = this.font(weight)
-    // The first of its forms that fits whole, else the last cut to the room.
-    const room = Math.max(0, a1 - a0 - 10)
-    const whole = labels.find((label) => g.measureText(label).width <= room)
-    const text = whole ?? this.fitText(g, labels[labels.length - 1] ?? '', room)
+    const lo = a0 + 5
+    const hi = a1 - 5
+    const centre = (a0 + a1) / 2
+    let text = ''
+    let mid = centre
+    for (const label of labels) {
+      const at = clearPlace(centre, g.measureText(label).width, lo, hi, blocked)
+      if (at === null) continue
+      text = label
+      mid = at
+      break
+    }
+    if (text === '') {
+      const cut = this.fitText(g, labels[labels.length - 1] ?? '', Math.max(0, hi - lo))
+      const at = cut === '' ? null : clearPlace(centre, g.measureText(cut).width, lo, hi, blocked)
+      if (at !== null) {
+        text = cut
+        mid = at
+      }
+    }
     const width = text === '' ? 0 : g.measureText(text).width
-    const mid = (a0 + a1) / 2
     const { x, y } = this.map
     const point = (along: number, acrossAt: number): [number, number] => (edge === 'top' ? [along, y - acrossAt] : [x - acrossAt, along])
     g.strokeStyle = ink.faint
@@ -1510,9 +1648,11 @@ export class ContactPane implements CuratePane {
   /**
    * Names on plates, where the blocks are too narrow to hold them: the cell
    * under the pointer's row and column, the genome lit, the selection's —
-   * each where it does not cover one written already.
+   * each where it does not cover one placed already. None where the names
+   * are written on the bars.
    */
-  private genomeLabels(g: CanvasRenderingContext2D, geo: Geometry, drawn: GenomesDrawn, ink: StageInk, marks: { selected: readonly number[]; lit: number; pointer: Hit | null }): void {
+  private genomePlates(g: CanvasRenderingContext2D, geo: Geometry, drawn: GenomesDrawn, marks: { selected: readonly number[]; lit: number; pointer: Hit | null }): Plate[] {
+    if (geo.k >= NAME_PX) return []
     const { axis, answer } = drawn
     const wanted: Array<{ edge: 'top' | 'left'; slot: number; strong: boolean }> = []
     const pointer = marks.pointer
@@ -1521,14 +1661,28 @@ export class ContactPane implements CuratePane {
     }
     if (marks.lit >= 0) wanted.push({ edge: 'top', slot: marks.lit, strong: true }, { edge: 'left', slot: marks.lit, strong: true })
     if (marks.selected.length <= 8) for (const s of marks.selected) wanted.push({ edge: 'top', slot: s, strong: false }, { edge: 'left', slot: s, strong: false })
-    if (geo.k >= NAME_PX) {
-      // The names are written: only the pointer's, outlined where a block is cut.
-      return
-    }
+    return this.placePlates(
+      g,
+      geo,
+      wanted.filter(({ slot }) => slot >= 0 && slot < axis.genomes.length),
+      (slot) => {
+        const genome = answer.genomes[axis.genomes[slot]]
+        return { text: this.ctx.shortName(genome.id), element: genome.kind === 'element' }
+      },
+    )
+  }
+
+  /** Plates for units along the bars, in the order asked, each where it covers none placed before it. */
+  private placePlates(
+    g: CanvasRenderingContext2D,
+    geo: Geometry,
+    wanted: ReadonlyArray<{ edge: 'top' | 'left'; slot: number; strong: boolean }>,
+    nameOf: (slot: number) => { text: string; element: boolean },
+  ): Plate[] {
+    const plates: Plate[] = []
     const taken: Record<'top' | 'left', Array<[number, number]>> = { top: [], left: [] }
     const seen = new Set<string>()
     for (const { edge, slot, strong } of wanted) {
-      if (slot < 0 || slot >= axis.genomes.length) continue
       const key = `${edge}:${slot}`
       if (seen.has(key)) continue
       seen.add(key)
@@ -1537,25 +1691,43 @@ export class ContactPane implements CuratePane {
       const start = edge === 'top' ? this.map.x : this.map.y
       if (along < start || along > start + this.map.size) continue
       if (taken[edge].some(([a, b]) => along > a - 8 && along < b + 8)) continue
+      const { text, element } = nameOf(slot)
+      const plate = this.plateFor(g, edge, along, text, strong, element)
+      if (plate === null) continue
       taken[edge].push([along - 7, along + 7])
-      const genome = answer.genomes[axis.genomes[slot]]
-      this.plate(g, edge, along, this.ctx.shortName(genome.id), ink, strong, genome.kind === 'element')
+      plates.push(plate)
     }
+    return plates
   }
 
-  /** A name on a plate across a bar, an element's after its diamond: a pointer's label. */
-  private plate(g: CanvasRenderingContext2D, edge: 'top' | 'left', along: number, text: string, ink: StageInk, strong: boolean, element = false): void {
+  /** A name's plate across a bar, cut to the room there; `null` where not even a few letters fit. */
+  private plateFor(g: CanvasRenderingContext2D, edge: 'top' | 'left', along: number, text: string, strong: boolean, element: boolean): Plate | null {
     const { strip, gap } = this.bar
     const c0 = gap + strip + 2
     const room = (edge === 'top' ? this.map.y : this.map.x) - c0 - 2
     const mark = element ? DIAMOND_ROOM : 0
-    if (room < 16 + mark) return
+    if (room < 16 + mark) return null
     g.font = this.font('600')
     const label = this.fitText(g, text, room - 8 - mark)
-    if (label === '') return
-    const textWidth = g.measureText(label).width
-    const width = textWidth + 8 + mark
-    const thick = 15
+    if (label === '') return null
+    return { edge, along, label, width: g.measureText(label).width + 8 + mark, strong, element }
+  }
+
+  /** Where the plates on a bar stand across a line `across` from the map's edge: the stretches along it a label there keeps clear of. */
+  private blockedBy(plates: readonly Plate[], edge: 'top' | 'left', across: number): Array<[number, number]> {
+    const c0 = this.bar.gap + this.bar.strip + 2
+    return plates.filter((plate) => plate.edge === edge && c0 + plate.width >= across - 7).map((plate) => [plate.along - PLATE_THICK / 2, plate.along + PLATE_THICK / 2])
+  }
+
+  /** A name on a plate across a bar, an element's after its diamond: a pointer's label. */
+  private drawPlate(g: CanvasRenderingContext2D, ink: StageInk, plate: Plate): void {
+    const { edge, along, label, width, strong, element } = plate
+    const { strip, gap } = this.bar
+    const c0 = gap + strip + 2
+    const mark = element ? DIAMOND_ROOM : 0
+    g.font = this.font('600')
+    const textWidth = width - 8 - mark
+    const thick = PLATE_THICK
     const { x, y } = this.map
     g.save()
     if (edge === 'top') {
@@ -1609,18 +1781,24 @@ export class ContactPane implements CuratePane {
     const pointerHit = this.pointer !== null && this.large && this.press?.kind !== 'pan' ? this.hitAt(this.pointer.x, this.pointer.y) : null
     const dropSpan = this.dropLit?.kind === 'genome' && !this.dropRefused ? (axis.spans.find((span) => span.id === (this.dropLit as { id: string }).id) ?? null) : null
     const featured = close.answer === model.answer && this.large ? this.featured() : null
+    // The question shown: a recruit's or a move's genome and the contigs it
+    // would bring; a merge's or a host question's every genome shown.
     const featuredUnits = new Set<number>()
-    let featuredSpan: Span | undefined
-    if (featured !== null && (featured.kind === 'recruit' || featured.kind === 'move')) {
-      for (const c of featured.contigs) {
-        const u = unitOf.get(c)
-        if (u !== undefined) featuredUnits.add(u)
+    const featuredSpans: Span[] = []
+    if (featured !== null) {
+      const bringing = featured.kind === 'recruit' || featured.kind === 'move'
+      const ids = new Set((bringing ? featured.genomes.slice(0, 1) : featured.genomes).map((gi) => model.answer?.genomes[gi]?.id))
+      for (const span of axis.spans) if (span.id !== null && ids.has(span.id)) featuredSpans.push(span)
+      if (bringing) {
+        for (const c of featured.contigs) {
+          const u = unitOf.get(c)
+          if (u !== undefined) featuredUnits.add(u)
+        }
       }
-      const target = model.answer?.genomes[featured.genomes[0]]?.id
-      featuredSpan = axis.spans.find((span) => span.id === target)
     }
+    const plates = this.large ? this.closePlates(g, geo, close, pointerHit, litUnit) : []
 
-    for (const edge of ['top', 'left'] as const) this.closeBar(g, edge, geo, close, ink, { selected: new Set(selected), lit: litUnit, litSpan, drop: dropSpan, featured: featuredUnits, pointer: pointerHit })
+    for (const edge of ['top', 'left'] as const) this.closeBar(g, edge, geo, close, ink, { selected: new Set(selected), lit: litUnit, litSpan, drop: dropSpan, featured: featuredUnits, pointer: pointerHit, plates })
 
     const { x, y, size } = this.map
     g.save()
@@ -1631,33 +1809,41 @@ export class ContactPane implements CuratePane {
     // What is lit and offered first, the selection over them: no halo eats into its outline.
     if (litSpan !== undefined) this.outline(g, geo, paper, litSpan.from, litSpan.to, 1.5, [4, 3])
     if (litUnit >= 0) this.bands(g, geo, paper, litUnit, litUnit + 1)
-    if (featuredSpan !== undefined) this.outline(g, geo, paper, featuredSpan.from, featuredSpan.to, 2.25, [5, 3])
+    for (const span of featuredSpans) this.outline(g, geo, paper, span.from, span.to, 2.25, [5, 3])
     if (pointerHit !== null && pointerHit.where === 'map' && !pointerHit.diagonal && this.ctx.dragging === null) this.cellOutline(g, geo, paper, pointerHit.row, pointerHit.col)
     for (const span of selectedSpans) this.outline(g, geo, paper, span.from, span.to)
     for (const [from, to] of runsOf(selected)) this.outline(g, geo, paper, from, to)
     if (dropSpan !== null) this.outline(g, geo, paper, dropSpan.from, dropSpan.to, 2.75)
     g.restore()
-    if (featured !== null && featuredSpan !== undefined) {
-      // The review's number in the margin beside the first contig it would bring, else beside its genome.
-      const at = this.offered.findIndex((s) => s.key === featured.key)
-      const first = featuredUnits.size > 0 ? Math.min(...featuredUnits) : featuredSpan.from
+    if (featured !== null && (featuredSpans.length > 0 || featuredUnits.size > 0)) {
+      for (const span of featuredSpans) this.marked.cells.push(span.id ?? '')
+      // The review's number in the margin beside the first contig it would bring, else beside its first genome.
+      const number = this.numberOf(featured)
+      const first = featuredUnits.size > 0 ? Math.min(...featuredUnits) : Math.min(...featuredSpans.map((span) => span.from))
       const row = geo.Y(first + 0.5)
-      if (at >= 0 && row >= y && row <= y + size) this.disc(g, paper, x + size + 11, row, at + 1)
-    }
-    if (this.large) {
-      const labels: Array<{ unit: number; strong: boolean }> = []
-      if (pointerHit !== null && pointerHit.where !== null && !pointerHit.names && this.ctx.dragging === null) labels.push({ unit: pointerHit.col, strong: true }, { unit: pointerHit.row, strong: true })
-      if (litUnit >= 0) labels.push({ unit: litUnit, strong: true }, { unit: litUnit, strong: true })
-      for (const [k, { unit, strong }] of labels.entries()) {
-        const edge = k % 2 === 0 ? 'top' : 'left'
-        if (unit < 0 || unit >= axis.contigs.length) continue
-        const P = edge === 'top' ? geo.X : geo.Y
-        const along = (P(unit) + P(unit + 1)) / 2
-        const start = edge === 'top' ? x : y
-        if (along < start || along > start + size) continue
-        this.plate(g, edge, along, this.ctx.data.file.names[axis.contigs[unit]] ?? `#${axis.contigs[unit]}`, ink, strong)
+      if (number !== null && row >= y && row <= y + size) {
+        this.disc(g, paper, x + size + 11, row, number)
+        this.marked.number = number
       }
     }
+    for (const plate of plates) this.drawPlate(g, ink, plate)
+  }
+
+  /** A close-up's plates: the contigs under the pointer's row and column, and the one lit, named where the bars name genomes only. */
+  private closePlates(g: CanvasRenderingContext2D, geo: Geometry, close: CloseDrawn, pointer: Hit | null, lit: number): Plate[] {
+    const { axis } = close
+    const wanted: Array<{ edge: 'top' | 'left'; slot: number; strong: boolean }> = []
+    if (pointer !== null && pointer.where !== null && !pointer.names && this.ctx.dragging === null) {
+      wanted.push({ edge: 'top', slot: pointer.col, strong: true }, { edge: 'left', slot: pointer.row, strong: true })
+    }
+    if (lit >= 0) wanted.push({ edge: 'top', slot: lit, strong: true }, { edge: 'left', slot: lit, strong: true })
+    const names = this.ctx.data.file.names
+    return this.placePlates(
+      g,
+      geo,
+      wanted.filter(({ slot }) => slot >= 0 && slot < axis.contigs.length),
+      (slot) => ({ text: names[axis.contigs[slot]] ?? `#${axis.contigs[slot]}`, element: false }),
+    )
   }
 
   /** The edges between the close-up's genomes, its candidates' dashed, and its contigs' where wide. */
@@ -1707,7 +1893,7 @@ export class ContactPane implements CuratePane {
     geo: Geometry,
     close: CloseDrawn,
     ink: StageInk,
-    marks: { selected: ReadonlySet<number>; lit: number; litSpan: Span | undefined; drop: Span | null; featured: ReadonlySet<number>; pointer: Hit | null },
+    marks: { selected: ReadonlySet<number>; lit: number; litSpan: Span | undefined; drop: Span | null; featured: ReadonlySet<number>; pointer: Hit | null; plates: readonly Plate[] },
   ): void {
     const { axis, answer } = close
     const n = axis.contigs.length
@@ -1788,6 +1974,7 @@ export class ContactPane implements CuratePane {
     // The genomes' names, and the candidates'.
     if (this.large && names > 0) {
       const c = gap + strip + NAMES_GAP + names / 2
+      const blocked = this.blockedBy(marks.plates, edge, c)
       const pointerSpan = pointer !== null && pointer.where !== null && pointer.where !== 'map' && pointer.names ? spanAt(axis.spans, pointer.row) : -1
       axis.spans.forEach((span, k) => {
         const a0 = Math.max(start, P(span.from))
@@ -1796,13 +1983,23 @@ export class ContactPane implements CuratePane {
         const count = fmt.int(span.to - span.from)
         const labels = span.id === null ? [`candidates · ${count}`, `+${count}`] : [`${this.ctx.shortName(span.id)} · ${count}`, this.ctx.shortName(span.id)]
         const lit = k === pointerSpan || marks.litSpan === span || marks.drop === span
-        this.dimension(g, edge, a0, a1, c, labels, ink, lit ? ink.accent : span.id === null ? ink.dim : ink.text, span.id === null ? '' : '600')
+        this.dimension(g, edge, a0, a1, c, labels, ink, lit ? ink.accent : span.id === null ? ink.dim : ink.text, span.id === null ? '' : '600', blocked)
       })
     }
     g.restore()
   }
 
   // --- The key ---------------------------------------------------------------
+
+  /** The key's height: its ramp and its two lines of words, at the text's scale. */
+  private keyHeight(): number {
+    return Math.ceil(KEY_HEIGHT - 18.5 + 18.5 * getTextScale())
+  }
+
+  /** The key shows under a large map with cells to read: never on a thumbnail, nor under an empty plot. */
+  private showKey(): void {
+    this.keyBox.classList.toggle('hidden', !this.large || this.units <= 0)
+  }
 
   private paintKey(): void {
     this.keyDirty = false
@@ -1815,20 +2012,22 @@ export class ContactPane implements CuratePane {
     let title = 'affinity'
     let words = ''
     if (this.level === 'genomes' && genomes !== null) {
-      ticks = affinityTicks(genomes.map.vmin, genomes.map.vmax, genomes.map.background)
-      words = `Affinity, at least: how densely two genomes meet against how densely each meets itself. ${affinityText(genomes.map.background)} is the background, spurious ligation; 1, as densely as a genome's own contigs.`
+      // Its foot is the background only once the contacts measured it: never a stand-in printed as one.
+      if (genomes.answer.counted && this.ctx.data.background !== null) {
+        ticks = affinityTicks(genomes.map.vmin, genomes.map.vmax, genomes.map.background)
+        words = `Affinity at its lower bound: how densely two genomes meet against how densely each meets itself, from the background of spurious ligation (${affinityText(genomes.map.background)}) to 1, as densely as a genome's own contigs.`
+      } else words = 'Affinity at its lower bound: how densely two genomes meet against how densely each meets itself, drawn once the contacts are read.'
     } else if (close !== null && this.held?.picture) {
       const picture = this.held.picture
       title = 'observed / expected'
       ticks = ratioTicks(picture.vmin, picture.vmax, this.held.background)
-      words = `Observed over expected: a pair's contacts over what the two contigs' contacts with every contig expect. ${affinityText(this.held.background)} is the background, spurious ligation; 1, as many as expected.`
+      words = `Observed over expected: a pair's contacts over what the two contigs' contacts with every contig expect, from the background of spurious ligation (${affinityText(this.held.background)}) to 1, as many as expected, and on.`
     } else title = this.level === 'genomes' ? 'affinity' : 'observed / expected'
     this.keyTitle.textContent = title
     canvas.setAttribute('aria-label', words === '' ? title : words)
     canvas.title = words
     const dpr = this.dpr
-    // As tall as its two lines of words, at the text's scale.
-    const height = Math.ceil(KEY_HEIGHT - 18.5 + 18.5 * getTextScale())
+    const height = this.keyHeight()
     canvas.width = Math.round(KEY_WIDTH * dpr)
     canvas.height = Math.round(height * dpr)
     canvas.style.width = `${KEY_WIDTH}px`
@@ -2034,6 +2233,18 @@ export class ContactPane implements CuratePane {
   // The hand.
   // -------------------------------------------------------------------------
 
+  /** A word of the pane's own on the readout for a moment, until the pointer says another. */
+  private flash(text: string): void {
+    this.said = text
+    this.ctx.say(text)
+    window.clearTimeout(this.flashTimer)
+    this.flashTimer = window.setTimeout(() => {
+      if (this.disposed || this.said !== text) return
+      this.said = null
+      this.ctx.say(null)
+    }, FLASH_MS)
+  }
+
   private wire(): void {
     const overlay = this.overlay
     overlay.addEventListener('pointerdown', (event) => this.pointerDown(event))
@@ -2050,9 +2261,10 @@ export class ContactPane implements CuratePane {
       if (this.large) event.preventDefault()
     })
     // Space held pans: heard on the window, never taken from the stage, which
-    // previews the review's step with it.
+    // previews the review's step with it; left, as the stage leaves it, to a
+    // field and to a focused button.
     const down = (event: KeyboardEvent): void => {
-      if (event.key === ' ' && !typing(event.target)) this.setSpace(true)
+      if (event.key === ' ' && !wantsSpace(event.target)) this.setSpace(true)
     }
     const up = (event: KeyboardEvent): void => {
       if (event.key === ' ') this.setSpace(false)
@@ -2491,7 +2703,7 @@ export class ContactPane implements CuratePane {
     const parts = [this.ctx.shortName(genome.id), fmt.bp(genome.length), `${fmt.int(genome.contigs)} contig${genome.contigs === 1 ? '' : 's'}`]
     if (genome.kind === 'mag') {
       const q = genome.quality
-      if (q !== null) parts.push(`${fmt.pct(q.weightedCompleteness, 0)} complete`, `${fmt.fixed(q.weightedRedundancy, 2)} redundant`)
+      if (q !== null) parts.push(`${fmt.pct(q.weightedCompleteness, 0)} complete`, `${redundancyText(q.weightedRedundancy)} redundant`)
     } else {
       const hosts = drawn.answer.links.filter((link) => link.element === genome.id).map((link) => this.ctx.shortName(link.mag))
       parts.push(hosts.length === 0 ? 'an element, no host' : `an element, hosted by ${hosts.join(', ')}`)

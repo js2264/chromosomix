@@ -18,6 +18,7 @@ import {
   candidatesFor,
   cellMapOf,
   clampView,
+  clearPlace,
   closeUpAxis,
   centredView,
   FALLBACK_BACKGROUND,
@@ -25,13 +26,16 @@ import {
   genomeMap,
   isIdentity,
   lengthShare,
+  markedPairs,
   pairOf,
   placeLabels,
+  questionNumber,
   ratioText,
   ratioTicks,
   runsOf,
   sameUnits,
   spanAt,
+  stepTargets,
 } from '../../src/curate/ui/contactLayout'
 import { encode, triangleIndex } from '../../src/metacooler/picture'
 import { community } from '../support/curateCommunity'
@@ -97,6 +101,74 @@ describe('the genome map', () => {
     const map = genomeMap({ ...a, counted: false }, axis, null)
     expect(map.levels[0].cells.every((byte) => byte === 0)).toBe(true)
     expect(map.background).toBe(FALLBACK_BACKGROUND)
+  })
+})
+
+describe('the review’s question', () => {
+  /** A suggestion of a kind, over genomes by index; a question's members are suggestions of their own. */
+  const asked = (kind: Suggestion['kind'], genomes: number[], key = `${kind}:${genomes.join('+')}`, members?: Suggestion[]): Suggestion & { members?: Suggestion[] } => ({
+    key,
+    kind,
+    step: { op: 'merge', into: 'A', genomes: [] },
+    words: '',
+    confidence: 0.9,
+    features: [],
+    evidence: [],
+    genomes,
+    contigs: [],
+    affinity: 1,
+    contacts: 1,
+    ...(members === undefined ? {} : { members }),
+  })
+
+  it('marks every pair among a merge’s genomes: an organism’s fragments, one question', () => {
+    expect(markedPairs(asked('merge', [4, 1]))).toEqual([{ kind: 'merge', a: 4, b: 1 }])
+    expect(markedPairs(asked('merge', [2, 0, 5]))).toEqual([
+      { kind: 'merge', a: 2, b: 0 },
+      { kind: 'merge', a: 2, b: 5 },
+      { kind: 'merge', a: 0, b: 5 },
+    ])
+  })
+
+  it('marks a host question at each member’s pair, with its own mark; a recruit or a move at no cell', () => {
+    const question = asked('link', [7, 3, 1], 'host:E', [asked('unlink', [7, 3]), asked('link', [7, 1])])
+    expect(markedPairs(question)).toEqual([
+      { kind: 'unlink', a: 7, b: 3 },
+      { kind: 'link', a: 7, b: 1 },
+    ])
+    expect(markedPairs(asked('link', [7, 1]))).toEqual([{ kind: 'link', a: 7, b: 1 }])
+    expect(markedPairs(asked('recruit', [2]))).toEqual([])
+    expect(markedPairs(asked('move', [2, 3]))).toEqual([])
+  })
+
+  it('numbers a question as the band does: the likely ones from 1, the less sure from 1 again, a member by its question', () => {
+    const queue = [
+      { key: 'merge:A+B+C', confidence: 0.99, members: [{ key: 'merge:A+B' }, { key: 'merge:B+C' }] },
+      { key: 'host:E', confidence: 0.6, members: [{ key: 'link:E>A' }] },
+      { key: 'move:x>B', confidence: 0.3, members: [{ key: 'move:x>B' }] },
+      { key: 'recruit:y>C', confidence: 0.2, members: [{ key: 'recruit:y>C' }] },
+    ]
+    expect(questionNumber(queue, 'merge:A+B+C', 0.5)).toBe(1)
+    expect(questionNumber(queue, 'merge:B+C', 0.5)).toBe(1)
+    expect(questionNumber(queue, 'link:E>A', 0.5)).toBe(2)
+    expect(questionNumber(queue, 'move:x>B', 0.5)).toBe(1)
+    expect(questionNumber(queue, 'recruit:y>C', 0.5)).toBe(2)
+    expect(questionNumber(queue, 'merge:A+C', 0.5)).toBeNull()
+  })
+
+  it('finds where previewed steps change the binning: the genomes they make, keep or link', () => {
+    expect(
+      stepTargets([
+        { op: 'merge', into: 'A', genomes: ['B', 'C'] },
+        { op: 'move', contigs: ['x'], to: 'D' },
+        { op: 'move', contigs: ['y'], to: null },
+        { op: 'create', id: 'curated:1', name: 'n', kind: 'mag', contigs: ['z'] },
+        { op: 'link', element: 'E', mag: 'A' },
+        { op: 'dissolve', genome: 'F' },
+        { op: 'retype', genome: 'G', kind: 'element' },
+        { op: 'rename', genome: 'G', name: 'H' },
+      ]),
+    ).toEqual(['A', 'D', 'curated:1', 'E', 'G'])
   })
 })
 
@@ -189,6 +261,21 @@ describe('the words', () => {
     expect(placeLabels([{ at: 100, width: 10 }], 100, 4, 20)).toEqual([90])
     // One that would have to move further than it may is left out, and the next placed after the last kept.
     expect(placeLabels([{ at: 10, width: 40 }, { at: 12, width: 10 }, { at: 70, width: 10 }], 100, 4, 5)).toEqual([0, null, 65])
+  })
+
+  it('keeps a bar’s label clear of the name plates across it: in the middle, beside them, or nowhere', () => {
+    // A 40-wide label on a stretch 0–200: in the middle with nothing in the way.
+    expect(clearPlace(100, 40, 0, 200, [])).toBe(100)
+    expect(clearPlace(100, 40, 0, 200, [[150, 165]])).toBe(100)
+    // A plate over the middle: just past it, on the side nearer the middle.
+    expect(clearPlace(100, 40, 0, 200, [[95, 110]])).toBe(71)
+    expect(clearPlace(100, 40, 0, 200, [[90, 105]])).toBe(129)
+    // Two plates: the nearest gap that holds it.
+    expect(clearPlace(100, 40, 0, 200, [[60, 75], [90, 105]])).toBe(129)
+    // Nowhere clear: plates either side of every place it fits.
+    expect(clearPlace(50, 40, 0, 100, [[20, 35], [60, 75]])).toBeNull()
+    // Too long for the stretch.
+    expect(clearPlace(50, 120, 0, 100, [])).toBeNull()
   })
 
   it('prints an affinity to two significant figures below 1, to two decimals from 1', () => {

@@ -1,9 +1,9 @@
 /* The curation stage (SPECS §33.3): contact. Tokens only, both themes from the app's own. */
 
 /* ---------------------------------------------------------------------------
-   The contact map: a head (the crumb, the key, the zoom), then the plot —
-   the picture on its paper, and over it one canvas that draws the furniture
-   and takes the hand.
+   The contact map: a head (the crumb, the close-up's act, the zoom), then
+   the plot — the picture on its paper, one canvas over it that draws the
+   furniture and takes the hand, and the key under the map.
    ------------------------------------------------------------------------- */
 
 .curate-contact {
@@ -31,7 +31,7 @@
 }
 
 /* The crumb: `genomes`, then the close-up's genomes. Short of room, the
-   counts give way first, then the key's word, and the names last. */
+   counts give way first, and the names last. */
 .curate-crumbs {
   display: flex;
   align-items: baseline;
@@ -97,36 +97,15 @@
   white-space: nowrap;
 }
 
-/* The key: what a colour means, on the map's own ramp. */
-.curate-contact-key {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex: 0 6 auto;
-  min-width: 0;
-}
-.curate-key-title {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--text-dim);
-  white-space: nowrap;
-}
-.curate-key-ramp {
-  display: block;
-  flex: 0 0 auto;
-}
-
 .curate-contact-tools {
   display: inline-flex;
   gap: 0.15rem;
   flex: 0 0 auto;
 }
 
-/* Narrow: the key keeps its ramp, the crumb its place. */
-@container (max-width: 34rem) {
-  .curate-key-title {
+/* Narrow: the act keeps its key, the crumb its names. */
+@container (max-width: 26rem) {
+  .curate-contact-act > span:first-child {
     display: none;
   }
 }
@@ -177,6 +156,33 @@
 /* A thumbnail beside the large picture: the stage's head above it makes it large. */
 .curate-contact.is-small .curate-contact-overlay {
   pointer-events: none;
+}
+
+/* The key: what a colour means, on the map's own ramp, under the map as a
+   figure's — its right edge on the map's, placed by the pane. */
+.curate-contact-key {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: calc(100% - 12px);
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+}
+.curate-contact.is-small .curate-contact-key {
+  display: none;
+}
+.curate-key-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.curate-key-ramp {
+  display: block;
+  flex: 0 0 auto;
 }
 
 /* What the map is waiting for, or why it draws nothing. */

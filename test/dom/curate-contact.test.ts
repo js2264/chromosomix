@@ -3,9 +3,11 @@
 /**
  * The curation stage's contact map (SPECS §33.3), in a DOM: the genome under a
  * press, a run dragged along the diagonal, the selection carried, the drop
- * target at a bar's block, the readout's words, and the close-up — asked for
- * the selected genomes' contigs and their candidates, read again after a step,
- * its genomes' names selecting their contigs.
+ * target at a bar's block, the readout's words, the review's question marked
+ * whole and numbered as the band numbers it, framed once, the key under the
+ * map, and the close-up — asked for the selected genomes' contigs and their
+ * candidates, read again after a step, its genomes' names selecting their
+ * contigs, a contig carried.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -76,11 +78,13 @@ const frame = (): Promise<void> => new Promise((resolve) => requestAnimationFram
 /**
  * The pane over the community, in a square plot (600 pixels unless asked), its
  * first count in and drawn; its close-ups answered as the worker would, or
- * never (`read: false`).
+ * never (`read: false`); the background as the network's pass measured it, or
+ * not yet (`background: null`).
  */
-async function mount(options: { side?: number; read?: boolean } = {}): Promise<Mounted> {
+async function mount(options: { side?: number; read?: boolean; background?: null } = {}): Promise<Mounted> {
   const side = options.side ?? 600
   const stage = testContext()
+  if (options.background === null) stage.ctx.data.background = null
   const asked: Int32Array[] = []
   ;(stage.ctx as { focus: CurateContext['focus'] }).focus = (contigs) => {
     asked.push(Int32Array.from(contigs))
@@ -265,6 +269,107 @@ describe('the genome map', () => {
     expect(overlay().dataset.current).toBe('')
   })
 
+  it('marks the review’s question whole, numbered as the band numbers it', async () => {
+    const { pane, model } = await mount()
+    model.setMode('review')
+    // The review opens on the merge of X's halves, its first question.
+    pane.showSuggestion(model.current)
+    await frame()
+    expect(overlay().dataset.featured).toBe('X1×X2')
+    expect(overlay().dataset.number).toBe('1')
+    // The element's question, its fourth: unlink P from Z and link it to Y, one question of two.
+    model.setCurrent('host:P')
+    expect(model.current?.members.map((member) => member.kind)).toEqual(['unlink', 'link'])
+    pane.showSuggestion(model.current)
+    await frame()
+    expect(overlay().dataset.featured?.split(' ').sort()).toEqual(['Y×P', 'Z×P'])
+    expect(overlay().dataset.number).toBe('4')
+    // In review the current question is marked whether the stage shows it or not; out of it, none.
+    pane.showSuggestion(null)
+    await frame()
+    expect(overlay().dataset.number).toBe('4')
+    model.setMode('manual')
+    await frame()
+    expect(overlay().dataset.featured).toBe('')
+    expect(overlay().dataset.number).toBe('')
+  })
+
+  it('marks every pair among an organism’s fragments, a question the queue does not hold without a number', async () => {
+    const { pane, model } = await mount()
+    const merge = model.offered().find((s) => s.kind === 'merge')!
+    const index = (id: string): number => model.answer!.genomes.findIndex((genome) => genome.id === id)
+    // Three fragments as one question, as `curate/questions.ts` groups them.
+    pane.showSuggestion({ ...merge, key: 'merge:X1+X2+Y', genomes: [index('X1'), index('X2'), index('Y')], members: [merge], steps: [merge.step] } as typeof merge)
+    await frame()
+    expect(overlay().dataset.featured?.split(' ').sort()).toEqual(['X1×X2', 'Y×X1', 'Y×X2'])
+    expect(overlay().dataset.number).toBe('')
+    // A recruit: the genome it brings a contig into, outlined.
+    pane.showSuggestion(model.offered().find((s) => s.kind === 'recruit')!)
+    await frame()
+    expect(overlay().dataset.featured).toBe('X1')
+    expect(overlay().dataset.number).toBe('3')
+  })
+
+  it('frames a question as it is first shown, and leaves a view moved since where it is', async () => {
+    const { pane, model } = await mount()
+    // Zoomed onto Z and P, three genomes wide.
+    pane.zoomBy(0.6, { x: 5, y: 5 })
+    await frame()
+    expect(geometry().domain.slice(0, 2)).toEqual([2, 5])
+    const merge = model.offered().find((s) => s.kind === 'merge')!
+    pane.showSuggestion(merge)
+    await frame()
+    // X1 and X2, the first and second units, in view.
+    const framed = geometry().domain
+    expect(framed[0]).toBeLessThanOrEqual(1)
+    expect(framed[1]).toBeGreaterThanOrEqual(3)
+    // The reader looks elsewhere; the stage shows the same question after a count, and again after none.
+    pane.fit()
+    pane.zoomBy(0.6, { x: 5, y: 5 })
+    pane.showSuggestion(merge)
+    pane.showSuggestion(null)
+    pane.showSuggestion(merge)
+    await frame()
+    expect(geometry().domain.slice(0, 2)).toEqual([2, 5])
+    // Another question is framed.
+    pane.showSuggestion(model.offered().find((s) => s.kind === 'recruit')!)
+    await frame()
+    expect(geometry().domain[0]).toBeLessThanOrEqual(1)
+  })
+
+  it('draws the binning as it would be while a step is previewed, and holds still under a drag', async () => {
+    const { pane, model, ctx } = await mount()
+    model.preview(model.offered().find((s) => s.kind === 'merge')!.step, true)
+    await frame()
+    expect(model.previewing).toBe(true)
+    expect(geometry().n).toBe(4)
+    // Something held over the map: the cells stay where the hand found them.
+    ctx.startDrag({ kind: 'genomes', ids: ['Z'] }, new PointerEvent('pointerdown'))
+    pointer('pointermove', cell(0, 0))
+    await frame()
+    expect(geometry().n).toBe(5)
+    expect(pane.view).toBe('genomes')
+  })
+
+  it('keys the map under it, its foot at the background once the contacts measured one', async () => {
+    const { pane } = await mount()
+    const key = pane.element.querySelector('.curate-contact-key') as HTMLElement
+    expect(pane.element.querySelector('.curate-contact-head .curate-contact-key')).toBeNull()
+    expect(key.classList.contains('hidden')).toBe(false)
+    const { y, size } = geometry()
+    expect(parseFloat(key.style.top)).toBeGreaterThanOrEqual(y + size)
+    expect(key.querySelector('canvas')?.getAttribute('aria-label')).toMatch(/^Affinity at its lower bound: .* from the background of spurious ligation \(0\.\d+\) to 1/)
+    pane.setLarge(false)
+    expect(key.classList.contains('hidden')).toBe(true)
+  })
+
+  it('prints no background in its key before the contacts measured one', async () => {
+    const { pane } = await mount({ background: null })
+    const ramp = pane.element.querySelector('.curate-contact-key canvas') as HTMLElement
+    expect(ramp.getAttribute('aria-label')).toMatch(/drawn once the contacts are read\.$/)
+    expect(ramp.getAttribute('aria-label')).not.toMatch(/\d/)
+  })
+
   it('draws small as a thumbnail: no head, no readout, no hand', async () => {
     const { pane, said, model } = await mount()
     pane.setLarge(false)
@@ -314,7 +419,7 @@ describe('the close-up', () => {
   })
 
   it('selects a genome’s contigs by its name on the bar, and takes a drop on a genome’s span alone', async () => {
-    const { pane, model } = await mount()
+    const { pane, model, ctx } = await mount()
     model.selectGenomes(['X1', 'X2'])
     pane.closeUp()
     await frame()
@@ -326,11 +431,14 @@ describe('the close-up', () => {
     expect(pane.dropTargetAt(span.clientX, span.clientY)).toEqual({ kind: 'genome', id: 'X2' })
     const candidate = topBar(7)
     expect(pane.dropTargetAt(candidate.clientX, candidate.clientY)).toBeNull()
-    // A contig pressed, then carried.
+    // A contig pressed, then carried: y5, the contig X1 holds by mistake, onto Y.
     press(cell(3, 3))
     expect(model.selection.contigs).toEqual([3])
+    expect(ctx.dragging).toBeNull()
     pointer('pointerdown', cell(3, 3))
     pointer('pointermove', { clientX: cell(3, 3).clientX, clientY: cell(3, 3).clientY + 40 })
+    expect(ctx.dragging).toEqual({ kind: 'contigs', contigs: [3] })
+    expect(ctx.dropWords({ kind: 'genome', id: 'Y' })?.refused).toBe(false)
     expect(pane.view).toBe('contigs')
   })
 
@@ -391,6 +499,32 @@ describe('the close-up', () => {
     pane.back()
     await frame()
     expect(geometry().domain).toEqual([0, 5, 0, 5])
+  })
+
+  it('marks the review’s question close up: the genome a recruit fills, a merge’s genomes, numbered as the band numbers them', async () => {
+    const { pane, model } = await mount()
+    model.selectGenomes(['X1', 'X2'])
+    pane.closeUp()
+    await frame()
+    model.setMode('review')
+    model.setCurrent('recruit:u0>X1')
+    pane.showSuggestion(model.current)
+    await frame()
+    expect(overlay().dataset.featured).toBe('X1')
+    expect(overlay().dataset.number).toBe('3')
+    model.setCurrent('merge:X1+X2')
+    pane.showSuggestion(model.current)
+    await frame()
+    expect(overlay().dataset.featured?.split(' ').sort()).toEqual(['X1', 'X2'])
+    expect(overlay().dataset.number).toBe('1')
+  })
+
+  it('says what to do with nothing selected, and lets go of it as the pointer leaves', async () => {
+    const { pane, said } = await mount()
+    pane.closeUp()
+    expect(said.at(-1)).toBe('Select genomes, in the list or on the map, then press Enter for their contigs.')
+    overlay().dispatchEvent(new PointerEvent('pointerleave', { bubbles: false }))
+    expect(said.at(-1)).toBeNull()
   })
 
   it('says it is reading a close-up until its contacts land', async () => {

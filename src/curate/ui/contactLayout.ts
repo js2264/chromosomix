@@ -1,9 +1,10 @@
 /**
  * The contact map's arithmetic (SPECS §33.3), apart from its canvas: which
- * genome each row of the map is, what a cell holds, the close-up's contigs and
- * the spans they make, the contigs a suggestion would bring into a close-up,
- * where a framed run puts the view, and the words and ticks its readout and key
- * print.
+ * genome each row of the map is, what a cell holds, the cells the review's
+ * question marks and the number it wears, the close-up's contigs and the spans
+ * they make, the contigs a suggestion would bring into a close-up, where a
+ * framed run puts the view, and the words and ticks its readout and key print —
+ * each where the names over it leave room.
  *
  * **One uniform cell a genome**, in the stage's order — MAGs, then elements,
  * never the pool (§7.4): a length axis would spend itself on the long genomes.
@@ -16,7 +17,7 @@
  * Pure: arrays in, arrays out, so the pane's logic is tested without a canvas.
  */
 
-import type { GenomeKind } from '../../genome/curation'
+import type { CurationStep, GenomeKind } from '../../genome/curation'
 import { encode, pyramid, triangleIndex, triangleSize, type PictureLevel, type Quantizer } from '../../metacooler/picture'
 import { lowerAffinity } from '../method'
 import type { GenomePairs, Suggestion } from '../suggest'
@@ -131,6 +132,102 @@ export function genomeMap(
 export function pairOf(map: GenomeMap, genomes: number, a: number, b: number): number {
   if (a === b) return -1
   return map.pairs.get(Math.min(a, b) * genomes + Math.max(a, b)) ?? -1
+}
+
+// ---------------------------------------------------------------------------
+// The review's question.
+// ---------------------------------------------------------------------------
+
+/** A suggestion, or a question of several (`curate/questions.ts`): its members, when it has them. */
+type Asked = Suggestion & { members?: readonly Suggestion[] }
+
+/** A cell a question marks on the genome map: two genomes, as indices of the answer's, and the mark. */
+export interface MarkedPair {
+  kind: 'merge' | 'link' | 'unlink'
+  a: number
+  b: number
+}
+
+/**
+ * The cells a suggestion, or a question whole, marks on the genome map: a
+ * merge's every pair among its genomes — an organism's fragments are one
+ * question, so each block they would join is marked —, a host question's
+ * every member at its own pair with its own mark (a link, an unlink); none for
+ * a recruit or a move, which outline the genome they bring contigs into.
+ */
+export function markedPairs(s: Asked): MarkedPair[] {
+  if (s.kind === 'merge') {
+    const genomes = [...new Set(s.genomes)].filter((g) => g >= 0)
+    const out: MarkedPair[] = []
+    for (let i = 0; i < genomes.length; i++) for (let j = i + 1; j < genomes.length; j++) out.push({ kind: 'merge', a: genomes[i], b: genomes[j] })
+    return out
+  }
+  if (s.kind !== 'link' && s.kind !== 'unlink') return []
+  const out: MarkedPair[] = []
+  const seen = new Set<string>()
+  for (const member of s.members ?? [s]) {
+    if (member.kind !== 'link' && member.kind !== 'unlink') continue
+    const [a, b] = member.genomes
+    if (a === undefined || b === undefined || a < 0 || b < 0) continue
+    const key = `${member.kind}:${Math.min(a, b)}:${Math.max(a, b)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ kind: member.kind, a, b })
+  }
+  return out
+}
+
+/**
+ * A question's number as the review's band and the suggestions card print it
+ * — the likely ones from 1, the less sure from 1 again — found by its key or a
+ * member's (a member stepped into wears its question's); `null` for one the
+ * queue does not hold.
+ */
+export function questionNumber(
+  queue: ReadonlyArray<{ key: string; confidence: number; members: ReadonlyArray<{ key: string }> }>,
+  key: string,
+  likely: number,
+): number | null {
+  let at = queue.findIndex((q) => q.key === key)
+  if (at < 0) at = queue.findIndex((q) => q.members.some((m) => m.key === key))
+  if (at < 0) return null
+  const first = queue.filter((q) => q.confidence >= likely).length
+  return at < first ? at + 1 : at - first + 1
+}
+
+/**
+ * The genomes previewed steps make or change, by id: where the binning as it
+ * would be differs — a merge's survivor, the genome contigs move to, a new one,
+ * a genome retyped or renamed, both ends of a link. A dissolved genome leaves
+ * none: it is gone.
+ */
+export function stepTargets(steps: readonly CurationStep[]): string[] {
+  const out = new Set<string>()
+  for (const step of steps) {
+    switch (step.op) {
+      case 'move':
+        if (step.to !== null) out.add(step.to)
+        break
+      case 'create':
+        out.add(step.id)
+        break
+      case 'merge':
+        out.add(step.into)
+        break
+      case 'retype':
+      case 'rename':
+        out.add(step.genome)
+        break
+      case 'link':
+      case 'unlink':
+        out.add(step.element)
+        out.add(step.mag)
+        break
+      case 'dissolve':
+        break
+    }
+  }
+  return [...out]
 }
 
 // ---------------------------------------------------------------------------
@@ -343,6 +440,27 @@ export function placeLabels(items: ReadonlyArray<{ at: number; width: number }>,
     end = from + width
     return from
   })
+}
+
+/**
+ * Where a label `width` long goes along a stretch `[lo, hi]` without running
+ * into what stands across it (`blocked`, intervals along the same line, as a
+ * name's plate does over a section's label): its centre — `mid` where that is
+ * clear, else the clear place nearest it, just past a blocked interval —, or
+ * `null` where no place in the stretch is clear.
+ */
+export function clearPlace(mid: number, width: number, lo: number, hi: number, blocked: ReadonlyArray<readonly [number, number]>, gap = 4): number | null {
+  const half = width / 2
+  const fits = (c: number): boolean =>
+    c - half >= lo - 1e-9 && c + half <= hi + 1e-9 && blocked.every(([b0, b1]) => c + half + gap <= b0 + 1e-9 || c - half - gap >= b1 - 1e-9)
+  if (fits(mid)) return mid
+  let best: number | null = null
+  for (const [b0, b1] of blocked) {
+    for (const c of [b0 - gap - half, b1 + gap + half]) {
+      if (fits(c) && (best === null || Math.abs(c - mid) < Math.abs(best - mid))) best = c
+    }
+  }
+  return best
 }
 
 /** Where a value sits along a ramp from `vmin` to `vmax`, base-10 logs both. */
