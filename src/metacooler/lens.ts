@@ -90,6 +90,26 @@ export class BinLens {
   }
 
   /**
+   * A lens that moves whole sequences, each forward, and sets nothing aside: a
+   * permutation of the stored bins, every one landing once. The curated
+   * binning's (`curationLens.ts`, §33.4), which lays the contigs out in another
+   * order and changes nothing else — built from the bins themselves rather than
+   * through an edit, since a metagenome's two million contigs are no assembly
+   * to fold.
+   *
+   * @param fields.toOriginal The stored bin each bin shows, every stored bin once.
+   */
+  static permutation(fields: {
+    names: string[]
+    lengths: Float64Array
+    chromOffset: Float64Array
+    toOriginal: Int32Array
+    originalBins: number
+  }): BinLens {
+    return new BinLens(fields)
+  }
+
+  /**
    * The lens an edited assembly makes over one resolution of the file.
    *
    * @param names The original sequences, in file order, as `coords` indexes them.
@@ -386,16 +406,25 @@ export class LensStore implements PixelStore {
     return this.inner.scoreColumns()
   }
 
-  /** Each edited bin's stored-pixel count is its original bin's — a density, for sorting and estimates. */
+  /**
+   * Each edited bin's stored-pixel count is its original bin's — a density, for
+   * sorting and estimates. Kept for the index it was counted from: a dozen
+   * callers ask, and each asking was an array the length of the map.
+   */
   binOffsets(): Float64Array {
     const inner = this.inner.binOffsets()
+    if (this.offsets?.inner === inner) return this.offsets.out
     const out = new Float64Array(this.lens.nBins + 1)
     for (let e = 0; e < this.lens.nBins; e++) {
       const bin = this.lens.toOriginal[e]
       out[e + 1] = out[e] + (bin >= 0 ? inner[bin + 1] - inner[bin] : 0)
     }
+    this.offsets = { inner, out }
     return out
   }
+
+  /** {@link binOffsets}, with the index it was counted from. */
+  private offsets: { inner: Float64Array; out: Float64Array } | null = null
 
   /**
    * The edited window, from the original rows it needs — or, from a store that

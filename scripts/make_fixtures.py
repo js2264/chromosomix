@@ -174,6 +174,57 @@ def write_rich_genomes(src: Path, dst: Path) -> None:
             )
 
 
+#: The curation `test/unit/curation-lens.test.ts` draws over `basic.metacool`
+#: (SPECS §33.4), as the contig → genome table its export writes: contigs moved
+#: between genomes and recruited from the pool, one genome merged into another
+#: and one dissolved, a MAG and an element created, and a genome renamed to a
+#: name that sorts before every other — so `reassign`'s order (the pool, then
+#: the genomes by name in code-point order, `basic_*` after `MAG_*`) is tested,
+#: and not the file's order or a locale's. The test applies the same steps and
+#: checks its fold against this table before it compares the maps.
+CURATED_MOVES = {
+    "contig_1_012": "MAG_02",
+    "contig_1_013": "MAG_03",
+    "contig_1_035": "MAG_05",
+    "contig_1_010": "basic_curated_001",
+    "contig_1_039": "basic_curated_001",
+    "contig_1_016": "basic_element_001",
+}
+CURATED_MERGED = {"MAG_10": "MAG_09"}
+CURATED_DISSOLVED = {"MAG_04"}
+CURATED_RENAMED = {"MAG_02": "Acinetobacter_X"}
+#: What metacooler reads as no genome, as `create` read basic's table.
+UNBINNED_SENTINELS = {"", "na", "nan", "none", "nd", "n/d", "-1", "__unbinned__"}
+
+
+def write_curated_contigs(src: Path, dst: Path) -> None:
+    """Write the curated binning of `basic.metacool` as `reassign` reads it.
+
+    Every contig with a header, the pool as ``__unbinned__``: the table the
+    curation's export writes (`src/curate/exports.ts`), read with
+    ``--contigs-format contig_name,genome_name`` and ``--missing unbinned``.
+    """
+    with src.open(newline="", encoding="utf-8") as fh, dst.open(
+        "w", newline="", encoding="utf-8"
+    ) as out:
+        reader = csv.reader(fh, delimiter="\t")
+        header = next(reader)
+        i_contig = header.index("contig_name")
+        i_genome = header.index("genome_name")
+        out.write("contig_name\tgenome_name\n")
+        for row in reader:
+            contig = row[i_contig]
+            genome = row[i_genome]
+            if genome.strip().lower() in UNBINNED_SENTINELS:
+                genome = "__unbinned__"
+            genome = CURATED_MOVES.get(contig, genome)
+            genome = CURATED_MERGED.get(genome, genome)
+            if genome in CURATED_DISSOLVED:
+                genome = "__unbinned__"
+            genome = CURATED_RENAMED.get(genome, genome)
+            out.write(f"{contig}\t{genome}\n")
+
+
 def write_float_cool(source_cool: Path, dst: Path) -> None:
     """Copy a cooler, turning its integer counts into genuinely fractional ones.
 
@@ -279,6 +330,33 @@ def build(out: Path, data: Path) -> list[dict]:
         "metacool",
         "accept",
         "fixed 1 kb bins, genome-then-length, 10 MAGs + __unbinned__ with real contigs",
+    )
+
+    # -- curated (an oracle, not a fixture with a golden) ----------------------
+    # basic re-grouped by `metacooler reassign` from a curation's contig →
+    # genome table: what a session drawn through that curation must equal, bin
+    # for bin (SPECS §33.4). Beside the fixtures rather than among them, so no
+    # golden is made of it: the lens test compares the two maps directly.
+    curated_contigs = fresh(out / "curated_contigs.tsv")
+    write_curated_contigs(basic_contigs, curated_contigs)
+    run(
+        [
+            *metacooler,
+            "reassign",
+            str(out / "basic.metacool"),
+            "--contigs",
+            str(curated_contigs),
+            "--contigs-format",
+            "contig_name,genome_name",
+            "--missing",
+            "unbinned",
+            "--layout",
+            "genome-then-length",
+            "--output",
+            str(fresh(out / "curated.metacool")),
+            "--force",
+            "--quiet",
+        ]
     )
 
     # -- metadata ------------------------------------------------------------
