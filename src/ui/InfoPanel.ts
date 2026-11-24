@@ -433,16 +433,11 @@ export class InfoPanel {
                 ]
           })()
         : []),
-      // The binning the map is drawn through, where it is a curation's (§33.4),
-      // and the file's own beside it.
+      // The binning the map is drawn through, where it is a curation's (§33.4):
+      // the counts above are the curated genomes', and the file's pool is set
+      // beside the curated one in the Binning QC card.
       ...(info.curation?.refusal === null && info.curation.file !== undefined
-        ? ([
-            [
-              'binning',
-              `curated · ${fmt.int(info.curation.steps)} ${info.curation.steps === 1 ? 'step' : 'steps'} ` +
-                `(file: ${fmt.int(info.curation.file.genomes)} ${info.curation.file.genomes === 1 ? 'genome' : 'genomes'})`,
-            ],
-          ] as Array<[string, string]>)
+        ? ([['binning', `curated · ${fmt.int(info.curation.steps)} ${info.curation.steps === 1 ? 'step' : 'steps'}`]] as Array<[string, string]>)
         : []),
       [info.hasGenomes ? 'contigs' : 'chromosomes', fmt.int(info.nContigs)],
       ['bins', fmt.int(info.nBins)],

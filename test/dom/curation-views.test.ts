@@ -144,7 +144,7 @@ describe('the File and Binning QC cards under a curation', () => {
     expect(rows['MAGs']).toBe('2')
     expect(rows['elements']).toBe('1')
     expect(rows['genomes']).toBeUndefined()
-    expect(rows['binning']).toBe('curated · 3 steps (file: 3 genomes)')
+    expect(rows['binning']).toBe('curated · 3 steps')
   })
 
   it('sets the file’s pool beside the curated one where they differ, and says nothing of it where they agree', () => {

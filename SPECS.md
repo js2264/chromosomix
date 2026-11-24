@@ -17357,8 +17357,8 @@ the recomputed ones titled as such and the file's others as left empty where the
 genome; the contigs table names each contig's genome; the genome and genome-pair views and the
 genome × genome overview read the curated genomes — a genome edge list beside the file, which counts
 the file's genomes, set aside (§7.3); the record card leads with a genome's kind and curation; the
-File card counts the MAGs and the elements apart and says `binning curated · 7 steps (file: 177
-genomes)`; the Binning QC card gives the curated pool, and the file's beside it where the two differ.
+File card counts the MAGs and the elements apart and says `binning curated · 7 steps`; the Binning
+QC card gives the curated pool, and the file's beside it where the two differ.
 A genome's stage (§27.10) draws the curated genome's contigs from the file as it is, and counts where
 they belong by the curated genomes.
 
