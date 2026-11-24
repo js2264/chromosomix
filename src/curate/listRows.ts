@@ -15,7 +15,8 @@ export type ListSection = 'mags' | 'elements' | 'pool'
 /** One row of the list. */
 export type ListRow =
   | { kind: 'section'; section: ListSection; genomes: number; contigs: number; length: number; open: boolean; shown: number }
-  | { kind: 'genome'; genome: number; id: string; open: boolean }
+  /** A genome; `byFilter` where the filter shows it on its hits, open until the reader closes it. */
+  | { kind: 'genome'; genome: number; id: string; open: boolean; byFilter?: boolean }
   | { kind: 'contig'; contig: number; genome: number }
 
 /** How a genome section is sorted. */
@@ -216,7 +217,7 @@ export function listRows(input: ListInput): ListRows {
       const id = answer.genomes[g].id
       // Opened by the filter on its hits until the reader closes it.
       const isOpen = hits !== null ? input.closed?.has(id) !== true : input.open.has(id)
-      rows.push({ kind: 'genome', genome: g, id, open: isOpen })
+      rows.push(hits !== null ? { kind: 'genome', genome: g, id, open: isOpen, byFilter: true } : { kind: 'genome', genome: g, id, open: isOpen })
       if (!isOpen) continue
       for (const c of hits ?? contigsOf[g]) rows.push({ kind: 'contig', contig: c, genome: g })
     }

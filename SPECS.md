@@ -17396,8 +17396,10 @@ complete, the redundant MAGs, or the elements with no host; the genomes sort by 
 length, completeness, redundancy, contigs, suggestions or name, and the pool by likeliness, length
 or name. ↑ ↓ walk the rows, → opens a genome, ← closes it or climbs to it, Home and End go to the
 first and last row, `F2` or `R` renames in place — Tab takes the name and opens the next genome's
-(§26.8), a refused name keeps the caret and says why, and the box stays open through any count that
-lands while a name is typed; a genome `B` or `E` makes opens its name once it is counted. Enter is
+(§26.8; an input method's while it composes), a refused name keeps the caret and says why, a press
+elsewhere leaves the old name and the focus where it went, and the box stays open through any count
+that lands while a name is typed; a genome `B` or `E` makes opens its name once it is counted, unless
+another name is being typed by then. Enter is
 the stage's close-up, and in review the arrows are the review's. A virtual list: twenty thousand
 contigs scroll as fifty genomes do; a section's head stays at the top while its rows scroll, and
 takes a press and a drop as the head does. A contig's row takes a drop as its genome's, a pool

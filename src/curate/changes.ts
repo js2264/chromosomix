@@ -6,6 +6,7 @@
  */
 
 import type { BaseBinning, GenomeKind } from '../genome/curation'
+import { fmt } from '../units'
 import type { CurationStateResult } from '../worker/curateProtocol'
 
 /** One genome's change since the file. */
@@ -80,8 +81,8 @@ export function curationChanges(answer: CurationStateResult, file: BaseBinning):
 export function changeChip(change: GenomeChange): string | null {
   if (change.created) return 'new'
   const parts: string[] = []
-  if (change.gained > 0) parts.push(`+${change.gained.toLocaleString('en-US')}`)
-  if (change.lost > 0) parts.push(`−${change.lost.toLocaleString('en-US')}`)
+  if (change.gained > 0) parts.push(`+${fmt.int(change.gained)}`)
+  if (change.lost > 0) parts.push(`−${fmt.int(change.lost)}`)
   if (change.retypedFrom !== null) parts.push(change.retypedFrom === 'element' ? 'was an element' : 'was a MAG')
   if (change.renamedFrom !== null) parts.push('renamed')
   return parts.length === 0 ? null : parts.join(' ')
@@ -89,7 +90,8 @@ export function changeChip(change: GenomeChange): string | null {
 
 /** A count and its noun, one or many: `1 contig`, `30 contigs`. */
 export function counted(n: number, one: string, many = `${one}s`): string {
-  return `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
+  // Grouped as the reader's locale groups, as every count (§26.2).
+  return `${fmt.int(n)} ${n === 1 ? one : many}`
 }
 
 /** A genome's change in a sentence, for the chip's title. */
@@ -97,7 +99,7 @@ export function changeWords(change: GenomeChange): string {
   if (change.created) return `Made by the curation: ${counted(change.gained, 'contig')}.`
   const parts: string[] = []
   if (change.absorbed.length > 0) parts.push(`merged with ${change.absorbed.join(', ')}`)
-  if (change.gained > 0 || change.lost > 0) parts.push(`${counted(change.gained, 'contig')} in, ${change.lost.toLocaleString('en-US')} out`)
+  if (change.gained > 0 || change.lost > 0) parts.push(`${counted(change.gained, 'contig')} in, ${fmt.int(change.lost)} out`)
   if (change.renamedFrom !== null) parts.push(`${change.renamedFrom} in the file`)
   if (change.retypedFrom !== null) parts.push(`${change.retypedFrom === 'element' ? 'an element' : 'a MAG'} in the file`)
   if (parts.length === 0) return 'As in the file.'

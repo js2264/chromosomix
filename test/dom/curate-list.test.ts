@@ -191,4 +191,58 @@ describe('the genome list', () => {
     press(row('c:0'), { metaKey: true })
     expect(model.selection).toEqual({ genomes: [], contigs: [0] })
   })
+
+  it('closes a name box pressed away from, the focus left where it went, and leaves Tab to an input method mid-composition', async () => {
+    const { store } = await mount()
+    press(row('g:X1'))
+    key('F2')
+    const input = document.querySelector('.curate-rename') as HTMLInputElement
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, isComposing: true }))
+    expect(document.querySelector('.curate-rename')).toBe(input)
+    const filter = document.querySelector('.curate-filter') as HTMLInputElement
+    filter.focus()
+    expect(document.querySelector('.curate-rename')).toBeNull()
+    expect(document.activeElement).toBe(filter)
+    expect(store.applied).toBe(0)
+  })
+
+  it('closes on the first press a genome the filter shows on its hits, open before or not', async () => {
+    await mount()
+    press(row('g:X2'))
+    key('ArrowRight')
+    await frame()
+    const box = document.querySelector('.curate-filter') as HTMLInputElement
+    box.value = 'x4'
+    box.dispatchEvent(new Event('input'))
+    await frame()
+    expect(names()).toContain('x4')
+    press(row('g:X2'))
+    key('ArrowLeft')
+    await frame()
+    expect(names()).not.toContain('x4')
+    // The filter gone, X2 is open again as the reader left it.
+    box.value = ''
+    box.dispatchEvent(new Event('input'))
+    await frame()
+    expect(names()).toContain('x3')
+  })
+
+  it('ignores a double press in the name box, and goes on to the last row from past the end', async () => {
+    const { model } = await mount()
+    press(row('g:X1'))
+    key('F2')
+    const input = document.querySelector('.curate-rename') as HTMLInputElement
+    input.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    await frame()
+    expect(names()).not.toContain('x0')
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    key('End')
+    expect(model.selection.contigs).toEqual([18])
+    const box = document.querySelector('.curate-filter') as HTMLInputElement
+    box.value = 'Z'
+    box.dispatchEvent(new Event('input'))
+    await frame()
+    key('ArrowDown')
+    expect(model.selection.genomes).toEqual(['Z'])
+  })
 })

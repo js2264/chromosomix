@@ -16,7 +16,7 @@
 import { el } from '../../ui/dom'
 import { icon } from '../../ui/icons'
 import { keyLabel, withKey } from '../../ui/commands'
-import { TAB_WALKS } from '../../ui/tabWalk'
+import { TAB_WALKS, tabStep } from '../../ui/tabWalk'
 import { fmt } from '../../units'
 import { changeChip, changeWords, counted, curationChanges, type CurationChanges } from '../changes'
 import { redundancyText } from '../price'
@@ -190,7 +190,14 @@ export class GenomeList {
         pointerdown: (event: PointerEvent) => {
           if (event.button !== 0 || this.stickySection === null) return
           event.preventDefault()
-          this.toggleFold(this.stickySection)
+          const section = this.stickySection
+          this.toggleFold(section)
+          // The section folded stays in view, its head where the reader pressed it.
+          const k = this.rows.rows.findIndex((row) => row.kind === 'section' && row.section === section)
+          if (k >= 0) {
+            this.scroller.scrollTop = k * LIST_ROW
+            this.schedule()
+          }
         },
         // It stands over the list, not in it: the wheel on it scrolls the list.
         wheel: (event: WheelEvent) => {
@@ -498,7 +505,10 @@ export class GenomeList {
     node.addEventListener('pointerdown', (event) => this.pointerDown(event, row))
     node.addEventListener('pointerenter', () => this.hoverRow(row))
     node.addEventListener('dblclick', (event) => {
-      if (row.kind === 'genome' && (event.target as HTMLElement).closest('.curate-row-name') !== null) this.startRename(row.id)
+      const target = event.target as HTMLElement
+      // A double press in the name box selects a word, nothing more.
+      if (target.closest('input') !== null) return
+      if (row.kind === 'genome' && target.closest('.curate-row-name') !== null) this.startRename(row.id)
       else if (row.kind === 'genome') this.toggleOpen(row.id)
     })
     return node
@@ -778,10 +788,12 @@ export class GenomeList {
 
   private toggleOpen(id: string): void {
     const row = this.rows.rows.find((r) => r.kind === 'genome' && r.id === id)
-    // One the filter opened on its contigs closes for as long as the filter stands.
-    if (row?.kind === 'genome' && row.open && !this.open.has(id) && readFilter(this.filterBox.value) !== null) this.closed.add(id)
-    else if (this.closed.has(id)) this.closed.delete(id)
-    else if (this.open.has(id)) this.open.delete(id)
+    // A row the filter shows on its hits opens and closes for as long as the
+    // filter stands, whatever the reader had open before it.
+    if (row?.kind === 'genome' && row.byFilter === true) {
+      if (row.open) this.closed.add(id)
+      else this.closed.delete(id)
+    } else if (this.open.has(id)) this.open.delete(id)
     else this.open.add(id)
     this.recompute()
   }
@@ -804,8 +816,13 @@ export class GenomeList {
       // to the row now where it was, ↑ to the one before.
       let k: number
       if (at >= 0) k = at
-      else if (this.activeAt >= 0) k = Math.min(this.activeAt, rows.length) - (by > 0 ? 1 : 0)
-      else k = by > 0 ? -1 : rows.length
+      else if (this.activeAt >= 0 && this.activeAt < rows.length) k = this.activeAt - (by > 0 ? 1 : 0)
+      // From past the end — the filter left fewer rows — the last row there is.
+      else if (this.activeAt >= rows.length) {
+        const last = rows.length - 1 - [...rows].reverse().findIndex((r) => r.kind !== 'section')
+        if (last >= rows.length) return true
+        k = last + (by > 0 ? -1 : 1)
+      } else k = by > 0 ? -1 : rows.length
       for (;;) {
         k += by
         if (k < 0 || k >= rows.length) return true
@@ -946,7 +963,10 @@ export class GenomeList {
     }
     if (k < 0) {
       if (!waited && (genome === undefined || this.ctx.model.stale)) {
-        void this.ctx.model.settled().then(() => this.startRename(id, true))
+        // Once counted — unless a name is being typed meanwhile: that box is the reader's.
+        void this.ctx.model.settled().then(() => {
+          if (this.renaming === null) this.startRename(id, true)
+        })
         return
       }
       if (genome !== undefined) this.ctx.say('Its row is hidden by the filter or the chips: clear them to rename it.')
@@ -967,7 +987,7 @@ export class GenomeList {
     this.renaming = { id, input, cancel: () => finish(false) }
     input.focus()
     input.select()
-    const finish = (commit: boolean, then?: 1 | -1): void => {
+    const finish = (commit: boolean, then?: 1 | -1, keepFocus = false): void => {
       if (this.renaming?.input !== input) return
       if (commit) {
         const refused = this.ctx.model.rename(id, input.value)
@@ -982,7 +1002,10 @@ export class GenomeList {
       this.renaming = null
       this.ctx.say(null)
       this.schedule(true)
-      this.focus()
+      // The keyboard back to the list after Enter, Escape or Tab; a press
+      // elsewhere keeps the focus it went to — the filter box, a card's field —
+      // or the letters typed next would be the stage's keys.
+      if (!keepFocus) this.focus()
       if (then !== undefined) {
         const genomes = this.rows.rows.filter((row): row is Extract<ListRow, { kind: 'genome' }> => row.kind === 'genome')
         const at = genomes.findIndex((row) => row.id === id)
@@ -992,20 +1015,23 @@ export class GenomeList {
     }
     input.addEventListener('keydown', (event) => {
       event.stopPropagation()
+      // Mid-composition the keys are the input method's (§26.8).
+      if (event.isComposing) return
+      const walk = tabStep(event)
       if (event.key === 'Enter') {
         event.preventDefault()
         finish(true)
       } else if (event.key === 'Escape') {
         event.preventDefault()
         finish(false)
-      } else if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      } else if (walk !== null) {
         event.preventDefault()
-        finish(true, event.shiftKey ? -1 : 1)
+        finish(true, walk)
       } else input.classList.remove('is-refused')
     })
     input.addEventListener('blur', () => {
-      // A press elsewhere leaves the old name, as Escape does.
-      if (this.renaming?.input === input) finish(false)
+      // A press elsewhere leaves the old name, as Escape does, and the focus where it went.
+      if (this.renaming?.input === input) finish(false, undefined, true)
     })
   }
 

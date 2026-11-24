@@ -157,7 +157,8 @@
   z-index: 2;
 }
 .curate-row-section.is-drop-target,
-.curate-row-genome.is-drop-target {
+.curate-row-genome.is-drop-target,
+.curate-row-contig.is-drop-target {
   box-shadow: inset 0 0 0 2px var(--accent);
   background: var(--accent-soft);
 }
@@ -239,9 +240,18 @@
   flex: 0 0 auto;
   margin-right: auto;
 }
-/* A changed genome's row gives its bar's room to the change: the percentage stays. */
+/* A changed genome's row gives its bar's room to the change: the percentage stays, its box as wide as it. */
 .curate-row.has-change .curate-bar {
   display: none;
+}
+.curate-row.has-change .curate-row-quality {
+  width: auto;
+}
+/* The numbers and the suggestions' disc never give way: the name and the change do. */
+.curate-row-quality,
+.curate-row-redundant,
+.curate-row-suggested {
+  flex-shrink: 0;
 }
 
 .curate-row-length,
@@ -362,9 +372,22 @@
     display: none;
   }
 }
-@container (max-width: 250px) {
-  .curate-row-gc,
+/* Then the change chip (its words are in the name's title), then the bars. */
+@container (max-width: 300px) {
   .curate-change {
+    display: none;
+  }
+}
+@container (max-width: 270px) {
+  .curate-bar {
+    display: none;
+  }
+  .curate-row-quality {
+    width: auto;
+  }
+}
+@container (max-width: 250px) {
+  .curate-row-gc {
     display: none;
   }
 }
