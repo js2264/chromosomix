@@ -3,7 +3,7 @@
  * the heading's word, the stage opening and reading the contacts, the three
  * pictures and the list, a genome lit in every part, the fragments of one
  * organism selected, the review's questions with their price, a question taken
- * and turned down, the host map and the scatter large, a lasso, a drag onto a
+ * and turned down, a host question, the host map large and around an element, the scatter large, a lasso, a drag onto a
  * genome, the close-up, auto, the exports, the session drawn through the
  * curation once the stage closes, the dark theme, a narrow window, and the dev
  * features off.
@@ -114,6 +114,17 @@ await counted()
 console.log('after N, band:', await band())
 console.log('history:', await history())
 
+// A host question in review: → until the band asks one, the host map large.
+for (let k = 0; k < 80; k++) {
+  if (/^review.*\b(link|unlink)\b/.test((await band()) ?? '')) break
+  await page.keyboard.press('ArrowRight')
+  await sleep(120)
+}
+await sleep(800)
+console.log('host question:', await band())
+console.log('large on a host question:', await large())
+await shot('cu08b-host-question')
+
 // The host map and the scatter large.
 await page.click('[data-mode="manual"]')
 await sleep(300)
@@ -121,6 +132,21 @@ await page.keyboard.press('2')
 await sleep(800)
 console.log('large:', await large())
 await shot('cu09-hosts')
+// An element selected: the host map around it.
+await page.fill('.curate-filter', 'MGE_00003')
+await sleep(400)
+const element = await page.$('.curate-row-genome[data-genome^="MetaTOR_MGE_"]')
+if (element !== null) {
+  await element.click()
+  await sleep(300)
+  await page.click('.curate-host-scope [data-scope="selection"], button:has-text("around the selection")').catch(() => console.log('no "around the selection"'))
+  await sleep(800)
+  console.log('host map around:', await text('[data-pane="hosts"] .curate-host-head, [data-pane="hosts"] header'))
+  await shot('cu09b-hosts-around')
+}
+await page.fill('.curate-filter', '')
+await page.keyboard.press('Escape')
+await sleep(300)
 await page.keyboard.press('3')
 await sleep(800)
 console.log('large:', await large())
