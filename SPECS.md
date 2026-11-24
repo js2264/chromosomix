@@ -2174,7 +2174,7 @@ in 21 requests before its first picture at 10 kb; at 256 KiB it is 9.7 MB in 25,
 link of 100 ms and 50 Mbit/s a request its reads end in 5 s, not 22 — the rest of the difference
 being the circularity check it no longer runs (§8.15). The same quarter megabyte is the tracks'
 chunk (`annotations/worker/cachedFile.ts`). It is a few more round trips where the walk's places lie
-close together — the demo metacool opens and lists its genomes in 9 requests where it took 6 — and
+close together — the demo metacool opens and lists its genomes in 8 requests where it took 4 — and
 fewer bytes everywhere. A whole chromosome, which streams, is about even: chromosome 2 of the same
 map at 50 kb is 47 requests and 92 MB where it was 35 and 102, on screen through that link in 24 s
 either way.
@@ -2993,14 +2993,14 @@ row of the genomes table.
 **`bin × bin` is the default.** A contig cell sums a rectangle of `length × length`, and a
 metagenome's contigs span several orders of magnitude in length, so the contig axis spends its width
 on the shortest sequences and its colour range on the longest: a block is as wide as a genome is
-*fragmented* rather than as long as it is. Measured on the 48-MAG mock community, 62% of the contig
-axis goes to contigs under 5 kb holding 4% of the sequence, one badly-assembled MAG takes 28% of it
-for 4.5% of the assembly, and a third of the diagonal comes out empty. Bin cells are all the same
-area, so one scale fits the whole picture — and landing on the legible level is worth more than
-landing on the one that contains the others. The contig level stays, because "is this bin one
-organism?" is a question only it answers. Where a sidecar edge list is advertised the default gives
-way to `genome × genome`: that one is a small download rather than a pass over the file, so it is
-the cheapest thing to land on.
+*fragmented* rather than as long as it is. Measured on the mock community's 50 MAGs and 127 mobile
+elements, 62% of the contig axis goes to contigs under 5 kb holding 4% of the sequence, one
+badly-assembled MAG takes 28% of it for 4.4% of the sequence, and two cells in five of the diagonal
+hold no contact at all. Bin cells are all the same area, so one scale fits the whole picture — and
+landing on the legible level is worth more than landing on the one that contains the others. The
+contig level stays, because "is this bin one organism?" is a question only it answers. Where a
+sidecar edge list is advertised the default gives way to `genome × genome`: that one is a small
+download rather than a pass over the file, so it is the cheapest thing to land on.
 
 **The bin level costs what the other two cost, and gives way when it cannot be had.** Its block is
 the raster's size whatever the file — up to 4,096² cells — and it used to be summed into a full
@@ -3765,10 +3765,10 @@ where a full match says nothing. Silent zero-overlap is the most likely support 
 impossible.
 
 **On a file with a genome layer the report is about genomes** (§8.5). The same arithmetic that is
-informative on a cooler is alarming on a metagenome: a coverage track over four MAGs matches `794 of
+informative on a cooler is alarming on a metagenome: a coverage track over four MAGs matches `420 of
 20,566` sequences, which is true, and is also what a track about another organism entirely would
-say. So where the map has genomes the sentence counts them — *794 of 20,566 sequences, in 4 of 48
-genomes: metator_00001_00000, …* — and it is a **note rather than a warning**, because partial
+say. So where the map has genomes the sentence counts them — *420 of 20,566 sequences, in 4 of 177
+genomes: MM133_metator_00001_00001, …* — and it is a **note rather than a warning**, because partial
 coverage is the expected shape of a track over a co-assembly and painting it yellow would make the
 ordinary case read as a fault. The two failures that *are* faults keep their voice: no overlap at
 all, and a cross-convention match whose lengths disagree (§5.9).
@@ -16521,16 +16521,17 @@ kind — a cell never holds two sequences — and a curator scaffolds a MAG, not
 `.metacool` the stage is on one genome: the one in view, else the one the reader picks from a list of
 the file's genomes, longest first, each with its size, its contigs and how many steps its edit has, with
 a filter for a file of hundreds (`edit/GenomePicker.ts`); the command reads *Edit genome
-metator_00009_00000* where one is in view and *Edit a genome* where none is. The edit is that genome's
-alone: its original is the genome's contigs in the file's order, marked with the genome's name, kept
-under the file's key and the genome's (`state/referenceEdit.ts`, `genomeEditKey`), and checked against
-the file as a part of it — every contig of it one of the file's, as long — and carried, with what its
-answers taught, in a saved workspace and a shared link (`genomeEdits`, by genome). Its picture is those contigs
-alone (`pictureLayout` over some of a map's sequences): only their rows are read, a contact with a
-contig outside is left out, and the method weighs the genome as it would a genome. Everything the stage
-writes is that genome's, and says so — `Mock_microbial_community.metator_00009_00000.edited.agp` — the
-lifted contacts included, a map of that genome alone through its edit. The session itself is not drawn
-through a genome's edit: the metagenome's views are the file's.
+MM133_metator_00001_00002* where one is in view and *Edit a genome* where none is. The edit is that
+genome's alone: its original is the genome's contigs in the file's order, marked with the genome's
+name, kept under the file's key and the genome's (`state/referenceEdit.ts`, `genomeEditKey`), and
+checked against the file as a part of it — every contig of it one of the file's, as long — and
+carried, with what its answers taught, in a saved workspace and a shared link (`genomeEdits`, by
+genome). Its picture is those contigs alone (`pictureLayout` over some of a map's sequences): only
+their rows are read, a contact with a contig outside is left out, and the method weighs the genome as
+it would a genome. Everything the stage writes is that genome's, and says so —
+`MM133.MM133_metator_00001_00002.edited.agp` — the lifted contacts included, a map of that genome
+alone through its edit. The session itself is not drawn through a genome's edit: the metagenome's
+views are the file's.
 
 **Where its contigs belong.** The stage's *genome* card reads every contact of the file once — without
 being asked where the file holds at most 50 million pixels, else at a press — counting, for each contig
@@ -16542,13 +16543,14 @@ another genome more than this one, each with its shares and a way to **send** it
 of other genomes, and of none, that give this genome 40% or more of their contacts, five at least, each
 with a way to **bring** it in — eight of each at most, the likeliest first. Sending sets every
 stretch of the contig the edit places aside as a contaminant, marked with the genome it goes to —
-*send NODE_3314:1-1,804 to metator_00025_00000* — which
-the set-aside list and the AGP's comment line (`# aside  contaminant  NODE_3314:1-1804  metator_00025_00000`)
+*send NODE_3314_len_1804:1-1,804 to MM133_metator_00716_00000* — which the set-aside list and the
+AGP's comment line (`# aside  contaminant  NODE_3314_len_1804:1-1804  MM133_metator_00716_00000`)
 carry, and read back. Bringing in makes the contig one the edit may name — the original's
-`elsewhere`, each with the genome it came from — and a step, *bring in NODE_10045*, puts it whole after
-the genome's own contigs, undone as any step is; the picture is read again with it, and the method
-weighs it with the rest. On the mock community, metator_00007_00000 keeps 93% of its contacts, two of
-its contigs meet metator_00025_00000 more, and 62 unbinned contigs give it 40% or more of theirs.
+`elsewhere`, each with the genome it came from — and a step, *bring in NODE_10045_len_3361*, puts it
+whole after the genome's own contigs, undone as any step is; the picture is read again with it, and
+the method weighs it with the rest. On the mock community, MM133_metator_00014_00000 keeps 93% of its
+contacts, two of its contigs meet MM133_metator_00716_00000 more, and 62 unbinned contigs and one of
+MM133_metator_00713_00000 give it 40% or more of theirs.
 
 **The contig → MAG table** (`edit/binning.ts`), from any genome's export card: every contig of the file
 with its genome, every genome's kept edit applied — a contig sent away is its new genome's, one brought

@@ -54,7 +54,7 @@ const shot = async (name) => {
 }
 /** Every word on screen, for the log's assertions. */
 const words = () => page.evaluate(() => document.body.innerText)
-const METACOOL = `${BASE}/demo/metagenomics/mock-community/Mock_microbial_community.metacool`
+const METACOOL = `${BASE}/demo/metagenomics/mock-community/MM133.metacool`
 /** `?dev` while the dev features are asked for, nothing while they are not. */
 let query = ''
 
@@ -122,7 +122,7 @@ await openMetacool()
 text = await words()
 console.log('off · .metacool refused:', /not a contact map this viewer reads/.test(text))
 console.log('off · refusal names metacool (outside the file name):',
-  /metacool/i.test(text.replaceAll('Mock_microbial_community.metacool', '')))
+  /metacool/i.test(text.replaceAll('MM133.metacool', '')))
 await shot('d03-metacool-refused')
 
 // ── On ─────────────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@
       "version": 1,
       "createdAt": "2026-09-09T00:00:00.000Z",
       "state": {
-        "uri": "Mock_microbial_community.metacool",
+        "uri": "MM133.metacool",
         "view": "genomes",
         "level": "bin",
         "balance": false,

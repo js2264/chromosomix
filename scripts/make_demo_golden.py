@@ -67,12 +67,12 @@ BUCKET = "https://rsglab-data.s3.eu-west-3.amazonaws.com/"
 #: their folders out.
 MAPS: list[dict] = [
     {
-        "path": "demo/metagenomics/mock-community/Mock_microbial_community.metacool",
+        "path": "demo/metagenomics/mock-community/MM133.metacool",
         "groups": [""],
         "published": False,
     },
     {
-        "path": "demo/metagenomics/mock-community/Mock_microbial_community.mmetacool",
+        "path": "demo/metagenomics/mock-community/MM133.mmetacool",
         "groups": ["entries/1000", "entries/2000", "entries/4000"],
         "published": False,
     },

@@ -14,8 +14,8 @@ import { MetaCooler } from '../../src/metacooler/MetaCooler'
 import { LocalFileSource } from '../../src/sources/LocalFileSource'
 
 const DEMO = (path: string): string => new URL(`../../demo/${path}`, import.meta.url).pathname
-const METACOOL = DEMO('metagenomics/mock-community/Mock_microbial_community.metacool')
-const MMETACOOL = DEMO('metagenomics/mock-community/Mock_microbial_community.mmetacool')
+const METACOOL = DEMO('metagenomics/mock-community/MM133.metacool')
+const MMETACOOL = DEMO('metagenomics/mock-community/MM133.mmetacool')
 const COOLER = DEMO('yeast/Yeast_microC_G2M_1kb.cool')
 
 /**

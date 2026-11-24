@@ -19,6 +19,8 @@ import { execSync } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { withDev } from './gallery-lib.mjs'
+
 const require = createRequire(import.meta.url)
 function playwright() {
   try {
@@ -58,7 +60,7 @@ const isDark = (page) =>
 const YEAST = `${BASE}/demo/yeast/Yeast_microC.chromosomix.json`
 const DECK = `${BASE}/demo/yeast/Yeast_deck.chromosomix.json`
 const TRACKS = `${BASE}/demo/yeast/Yeast_tracks.chromosomix.json`
-const MOCK = `${BASE}/demo/metagenomics/mock-community/Mock_microbial_community.chromosomix.json`
+const MOCK = `${BASE}/demo/metagenomics/mock-community/MM133.chromosomix.json`
 
 /** One scene: its own context, viewport and storage. */
 async function scene(name, fn, { width = 1920, height = 1100, dark = false } = {}) {
@@ -488,7 +490,7 @@ await scene('browser', async ({ page, shot, fold, opened }) => {
 
 // ---------------------------------------------------------------- the metagenome
 await scene('metagenome', async ({ page, shot, fold, opened }) => {
-  await page.goto(`${BASE}/?config=${MOCK}`)
+  await page.goto(withDev(`${BASE}/?config=${MOCK}`))
   await opened()
   await sleep(2500)
   await shot('60-genomes-table')

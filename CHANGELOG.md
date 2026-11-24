@@ -56,6 +56,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   (`qc_intra_contig_short`, `qc_intra_contig_long`) and, for a map made from pairs, the QC block's
   distance threshold of 1,001 bp; the goldens record them, and the version that wrote them.
 
+- **The mock community's demo is MM133: 50 MAGs and 127 mobile elements with their hosts, and the
+  marker genes of every contig — a dev feature (§33).** `demo/metagenomics/mock-community/` holds
+  `MM133.metacool`, `MM133.mmetacool` and `MM133.chromosomix.json` in place of
+  `Mock_microbial_community.*`, an older binning of the same library: the same 20,566 contigs and
+  7,081,501 pixels, binned by metaTOR 1.4 into 50 MAGs and 127 elements (`MetaTOR_MGE_*`, `mge`
+  true), with `/clusters` holding its rounds and the elements' hosts, and every contig's markers as
+  `metator markers` stores them (`/contigs/markers_Bact105` and `markers_Arch131`). The collection
+  is its zoomify at 1, 2 and 4 kb, each entry with the clusters and the markers, and the workspace
+  opens it on the genomes table as before. It is the demo curating the genomes is shown and tested
+  on. The demo's goldens are rebuilt from it — the contigs' order follows the binning, so every bin
+  id moves — and the galleries open it with the dev features on, `ui-edit-metagenome` on
+  MM133_metator_00001_00002.
+
 - **With no map starred, a deck's map tasks run on every map at once (§18.1).** They used to be
   greyed until a map was starred. Now only the plain `run on ★` is greyed, with the reason in its
   tooltip, and *run on all N maps* runs, set up from the first map as the *Map* card is while it sets
@@ -387,7 +400,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The mock microbial community from the lab's store (a dev feature, §29).** Its files were deleted
   from the lab's bucket, so the store's *Mock microbial community* figure and its `.metacool` and
-  `.mmetacool` rows went with them. The files stay in the repository, where the tests read them.
+  `.mmetacool` rows went with them. The community's map stays in the repository, where the tests read
+  it: MM133 now, under *Changed*.
 - ***match all resolutions*, from the deck's bar (§16.2, §16.5).** Every map is read at the deck's
   one resolution already, so the press had nothing left to do; **match all scales** stays. With it
   goes the way a change of the first map's rung reached the other maps, reopening each at that rung:
