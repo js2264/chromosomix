@@ -20,7 +20,8 @@ import { readFileBinning, type FileBinningRead } from '../curate/base'
 import { background, tally, visibility } from '../curate/method'
 import { focusPicture } from '../curate/focus'
 import { binContigs, NetworkBuilder } from '../curate/network'
-import { curationState, methodBinning, neighbourLists, type CurationEvidence } from '../curate/suggest'
+import { stateAnswer } from '../curate/answer'
+import { methodBinning, neighbourLists, type CurationEvidence } from '../curate/suggest'
 import type { CurationBaseResult, CurationFocusResult, CurationNetworkResult, CurationRequest, CurationStateResult } from './curateProtocol'
 
 /** What one file's curation keeps. */
@@ -133,28 +134,7 @@ function evidenceOf(mc: MetaCooler): { kept: Held; evidence: CurationEvidence } 
 
 export function handleCurationState(mc: MetaCooler, request: Extract<CurationRequest, { kind: 'curationState' }>): CurationStateResult {
   const { kept, evidence } = evidenceOf(mc)
-  const binning = CuratedBinning.of(kept.read.base, request.curation)
-  const state = curationState(evidence, binning, request.weights ?? {})
-  return {
-    fingerprint: binning.fingerprint(),
-    genomes: binning.genomes.map((genome, g) => ({
-      id: genome.id,
-      name: genome.name,
-      kind: genome.kind,
-      asInFile: genome.asInFile,
-      contigs: genome.contigs.length,
-      length: genome.contigs.reduce((sum, c) => sum + evidence.lengths[c], 0),
-      within: state.tally.within[g],
-      visibility: state.tally.visibility[g],
-      quality: state.quality[g] ?? null,
-    })),
-    genomeOf: binning.genomeOf.slice(),
-    links: binning.links.map((link) => ({ ...link })),
-    pairs: state.pairs,
-    hosts: state.hosts,
-    contigs: state.contigs,
-    suggestions: state.suggestions,
-  }
+  return stateAnswer(evidence, CuratedBinning.of(kept.read.base, request.curation), request.weights ?? {})
 }
 
 export function handleCurationFocus(mc: MetaCooler, request: Extract<CurationRequest, { kind: 'curationFocus' }>): CurationFocusResult {
