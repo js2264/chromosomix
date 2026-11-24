@@ -158,6 +158,7 @@ describe('MM133, against its truth', () => {
 
   it('prices every MAG as miComplete does: the map’s own four numbers, but where mge --reassign took a contig since', () => {
     const table = mc.fullGenomes()
+    if (table === null) throw new Error('the map has no genomes table')
     const names = table.strings('name')
     const column = (name: string): number[] => table.numbers(name)
     const stored = ['Completeness', 'Redundancy', 'Weighted completeness', 'Weighted redundancy'].map(column)

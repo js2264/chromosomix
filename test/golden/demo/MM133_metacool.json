@@ -1,5 +1,5 @@
 {
- "bytes": 12080164,
+ "bytes": 11770740,
  "file": "MM133.metacool",
  "maps": [
   {
@@ -14729,7 +14729,7 @@
    ]
   }
  ],
- "md5": "bcc3c13b523b848e7704aae86230e592",
+ "md5": "3c8fe8050c98cfdfd72f18f4deb6d11b",
  "path": "demo/metagenomics/mock-community/MM133.metacool",
  "url": null
 }

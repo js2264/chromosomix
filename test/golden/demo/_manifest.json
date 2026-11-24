@@ -4,18 +4,18 @@
  "generator": "scripts/make_demo_golden.py",
  "maps": [
   {
-   "bytes": 12080164,
+   "bytes": 11770740,
    "file": "MM133.metacool",
    "golden": "MM133_metacool.json",
-   "md5": "bcc3c13b523b848e7704aae86230e592",
+   "md5": "3c8fe8050c98cfdfd72f18f4deb6d11b",
    "path": "demo/metagenomics/mock-community/MM133.metacool",
    "url": null
   },
   {
-   "bytes": 27167852,
+   "bytes": 27159768,
    "file": "MM133.mmetacool",
    "golden": "MM133_mmetacool.json",
-   "md5": "090b514a4910055ed760cad62d25710b",
+   "md5": "af8c1510edd02c05abc1743efbec0e47",
    "path": "demo/metagenomics/mock-community/MM133.mmetacool",
    "url": null
   },
