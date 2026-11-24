@@ -155,7 +155,6 @@
 }
 .curate-list-sticky {
   z-index: 2;
-  pointer-events: none;
 }
 .curate-row-section.is-drop-target,
 .curate-row-genome.is-drop-target {

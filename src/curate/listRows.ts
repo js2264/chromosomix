@@ -7,6 +7,7 @@
  */
 
 import type { CurationStateResult } from '../worker/curateProtocol'
+import { shortName } from './names'
 
 /** The list's three sections. */
 export type ListSection = 'mags' | 'elements' | 'pool'
@@ -35,11 +36,15 @@ export type ListFilter =
   | { kind: 'text'; text: string }
   | { kind: 'regex'; pattern: RegExp }
   | { kind: 'names'; names: ReadonlySet<string> }
+  /** A `/…/` that is not a pattern: it finds nothing, and says why. */
+  | { kind: 'invalid'; reason: string }
 
 /**
  * A filter box's text, read: `/…/` a pattern, several names (split on spaces,
- * commas or lines) a pasted list matched exactly, anything else a substring
- * matched in any case. `null` for an empty box, or a pattern that is not one.
+ * commas or lines) a pasted list matched exactly, anything else — one name,
+ * whatever separator was copied with it — a substring matched in any case.
+ * `null` for an empty box; a `/…/` that does not compile finds nothing and
+ * says why.
  */
 export function readFilter(text: string): ListFilter | null {
   const trimmed = text.trim()
@@ -48,13 +53,13 @@ export function readFilter(text: string): ListFilter | null {
   if (regex !== null) {
     try {
       return { kind: 'regex', pattern: new RegExp(regex[1], regex[2].includes('i') ? regex[2] : `${regex[2]}i`) }
-    } catch {
-      return null
+    } catch (error) {
+      return { kind: 'invalid', reason: error instanceof Error ? error.message : String(error) }
     }
   }
   const names = trimmed.split(/[\s,;]+/).filter((name) => name !== '')
   if (names.length > 1) return { kind: 'names', names: new Set(names) }
-  return { kind: 'text', text: trimmed.toLowerCase() }
+  return { kind: 'text', text: (names[0] ?? trimmed).toLowerCase() }
 }
 
 /** Whether a name passes a filter. */
@@ -66,6 +71,8 @@ export function passes(filter: ListFilter, name: string): boolean {
       return filter.pattern.test(name)
     case 'names':
       return filter.names.has(name)
+    case 'invalid':
+      return false
   }
 }
 
@@ -78,6 +85,8 @@ export interface ListInput {
   lengths: readonly number[]
   /** Genomes open, by id. */
   open: ReadonlySet<string>
+  /** Genomes a filter opened on their contigs that the reader closed, by id. */
+  closed?: ReadonlySet<string>
   /** Sections folded. */
   folded: ReadonlySet<ListSection>
   genomeSort: GenomeSort
@@ -90,6 +99,14 @@ export interface ListInput {
   suggested: ArrayLike<number>
   /** Each pool contig's likeliest recruit's confidence, `0` for none. */
   poolLikeliness: ArrayLike<number>
+  /**
+   * Whether each genome wears a change (`curate/changes.ts`'s chip), by index
+   * of the answer's: what the *changed* chip keeps — a renamed genome too.
+   * Without it, the genomes not as in the file.
+   */
+  changed?: ArrayLike<boolean>
+  /** Each section's shared prefix: a pasted list of the names the list prints finds them. */
+  prefixes?: { mag: string; element: string }
 }
 
 /** What a list holds: its rows, and per section how many of its rows a filter or a chip left. */
@@ -99,6 +116,8 @@ export interface ListRows {
   missing: string[]
   /** Genomes and contigs a filter found, for *select them*. */
   found: { genomes: number[]; contigs: number[] }
+  /** Names of a pasted list that exist but the chips hide. */
+  hidden?: number
 }
 
 /** The list's rows. */
@@ -118,27 +137,41 @@ export function listRows(input: ListInput): ListRows {
   for (const list of contigsOf) list.sort(longestFirst)
   const linked = new Set(answer.links.map((link) => link.element))
 
-  // A genome passes the filter on its name, or on a contig's: then its contigs
-  // that pass are shown under it, open.
+  // A genome passes the filter on its name — the whole, or the short one the
+  // list prints — or on a contig's: then its contigs that pass are shown under
+  // it, open.
   const found = { genomes: [] as number[], contigs: [] as number[] }
-  const seen = new Set<string>()
-  const contigPasses = (c: number): boolean => {
+  const prefixOf = (g: number): string => (answer.genomes[g].kind === 'mag' ? (input.prefixes?.mag ?? '') : (input.prefixes?.element ?? ''))
+  const genomePasses = (g: number): boolean => {
     if (filter === null) return true
-    const ok = passes(filter, names[c] ?? '')
-    if (ok && filter.kind === 'names') seen.add(names[c])
-    return ok
+    const name = answer.genomes[g].name
+    if (passes(filter, name)) return true
+    return filter.kind === 'names' && filter.names.has(shortName(name, prefixOf(g)))
+  }
+  const contigPasses = (c: number): boolean => filter === null || passes(filter, names[c] ?? '')
+  // A pasted list's names that exist, whatever the chips hide.
+  const seen = new Set<string>()
+  if (filter?.kind === 'names') {
+    answer.genomes.forEach((genome, g) => {
+      if (filter.names.has(genome.name)) seen.add(genome.name)
+      const short = shortName(genome.name, prefixOf(g))
+      if (filter.names.has(short)) seen.add(short)
+    })
+    for (const name of names) if (filter.names.has(name)) seen.add(name)
   }
   const chipped = (g: number): boolean => {
     const genome = answer.genomes[g]
     for (const chip of input.chips) {
-      if (chip === 'changed' && genome.asInFile) return false
+      if (chip === 'changed' && !(input.changed === undefined ? !genome.asInFile : input.changed[g] === true)) return false
       if (chip === 'suggested' && !((input.suggested[g] ?? 0) > 0)) return false
-      if (chip === 'complete' && !((genome.quality?.weightedCompleteness ?? 0) >= CHIP_COMPLETE)) return false
-      if (chip === 'redundant' && !((genome.quality?.weightedRedundancy ?? 0) > CHIP_REDUNDANT)) return false
+      // Quality is a MAG's word: an element with a marker twice is not redundant.
+      if (chip === 'complete' && !(genome.kind === 'mag' && (genome.quality?.weightedCompleteness ?? 0) >= CHIP_COMPLETE)) return false
+      if (chip === 'redundant' && !(genome.kind === 'mag' && (genome.quality?.weightedRedundancy ?? 0) > CHIP_REDUNDANT)) return false
       if (chip === 'unhosted' && (genome.kind !== 'element' || linked.has(genome.id))) return false
     }
     return true
   }
+  const shownNames = new Set<string>()
 
   const rows: ListRow[] = []
   for (const section of ['mags', 'elements'] as const) {
@@ -158,11 +191,18 @@ export function listRows(input: ListInput): ListRows {
         shown.push({ genome: g, contigs: null })
         continue
       }
-      const byName = passes(filter, genome.name)
-      if (byName && filter.kind === 'names') seen.add(genome.name)
+      const byName = genomePasses(g)
       const hits = contigsOf[g].filter(contigPasses)
-      if (byName) found.genomes.push(g)
-      found.contigs.push(...hits)
+      if (byName) {
+        found.genomes.push(g)
+        shownNames.add(genome.name)
+        shownNames.add(shortName(genome.name, prefixOf(g)))
+      }
+      // One by one: a match of every contig is past what one call's arguments hold.
+      for (const c of hits) {
+        found.contigs.push(c)
+        shownNames.add(names[c])
+      }
       // Found by its own name, a genome is shown as it is; found by its
       // contigs', it opens on them.
       if (byName) shown.push({ genome: g, contigs: null })
@@ -174,7 +214,8 @@ export function listRows(input: ListInput): ListRows {
     if (!open) continue
     for (const { genome: g, contigs: hits } of shown) {
       const id = answer.genomes[g].id
-      const isOpen = input.open.has(id) || hits !== null
+      // Opened by the filter on its hits until the reader closes it.
+      const isOpen = hits !== null ? input.closed?.has(id) !== true : input.open.has(id)
       rows.push({ kind: 'genome', genome: g, id, open: isOpen })
       if (!isOpen) continue
       for (const c of hits ?? contigsOf[g]) rows.push({ kind: 'contig', contig: c, genome: g })
@@ -185,7 +226,11 @@ export function listRows(input: ListInput): ListRows {
   // leave the pool showing nothing.
   const genomeChips = [...input.chips].some((chip) => chip !== 'suggested')
   const poolShown = genomeChips ? [] : pool.filter((c) => contigPasses(c) && (!input.chips.has('suggested') || (input.poolLikeliness[c] ?? 0) > 0))
-  if (filter !== null) found.contigs.push(...poolShown)
+  if (filter !== null)
+    for (const c of poolShown) {
+      found.contigs.push(c)
+      shownNames.add(names[c])
+    }
   sortPool(poolShown, input)
   let poolLength = 0
   for (const c of pool) poolLength += lengths[c] ?? 0
@@ -194,7 +239,8 @@ export function listRows(input: ListInput): ListRows {
   if (poolOpen) for (const c of poolShown) rows.push({ kind: 'contig', contig: c, genome: -1 })
 
   const missing = filter?.kind === 'names' ? [...filter.names].filter((name) => !seen.has(name)) : []
-  return { rows, missing, found }
+  const hidden = filter?.kind === 'names' ? [...seen].filter((name) => !shownNames.has(name)).length : 0
+  return { rows, missing, found, hidden }
 }
 
 function sortGenomes(shown: Array<{ genome: number }>, input: ListInput, answer: CurationStateResult): void {

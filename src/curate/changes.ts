@@ -48,7 +48,10 @@ export function curationChanges(answer: CurationStateResult, file: BaseBinning):
     }
   })
   const byId = new Map(answer.genomes.map((genome, g) => [genome.id, g]))
-  const absorbed = genomes.map(() => new Set<string>())
+  // Of each file genome that is gone, how many of its contigs each genome holds now.
+  const goneHeld = genomes.map(() => new Map<string, number>())
+  const fileSize = new Map<string, number>()
+  for (const name of fileGenomeOf) if (name !== null) fileSize.set(name, (fileSize.get(name) ?? 0) + 1)
   let moved = 0
   answer.genomeOf.forEach((g, c) => {
     const was = fileGenomeOf[c]
@@ -57,17 +60,18 @@ export function curationChanges(answer: CurationStateResult, file: BaseBinning):
     moved++
     if (g >= 0) {
       genomes[g].gained++
-      // A contig of a file genome that is gone came in by a merge, or as the
-      // whole of it: the genome it came from is named.
-      if (was !== null && !byId.has(was)) absorbed[g].add(was)
+      if (was !== null && !byId.has(was)) goneHeld[g].set(was, (goneHeld[g].get(was) ?? 0) + 1)
     }
     if (was !== null) {
       const from = byId.get(was)
       if (from !== undefined) genomes[from].lost++
     }
   })
-  absorbed.forEach((names, g) => {
-    genomes[g].absorbed = [...names].sort()
+  // A genome that is gone was merged into the one holding most of it — more
+  // than half its contigs: one contig of a dissolved genome recruited, or
+  // moved out before a merge, says nothing of a merge.
+  goneHeld.forEach((held, g) => {
+    genomes[g].absorbed = [...held].filter(([name, n]) => 2 * n > (fileSize.get(name) ?? 0)).map(([name]) => name).sort()
   })
   return { genomes, fileGenomeOf, moved }
 }
@@ -83,12 +87,17 @@ export function changeChip(change: GenomeChange): string | null {
   return parts.length === 0 ? null : parts.join(' ')
 }
 
+/** A count and its noun, one or many: `1 contig`, `30 contigs`. */
+export function counted(n: number, one: string, many = `${one}s`): string {
+  return `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
+}
+
 /** A genome's change in a sentence, for the chip's title. */
 export function changeWords(change: GenomeChange): string {
-  if (change.created) return `Made by the curation: ${change.gained.toLocaleString('en-US')} contigs.`
+  if (change.created) return `Made by the curation: ${counted(change.gained, 'contig')}.`
   const parts: string[] = []
   if (change.absorbed.length > 0) parts.push(`merged with ${change.absorbed.join(', ')}`)
-  if (change.gained > 0 || change.lost > 0) parts.push(`${change.gained.toLocaleString('en-US')} contigs in, ${change.lost.toLocaleString('en-US')} out`)
+  if (change.gained > 0 || change.lost > 0) parts.push(`${counted(change.gained, 'contig')} in, ${change.lost.toLocaleString('en-US')} out`)
   if (change.renamedFrom !== null) parts.push(`${change.renamedFrom} in the file`)
   if (change.retypedFrom !== null) parts.push(`${change.retypedFrom === 'element' ? 'an element' : 'a MAG'} in the file`)
   if (parts.length === 0) return 'As in the file.'

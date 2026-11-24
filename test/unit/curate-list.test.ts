@@ -66,12 +66,34 @@ describe('the genome list', () => {
     expect(pasted.found.contigs.map((c) => NAMES[c]).sort()).toEqual(['u0', 'x4'])
   })
 
-  it('reads a box: empty is none, a broken pattern none, one word a part of a name', () => {
+  it('reads a box: empty is none, a broken pattern finds nothing and says why, one name a part of a name', () => {
     expect(readFilter('  ')).toBeNull()
-    expect(readFilter('/(/')).toBeNull()
+    const broken = readFilter('/(/')
+    expect(broken?.kind).toBe('invalid')
+    if (broken !== null) expect(passes(broken, 'x1')).toBe(false)
+    expect(listRows(input({ filter: broken })).rows.filter((row) => row.kind !== 'section')).toEqual([])
     const one = readFilter('NODE')
     expect(one?.kind).toBe('text')
     if (one !== null) expect(passes(one, 'a_node_7')).toBe(true)
+    // One name copied with its separator is the name.
+    const copied = readFilter('x4,')
+    expect(copied).toEqual({ kind: 'text', text: 'x4' })
+  })
+
+  it('finds a pasted list of the short names the list prints, names what the chips hide apart from what is missing, and closes a genome the filter opened', () => {
+    const prefixed = { ...answer, genomes: answer.genomes.map((genome) => ({ ...genome, name: `MM_${genome.name}` })) }
+    const rows = listRows(input({ answer: prefixed, prefixes: { mag: 'MM_', element: 'MM_' }, filter: readFilter('X1 Y') }))
+    expect(rows.missing).toEqual([])
+    // The rows are the same genomes: named here by the unprefixed answer.
+    expect(rows.rows.map(word)).toEqual(['§mags', 'X1', 'Y', '§elements', '§pool'])
+    const chipped = listRows(input({ filter: readFilter('X1 Y nope'), chips: new Set(['unhosted']) }))
+    expect(chipped.missing).toEqual(['nope'])
+    expect(chipped.hidden).toBe(2)
+    // x4 opens X2 on it; closed by the reader, it stays closed under the filter.
+    const opened = listRows(input({ filter: readFilter('x4') }))
+    expect(opened.rows.map(word)).toContain('·x4')
+    const closed = listRows(input({ filter: readFilter('x4'), closed: new Set(['X2']) }))
+    expect(closed.rows.map(word)).toEqual(['§mags', 'X2', '§elements', '§pool'])
   })
 
   it('sorts a section by a column, ties in the stage’s order, and the pool by its likeliest recruits', () => {

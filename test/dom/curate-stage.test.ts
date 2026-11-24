@@ -250,4 +250,27 @@ describe('the curation stage', () => {
     key('l')
     expect(document.querySelector('.curate-readout')?.textContent).toMatch(/^Select an element/)
   })
+
+  it('in review, gives the arrows to the review even while the list has the keyboard', async () => {
+    const { ctx } = await open()
+    ;(document.querySelector('[data-mode="review"]') as HTMLButtonElement).click()
+    await settle()
+    const first = ctx().model.current?.key
+    const scroller = document.querySelector('.curate-list-scroll') as HTMLElement
+    scroller.focus()
+    scroller.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }))
+    await settle()
+    expect(ctx().model.current?.key).not.toBe(first)
+    expect(ctx().model.selection.genomes).toEqual([])
+  })
+
+  it('opens a new genome’s name for typing once B has made it and it is counted', async () => {
+    const { ctx } = await open()
+    ctx().model.selectContigs([18])
+    key('b')
+    await settle()
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+    const input = document.querySelector('.curate-rename') as HTMLInputElement | null
+    expect(input?.value).toBe('curated_MAG_1')
+  })
 })

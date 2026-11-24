@@ -123,4 +123,72 @@ describe('the genome list', () => {
     await model.settled()
     expect(store.binning.genomeOf[3]).toBe(store.binning.indexOfId('Y'))
   })
+
+  it('keeps the name box through a recount, and Tab walks on to the next genome’s', async () => {
+    const { model, store } = await mount()
+    press(row('g:X1'))
+    key('F2')
+    const input = document.querySelector('.curate-rename') as HTMLInputElement
+    // A step made meanwhile — the count lands while the name is typed.
+    store.apply({ op: 'rename', genome: 'Z', name: 'Zeta' })
+    await model.settled()
+    await frame()
+    expect(input.isConnected).toBe(true)
+    expect(document.querySelector('.curate-rename')).toBe(input)
+    input.value = 'Xanthomonas'
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    await frame()
+    // The next genome's box is open at once, and its own rename's count keeps it.
+    const next = document.querySelector('.curate-rename') as HTMLInputElement
+    expect(next).not.toBeNull()
+    expect(next.value).toBe('X2')
+    await model.settled()
+    await frame()
+    expect(next.isConnected).toBe(true)
+    expect(names()).toContain('Xanthomonas')
+  })
+
+  it('leaves Enter to the stage’s close-up, goes Home and End, and keeps → on a contig', async () => {
+    const { model } = await mount()
+    press(row('g:X1'))
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    document.querySelector('.curate-list-scroll')?.dispatchEvent(enter)
+    expect(enter.defaultPrevented).toBe(false)
+    expect(names()).not.toContain('x0')
+    key('End')
+    expect(model.selection.contigs).toEqual([18])
+    key('Home')
+    expect(model.selection.genomes).toEqual(['Y'])
+    // A contig is a leaf: → stays on it.
+    press(row('g:X1'))
+    key('ArrowRight')
+    await frame()
+    key('ArrowDown')
+    const on = model.selection.contigs
+    key('ArrowRight')
+    expect(model.selection.contigs).toEqual(on)
+  })
+
+  it('takes a drop on a contig’s row as its genome’s, and on a pool contig’s as the pool’s', async () => {
+    await mount()
+    press(row('g:X1'))
+    key('ArrowRight')
+    await frame()
+    expect(row('c:0').dataset.dropGenome).toBe('X1')
+    expect(row('c:18').dataset.dropSection).toBe('pool')
+    // Heads alone are not selectable: they say nothing of it.
+    expect(row('s:mags').hasAttribute('aria-selected')).toBe(false)
+    expect(row('g:X1').getAttribute('aria-level')).toBe('2')
+    expect(row('c:0').getAttribute('aria-level')).toBe('3')
+    expect(document.querySelector('.curate-list-scroll')?.getAttribute('aria-activedescendant')).toBe(row('g:X1').id)
+  })
+
+  it('keeps one kind selected: ⌘ on a contig with genomes selected starts again from it', async () => {
+    const { model } = await mount()
+    press(row('g:X1'))
+    key('ArrowRight')
+    await frame()
+    press(row('c:0'), { metaKey: true })
+    expect(model.selection).toEqual({ genomes: [], contigs: [0] })
+  })
 })

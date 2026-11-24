@@ -257,6 +257,8 @@ export class CurateStage {
       watchTheme(() => {
         this.inkHeld = null
         for (const pane of Object.values(this.panes)) pane.update('state')
+        // The list's swatches too, or one genome wears two colours at once.
+        this.list.update('state')
       }),
     )
     this.root.addEventListener('pointermove', (event) => {
@@ -633,18 +635,26 @@ export class CurateStage {
     if (model.mode !== 'review') {
       for (const pane of Object.values(this.panes)) pane.showSuggestion(null)
       if (this.large !== this.chosen) this.setLarge(this.chosen)
+      this.framedKey = null
       return
     }
     const current = model.current
     for (const pane of Object.values(this.panes)) pane.showSuggestion(current)
     if (current === null) return
     model.preview(current.steps, this.space)
+    // Framed when the question changes, not on every count: the reader's row
+    // in the list stays where they took it.
+    if (current.key === this.framedKey) return
+    this.framedKey = current.key
     this.setLarge(current.kind === 'link' || current.kind === 'unlink' ? 'hosts' : 'contacts')
     this.ctx.frame({
       genomes: current.genomes.map((g) => model.answer?.genomes[g]?.id).filter((id): id is string => id !== undefined),
       contigs: current.contigs,
     })
   }
+
+  /** The question review framed last. */
+  private framedKey: string | null = null
 
   /** The readout: what a part said, the drag's words, or the curation's tally. */
   private paintReadout(): void {
@@ -944,6 +954,15 @@ export class CurateStage {
   /** The stage's keys; `true` when taken. */
   private key(event: KeyboardEvent): boolean {
     if (this.closed) return false
+    // In review the arrows are the review's, as its band prints them: the
+    // questions ← →, a question's members ↓ ↑ — before the list's.
+    if (this.model.mode === 'review' && !event.metaKey && !event.ctrlKey && !event.altKey && event.key.startsWith('Arrow')) {
+      if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+        this.model.moveCurrent(event.key === 'ArrowRight' ? 1 : -1)
+        return true
+      }
+      return this.model.moveMember(event.key === 'ArrowDown' ? 1 : -1) || true
+    }
     // The list's own keys while it has the keyboard.
     if (this.list.contains(event.target) && this.list.key(event)) return true
     // A picture's own — zoom, fit, its level — where the pointer is.
@@ -984,15 +1003,6 @@ export class CurateStage {
         else model.reject(current)
         return true
       }
-      case 'ArrowRight':
-      case 'ArrowLeft':
-        if (model.mode !== 'review') return false
-        model.moveCurrent(key === 'ArrowRight' ? 1 : -1)
-        return true
-      case 'ArrowDown':
-      case 'ArrowUp':
-        if (model.mode !== 'review') return false
-        return model.moveMember(key === 'ArrowDown' ? 1 : -1)
       case ' ':
         if (model.mode !== 'review' || model.current === null) return false
         if (!event.repeat) {
@@ -1030,7 +1040,8 @@ export class CurateStage {
         const kind = key === 'b' || key === 'B' ? 'mag' : 'element'
         if (selection.contigs.length > 0) {
           const id = model.createFromSelected(kind)
-          if (id !== null) requestAnimationFrame(() => this.list.startRename(id))
+          // Its name open for typing once it is counted and has a row.
+          if (id !== null) this.list.startRename(id)
         } else if (selection.genomes.length > 0) model.retypeSelected(kind)
         else return false
         return true

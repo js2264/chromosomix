@@ -7,9 +7,10 @@
  *
  * One selection with the pictures: a press selects a row, ⌘/Ctrl toggles one,
  * ⇧ extends; ↑ ↓ walk the rows, → opens a genome, ← closes it or climbs to it,
- * Enter opens or closes, F2 renames, ⌘A selects every row shown. A row dragged
- * is the selection when it is in it, and drops on a genome's row (*into it*),
- * a section's head (*a new one*, *of that kind*) or the pool (*out*).
+ * Home and End go to the first and last row, F2 renames, ⌘A selects every row
+ * shown — Enter is the stage's close-up. A row dragged is the selection when it
+ * is in it, and drops on a genome's row or one of its contigs (*into it*), a
+ * section's head (*a new one*, *of that kind*) or the pool (*out*).
  */
 
 import { el } from '../../ui/dom'
@@ -17,7 +18,7 @@ import { icon } from '../../ui/icons'
 import { keyLabel, withKey } from '../../ui/commands'
 import { TAB_WALKS } from '../../ui/tabWalk'
 import { fmt } from '../../units'
-import { changeChip, changeWords, curationChanges, type CurationChanges } from '../changes'
+import { changeChip, changeWords, counted, curationChanges, type CurationChanges } from '../changes'
 import { listRows, readFilter, rowKey, type GenomeSort, type ListChip, type ListRow, type ListRows, type ListSection, type PoolSort } from '../listRows'
 import type { CurateChange } from '../model'
 import type { Suggestion } from '../suggest'
@@ -27,6 +28,8 @@ import { grade } from './grade'
 
 /** A row's height, in CSS pixels. */
 export const LIST_ROW = 28
+/** Lists made, for their rows' ids. */
+let lists = 0
 /** Rows drawn past each edge of the view. */
 const OVERSCAN = 8
 /** How far a press moves before it is a drag. */
@@ -38,6 +41,8 @@ interface Derived {
   changes: CurationChanges
   /** Suggestions on offer naming each genome. */
   suggested: Int32Array
+  /** Whether each genome wears a change chip: what the *changed* chip keeps. */
+  changed: boolean[]
   /** Each contig's best suggestion on offer that would move it, if any. */
   best: Map<number, Suggestion>
   likeliness: Float64Array
@@ -76,6 +81,9 @@ export class GenomeList {
   private derived: Derived | null = null
   private rows: ListRows = { rows: [], missing: [], found: { genomes: [], contigs: [] } }
   private readonly open = new Set<string>()
+  /** Genomes the filter opened on their contigs and the reader closed; forgotten with the filter. */
+  private readonly closed = new Set<string>()
+  private filterText = ''
   private readonly folded = new Set<ListSection>()
   private genomeSort: GenomeSort = 'order'
   private poolSort: PoolSort = 'likeliest'
@@ -84,8 +92,12 @@ export class GenomeList {
   private readonly drawn = new Map<string, HTMLElement>()
   /** The row the keyboard is on, by key, and the row a ⇧-press extends from. */
   private active: string | null = null
+  /** Where the keyboard's row was: ↓ goes on from there when its row has gone. */
+  private activeAt = -1
   private anchor: string | null = null
-  private renaming: { id: string; input: HTMLInputElement } | null = null
+  private renaming: { id: string; input: HTMLInputElement; cancel: () => void } | null = null
+  /** This list's own, so two lists' rows never share an id. */
+  private readonly uid = ++lists
   private press: { x: number; y: number; row: ListRow; pointer: number } | null = null
   private frame = 0
   private readonly unsubscribe: Array<() => void> = []
@@ -98,6 +110,7 @@ export class GenomeList {
       title: withKey('Part of a name, a /pattern/, or a pasted list of names', '/'),
       attrs: { 'aria-label': 'Filter genomes and contigs', spellcheck: 'false' },
       on: { input: () => this.recompute() },
+      // Each row an id, for the tree's active descendant.
     })
     this.filterNote = el('div', { class: 'curate-filter-note hidden', attrs: { role: 'status' } })
     this.chipRow = el('div', { class: 'curate-chips', attrs: { role: 'group', 'aria-label': 'Show only' } })
@@ -169,7 +182,21 @@ export class GenomeList {
       },
     })
     this.scroller.appendChild(this.spacer)
-    this.sticky = el('div', { class: 'curate-list-sticky hidden', attrs: { 'aria-hidden': 'true' } })
+    this.sticky = el('div', {
+      class: 'curate-list-sticky curate-row-section hidden',
+      attrs: { 'aria-hidden': 'true' },
+      on: {
+        pointerdown: (event: PointerEvent) => {
+          if (event.button !== 0 || this.stickySection === null) return
+          event.preventDefault()
+          this.toggleFold(this.stickySection)
+        },
+        // It stands over the list, not in it: the wheel on it scrolls the list.
+        wheel: (event: WheelEvent) => {
+          this.scroller.scrollTop += event.deltaY
+        },
+      },
+    })
     // Three drop targets that never scroll away: what is held dropped here makes
     // a new MAG, a new element, or goes to the pool.
     const dock = el(
@@ -254,7 +281,8 @@ export class GenomeList {
         if (s.confidence > likeliness[c]) likeliness[c] = s.confidence
       }
     }
-    this.derived = { answer, changes: curationChanges(answer, this.ctx.data.file), suggested, best, likeliness }
+    const changes = curationChanges(answer, this.ctx.data.file)
+    this.derived = { answer, changes, suggested, changed: changes.genomes.map((change) => changeChip(change) !== null), best, likeliness }
     return this.derived
   }
 
@@ -268,12 +296,19 @@ export class GenomeList {
       return
     }
     const { file } = this.ctx.data
+    if (this.filterBox.value !== this.filterText) {
+      this.filterText = this.filterBox.value
+      this.closed.clear()
+    }
     this.rows = listRows({
       answer: derived.answer,
       order: this.ctx.model.order,
       names: file.names,
       lengths: file.lengths,
       open: this.open,
+      closed: this.closed,
+      changed: derived.changed,
+      prefixes: { mag: this.ctx.prefixOf('mag'), element: this.ctx.prefixOf('element') },
       folded: this.folded,
       genomeSort: this.genomeSort,
       poolSort: this.poolSort,
@@ -297,6 +332,11 @@ export class GenomeList {
     const { genomes, contigs } = this.rows.found
     const found = genomes.length + contigs.length
     const parts: Array<string | HTMLElement> = []
+    if (filter.kind === 'invalid') {
+      note.replaceChildren(el('span', { class: 'curate-filter-missing', text: `not a pattern: ${filter.reason}` }))
+      note.classList.remove('hidden')
+      return
+    }
     if (filter.kind === 'names') {
       const asked = filter.names.size
       parts.push(`${fmt.int(asked - this.rows.missing.length)} of ${fmt.int(asked)} found`)
@@ -309,6 +349,8 @@ export class GenomeList {
           }),
         )
       }
+      const hidden = this.rows.hidden ?? 0
+      if (hidden > 0) parts.push(el('span', { class: 'curate-filter-missing', text: ` · ${fmt.int(hidden)} hidden by the chips` }))
     } else parts.push(`${fmt.int(found)} found`)
     if (found > 0) {
       parts.push(' · ')
@@ -338,9 +380,18 @@ export class GenomeList {
   // Drawing: the rows in view.
   // -------------------------------------------------------------------------
 
+  /** The row the name is being typed in: kept through every redraw, or the letters typed next would be the stage's keys. */
+  private renamingRow(): HTMLElement | null {
+    return this.renaming === null ? null : (this.renaming.input.closest('.curate-row') as HTMLElement | null)
+  }
+
   private schedule(rebuild = false): void {
-    if (rebuild) for (const node of this.drawn.values()) node.remove()
-    if (rebuild) this.drawn.clear()
+    if (rebuild) {
+      const keep = this.renamingRow()
+      for (const node of this.drawn.values()) if (node !== keep) node.remove()
+      this.drawn.clear()
+      if (keep !== null && this.renaming !== null) this.drawn.set(`g:${this.renaming.id}`, keep)
+    }
     cancelAnimationFrame(this.frame)
     this.frame = requestAnimationFrame(() => this.draw())
   }
@@ -353,17 +404,14 @@ export class GenomeList {
     const first = Math.max(0, Math.floor(top / LIST_ROW) - OVERSCAN)
     const last = Math.min(rows.length, Math.ceil((top + height) / LIST_ROW) + OVERSCAN)
     const keep = new Set<string>()
+    const typing = this.renamingRow()
     for (let k = first; k < last; k++) {
       const row = rows[k]
       const key = rowKey(row)
       keep.add(key)
       let node = this.drawn.get(key)
-      if (node === undefined || node.dataset.at !== String(k) || this.renaming?.input.closest('.curate-row') === node) {
-        if (node !== undefined && this.renaming?.input.closest('.curate-row') === node) {
-          node.style.transform = `translateY(${k * LIST_ROW}px)`
-          node.dataset.at = String(k)
-          continue
-        }
+      if (node === typing && node !== undefined) continue
+      if (node === undefined || node.dataset.at !== String(k)) {
         node?.remove()
         node = this.rowElement(row, k)
         this.drawn.set(key, node)
@@ -371,9 +419,19 @@ export class GenomeList {
       }
     }
     for (const [key, node] of this.drawn) {
-      if (keep.has(key)) continue
+      if (keep.has(key) || node === typing) continue
       node.remove()
       this.drawn.delete(key)
+    }
+    // The row being renamed goes where its genome is now, in view or not; its genome gone, the box closes.
+    if (typing !== null && this.renaming !== null) {
+      const id = this.renaming.id
+      const k = rows.findIndex((row) => row.kind === 'genome' && row.id === id)
+      if (k < 0) this.renaming.cancel()
+      else {
+        typing.style.transform = `translateY(${k * LIST_ROW}px)`
+        typing.dataset.at = String(k)
+      }
     }
     this.restyle()
     this.paintSticky(first + OVERSCAN <= rows.length ? Math.floor(top / LIST_ROW) : 0)
@@ -397,13 +455,30 @@ export class GenomeList {
       return
     }
     this.sticky.replaceChildren(...this.sectionContent(head))
+    // A head like the one it stands for: a press folds it, a drop on it lands there, not on the row it covers.
+    this.sticky.dataset.dropSection = head.section
+    this.stickySection = head.section
     this.sticky.classList.remove('hidden')
+  }
+
+  private stickySection: ListSection | null = null
+
+  /** A row's id, for the tree's active descendant. */
+  private rowId(row: ListRow): string {
+    return `curate-row-${this.uid}-${rowKey(row).replace(/[^A-Za-z0-9_-]/g, '_')}`
   }
 
   private rowElement(row: ListRow, at: number): HTMLElement {
     const node = el('div', {
       class: `curate-row curate-row-${row.kind}`,
-      attrs: { role: 'treeitem', 'data-key': rowKey(row), 'data-at': String(at) },
+      attrs: {
+        role: 'treeitem',
+        id: this.rowId(row),
+        'data-key': rowKey(row),
+        'data-at': String(at),
+        // Heads, then genomes and the pool's contigs, then a genome's contigs.
+        'aria-level': row.kind === 'section' ? '1' : row.kind === 'contig' && row.genome >= 0 ? '3' : '2',
+      },
       style: { transform: `translateY(${at * LIST_ROW}px)` },
     })
     switch (row.kind) {
@@ -433,16 +508,16 @@ export class GenomeList {
     const word = SECTION_WORD[row.section]
     const count =
       row.section === 'pool'
-        ? `${fmt.int(row.contigs)} contigs · ${fmt.bp(row.length)}`
+        ? `${counted(row.contigs, 'contig')} · ${fmt.bp(row.length)}${row.shown !== row.contigs ? ` · ${fmt.int(row.shown)} shown` : ''}`
         : `${fmt.int(row.genomes)}${row.shown !== row.genomes ? ` · ${fmt.int(row.shown)} shown` : ''}`
     const title = el('span', { class: 'curate-section-title', text: word })
-    const counted = el('span', { class: 'curate-section-count', text: count })
+    const countNode = el('span', { class: 'curate-section-count', text: count })
     const holder = el('span', { class: 'curate-section-chevron' })
     holder.appendChild(chevron)
     // The prefix every name of the section shares, printed once here.
     const prefix = row.section === 'pool' ? '' : this.ctx.prefixOf(row.section === 'mags' ? 'mag' : 'element')
-    if (prefix === '') return [holder, title, counted]
-    return [holder, title, el('span', { class: 'curate-section-prefix', text: `${prefix}…`, title: `Every name here begins ${prefix}` }), counted]
+    if (prefix === '') return [holder, title, countNode]
+    return [holder, title, el('span', { class: 'curate-section-prefix', text: `${prefix}…`, title: `Every name here begins ${prefix}` }), countNode]
   }
 
   private genomeContent(node: HTMLElement, row: Extract<ListRow, { kind: 'genome' }>): void {
@@ -469,7 +544,7 @@ export class GenomeList {
     swatch.style.setProperty('--swatch', colour.css)
     const change = derived.changes.genomes[row.genome]
     const chip = changeChip(change)
-    const name = el('span', { class: 'curate-row-name', text: this.ctx.shortName(genome.id), title: `${genome.name} · ${fmt.int(genome.contigs)} contigs · ${fmt.bp(genome.length)}` })
+    const name = el('span', { class: 'curate-row-name', text: this.ctx.shortName(genome.id), title: `${genome.name} · ${counted(genome.contigs, 'contig')} · ${fmt.bp(genome.length)}` })
     const parts: Array<HTMLElement | null> = [
       disclosure,
       swatch,
@@ -493,9 +568,12 @@ export class GenomeList {
         )
       }
     } else {
-      const hosts = derived.answer.links.filter((link) => link.element === genome.id).map((link) => this.ctx.shortName(link.mag))
+      const links = derived.answer.links.filter((link) => link.element === genome.id)
+      const hosts = links.map((link) => this.ctx.shortName(link.mag))
+      // The title keeps the whole name, as titles do (§33.3).
+      const whole = links.map((link) => derived.answer.genomes.find((g) => g.id === link.mag)?.name ?? link.mag)
       const text = hosts.length === 0 ? 'no host' : hosts.length === 1 ? `→ ${hosts[0]}` : `${hosts.length} hosts`
-      parts.push(el('span', { class: `curate-row-hosts${hosts.length === 0 ? ' is-faint' : ''}`, text, title: hosts.length === 0 ? 'Linked to no MAG.' : `Hosted by ${hosts.join(', ')}.` }))
+      parts.push(el('span', { class: `curate-row-hosts${hosts.length === 0 ? ' is-faint' : ''}`, text, title: hosts.length === 0 ? 'Linked to no MAG.' : `Hosted by ${whole.join(', ')}.` }))
     }
     const n = derived.suggested[row.genome]
     parts.push(
@@ -503,7 +581,7 @@ export class GenomeList {
         ? el('button', {
             class: 'curate-row-suggested',
             text: String(n),
-            title: `${n} suggestion${n === 1 ? '' : 's'} on offer name it: show only what a suggestion names`,
+            title: `${counted(n, 'suggestion')} on offer name it: select it and show it`,
             attrs: { type: 'button', tabindex: '-1' },
             on: {
               click: (event: MouseEvent) => {
@@ -525,6 +603,12 @@ export class GenomeList {
     const c = row.contig
     node.dataset.contig = String(c)
     if (row.genome < 0) node.classList.add('is-pooled')
+    // A contig's row takes a drop as its genome's does, a pool contig's as the pool's.
+    if (row.genome < 0) node.dataset.dropSection = 'pool'
+    else {
+      const id = derived.answer.genomes[row.genome]?.id
+      if (id !== undefined) node.dataset.dropGenome = id
+    }
     const name = file.names[c] ?? `#${c}`
     const parts: HTMLElement[] = [
       el('span', { class: 'curate-row-indent' }),
@@ -540,9 +624,14 @@ export class GenomeList {
       parts.push(el('span', { class: 'curate-row-offer', text: `→ ${target} ${Math.min(99, Math.round(best.confidence * 100))}%`, title: best.words }))
     } else if (was !== now) {
       const from = was === null ? 'from the pool' : `from ${this.fileName(was)}`
-      parts.push(el('span', { class: 'curate-row-moved', text: from, title: `In ${was === null ? 'no genome' : this.fileName(was)} in the file.` }))
+      parts.push(el('span', { class: 'curate-row-moved', text: from, title: `In ${was === null ? 'no genome' : this.wholeName(was)} in the file.` }))
     }
     node.append(...parts)
+  }
+
+  /** A file genome's whole name now, by its id: its new name where it was renamed. */
+  private wholeName(id: string): string {
+    return this.derived?.answer.genomes.find((genome) => genome.id === id)?.name ?? id
   }
 
   /** A file genome's name now, by its id, short: its new name where it was renamed. */
@@ -566,9 +655,11 @@ export class GenomeList {
       const contig = node.dataset.contig === undefined ? -1 : Number(node.dataset.contig)
       const selected = (genome !== undefined && genomes.has(genome)) || (contig >= 0 && contigs.has(contig))
       node.classList.toggle('is-selected', selected)
-      node.setAttribute('aria-selected', String(selected))
+      // A head is not a thing to select: it says nothing of it.
+      if (!node.classList.contains('curate-row-section')) node.setAttribute('aria-selected', String(selected))
       node.classList.toggle('is-lit', (genome !== undefined && hovered.genome === genome) || (contig >= 0 && hovered.contig === contig))
       node.classList.toggle('is-active', key === this.active)
+      if (key === this.active) this.scroller.setAttribute('aria-activedescendant', node.id)
       node.classList.toggle('is-current', (genome !== undefined && currentGenomes.has(genome)) || (contig >= 0 && currentContigs.has(contig)))
     }
   }
@@ -633,12 +724,26 @@ export class GenomeList {
   /** A press on a row, or ↑ ↓ to it. */
   private choose(row: ListRow, how: 'replace' | 'toggle' | 'range'): void {
     const key = rowKey(row)
+    const rows = this.rows.rows
     this.active = key
+    this.activeAt = rows.findIndex((r) => rowKey(r) === key)
+    const selection = this.ctx.model.selection
+    // One kind at a time: ⌘ on a row of the other kind starts again from it.
+    if (how === 'toggle' && ((row.kind === 'genome' && selection.contigs.length > 0) || (row.kind === 'contig' && selection.genomes.length > 0))) how = 'replace'
+    // ⇧ extends from the selection: from the last of its rows in the list where
+    // the anchor is not in it (a press on a picture since).
+    if (how === 'range') {
+      const inSelection = (r: ListRow): boolean => (r.kind === 'genome' && selection.genomes.includes(r.id)) || (r.kind === 'contig' && selection.contigs.includes(r.contig))
+      const anchored = this.anchor === null ? undefined : rows.find((r) => rowKey(r) === this.anchor)
+      if (anchored === undefined || !inSelection(anchored)) {
+        const last = [...rows].reverse().find(inSelection)
+        this.anchor = last === undefined ? null : rowKey(last)
+      }
+    }
     if (how === 'range' && this.anchor !== null) {
-      const rows = this.rows.rows
       const from = rows.findIndex((r) => rowKey(r) === this.anchor)
       const to = rows.findIndex((r) => rowKey(r) === key)
-      if (from >= 0 && to >= 0) {
+      if (from >= 0 && to >= 0 && rows[from].kind === row.kind) {
         const [lo, hi] = from <= to ? [from, to] : [to, from]
         const span = rows.slice(lo, hi + 1)
         if (row.kind === 'genome') this.ctx.model.selectGenomes(span.flatMap((r) => (r.kind === 'genome' ? [r.id] : [])))
@@ -655,7 +760,11 @@ export class GenomeList {
   }
 
   private toggleOpen(id: string): void {
-    if (this.open.has(id)) this.open.delete(id)
+    const row = this.rows.rows.find((r) => r.kind === 'genome' && r.id === id)
+    // One the filter opened on its contigs closes for as long as the filter stands.
+    if (row?.kind === 'genome' && row.open && !this.open.has(id) && readFilter(this.filterBox.value) !== null) this.closed.add(id)
+    else if (this.closed.has(id)) this.closed.delete(id)
+    else if (this.open.has(id)) this.open.delete(id)
     else this.open.add(id)
     this.recompute()
   }
@@ -674,7 +783,12 @@ export class GenomeList {
     const at = this.active === null ? -1 : rows.findIndex((row) => rowKey(row) === this.active)
     const row = at >= 0 ? rows[at] : undefined
     const step = (by: number): boolean => {
-      let k = at < 0 ? (by > 0 ? -1 : rows.length) : at
+      // The keyboard's row gone (merged away, folded, filtered out): ↓ goes on
+      // to the row now where it was, ↑ to the one before.
+      let k: number
+      if (at >= 0) k = at
+      else if (this.activeAt >= 0) k = Math.min(this.activeAt, rows.length) - (by > 0 ? 1 : 0)
+      else k = by > 0 ? -1 : rows.length
       for (;;) {
         k += by
         if (k < 0 || k >= rows.length) return true
@@ -695,7 +809,10 @@ export class GenomeList {
           this.toggleOpen(row.id)
           return true
         }
-        return step(1)
+        // Into an open genome's first contig; a contig is a leaf.
+        if (row?.kind === 'genome') return step(1)
+        return row !== undefined
+
       case 'ArrowLeft':
         if (row?.kind === 'genome' && row.open) {
           this.toggleOpen(row.id)
@@ -712,12 +829,6 @@ export class GenomeList {
           }
         }
         return false
-      case 'Enter':
-        if (row?.kind === 'genome') {
-          this.toggleOpen(row.id)
-          return true
-        }
-        return false
       case 'F2':
         if (row?.kind === 'genome') {
           this.startRename(row.id)
@@ -725,9 +836,14 @@ export class GenomeList {
         }
         return false
       case 'Home':
-        return step(-rows.length)
-      case 'End':
-        return step(rows.length)
+      case 'End': {
+        const k = event.key === 'Home' ? rows.findIndex((r) => r.kind !== 'section') : rows.length - 1 - [...rows].reverse().findIndex((r) => r.kind !== 'section')
+        if (k < 0 || k >= rows.length) return true
+        this.choose(rows[k], event.shiftKey ? 'range' : 'replace')
+        if (!event.shiftKey) this.anchor = rowKey(rows[k])
+        this.reveal(k)
+        return true
+      }
       case 'a':
       case 'A':
         if (!mod) return false
@@ -760,22 +876,30 @@ export class GenomeList {
     const answer = this.ctx.model.answer
     if (answer === null) return
     let opened = false
+    const unfold = (section: ListSection): void => {
+      if (!this.folded.has(section)) return
+      this.folded.delete(section)
+      opened = true
+    }
+    const sectionOf = (g: number): ListSection => (answer.genomes[g].kind === 'mag' ? 'mags' : 'elements')
+    for (const id of target.genomes ?? []) {
+      const g = answer.genomes.findIndex((genome) => genome.id === id)
+      if (g >= 0) unfold(sectionOf(g))
+    }
     for (const c of target.contigs ?? []) {
       const g = answer.genomeOf[c]
       if (g >= 0 && !this.open.has(answer.genomes[g].id)) {
         this.open.add(answer.genomes[g].id)
         opened = true
       }
-      if (g < 0 && this.folded.has('pool')) {
-        this.folded.delete('pool')
-        opened = true
-      }
+      unfold(g < 0 ? 'pool' : sectionOf(g))
     }
     if (opened) this.recompute()
     const keys = new Set([...(target.genomes ?? []).map((id) => `g:${id}`), ...(target.contigs ?? []).map((c) => `c:${c}`)])
     const k = this.rows.rows.findIndex((row) => keys.has(rowKey(row)))
     if (k < 0) return
     this.active = rowKey(this.rows.rows[k])
+    this.activeAt = k
     this.reveal(k)
   }
 
@@ -783,27 +907,47 @@ export class GenomeList {
   // Renaming in place.
   // -------------------------------------------------------------------------
 
-  /** Open a genome's name for typing (F2, a double press, a new genome). */
-  startRename(id: string): void {
+  /**
+   * Open a genome's name for typing (F2, a double press, a new genome): its
+   * section unfolded if it was folded; a genome a step has just made, once the
+   * step is counted and it has a row; one the filter or the chips hide, never,
+   * and the readout says why.
+   */
+  startRename(id: string, waited = false): void {
     const answer = this.ctx.model.answer
     if (answer === null) return
-    const k = this.rows.rows.findIndex((row) => row.kind === 'genome' && row.id === id)
-    if (k < 0) return
+    const find = (): number => this.rows.rows.findIndex((row) => row.kind === 'genome' && row.id === id)
+    let k = find()
+    const genome = answer.genomes.find((g) => g.id === id)
+    if (k < 0 && genome !== undefined) {
+      const section: ListSection = genome.kind === 'mag' ? 'mags' : 'elements'
+      if (this.folded.has(section)) {
+        this.folded.delete(section)
+        this.recompute()
+        k = find()
+      }
+    }
+    if (k < 0) {
+      if (!waited && (genome === undefined || this.ctx.model.stale)) {
+        void this.ctx.model.settled().then(() => this.startRename(id, true))
+        return
+      }
+      if (genome !== undefined) this.ctx.say('Its row is hidden by the filter or the chips: clear them to rename it.')
+      return
+    }
     this.active = `g:${id}`
     this.reveal(k)
     this.draw()
     const node = this.drawn.get(`g:${id}`)
     const name = node?.querySelector('.curate-row-name')
-    if (node === undefined || name === null || name === undefined) return
-    const genome = answer.genomes.find((g) => g.id === id)
-    if (genome === undefined) return
+    if (node === undefined || name === null || name === undefined || genome === undefined) return
     const input = el('input', {
       class: 'curate-rename',
       value: genome.name,
       attrs: { 'aria-label': `Rename ${genome.name}`, spellcheck: 'false', [TAB_WALKS]: '' },
     })
     name.replaceWith(input)
-    this.renaming = { id, input }
+    this.renaming = { id, input, cancel: () => finish(false) }
     input.focus()
     input.select()
     const finish = (commit: boolean, then?: 1 | -1): void => {

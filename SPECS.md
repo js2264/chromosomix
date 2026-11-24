@@ -17386,14 +17386,21 @@ at metaTOR's high quality — or, for an element, its host (`→ 00003_00001`, `
 and a disc counting the suggestions that name it. It opens on its contigs, longest first, each with
 its length, its GC content and the suggestion that would move it (`→ 00700_00002 99%`), or where a
 step brought it from. The pool lists its contigs, its likeliest recruits first. One box filters, by
-part of a name, a `/pattern/` or a **pasted list of names** (`12 of 12 found · select them`, and the
-names it could not find); chips keep only the changed, the suggested, the at least half complete,
-the redundant, or the elements with no host; the genomes sort by the stage's order, length,
-completeness, redundancy, contigs, suggestions or name, and the pool by likeliness, length or name.
-↑ ↓ walk the rows, → opens a genome, ← closes it or climbs to it, `F2` or `R` renames in place — Tab
-takes the name and opens the next genome's (§26.8), a refused name keeps the caret and says why. A
-virtual list: twenty thousand contigs scroll as fifty genomes do. Three targets docked at its foot,
-*+ new MAG*, *+ new element* and *unbinned*, never scroll away.
+part of a name, a `/pattern/` (one that is not a pattern finds nothing and says why) or a **pasted
+list of names**, whole or as the list prints them (`12 of 12 found · select them`, the names it
+could not find, and how many the chips hide); a genome the filter opens on its contigs closes when
+asked. Chips keep only the changed (a renamed genome too), the suggested, the MAGs at least half
+complete, the redundant MAGs, or the elements with no host; the genomes sort by the stage's order,
+length, completeness, redundancy, contigs, suggestions or name, and the pool by likeliness, length
+or name. ↑ ↓ walk the rows, → opens a genome, ← closes it or climbs to it, Home and End go to the
+first and last row, `F2` or `R` renames in place — Tab takes the name and opens the next genome's
+(§26.8), a refused name keeps the caret and says why, and the box stays open through any count that
+lands while a name is typed; a genome `B` or `E` makes opens its name once it is counted. Enter is
+the stage's close-up, and in review the arrows are the review's. A virtual list: twenty thousand
+contigs scroll as fifty genomes do; a section's head stays at the top while its rows scroll, and
+takes a press and a drop as the head does. A contig's row takes a drop as its genome's, a pool
+contig's as the pool's. Three targets docked at its foot, *+ MAG*, *+ element* and *unbinned*, never
+scroll away.
 
 **One drop grammar**, the same on the list and the pictures (`curate/drop.ts`): dropped on a genome
 means *into it* — contigs moved (recruited from the pool), genomes merged under its name, an element
