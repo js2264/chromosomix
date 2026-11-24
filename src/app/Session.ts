@@ -38,6 +38,10 @@ import { EditStage } from '../edit/EditStage'
 import { pickGenome, type PickableGenome } from '../edit/GenomePicker'
 import { UNBINNED, binningTable, type BinningTable } from '../edit/binning'
 import { ReferenceChip } from '../edit/ReferenceChip'
+import { CurationStore, keptCuration } from '../state/curation'
+import { CuratedBinning, curationFingerprint, type Curation } from '../genome/curation'
+import { carryGenomeView } from '../curate/places'
+import { CurationChip } from '../curate/CurationChip'
 import { DEFAULT_UI_COLORMAP } from '../render/colormaps'
 import { ManualStore, type ManualMark } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
@@ -192,7 +196,7 @@ import { askLoadCost, isLoadGate } from '../ui/LoadGate'
 import { GenomeView, type PanelSeed, type ScaleState } from '../ui/GenomeView'
 import { CellsTable, type MeasuredCells } from '../ui/CellsTable'
 import { GenomesTable } from '../ui/GenomesTable'
-import { InfoPanel } from '../ui/InfoPanel'
+import { InfoPanel, countKinds } from '../ui/InfoPanel'
 import { MinimapCard, suitsMinimap, type MinimapRange } from '../ui/MinimapCard'
 import { Overview, WHOLE_FILE_LEVELS } from '../ui/Overview'
 import { PairView } from '../ui/PairView'
@@ -1594,6 +1598,8 @@ export class Session {
     this.unsay()
     // The stage goes with the tab; the edit it made is kept with the file.
     this.editStage?.close()
+    // …and so does the curation's, whose curation is kept with the file too.
+    this.curateStage?.close()
     // The picker outlives every file this session opens and is torn down with
     // the tab, so its one subscription is released here rather than on each
     // navigation back to it.
@@ -2477,8 +2483,11 @@ export class Session {
     try {
       // `pairs/import.ts` weights its pass against the rungs so the bar does
       // not stall at 99%; the other two report bytes and then pixels.
-      // Through the edit kept for this file, where there is one to draw (§27.7).
-      const edit = this.editToOpen(uri)
+      // Through the curation of the binning kept for this file, where there is
+      // one to draw (§33.4) — or through the edit of its reference (§27.7), the
+      // two lenses not being drawn one through the other.
+      const curation = this.curationToOpen(uri)
+      const edit = curation === undefined ? this.editToOpen(uri) : undefined
       // The window this open is going to, where it says: what the first view
       // read is kept under it, and a kept plan for it is fetched with the open.
       const going = carry ?? this.store.state
@@ -2499,6 +2508,7 @@ export class Session {
           source: planned(source, uri, firstWindow),
           ...(binning === undefined ? {} : { binning }),
           ...(edit === undefined ? {} : { edit }),
+          ...(curation === undefined ? {} : { curation }),
         },
         (done, total, note) => screen.report(done, total, note),
       )
@@ -2506,6 +2516,13 @@ export class Session {
       this.lens = edit !== undefined && info.edit?.refusal === null ? { edit, assembly: EditedAssembly.of(edit) } : null
       const refusal = info.edit?.refusal ?? null
       if (refusal !== null) this.say(`The edit kept for this file is not drawn. ${refusal}`, uri)
+      // What the map is drawn through, by the binning the reader folded: the
+      // name the next open of this curation asks under (§33.4).
+      const drawnKey = info.curation?.refusal === null ? info.curation.key : undefined
+      this.curationDrawn = curation !== undefined && drawnKey !== undefined ? { key: drawnKey, held: curation.held } : null
+      if (curation !== undefined && drawnKey !== undefined) this.curationKeys.set(curationFingerprint(curation.held), drawnKey)
+      const unCurated = info.curation?.refusal ?? null
+      if (unCurated !== null) this.say(`The curation kept for this file is not drawn. ${unCurated}`, uri)
       // A new map in the worker is a map as stored (§6.5): whatever it was told
       // to draw the last one to went with it, and the render below tells it
       // again.
@@ -2558,6 +2575,10 @@ export class Session {
       // A different file, so whatever was parked belongs to a map that is being
       // let go of. `hideMap` is about *this* file and nothing else.
       this.parkedMap = null
+      // The curation's store is built from the binning of the map it was asked
+      // of, and another entry of a file may be binned otherwise: built again,
+      // when next asked, for any other map (§33.2).
+      if (this.file?.uri !== uri) this.curationHeld = null
       this.file = {
         uri,
         info,
@@ -2644,10 +2665,14 @@ export class Session {
         onDropResolution: (binsize) => this.dropResolution(binsize),
         contacts: this.contactsBoxFor(),
         ...(devFeature('edit') ? { reference: this.referenceChipFor() } : {}),
+        // The word on the genomes, on a metagenome (§33.4).
+        ...(isMetacool && devFeature('curate') && devFeature('metacool') ? { genomes: this.curationChipFor() } : {}),
       })
       this.infoPanel = new InfoPanel({
         info,
         onCloseFile: (which) => this.compare.close(which),
+        // The MAGs and the elements apart, where the table says which is which (§33.2).
+        genomeKinds: isMetacool ? countKinds(genomes.table) : null,
       })
       // The same strip the browser shows, over the map's own chromosome list, so
       // "where am I in the genome" is answered in the same place and the same
@@ -5720,7 +5745,7 @@ export class Session {
    * The edit the reader's map is drawn through (§27.7), as the reader accepted
    * it when the file opened; `null` for the file as it is. The edit store may
    * run ahead of it while the stage is open: the session is redrawn through the
-   * store's when the stage closes ({@link redrawThroughEdit}).
+   * store's when the stage closes ({@link redrawThroughLenses}).
    *
    * @internal SessionAnalysis runs a task through the edit the map is drawn
    * through.
@@ -5735,20 +5760,25 @@ export class Session {
   }
 
   /**
-   * Draw the session through the edit as it now stands, where the stage has
-   * changed it (§27.7): the file opened again through it — as a change of
-   * resolution opens it again — with the view carried to where its place went.
+   * Draw the session through its lenses as they now stand, where a stage has
+   * changed one — the edit of the reference (§27.7) or the curation of the
+   * genomes (§33.4): the file opened again through them, as a change of
+   * resolution opens it again, with the view carried to where its place went.
+   * Nothing is opened where neither changed what the map shows: an edit whose
+   * steps are the ones drawn, a curation whose binning is the one drawn.
    */
-  private async redrawThroughEdit(): Promise<void> {
+  private async redrawThroughLenses(): Promise<void> {
     const file = this.file
     const state = this.store.state
-    if (file === null || state === null || !devFeature('edit')) return
+    if (file === null || state === null) return
     const next = this.editToOpen(file.uri)
     const before = this.lens?.assembly ?? null
     const after = next === undefined ? null : EditedAssembly.of(next)
-    if ((before === null && (after === null || after.isIdentity)) || (before !== null && after !== null && sameSteps(this.lens?.edit, next))) {
-      return
-    }
+    const editSame =
+      (before === null && (after === null || after.isIdentity)) || (before !== null && after !== null && sameSteps(this.lens?.edit, next))
+    const curation = this.curationToOpen(file.uri)
+    const curationSame = (this.curationDrawn?.key ?? null) === (curation?.key ?? null)
+    if (editSame && curationSame) return
     const drawn = after === null || after.isIdentity ? null : after
     const carried = this.carryAcrossEntries(file.uri)
     if (carried === undefined) return
@@ -5767,9 +5797,9 @@ export class Session {
           ...(focus === undefined ? {} : focus === null ? { focus: undefined } : { focus }),
           // A selection names sequences, and an edit renames them: the table,
           // where the reader chose them, is where to choose them again.
-          ...(carried.view === 'selection' ? { view: 'contigs' as const, regions: undefined } : {}),
+          ...(carried.view === 'selection' && !editSame ? { view: 'contigs' as const, regions: undefined } : {}),
         }
-    await this.open(file.uri, file.source, view)
+    await this.open(file.uri, file.source, curationSame ? view : this.carriedThroughCuration(view, curation?.held ?? null))
   }
 
   /**
@@ -5780,8 +5810,11 @@ export class Session {
    * @internal SessionAnalysis frames every task through it.
    */
   withEditOf(framing: AnalysisFraming | null): AnalysisFraming | null {
-    if (framing === null || this.lens === null || framing.uri !== this.file?.uri) return framing
-    return { ...framing, edit: editFingerprint(this.lens.edit) }
+    if (framing === null || framing.uri !== this.file?.uri) return framing
+    // …and with the curated binning it is drawn through (§33.4), by its
+    // fingerprint: a step that changes the genomes makes a result stale.
+    const curated = this.curationDrawn === null ? framing : { ...framing, curation: this.curationDrawn.key }
+    return this.lens === null ? curated : { ...curated, edit: editFingerprint(this.lens.edit) }
   }
 
   /** Steps applied to the file's reference — from the store, or from the record it will read. */
@@ -5879,7 +5912,7 @@ export class Session {
         this.referenceChip?.sync()
         this.host.sessionChanged(this)
         // A genome's edit is its own files; the session is not drawn through it.
-        if (scope === undefined) void this.redrawThroughEdit()
+        if (scope === undefined) void this.redrawThroughLenses()
       },
     })
     this.host.sessionChanged(this)
@@ -5890,7 +5923,155 @@ export class Session {
     await this.contigs().catch(() => null)
     this.editStore()?.revert()
     this.referenceChip?.sync()
-    await this.redrawThroughEdit()
+    await this.redrawThroughLenses()
+  }
+
+  // -------------------------------------------------------------------------
+  // The curation of the genomes (§33)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The curation of the file's binning (§33.2), held and keyed as the edit of
+   * its reference is: one per file, the same at every rung and entry. Built
+   * from the file's binning as the reader reads it from the file as it is —
+   * never from the tables it answers through the curation's lens, which name
+   * the curated genomes: a kept curation checked against those would be
+   * refused after every reload (the reference edit's first bug, §27.7). A dev
+   * feature (§29): `null` while the switch is off, the record left as it was.
+   */
+  private curationHeld: { key: string; store: CurationStore } | null = null
+
+  /**
+   * The curation store of the file on screen, asked of the reader the first
+   * time; `null` off a metagenome and while the dev features are off.
+   *
+   * @internal The curation stage builds on it.
+   */
+  async curationStore(): Promise<CurationStore | null> {
+    if (!devFeature('curate') || !devFeature('metacool') || !this.isMetacool) return null
+    const key = this.sessionKey()
+    const reader = this.reader
+    if (key === null || reader === null) return null
+    if (this.curationHeld?.key === key) return this.curationHeld.store
+    const answer = await reader.request<'curationBase'>({ kind: 'curationBase' })
+    if (this.destroyed || this.sessionKey() !== key) return null
+    if (this.curationHeld?.key !== key) {
+      const store = new CurationStore(key, answer.base, answer.file)
+      store.subscribe(() => this.curationChip?.sync())
+      this.curationHeld = { key, store }
+    }
+    return this.curationHeld.store
+  }
+
+  /**
+   * The curation the reader's map is drawn through (§33.4), as the reader
+   * accepted it when the file opened, with the fingerprint of the binning it
+   * folded into; `null` for the file's own binning. The store may run ahead of
+   * it while the stage is open: the session is redrawn through the store's when
+   * the stage closes ({@link redrawThroughLenses}).
+   *
+   * @internal SessionAnalysis runs a task through the curation the map is
+   * drawn through.
+   */
+  curationDrawn: { key: string; held: Curation } | null = null
+
+  /**
+   * The binning each kept history was last drawn as, by the steps it applies —
+   * what an open names a curation by before the store has folded it: the
+   * reader answers the binning's fingerprint, and the next open of the same
+   * steps asks under it.
+   */
+  private readonly curationKeys = new Map<string, string>()
+
+  /**
+   * The curation to open a file through: the one kept for it, where the dev
+   * features are on and it has a step applied, named by the binning it folds
+   * into — two histories reaching one binning name one map (§33.4).
+   */
+  private curationToOpen(uri: string): { key: string; held: Curation } | undefined {
+    if (!devFeature('curate') || !devFeature('metacool')) return undefined
+    const key = this.memoryKey(uri)
+    const held = keptCuration(key)
+    if (held === null) return undefined
+    const steps = curationFingerprint(held)
+    const store = this.curationHeld?.key === key ? this.curationHeld.store : null
+    // The store folds the kept curation over the file's binning: its binning's
+    // fingerprint is the reader's, where the two are the one history.
+    if (store !== null && store.refusal === null && curationFingerprint(store.curation) === steps) {
+      return { key: store.binning.fingerprint(), held }
+    }
+    // A history the reader has folded before, by the binning it answered; one
+    // it has not, by its steps — another name for the same map, never one map's
+    // name for another.
+    return { key: this.curationKeys.get(steps) ?? `steps ${steps}`, held }
+  }
+
+  /** A view carried from the binning drawn to the one about to be (§33.4). */
+  private carriedThroughCuration(view: ViewState, next: Curation | null): ViewState {
+    const store = this.curationHeld?.key === this.sessionKey() ? (this.curationHeld?.store ?? null) : null
+    if (store === null) {
+      // The binnings cannot be folded without the file's: a genome named is
+      // looked for again in the genomes table.
+      return view.genome === undefined && view.genome2 === undefined && view.genomes === undefined
+        ? view
+        : { ...view, view: 'genomes', genome: undefined, genome2: undefined, genomes: undefined, region: undefined, region2: undefined, regions: undefined, focus: undefined }
+    }
+    const before = CuratedBinning.of(store.file, this.curationDrawn?.held ?? null)
+    const after = CuratedBinning.of(store.file, next)
+    return carryGenomeView(view, before, after, store.file.names)
+  }
+
+  /** Steps applied to the binning — the store's, else what the map is drawn through. */
+  private curationSteps(): number {
+    if (this.curationHeld !== null && this.curationHeld.key === this.sessionKey()) return this.curationHeld.store.applied
+    return this.curationDrawn?.held.cursor ?? 0
+  }
+
+  /** The heading's word on the genomes, with its questions answered by this session. */
+  private curationChip: CurationChip | null = null
+
+  private curationChipFor(): CurationChip {
+    this.curationChip = new CurationChip({
+      steps: () => this.curationSteps(),
+      onOpen: () => void this.openCurateStage(),
+      onRevert: () => void this.revertCuration(),
+    })
+    return this.curationChip
+  }
+
+  /**
+   * The curation stage, while it is open.
+   *
+   * @internal SessionCommands offers the stage only while no stage is open.
+   */
+  curateStage: { close(): void } | null = null
+
+  /**
+   * Open the curation stage on the metagenome on screen (§33.3).
+   *
+   * TODO(§33.3): the stage itself is being built beside this (`curate/`): it is
+   * opened here with the store from {@link curationStore}, sets
+   * {@link curateStage}, and on closing clears it, syncs the chip, calls
+   * `host.sessionChanged(this)` and then {@link redrawThroughLenses}. Until it
+   * lands this opens nothing and says so on the console.
+   *
+   * @internal SessionCommands and the heading's word on the genomes open it.
+   */
+  async openCurateStage(): Promise<void> {
+    if (!devFeature('curate') || !devFeature('metacool') || !this.isMetacool) return
+    if (this.curateStage !== null || this.editStage !== null) return
+    const store = await this.curationStore().catch(() => null)
+    if (store === null || this.destroyed) return
+    console.info('chromosomix: the curation stage is not built yet (§33.3)', { steps: store.applied })
+  }
+
+  /** The file's binning back: every step undone, and kept to be redone (§33.4). */
+  private async revertCuration(): Promise<void> {
+    const store = await this.curationStore().catch(() => null)
+    if (store === null) return
+    store.revert()
+    this.curationChip?.sync()
+    await this.redrawThroughLenses()
   }
 
   /**
@@ -7499,11 +7680,24 @@ export class Session {
     const row = findRow(payload, name)
     if (row < 0) return null
     const density = file.genomes.density[row]
+    // Under a curation (§33.4), whether this is a MAG or an element, and how
+    // the curation left it, lead — before anything the file says of it.
+    const owned = file.genomes.curation === undefined ? [] : ['kind', 'curation'].filter((key) => Array.isArray(payload.data[key]))
+    const lead = owned.map((key) => {
+      const value = (payload.data[key] as string[])[row] ?? ''
+      return {
+        key,
+        value: value === '' ? '—' : value,
+        title: key === 'kind' ? 'A MAG, or a mobile element, as the curation has it' : 'As in the file, changed by the curation, or made by it',
+      }
+    })
     return {
       heading,
       icon: 'dna',
       name,
       fields: recordFields(payload, row, {
+        skip: owned,
+        lead,
         extra:
           density === undefined
             ? []
@@ -7986,6 +8180,8 @@ export class Session {
     const view = new ContigsTable({
       data,
       hideColumns: cooler ? ['genome_id'] : [],
+      // Each contig's genome by its name, as the map draws it (§33.4).
+      ...(cooler ? {} : { genomeNames: file.genomeNames }),
       title: cooler ? 'Chromosomes' : 'Contigs',
       // The same word the crumb and the title use, inside the table too: its
       // filter box and its empty state said `contig` under a heading reading
@@ -8431,6 +8627,9 @@ export class Session {
    * level, which steps aside for it.
    */
   private edgeListUrl(): string | undefined {
+    // None while the map is drawn through a curation, whose genomes the list
+    // does not count (§33.4).
+    if (this.curationDrawn !== null) return undefined
     return new URLSearchParams(window.location.search).get('edges') ?? undefined
   }
 

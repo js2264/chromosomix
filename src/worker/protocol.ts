@@ -435,7 +435,17 @@ export interface OpenResult {
    * steps; `key` the fingerprint of the binning drawn, where one is. Absent
    * where none was asked.
    */
-  curation?: { refusal: string | null; steps: number; key?: string }
+  curation?: {
+    refusal: string | null
+    steps: number
+    key?: string
+    /**
+     * The file's own binning beside the curated one, where the map is drawn
+     * through it: its genomes but the pool, and the pool's figures, which the
+     * Binning QC card sets beside the curated pool's where they differ.
+     */
+    file?: { genomes: number; unassigned: UnassignedStats | null }
+  }
   sourceKind: SourceKind
 }
 

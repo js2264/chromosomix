@@ -65,6 +65,7 @@
  */
 
 import type { OpenResult } from '../worker/protocol'
+import type { UnassignedStats } from '../metacooler/MetaCooler'
 import { convergenceOf, libraryComplexity, writePairtoolsStats, type PairStats } from '../pairs/stats'
 import { devFeature } from '../state/devFeatures'
 import { button, el, fmt } from './dom'
@@ -96,6 +97,32 @@ export interface InfoPanelProps {
    * perfectly ordinary one-file map.
    */
   onCloseFile?(which: 1 | 2): void
+  /**
+   * The file's genomes counted by kind, where the kinds are known — a curation's
+   * `kind` column, or metaTOR's `mge` (§33.2): the MAGs and the mobile elements
+   * are two different things to have found, and the File card counts them apart.
+   */
+  genomeKinds?: { mags: number; elements: number } | null
+}
+
+/**
+ * The genomes of a `/genomes` table counted by kind, the pool left out: by a
+ * curation's `kind` column, else by metaTOR's `mge`; `null` where neither says.
+ */
+export function countKinds(table: { columns: string[]; data: Record<string, string[] | Float64Array> }): { mags: number; elements: number } | null {
+  const names = table.data['name']
+  const kind = table.data['kind']
+  const mge = table.data['mge']
+  const column = Array.isArray(kind) ? { values: kind, element: (v: string) => v === 'element' } : Array.isArray(mge) ? { values: mge, element: (v: string) => v.toLowerCase() === 'true' } : null
+  if (column === null || !Array.isArray(names)) return null
+  let mags = 0
+  let elements = 0
+  names.forEach((name, row) => {
+    if (name === '__unbinned__') return
+    if (column.element(column.values[row] ?? '')) elements++
+    else mags++
+  })
+  return { mags, elements }
 }
 
 /**
@@ -110,6 +137,13 @@ export interface InfoPanelProps {
  * what is on screen. General says what the file *is*; it does not decide
  * whether it is drawn.
  */
+
+/** `1,204 contigs (30.1%) · 830 bins (8.3%)`: each quantity whole, and its share of its own total. */
+function unassignedText(stats: UnassignedStats): string {
+  const contigFraction = stats.totalContigs === 0 ? 0 : stats.contigs / stats.totalContigs
+  const binFraction = stats.totalBins === 0 ? 0 : stats.bins / stats.totalBins
+  return `${fmt.int(stats.contigs)} contigs (${fmt.pct(contigFraction)}) · ${fmt.int(stats.bins)} bins (${fmt.pct(binFraction)})`
+}
 
 export class InfoPanel {
   readonly el: HTMLElement
@@ -386,8 +420,28 @@ export class InfoPanel {
       // width above a table saying 48 rows. The QC line below is the one place
       // it is counted.
       ...(info.hasGenomes
+        ? ((): Array<[string, string]> => {
+            // The MAGs and the mobile elements counted apart, where the kinds
+            // are known (§33.2) — on the session's own file, whose table they
+            // were counted from.
+            const kinds = info === this.props.info ? (this.props.genomeKinds ?? null) : null
+            return kinds === null
+              ? [['genomes', fmt.int(info.nGenomes - (info.unassigned === null ? 0 : 1))]]
+              : [
+                  ['MAGs', fmt.int(kinds.mags)],
+                  ['elements', fmt.int(kinds.elements)],
+                ]
+          })()
+        : []),
+      // The binning the map is drawn through, where it is a curation's (§33.4),
+      // and the file's own beside it.
+      ...(info.curation?.refusal === null && info.curation.file !== undefined
         ? ([
-            ['genomes', fmt.int(info.nGenomes - (info.unassigned === null ? 0 : 1))],
+            [
+              'binning',
+              `curated · ${fmt.int(info.curation.steps)} ${info.curation.steps === 1 ? 'step' : 'steps'} ` +
+                `(file: ${fmt.int(info.curation.file.genomes)} ${info.curation.file.genomes === 1 ? 'genome' : 'genomes'})`,
+            ],
           ] as Array<[string, string]>)
         : []),
       [info.hasGenomes ? 'contigs' : 'chromosomes', fmt.int(info.nContigs)],
@@ -565,16 +619,37 @@ export class InfoPanel {
     // no bins is a false statement, not a reassuring one.
     if (!this.props.info.hasGenomes) return null
     const stats = this.props.info.unassigned
+    // Under a curation (§33.4) the pool is the curated binning's, and the
+    // file's is set beside it where the two differ.
+    const file = this.props.info.curation?.refusal === null ? this.props.info.curation.file : undefined
+    const differs =
+      file !== undefined && ((file.unassigned?.contigs ?? 0) !== (stats?.contigs ?? 0) || (file.unassigned?.bins ?? 0) !== (stats?.bins ?? 0))
+    const inFile =
+      file === undefined || !differs
+        ? []
+        : [
+            el('p', {
+              class: 'qc-stat qc-file',
+              text:
+                file.unassigned === null
+                  ? 'in the file: none unassigned'
+                  : `in the file: ${unassignedText(file.unassigned)}`,
+            }),
+          ]
     if (stats === null) {
       return el(
         'div',
         { class: 'card qc qc-clean' },
         cardTitle('Binning QC', 'info'),
-        el('p', { text: 'This file has no __unbinned__ genome: every contig was assigned to a bin.' }),
+        el('p', {
+          text:
+            file === undefined
+              ? 'This file has no __unbinned__ genome: every contig was assigned to a bin.'
+              : 'The curated binning assigns every contig to a genome.',
+        }),
+        ...inFile,
       )
     }
-    const contigFraction = stats.totalContigs === 0 ? 0 : stats.contigs / stats.totalContigs
-    const binFraction = stats.totalBins === 0 ? 0 : stats.bins / stats.totalBins
     return el(
       'div',
       { class: 'card qc' },
@@ -585,10 +660,9 @@ export class InfoPanel {
       // and a reader acts on neither; what they act on is the number.
       el('p', {
         class: 'qc-stat',
-        text:
-          `unassigned: ${fmt.int(stats.contigs)} contigs (${fmt.pct(contigFraction)}) · ` +
-          `${fmt.int(stats.bins)} bins (${fmt.pct(binFraction)})`,
+        text: `${file === undefined ? 'unassigned' : 'unassigned, curated'}: ${unassignedText(stats)}`,
       }),
+      ...inFile,
       el('p', {
         class: 'hint',
         text: '__unbinned__ is not a genome and is never drawn; a diagnostic of binning quality.',

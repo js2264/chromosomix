@@ -15121,7 +15121,10 @@ span.deck-name {
   margin-left: auto;
 }
 .breadcrumb > .crumb-reference + .crumb-res,
-.breadcrumb > .crumb-reference + .crumb-contacts {
+.breadcrumb > .crumb-reference + .crumb-contacts,
+/* On a metagenome the word on the genomes (§33.4) comes first and takes the
+   free space; the reference's reads on from it. */
+.breadcrumb > .crumb-reference + .crumb-reference {
   margin-left: 0;
 }
 .crumb-reference-button {

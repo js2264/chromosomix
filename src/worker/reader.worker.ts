@@ -743,10 +743,15 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     if (both) {
       curated = { refusal: 'A curation of the genomes is not drawn together with an edit of the reference.', steps }
     } else {
+      const file = mc
       const seen = MetaCooler.withCuration(mc, request.curation.held)
       mc = seen.map
       const key = mc.curation?.key
-      curated = { refusal: seen.refusal, steps, ...(key === undefined ? {} : { key }) }
+      curated = {
+        refusal: seen.refusal,
+        steps,
+        ...(key === undefined ? {} : { key, file: { genomes: file.displayGenomes().length, unassigned: file.unassignedStats() } }),
+      }
       if (key !== undefined) curation = request.curation
     }
   }

@@ -178,6 +178,12 @@ export interface BreadcrumbProps {
    * where there is no map to edit, and while the dev features are off (§29).
    */
   reference?: { el: HTMLElement; sync(): void }
+  /**
+   * The word on the genomes (§33.4): *as in the file*, or *curated · N steps*,
+   * before the reference's. Seated as that one is, for its reason. Absent but
+   * on a metagenome, and while the dev features are off (§29).
+   */
+  genomes?: { el: HTMLElement; sync(): void }
 }
 
 /**
@@ -259,7 +265,13 @@ export class Breadcrumb {
     // to the coordinates.
     //
     // The reference first: whether the sequences the trail names are the
-    // file's or an edit's is the question before how finely they are drawn.
+    // file's or an edit's is the question before how finely they are drawn —
+    // and on a metagenome, before it, whether its genomes are the file's or a
+    // curation's.
+    if (this.props.genomes !== undefined) {
+      this.append(this.props.genomes.el)
+      this.props.genomes.sync()
+    }
     if (this.props.reference !== undefined) {
       this.append(this.props.reference.el)
       this.props.reference.sync()

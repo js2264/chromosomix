@@ -247,11 +247,16 @@ function buildColumns(data: GenomesResult): ColumnDef[] {
     ...CORE_ORDER.filter((name) => present.has(name)),
     ...payload.columns.filter((name) => !CORE_ORDER.includes(name)),
   ]
+  // Under a curation (§33.4) some columns are the curation's own or recomputed
+  // by it, and say so; the file's others are empty for a genome it changed.
+  const owned = new Set(data.curation?.owned ?? [])
+  const recomputed = new Set(data.curation?.recomputed ?? [])
+  const curated = data.curation !== undefined
 
   // Where the format's own columns end. Everything from here on was joined in
   // by whoever made the file, and the first of them carries the rule that says
   // so — the header's half of the record card's *joined in with the file*.
-  const first = ordered.find((name) => !CORE_ORDER.includes(name))
+  const first = ordered.find((name) => !CORE_ORDER.includes(name) && !owned.has(name) && !recomputed.has(name))
   const columns: ColumnDef[] = ordered.map((name) => {
     const column = payload.data[name]
     const core = CORE_LABELS[name]
@@ -259,10 +264,16 @@ function buildColumns(data: GenomesResult): ColumnDef[] {
     const joined = name === first ? { joined: true } : {}
     const title =
       core !== undefined
-        ? { title: core.title }
-        : // No label of ours, by §5.1 — but the reader hovering a second
-          // `Length` deserves to be told which one they are sorting by.
-          { title: `${name} — joined in with the file, not part of the format` }
+        ? { title: curated ? `${core.title}, counted again for the curated genome` : core.title }
+        : owned.has(name) || recomputed.has(name)
+          ? { title: curationTitle(name, recomputed.has(name)) }
+          : // No label of ours, by §5.1 — but the reader hovering a second
+            // `Length` deserves to be told which one they are sorting by.
+            {
+              title: curated
+                ? `${name} — joined in with the file, and empty for a genome the curation changed: measured on other contigs`
+                : `${name} — joined in with the file, not part of the format`,
+            }
     if (payloadColumnIsText(column)) {
       return {
         key: name,
@@ -318,6 +329,24 @@ function buildColumns(data: GenomesResult): ColumnDef[] {
   })
 
   return columns
+}
+
+/**
+ * What a column the curation writes says it is (§33.4): its own `kind` and
+ * `curation`, metaTOR's columns of the mobile elements written again from the
+ * curated kinds and links, and miComplete's numbers recomputed from the
+ * contigs' markers.
+ */
+function curationTitle(name: string, recomputed: boolean): string {
+  if (recomputed) return `${name} — recomputed for the curated genome from its contigs’ marker genes, as miComplete counts them`
+  switch (name) {
+    case 'kind':
+      return 'kind — a MAG, or a mobile element, as the curation has it'
+    case 'curation':
+      return 'curation — as in the file: the file’s contigs and kind; changed: contigs moved in or out, merged or retyped, and the file’s own columns left empty; new: a genome the curation made'
+    default:
+      return `${name} — written again from the curated genomes’ kinds and host links`
+  }
 }
 
 /**

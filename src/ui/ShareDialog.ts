@@ -68,6 +68,12 @@ export interface ShareDialogProps {
  */
 const REFUSED = 'Select-and-copy: this browser did not allow the clipboard to be written.'
 
+/** What a link carries, listed as a sentence ends: `a, b and c. ` */
+function carried(items: readonly string[]): string {
+  const last = items[items.length - 1] ?? ''
+  return `${items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${last}` : last}. `
+}
+
 export function openShareDialog(props: ShareDialogProps): Modal {
   // A box rather than an `<input>`. The link is a few hundred to a few thousand
   // characters of base64 on one line, and an input can only be scrolled through
@@ -234,9 +240,13 @@ export function openShareDialog(props: ShareDialogProps): Modal {
             // The edit of the reference, where there is one and the switch
             // that shows it is on (§27.2, §29.2): the recipient's map is drawn
             // through it, which is worth being told before sending.
-            (props.config.edit !== undefined && devFeature('edit')
-              ? 'the marks, the bookmarks and the edit of the reference. '
-              : 'the marks and the bookmarks. ') +
+            // …and so is the curation of the genomes (§33.2).
+            carried([
+              'the marks',
+              'the bookmarks',
+              ...(props.config.edit !== undefined && devFeature('edit') ? ['the edit of the reference'] : []),
+              ...(props.config.curation !== undefined && devFeature('curate') && devFeature('metacool') ? ['the curation of the genomes'] : []),
+            ]) +
             'No server holds it, so it cannot expire, and nothing about it reaches the site serving this page.',
         }),
         el(
