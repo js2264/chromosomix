@@ -51,6 +51,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The goldens of metacooler's fixtures are rebuilt with 0.4.0, the release CI installs.** The
+  fixtures metacooler writes now carry each contig's intra-contig QC counts
+  (`qc_intra_contig_short`, `qc_intra_contig_long`) and, for a map made from pairs, the QC block's
+  distance threshold of 1,001 bp; the goldens record them, and the version that wrote them.
+
 - **With no map starred, a deck's map tasks run on every map at once (§18.1).** They used to be
   greyed until a map was starred. Now only the plain `run on ★` is greyed, with the reason in its
   tooltip, and *run on all N maps* runs, set up from the first map as the *Map* card is while it sets

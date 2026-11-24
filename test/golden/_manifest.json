@@ -5,9 +5,9 @@
    "coverage": "full",
    "description": "fixed 1 kb bins, genome-then-length, 10 MAGs + __unbinned__ with real contigs",
    "expect": "accept",
-   "fixture_bytes": 108129,
+   "fixture_bytes": 112865,
    "golden": "basic_metacool.json",
-   "golden_bytes": 168555,
+   "golden_bytes": 171762,
    "kind": "metacool",
    "name": "basic.metacool"
   },
@@ -15,9 +15,9 @@
    "coverage": "full",
    "description": "basic plus /genomes metadata columns (taxonomy, completeness, …) and /contigs extras",
    "expect": "accept",
-   "fixture_bytes": 133991,
+   "fixture_bytes": 138892,
    "golden": "metadata_metacool.json",
-   "golden_bytes": 175740,
+   "golden_bytes": 178947,
    "kind": "metacool",
    "name": "metadata.metacool"
   },
@@ -25,9 +25,9 @@
    "coverage": "full",
    "description": "created with --drop-unassigned: no __unbinned__ row, genome 0 is a real MAG",
    "expect": "accept",
-   "fixture_bytes": 104836,
+   "fixture_bytes": 109572,
    "golden": "dropped_metacool.json",
-   "golden_bytes": 162543,
+   "golden_bytes": 165418,
    "kind": "metacool",
    "name": "dropped.metacool"
   },
@@ -45,9 +45,9 @@
    "coverage": "full",
    "description": "float64 pixels/count preserved by resolve_count_dtype (correction #2)",
    "expect": "accept",
-   "fixture_bytes": 112694,
+   "fixture_bytes": 117430,
    "golden": "floatcount_metacool.json",
-   "golden_bytes": 192372,
+   "golden_bytes": 195736,
    "kind": "metacool",
    "name": "floatcount.metacool"
   },
@@ -67,9 +67,9 @@
     "ladder.mmetacool::entries/4000"
    ],
    "expect": "refuse:mmetacool-root",
-   "fixture_bytes": 214324,
+   "fixture_bytes": 219111,
    "golden": "ladder_mmetacool.json",
-   "golden_bytes": 461832,
+   "golden_bytes": 465243,
    "kind": "mmetacool",
    "name": "ladder.mmetacool"
   },
@@ -87,9 +87,9 @@
     "samples.mmetacool::entries/rep2"
    ],
    "expect": "refuse:mmetacool-root",
-   "fixture_bytes": 181973,
+   "fixture_bytes": 191514,
    "golden": "samples_mmetacool.json",
-   "golden_bytes": 416449,
+   "golden_bytes": 423262,
    "kind": "mmetacool",
    "name": "samples.mmetacool"
   },
@@ -97,9 +97,9 @@
    "coverage": "full",
    "description": "contig-ordering=fasta: genomes are not contiguous in bin space",
    "expect": "refuse:bad-ordering",
-   "fixture_bytes": 109913,
+   "fixture_bytes": 114649,
    "golden": "fasta_order_metacool.json",
-   "golden_bytes": 4566,
+   "golden_bytes": 4744,
    "kind": "metacool",
    "name": "fasta_order.metacool"
   },
@@ -107,9 +107,9 @@
    "coverage": "full",
    "description": "DpnII fragment bins: bin-type='variable', bin-size stored as the string 'null'",
    "expect": "refuse:variable-bins",
-   "fixture_bytes": 150537,
+   "fixture_bytes": 155273,
    "golden": "variable_metacool.json",
-   "golden_bytes": 4516,
+   "golden_bytes": 4694,
    "kind": "metacool",
    "name": "variable.metacool"
   },
@@ -150,7 +150,7 @@
  "info_volatile_keys": [
   "creation-date"
  ],
- "metacooler_version": "0.2.0",
+ "metacooler_version": "0.4.0",
  "metadata_volatile_keys": [
   "commands"
  ],
