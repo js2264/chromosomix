@@ -395,7 +395,7 @@ describe('the acts', () => {
     expect(textsOf(document.body, '.curate-selection-price:not(.hidden) .curate-card-price-name')).toEqual(['Y', 'X1'])
   })
 
-  it('gives back the steps priced before an act was, a question of several steps too', async () => {
+  it('lets go of its own price when the pointer leaves an act, never puts back a copy of what was held', async () => {
     const m = await mount()
     await select(m, { genomes: ['X1'] })
     const held = [
@@ -408,7 +408,8 @@ describe('the acts', () => {
     await wait(200)
     expect(m.model.previewStep).toEqual({ op: 'merge', into: 'X1', genomes: ['X2'] })
     merge.dispatchEvent(new PointerEvent('pointerleave'))
-    expect(m.model.previewSteps).toEqual(held)
+    // The stage prices review's question again; nothing else is put back.
+    expect(m.model.previewSteps).toBeNull()
   })
 })
 

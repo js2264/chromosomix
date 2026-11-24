@@ -197,7 +197,7 @@ describe('the popover', () => {
     expect(rowNames()).toEqual(['unbinned'])
   })
 
-  it('gives back the steps of a question priced before it opened, on Escape', async () => {
+  it('lets go of its own preview on Escape, never puts back a copy of what was held: the stage prices review’s question again', async () => {
     const s = await stage({ contigs: [3] })
     const held = [
       { op: 'move' as const, contigs: ['u0'], to: 'X1' },
@@ -208,10 +208,41 @@ describe('the popover', () => {
     await wait(120)
     expect(s.model.previewStep).toEqual({ op: 'move', contigs: ['y5'], to: 'Y' })
     key('Escape')
-    expect(s.model.previewSteps).toEqual(held)
+    expect(s.model.previewSteps).toBeNull()
   })
 
-  it('prices the row under the keyboard, and gives the preview held before back on Escape', async () => {
+  it('takes one row for Enter held down, and leaves on Tab with the keyboard back where it came from', async () => {
+    const s = await stage({ genomes: ['X1'] })
+    const opener = document.createElement('button')
+    document.body.appendChild(opener)
+    opener.focus()
+    open(s, 'merge')
+    await wait(0)
+    const box = document.querySelector('.curate-chooser-filter') as HTMLInputElement
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', repeat: true, bubbles: true, cancelable: true }))
+    expect(Chooser.isOpen()).toBe(true)
+    expect(s.store.applied).toBe(0)
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+    expect(Chooser.isOpen()).toBe(false)
+    expect(s.store.applied).toBe(0)
+  })
+
+  it('keeps the caret in its box for a press anywhere in it but the box', async () => {
+    const s = await stage({ contigs: [3] })
+    open(s, 'move')
+    await wait(0)
+    const title = document.querySelector('.curate-chooser-title') as HTMLElement
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    title.dispatchEvent(press)
+    expect(press.defaultPrevented).toBe(true)
+    const box = document.querySelector('.curate-chooser-filter') as HTMLInputElement
+    const inBox = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    box.dispatchEvent(inBox)
+    expect(inBox.defaultPrevented).toBe(false)
+    expect(s.model.selection.contigs).toEqual([3])
+  })
+
+  it('prices the row under the keyboard, and lets go of its price on Escape', async () => {
     const s = await stage({ contigs: [3] })
     const held = { op: 'dissolve' as const, genome: 'Z' }
     s.model.preview(held, false)
@@ -227,7 +258,8 @@ describe('the popover', () => {
     expect(textsOf(document.body, '.curate-card-price-line')).toEqual(['complete 100% → 100%', 'redundant 1.00 → 1.00', 'complete 50% → 50%', 'redundant 1.00 → 1.00'])
     key('Escape')
     expect(Chooser.isOpen()).toBe(false)
-    expect(s.model.previewStep).toEqual(held)
+    // Its own preview let go of: what was held before is not put back.
+    expect(s.model.previewStep).toBeNull()
   })
 
   it('closes when the selection changes, or when the stage closes it', async () => {

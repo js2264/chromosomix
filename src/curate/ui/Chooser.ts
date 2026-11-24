@@ -21,10 +21,11 @@
  */
 
 import { el } from '../../ui/dom'
+import { TAB_WALKS } from '../../ui/tabWalk'
 import { icon, type IconName } from '../../ui/icons'
 import { keyBadge } from '../../ui/commands'
 import { fmt } from '../../units'
-import type { CurationStep, GenomeKind } from '../../genome/curation'
+import type { GenomeKind } from '../../genome/curation'
 import type { CurationStateResult } from '../../worker/curateProtocol'
 import type { DropPlan } from '../drop'
 import { lowerAffinity } from '../method'
@@ -451,8 +452,6 @@ export class Chooser {
   private priceTimer: ReturnType<typeof setTimeout> | null = null
   /** The step this chooser previews, by its key. */
   private previewKey: string | null = null
-  /** The preview held when it opened — one step, or the review's question's every step — given back when it closes unchosen. */
-  private readonly before: { steps: readonly CurationStep[] | null; drawn: boolean }
   private readonly opener: Element | null
   private readonly id = `curate-chooser-${++serial}`
   private readonly unsubscribe: Array<() => void> = []
@@ -463,7 +462,6 @@ export class Chooser {
     private readonly anchor: HTMLElement | { x: number; y: number },
     private readonly onChoose: (target: CurateDropTarget) => void,
   ) {
-    this.before = { steps: ctx.model.previewSteps, drawn: ctx.model.previewing }
     this.opener = document.activeElement
     this.head = el('span', { class: 'curate-chooser-title' })
     this.input = el('input', {
@@ -478,6 +476,7 @@ export class Chooser {
         'aria-label': 'Filter the genomes by name',
         spellcheck: 'false',
         autocomplete: 'off',
+        [TAB_WALKS]: '',
       },
       on: {
         input: () => this.refilter(true),
@@ -513,6 +512,11 @@ export class Chooser {
         class: 'curate-chooser',
         attrs: { role: 'dialog', 'aria-labelledby': `${this.id}-title`, 'data-chooser': kind },
         on: {
+          // A press anywhere in it but the box — its title, a group's head, the
+          // foot, the scrollbar — keeps the caret in the box: the keys stay the
+          // chooser's, never the stage's behind it.
+          pointerdown: (event: PointerEvent) => keepCaretInside(event, this.input),
+          mousedown: (event: MouseEvent) => keepCaretInside(event, this.input),
           focusout: (event: FocusEvent) => {
             const to = event.relatedTarget
             if (to instanceof Node && !this.element.contains(to)) this.cancel()
@@ -546,12 +550,16 @@ export class Chooser {
     return this.shown[this.active] ?? null
   }
 
-  /** Close without choosing: the preview held before it opened is held again. */
+  /**
+   * Close without choosing: the preview this chooser priced is let go of, its
+   * own only — the stage prices review's question again, rather than a copy
+   * of whatever was held when it opened being put back.
+   */
   cancel(): void {
     if (this.closed) return
     const mine = this.previewKey !== null && previewKey(this.ctx.model.previewSteps) === this.previewKey
     this.teardown()
-    if (mine) this.ctx.model.preview(this.before.steps, this.before.drawn)
+    if (mine) this.ctx.model.preview(null)
   }
 
   /** Close: as {@link cancel}. */
@@ -559,14 +567,21 @@ export class Chooser {
     this.cancel()
   }
 
-  /** Choose a row: the chooser closes, then the caller hears the target. */
+  /**
+   * Choose a row: the chooser closes, then the caller hears the target —
+   * not while a step is counted, when its rows are of the binning before it.
+   */
   choose(row: ChooserRow | null = this.activeRow): void {
     if (this.closed || row === null) return
+    if (this.ctx.model.stale) {
+      this.element.classList.add('is-waiting')
+      return
+    }
     const mine = this.previewKey
     this.teardown()
     this.onChoose(row.target)
-    // A choice that made no step leaves the preview it was priced by: give back what was held.
-    if (mine !== null && previewKey(this.ctx.model.previewSteps) === mine) this.ctx.model.preview(this.before.steps, this.before.drawn)
+    // A choice that made no step leaves the preview it was priced by: let go of it.
+    if (mine !== null && previewKey(this.ctx.model.previewSteps) === mine) this.ctx.model.preview(null)
   }
 
   private mount(): void {
@@ -755,7 +770,7 @@ export class Chooser {
         el('span', {
           class: 'curate-chooser-name',
           text: this.ctx.shortName(genome.id),
-          title: `${genome.name} · ${genome.kind === 'mag' ? 'MAG' : 'element'} · ${fmt.bp(genome.length)} · ${fmt.int(genome.contigs)} contigs`,
+          title: `${genome.name} · ${genome.kind === 'mag' ? 'MAG' : 'element'} · ${fmt.bp(genome.length)} · ${fmt.int(genome.contigs)} ${genome.contigs === 1 ? 'contig' : 'contigs'}`,
         }),
       )
     } else {
@@ -763,7 +778,7 @@ export class Chooser {
     }
     node.append(el('span', { class: 'curate-chooser-evidence', text: row.evidence, title: row.evidence }))
     if (row.confidence !== null) {
-      node.append(el('span', { class: 'curate-chooser-confidence', text: confidenceText(row.confidence), title: 'A suggestion on offer makes this step, at this confidence.' }))
+      node.append(el('span', { class: 'curate-chooser-confidence', text: confidenceText(row.confidence), title: 'The surest suggestion on offer towards this genome, for some or all of what is chosen for: its confidence.' }))
     }
     return node
   }
@@ -795,9 +810,10 @@ export class Chooser {
     const row = this.activeRow
     const plan = row === null ? null : rowStep(this.ctx.model, this.plan, row.target, (id) => this.ctx.shortName(id))
     const step = plan?.steps?.length === 1 ? plan.steps[0] : null
-    if (step === null) {
-      // Nothing to count for it: a preview of this chooser's goes.
-      if (this.previewKey !== null && previewKey(this.ctx.model.previewSteps) === this.previewKey) this.ctx.model.preview(this.before.steps, this.before.drawn)
+    // Nothing to count for it — no step, or a link, which moves no contig and
+    // changes no genome's quality: a preview of this chooser's goes.
+    if (step === null || step.op === 'link' || step.op === 'unlink') {
+      if (this.previewKey !== null && previewKey(this.ctx.model.previewSteps) === this.previewKey) this.ctx.model.preview(null)
       this.previewKey = null
       this.paintFoot()
       return
@@ -869,7 +885,16 @@ export class Chooser {
       case 'Enter':
         event.preventDefault()
         event.stopPropagation()
+        // Held down, the key repeats: one press, one choice — never a chain of them.
+        if (event.repeat) return
         this.choose()
+        return
+      case 'Tab':
+        // The chooser is a popover over the dialog, not one of its stops: Tab
+        // leaves it as Escape does, the keyboard back where it came from.
+        event.preventDefault()
+        event.stopPropagation()
+        this.cancel()
         return
       case 'Escape':
         event.preventDefault()
@@ -913,6 +938,11 @@ function roomOf(room: number): string {
 /** A press on a row keeps the caret in the filter box, so the keys stay the chooser's. */
 function keepCaret(event: Event): void {
   if ((event.target as Element | null)?.closest('.curate-chooser-row') !== null) event.preventDefault()
+}
+
+/** A press anywhere in the chooser but its box keeps the caret in the box. */
+function keepCaretInside(event: Event, box: HTMLInputElement): void {
+  if (event.target !== box) event.preventDefault()
 }
 
 /**

@@ -183,7 +183,7 @@ export class SelectionCard {
    * row), and the preview held before it — one step or a question's — given
    * back when the pointer leaves.
    */
-  private pricing: { key: string; from: PriceSlot; before: readonly CurationStep[] | null; drawn: boolean } | null = null
+  private pricing: { key: string; from: PriceSlot } | null = null
   private disposed = false
   private readonly unsubscribe: Array<() => void> = []
 
@@ -625,7 +625,9 @@ export class SelectionCard {
           label: 'merge',
           title: `Merge ${fold.name} into ${keep.name}, which keeps its name`,
           run: () => this.merge(s, keep.id, fold.id),
-          step,
+          // An element's merge is never graded, and its view has no price to show:
+          // nothing is counted for it.
+          ...(genome.kind === 'mag' ? { step } : {}),
         },
       }
     })
@@ -1196,7 +1198,8 @@ export class SelectionCard {
    */
   private stepping(run: () => unknown): () => void {
     return () => {
-      if (this.ctx.model.stale) {
+      // Nor after a count that failed: the binning shown is the one before the step.
+      if (!this.ctx.model.answerable) {
         this.element.classList.add('is-waiting')
         return
       }
@@ -1208,7 +1211,8 @@ export class SelectionCard {
 
   /** An act that opens the chooser, under itself. */
   private chooseAct(kind: 'move' | 'merge' | 'link', label: string, iconName: 'move' | 'merge' | 'link', title: string): HTMLButtonElement {
-    const button: HTMLButtonElement = this.act(label, iconName, title, () => this.hooks.choose(kind, button), kind === 'link' ? SELECTION_KEYS.link : SELECTION_KEYS.merge)
+    // Gated as a step is: a chooser opened while a step is counted would list the binning before it.
+    const button: HTMLButtonElement = this.act(label, iconName, title, this.stepping(() => this.hooks.choose(kind, button)), kind === 'link' ? SELECTION_KEYS.link : SELECTION_KEYS.merge)
     button.setAttribute('aria-haspopup', 'dialog')
     button.dataset.choose = kind
     this.chooseActs.set(kind, button)
@@ -1250,21 +1254,25 @@ export class SelectionCard {
     // A step counted meanwhile: the act's step is of the binning before it.
     if (step === null || this.disposed || model.stale) return
     const key = previewKey(step) as string
-    if (this.pricing === null) this.pricing = { key, from, before: model.previewSteps, drawn: model.previewing }
+    if (this.pricing === null) this.pricing = { key, from }
     else Object.assign(this.pricing, { key, from })
     model.preview(step, false)
     // Priced already (asked again): drawn where this act wants it.
     this.schedule('preview')
   }
 
-  /** Let go of the step an act priced: the preview held before it — one step or a question's — is held again. */
+  /**
+   * Let go of the step an act priced, where the preview is still the act's:
+   * the stage prices review's question again — never a copy of what was held
+   * before put back, which a chooser opened meanwhile would take for its own.
+   */
   private endPricing(): void {
     this.cancelPriceTimer()
     const held = this.pricing
     this.pricing = null
     if (held === null) return
     const model = this.ctx.model
-    if (previewKey(model.previewSteps) === held.key) model.preview(held.before, held.drawn)
+    if (previewKey(model.previewSteps) === held.key) model.preview(null)
   }
 
   /** A row's hover given back: the genome it lit and the words it said. */
@@ -1371,8 +1379,8 @@ export class SelectionCard {
     const model = this.ctx.model
     if (s !== undefined && s.step.op === 'merge') {
       const into = s.step.into
-      model.accept(s)
-      model.selectGenomes([into])
+      // The genome kept selected only where the merge was made.
+      if (model.accept(s)) model.selectGenomes([into])
       return
     }
     model.drop({ kind: 'genomes', ids: [fold] }, { kind: 'genome', id: keep })

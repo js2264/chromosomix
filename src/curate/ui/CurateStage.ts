@@ -1136,6 +1136,13 @@ export class CurateStage {
     if (elements.length === 0 || mags.length !== 1) return false
     const steps = elements.filter((element) => !answer.links.some((link) => link.element === element && link.mag === mags[0])).map((element) => ({ op: 'link' as const, element, mag: mags[0] }))
     if (steps.length === 0) return false
+    // One link on offer: taken as the card's act takes it — the suggestion's,
+    // learned — so the key printed on the act does what the act does (§26.4).
+    if (steps.length === 1) {
+      const only = steps[0]
+      const offer = this.model.offered().find((s) => s.step.op === 'link' && s.step.element === only.element && s.step.mag === only.mag)
+      if (offer !== undefined) return this.model.accept(offer)
+    }
     return this.model.drop({ kind: 'genomes', ids: elements }, { kind: 'genome', id: mags[0] })
   }
 
@@ -1146,6 +1153,9 @@ export class CurateStage {
     if (answer === null || chosen.length !== 2) return false
     const link = answer.links.find((l) => chosen.includes(l.element) && chosen.includes(l.mag))
     if (link === undefined) return false
+    // An unlink on offer is taken as the card's act takes it (§26.4).
+    const offer = this.model.offered().find((s) => s.step.op === 'unlink' && s.step.element === link.element && s.step.mag === link.mag)
+    if (offer !== undefined) return this.model.accept(offer)
     return this.model.link(link.element, link.mag, false)
   }
 

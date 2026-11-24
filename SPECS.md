@@ -17454,6 +17454,17 @@ Space` in review; `0 + −` the picture under the pointer; `?` this list. Enter 
 button and the arrows move a focused grip, as everywhere (§26.4). An act that would make nothing —
 contigs moved where they are, the pool's contigs unbinned — makes no step.
 
+**As it would be.** One preview at a time — the binning counted with one more step, or a
+question's steps together — held by what asked for it: review's question, a drop resting on a target,
+an act or a row the pointer or the keyboard rests on, the chooser's row. Each lets go of its own
+alone, never putting back a copy of what was held before; in review, once nothing else holds one, the
+stage prices the question again. It is priced, not drawn, but while Space is held or a drop rests. A
+link moves no contig and changes no genome's quality: nothing is counted for it. **The chooser** keeps
+the keyboard in its box whatever is pressed inside it, takes one row for Enter however long it is
+held, answers nothing while a step is counted, and leaves on Tab as on Escape, the keyboard back
+where it came from. A card's act and the key printed on it do the same thing: `L` and `Delete` on an
+element and a MAG take the link or the unlink on offer, as the card's act does.
+
 **One answer a press.** A question is answered only once the binning it was asked of is counted: Y
 or N — or a card's *take* and *turn down* — pressed while the step just made is counted, or after its
 count failed, answers nothing (the band says *weighing…*), and a key held down answers once — a
