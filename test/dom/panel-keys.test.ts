@@ -106,6 +106,19 @@ describe('the digit row', () => {
     expect(open(app)).toEqual([true, false, false, true])
   })
 
+  it('folds nothing while a dialog is up: a stage’s keys never reach the window behind it (§26.4)', () => {
+    const app = windowWithAFile()
+    const backdrop = document.createElement('div')
+    backdrop.className = 'modal-backdrop'
+    document.body.appendChild(backdrop)
+    press({ key: '1', code: 'Digit1' })
+    press({ key: '2', code: 'Digit2' })
+    expect(open(app)).toEqual([true, false, true, false])
+    backdrop.remove()
+    press({ key: '1', code: 'Digit1' })
+    expect(open(app)).toEqual([false, false, true, false])
+  })
+
   it('is text in a box, and the browser’s with a modifier held', () => {
     const app = windowWithAFile()
     const box = document.createElement('input')

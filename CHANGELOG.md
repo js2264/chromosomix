@@ -372,6 +372,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   another assembly: it opened on an empty history, the first step overwrote the edit being drawn, and
   the heading's revert arrow put the word back to *as in the file* while the map stayed edited. The
   edit is checked against the file's own sequences now.
+- **A key pressed on a stage no longer reaches the session behind it (§26.4).** Any letter the
+  reference editor had no use for — `t`, `g`, a digit, `<` — ran a command on the session under the
+  stage, folding its columns or stepping its map; the window's keys now stand down while any dialog
+  is open. On the editor, ↓ in a right-click menu no longer also moves the selection a place, and
+  Space presses a focused button instead of panning the map.
 - **A step this build does not know no longer fails the open (§29.4).** A workspace or a link from a
   newer build whose edit held an operation this one has never heard of threw while the edit was
   replayed, inside the reader's open, so the session was lost. The step is kept in the history,

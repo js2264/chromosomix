@@ -15530,6 +15530,12 @@ structure* card however many models the deck draws.
   *backtick* — reads along the spine with the name, since upright it would stand across the strip.
   The shortcuts dialog's key column is as wide as the widest key in the registry, the console's
   *Ctrl+backtick*.
+- **A key pressed over a dialog is the dialog's.** The window's own keys stand down while any dialog
+  is open — a stage, a chooser, a question — since everything behind one is inert: a letter a stage
+  has no use for runs nothing on the session under it. A stage listens through `ui/stageKeys.ts`,
+  which answers only while the stage is the dialog on top, and leaves a field's keys to the field, an
+  open menu's to the menu (whose ↓ would otherwise also move the stage's selection) and a focused
+  button's Space to the button.
 - **A toggle command is titled once, by its noun**, and wears its state as a chip — *Crosshair* `on`
   — in the palette and the shortcuts dialog alike. Titled by its outcome, *Show crosshair*, it read
   as the state, and the dialog printed whatever the app happened to be doing when it was opened.

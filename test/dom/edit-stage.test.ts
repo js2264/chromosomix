@@ -20,6 +20,7 @@ import { EditStage, type EditStageProps } from '@/edit/EditStage'
 import { expectedOf } from '@/edit/method'
 import type { Suggested } from '@/edit/suggest'
 import { EditStore } from '@/state/referenceEdit'
+import { closeMenu, openMenu } from '@/ui/Menu'
 import type { PictureResult } from '@/worker/protocol'
 import { setUpDom, textsOf, type DomTeardown } from '../support/dom'
 import { simulate, type TruePiece } from '../support/simulatedMap'
@@ -207,6 +208,17 @@ describe('the stage', () => {
     key('ArrowUp')
     expect(store.applied).toBe(1)
     expect(document.querySelector('.edit-readout')?.textContent).toBe('II is first already')
+  })
+
+  it('leaves ↓ to a menu that is open, so a menu row is never also a step (§26.4)', async () => {
+    const { store } = await open()
+    sequence('II').click()
+    openMenu(20, 20, [{ label: 'nothing', run: () => {} }])
+    key('ArrowUp')
+    expect(store.applied).toBe(0)
+    closeMenu()
+    key('ArrowUp')
+    expect(store.applied).toBe(1)
   })
 
   it('moves a sequence by its grip, dragged or with ↑ ↓ on it', async () => {

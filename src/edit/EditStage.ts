@@ -37,6 +37,7 @@ import { icon, iconButton } from '../ui/icons'
 import { closeMenu, openMenu, type MenuItem } from '../ui/Menu'
 import type { Modal } from '../ui/Modal'
 import { stageDialog } from '../ui/StageDialog'
+import { keyBelongsElsewhere } from '../ui/stageKeys'
 import { fmt } from '../units'
 import type { GenomeLinksResult, PictureResult, StageWindowSide } from '../worker/protocol'
 import { BAR_NAMES, BAR_THICKNESS, drawBar, drawOverlay, readInk, type StageInk } from './draw'
@@ -1907,9 +1908,9 @@ export class EditStage {
   private key(event: KeyboardEvent): void {
     if (this.closed) return
     const target = event.target as HTMLElement | null
-    if (target !== null && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
-      return
-    }
+    // A field's keys are its own, an open menu's are the menu's (its ↓ also
+    // moved the selection here), and a focused button's Space presses it.
+    if (keyBelongsElsewhere(event)) return
     // Only the dialog on top answers.
     const dialogs = document.querySelectorAll('.modal-backdrop')
     if (dialogs.length > 0 && !dialogs[dialogs.length - 1].contains(this.root)) return

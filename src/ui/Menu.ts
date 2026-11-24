@@ -53,6 +53,11 @@ export function closeMenu(): void {
   open?.()
 }
 
+/** Whether a menu is up: its keys are its own until it closes. */
+export function menuIsOpen(): boolean {
+  return open !== null
+}
+
 /**
  * Open a menu at a point in viewport coordinates.
  *

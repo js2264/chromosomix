@@ -2719,6 +2719,10 @@ export class App implements SessionHost {
     // resolution or refitted it under a press that was about something else.
     if (event.defaultPrevented) return
     if (this.modal !== null) return
+    // **Nor is a key pressed over a dialog.** A stage, a chooser or a question
+    // makes everything behind it inert, and a letter the stage has no use for —
+    // `t`, `g`, a digit, `<` — ran a command on the session behind it.
+    if (document.querySelector('.modal-backdrop') !== null) return
     const typing = isTypingTarget(event.target)
     // Above the loop, not inside it.
     //
