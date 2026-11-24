@@ -17286,7 +17286,7 @@ which edits one genome's scaffolds.
 
 **Status: being built.** Every subsection below describes what will be, and says *built* as it lands:
 so far the model of a curation and its store (§33.2), the stage — its frame, list, review, keys,
-contact map, scatter, cards and chooser (§33.3) —, the session drawn through the curated binning
+pictures, cards and chooser (§33.3) —, the session drawn through the curated binning
 (§33.4), the method — the contig network, affinity, the background, the suggestions and their
 confidence, and miComplete's numbers from the markers (§33.5) — and the tables (§33.8). It is a **dev feature** (§29), `curate`, throughout. The design it was written from — the
 decisions and who made them, the method with the numbers it was held to on the mock community — is
@@ -17469,8 +17469,8 @@ stage opened again does not read it again.
 modes, the questions, the band and its price, auto and its holding back, the keys and the contacts'
 read (`curate/ui/CurateStage.ts`, `curate/model.ts`, `curate/questions.ts`, `curate/price.ts`,
 `curate/order.ts`, `curate/colours.ts`, `curate/names.ts`, `curate/drop.ts`, `curate/listRows.ts`);
-the contact map and the GC × coverage scatter (`curate/ui/ContactPane.ts`, `ScatterPane.ts`); the
-inspector's cards and the chooser (`curate/ui/cards/`, `Chooser.ts`). *Being built*: the host map.
+the three pictures (`curate/ui/ContactPane.ts`, `HostPane.ts`, `ScatterPane.ts`); the inspector's
+cards and the chooser (`curate/ui/cards/`, `Chooser.ts`).
 
 ### 33.4 The session through the curated binning
 
