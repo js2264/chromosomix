@@ -2577,9 +2577,11 @@ export class Session {
       // let go of. `hideMap` is about *this* file and nothing else.
       this.parkedMap = null
       // The curation's store is built from the binning of the map it was asked
-      // of, and another entry of a file may be binned otherwise: built again,
-      // when next asked, for any other map (§33.2).
-      if (this.file?.uri !== uri) this.curationHeld = null
+      // of, and another entry of a file may be binned otherwise — and a file
+      // dropped again under the same name may be another binning (`metacooler
+      // reassign` wrote the stage's table into it): built again, when next
+      // asked, for any other map or file (§33.2).
+      if (this.file?.uri !== uri || (this.file !== null && !sameFile(this.file.source, source))) this.curationHeld = null
       this.file = {
         uri,
         info,
@@ -9904,3 +9906,9 @@ function sameSteps(a: ReferenceEdit | undefined, b: ReferenceEdit | undefined): 
 
 /** A remote source spec carrying `plan`, or the spec as it was where there is none. */
 
+/** Whether two opens read one file: the same file the reader gave, or the same address. */
+function sameFile(a: SourceSpec, b: SourceSpec): boolean {
+  if (a.kind === 'local' && b.kind === 'local') return a.file === b.file
+  if (a.kind === 'remote' && b.kind === 'remote') return a.url === b.url
+  return false
+}

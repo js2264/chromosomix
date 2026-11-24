@@ -33,6 +33,23 @@ interface Held {
 }
 
 let held: Held | null = null
+/** The byte source what is held was read through. */
+let heldSource: unknown = null
+
+/**
+ * A map opened through a byte source: what is held of another source is let
+ * go of. A file dropped again under the same name, with the same contigs and
+ * pixels — after `metacooler reassign` wrote the stage's table into it, or
+ * `metator markers --inplace` stored its markers — is another file, and its
+ * binning, markers and network are read again; the same source opened again
+ * (another rung, the session through a curation) keeps them. A remote file is
+ * one source per address for as long as the reader holds it.
+ */
+export function openedThrough(source: unknown): void {
+  if (source === heldSource) return
+  heldSource = source
+  held = null
+}
 
 /** The file a map is read from, as what is kept is keyed: its URI, contigs and pixels. */
 function fileKey(mc: MetaCooler): string {
@@ -49,6 +66,7 @@ function keptRead(mc: MetaCooler): Held {
 /** Forget what is kept: on `close`, and before a file of another key is read. */
 export function releaseCuration(): void {
   held = null
+  heldSource = null
 }
 
 /** The scan's hooks, as `reader.worker.ts`'s `scanHooks` makes them. */

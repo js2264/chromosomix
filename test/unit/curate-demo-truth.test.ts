@@ -17,7 +17,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { AUTO_THRESHOLD, LIKELY, OFFER_FLOOR } from '../../src/curate/method'
 import { MetaCooler } from '../../src/metacooler/MetaCooler'
 import { LocalFileSource } from '../../src/sources/LocalFileSource'
-import { handleCurationBase, handleCurationNetwork, handleCurationState, releaseCuration } from '../../src/worker/curate'
+import { handleCurationBase, handleCurationNetwork, handleCurationState, openedThrough, releaseCuration } from '../../src/worker/curate'
 import type { CurationBaseResult, CurationNetworkResult, CurationStateResult } from '../../src/worker/curateProtocol'
 
 const MAP = new URL('../../demo/metagenomics/mock-community/MM133.metacool', import.meta.url).pathname
@@ -180,4 +180,17 @@ describe('MM133, against its truth', () => {
     const q = state.genomes.find((genome) => genome.name === 'MM133_metator_00706_00000')?.quality
     expect(q && [q.completeness, q.redundancy, q.weightedCompleteness, q.weightedRedundancy]).toEqual([0.9905, 1.0192, 0.9814, 1.0294])
   })
+
+  it('keeps what it read for the source it read it through, and reads again through another', async () => {
+    const source = {}
+    openedThrough(source)
+    expect(handleCurationBase(mc).networkHeld).toBe(false)
+    await handleCurationNetwork(mc, { cancelled: () => false, onProgress: () => {} }, () => new Error('cancelled'))
+    // Kept while the same source is opened again: another rung, the session through a curation…
+    openedThrough(source)
+    expect(handleCurationBase(mc).networkHeld).toBe(true)
+    // …and let go of for a file dropped again under its name, which may be another binning.
+    openedThrough({})
+    expect(handleCurationBase(mc).networkHeld).toBe(false)
+  }, 60_000)
 })

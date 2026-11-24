@@ -89,7 +89,7 @@ import { openMap } from './open'
 import { LOAD_REPORT_MS, startBusyProbe } from '../perf/busy'
 import { Foreground } from './foreground'
 import { resolutionLabel } from '../units'
-import { handleCurationBase, handleCurationFocus, handleCurationNetwork, handleCurationState, releaseCuration } from './curate'
+import { handleCurationBase, handleCurationFocus, handleCurationNetwork, handleCurationState, openedThrough, releaseCuration } from './curate'
 
 /**
  * `lib` includes both DOM and WebWorker, so `self` is typed as a window here.
@@ -755,6 +755,8 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
       if (key !== undefined) curation = request.curation
     }
   }
+  // What the curation stage keeps is of this source's file alone (§33.9).
+  openedThrough(source)
   session = {
     mc,
     source,
