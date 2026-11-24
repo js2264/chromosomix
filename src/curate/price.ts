@@ -110,11 +110,24 @@ export function newlyDuplicated(row: PriceRow): string[] {
 }
 
 /** `64% + 35% → 99%` and `1.01 + 1.00 → 1.04`: a row's numbers, weighted, in a line each. */
+/**
+ * A redundancy as printed: two decimals, and a third within half a hundredth of
+ * a grade's bound — 1.05 for high quality, 1.10 for contaminated — so the
+ * number says which side of it the grade went: `1.102 · contaminated`, never
+ * `1.10 · contaminated`.
+ */
+export function redundancyText(x: number): string {
+  return REDUNDANCY_BOUNDS.some((bound) => Math.abs(x - bound) < 0.005) ? x.toFixed(3) : x.toFixed(2)
+}
+
+/** metaTOR's grade bounds on weighted redundancy (`ui/grade.ts`). */
+const REDUNDANCY_BOUNDS = [1.05, 1.1]
+
 export function priceLines(row: PriceRow): { completeness: string; redundancy: string } | null {
   if (row.after === null) return null
   const parts = row.from.filter((f) => f.quality !== null)
   const pct = (x: number): string => `${Math.round(x * 100)}%`
-  const ratio = (x: number): string => x.toFixed(2)
+  const ratio = redundancyText
   const was = (pick: (q: Quality) => number, form: (x: number) => string): string =>
     parts.length === 0 ? 'none' : parts.map((f) => form(pick(f.quality as Quality))).join(' + ')
   return {

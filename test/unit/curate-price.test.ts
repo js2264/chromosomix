@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { CuratedBinning, emptyCuration, fileBinning, withCurationStep, type CurationStep } from '../../src/genome/curation'
 import { stateAnswer } from '../../src/curate/answer'
-import { priceLines, priceOf, priceVerdict } from '../../src/curate/price'
+import { priceLines, priceOf, priceVerdict, redundancyText } from '../../src/curate/price'
 import { community } from '../support/curateCommunity'
 
 const { base, evidence } = community()
@@ -31,5 +31,15 @@ describe('a step’s price', () => {
 
   it('is nothing for a link', () => {
     expect(priceOf(now, after({ op: 'link', element: 'P', mag: 'Y' }))).toEqual([])
+  })
+})
+
+describe('a redundancy as printed', () => {
+  it('takes a third decimal near a grade’s bound, so the number says which side it went', () => {
+    expect(redundancyText(1.0412)).toBe('1.04')
+    expect(redundancyText(1.1021)).toBe('1.102')
+    expect(redundancyText(1.0976)).toBe('1.098')
+    expect(redundancyText(1.0489)).toBe('1.049')
+    expect(redundancyText(1.2)).toBe('1.20')
   })
 })

@@ -19,6 +19,7 @@ import { keyLabel, withKey } from '../../ui/commands'
 import { TAB_WALKS } from '../../ui/tabWalk'
 import { fmt } from '../../units'
 import { changeChip, changeWords, counted, curationChanges, type CurationChanges } from '../changes'
+import { redundancyText } from '../price'
 import { listRows, readFilter, rowKey, type GenomeSort, type ListChip, type ListRow, type ListRows, type ListSection, type PoolSort } from '../listRows'
 import type { CurateChange } from '../model'
 import type { Suggestion } from '../suggest'
@@ -566,7 +567,7 @@ export class GenomeList {
         const title = `${fmt.pct(q.weightedCompleteness, 1)} complete and ${fmt.fixed(q.weightedRedundancy, 3)} redundant, weighted (${q.set}); ${fmt.pct(q.completeness, 1)} and ${fmt.fixed(q.redundancy, 3)} unweighted; ${q.present} of ${q.markers} markers${g === null ? '' : ` · ${g === 'contaminated' ? 'contaminated' : `${g} quality`}`}`
         parts.push(
           el('span', { class: 'curate-row-quality', title }, bar, el('span', { class: 'curate-row-complete', text: fmt.pct(q.weightedCompleteness, 0) })),
-          el('span', { class: `curate-row-redundant${q.weightedRedundancy > 1.1 ? ' is-warn' : ''}`, text: fmt.fixed(q.weightedRedundancy, 2), title }),
+          el('span', { class: `curate-row-redundant${q.weightedRedundancy > 1.1 ? ' is-warn' : ''}`, text: redundancyText(q.weightedRedundancy), title }),
         )
       }
     } else {
