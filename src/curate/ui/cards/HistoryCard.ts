@@ -22,6 +22,7 @@ import type { CurateChange } from '../../model'
 import { historyRows, type HistoryRow } from '../../words'
 import type { CurateContext } from '../context'
 import { card } from './card'
+import { releaseFocusOnPointerPress } from './keyboard'
 
 export interface HistoryOptions {
   /** The curation: its history, where it stands, and whether one kept was refused. */
@@ -71,6 +72,8 @@ export class HistoryCard {
     if (this.store.refusal !== null) parts.push(el('p', { class: 'edit-note curate-history-refusal', text: this.store.refusal }))
     parts.push(this.list, this.undone, this.hint)
     this.body.replaceChildren(...parts)
+    // A row pressed keeps no keyboard: review's Space would press it again.
+    releaseFocusOnPointerPress(this.element)
     this.unsubscribe.push(this.store.subscribe(() => this.schedule()))
     this.unsubscribe.push(ctx.model.subscribe((change) => this.update(change)))
     this.paint()

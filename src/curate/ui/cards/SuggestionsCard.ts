@@ -9,7 +9,9 @@
  * suggestions opens on them, each with its own answer. The pointer resting on
  * a row draws the pictures as it would leave the binning, and lights what it
  * names; a press frames it, and in review makes it the question asked. The
- * question in review is marked, and its answers wear their keys.
+ * question in review is marked, and its answers wear their keys. While a step
+ * is counted the list is the binning's before it: dimmed, and its answers
+ * answer nothing, as review's keys do not.
  *
  * Under them, what was turned down, to offer again, and what the answers
  * taught; in auto, the run — `apply 12 at 80% or more`, then `applying… ·
@@ -22,13 +24,14 @@ import { keyBadge, withKey } from '../../../ui/commands'
 import { fmt } from '../../../units'
 import type { CurationStep } from '../../../genome/curation'
 import type { CurationStateResult } from '../../../worker/curateProtocol'
-import { AUTO_THRESHOLD, LIKELY, type SuggestionKind } from '../../method'
+import { AUTO_THRESHOLD, LIKELY, OFFER_FLOOR, type SuggestionKind } from '../../method'
 import { displayPercent, type CurateChange } from '../../model'
 import type { Question } from '../../questions'
 import type { Suggestion } from '../../suggest'
 import { declinedWords, shortWords } from '../../words'
 import type { CurateContext } from '../context'
-import { act, card } from './card'
+import { act, card, previewKey } from './card'
+import { releaseFocusOnPointerPress } from './keyboard'
 
 /** What the stage does for the card. */
 export interface SuggestionsHooks {
@@ -65,6 +68,28 @@ interface RowView {
   details: HTMLDetailsElement | null
 }
 
+/** Where the keyboard is among the rows: its question, the suggestion of it, which button, and the row's place. */
+interface ListFocus {
+  key: string
+  member: string | null
+  role: string
+  at: number
+}
+
+/**
+ * Put `nodes` in `parent` in this order, removing the others first and moving
+ * only what is out of place: a node kept where it was keeps the keyboard and
+ * the pointer, which a node taken out and put back loses.
+ */
+function placeChildren(parent: HTMLElement, nodes: readonly HTMLElement[]): void {
+  const keep = new Set<Element>(nodes)
+  for (const child of [...parent.children]) if (!keep.has(child)) child.remove()
+  nodes.forEach((node, k) => {
+    const there = parent.children[k] ?? null
+    if (there !== node) parent.insertBefore(node, there)
+  })
+}
+
 /** A suggestion's words as a sentence starts: for a title. */
 function capitalise(text: string): string {
   return text === '' ? text : `${text[0].toUpperCase()}${text.slice(1)}`
@@ -88,11 +113,19 @@ export class SuggestionsCard {
   private rows = new Map<string, RowView>()
   /** The genomes' names printed short, once an answer. */
   private names: { answer: CurationStateResult; short: Map<string, string> } | null = null
-  /** The row under the pointer, and the step it prices. */
+  /** The row lit — under the pointer, or holding the keyboard — and whether the keys lit it. */
   private hovering: string | null = null
+  private litByKeys = false
   private previewTimer: ReturnType<typeof setTimeout> | null = null
-  private pricing: { key: string; before: CurationStep | null; drawn: boolean } | null = null
+  /**
+   * The steps a row the pointer rests on draws, by the model's key, and
+   * whether that very preview was drawn before the row drew it (review's
+   * question, Space held).
+   */
+  private pricing: { key: string; wasDrawn: boolean } | null = null
   private shownCurrent: string | null = null
+  /** What the run's slot, the kinds, the turned down and the taught show: each drawn again only when it changes. */
+  private drawn = { auto: '', kinds: '', declined: '', learned: '' }
   private dirty = { all: true, marks: false }
   private frame = 0
   private disposed = false
@@ -118,6 +151,7 @@ export class SuggestionsCard {
     this.declinedSlot = el('div', { class: 'curate-suggestions-declined-slot' })
     this.learnedSlot = el('div', { class: 'curate-suggestions-learned-slot' })
     built.body.append(this.autoSlot, this.kinds, this.empty, this.list, this.more, this.declinedSlot, this.learnedSlot)
+    releaseFocusOnPointerPress(this.element)
     this.unsubscribe.push(ctx.model.subscribe((change) => this.update(change)))
     this.schedule('all')
   }
@@ -127,16 +161,18 @@ export class SuggestionsCard {
     switch (change) {
       case 'mode':
         // Review prices the question asked: the stage's preview, not a row's.
-        this.forgetPreview()
+        this.leaveToTheStage()
+        this.markWeighing()
         this.schedule('all')
         return
       case 'state':
       case 'counting':
       case 'error':
+        this.markWeighing()
         this.schedule('all')
         return
       case 'current':
-        this.forgetPreview()
+        this.leaveToTheStage()
         this.schedule('marks')
         return
       case 'hover':
@@ -152,6 +188,35 @@ export class SuggestionsCard {
     this.disposed = true
     cancelAnimationFrame(this.frame)
     for (const off of this.unsubscribe) off()
+  }
+
+  /**
+   * While a step is counted the questions are the binning's before it: the
+   * list dims after a moment, at once when an answer was pressed meanwhile
+   * (`is-waiting`). An auto run counts between every two of its steps, and
+   * says so itself: its list is not dimmed, or it would flicker.
+   */
+  private markWeighing(): void {
+    const model = this.ctx.model
+    this.element.classList.toggle('is-weighing', model.stale && model.answer !== null && !model.running)
+    if (!model.stale) this.element.classList.remove('is-waiting')
+  }
+
+  /**
+   * An answer: nothing while the last step is counted, as review's Y and N —
+   * the row is of the binning before it, and a second press would make its
+   * step twice and learn the answer twice —, the list dimmed at once instead.
+   */
+  private answering(run: () => void): () => void {
+    return () => {
+      if (this.ctx.model.stale) {
+        this.element.classList.add('is-waiting')
+        return
+      }
+      // Answered: a preview still waiting for the pointer to rest is not wanted.
+      this.clearTimer()
+      run()
+    }
   }
 
   private schedule(what: 'all' | 'marks'): void {
@@ -222,7 +287,7 @@ export class SuggestionsCard {
     let empty: string | null = null
     if (answer === null) empty = model.error === null ? 'Weighing the binning…' : `The count failed: ${model.error}`
     else if (!counted) empty = 'The suggestions come once the contacts are read: every merge, move, recruit and link they support.'
-    else if (queue.length === 0) empty = declined.length > 0 ? 'Nothing left to answer: what was turned down is below, to offer again.' : 'Nothing to suggest at 15% or more: drag contigs onto a genome to move them by hand.'
+    else if (queue.length === 0) empty = declined.length > 0 ? 'Nothing left to answer: what was turned down is below, to offer again.' : `Nothing to suggest at ${Math.round(OFFER_FLOOR * 100)}% or more: drag contigs onto a genome to move them by hand.`
     this.empty.textContent = empty ?? ''
     this.empty.classList.toggle('hidden', empty === null)
     this.paintList(queue, shown)
@@ -230,21 +295,31 @@ export class SuggestionsCard {
     this.paintLearned()
   }
 
-  /** In auto: the run, and what the last run held back. */
+  /**
+   * In auto: the run, and what the last run held back. Drawn again only when
+   * it says something else — a run counts between every two of its steps, and
+   * `stop` redrawn at each count would drop a press begun on it.
+   */
   private paintAuto(queue: readonly Question[]): void {
     const model = this.ctx.model
+    const sure = queue.filter((q) => q.confidence >= AUTO_THRESHOLD).length
+    const signature =
+      model.mode !== 'auto' ? '' : model.running ? 'running' : [sure, ...model.heldBack.map((item) => `${item.key}\t${item.words}\t${item.why}\t${queue.some((q) => q.key === item.key)}`)].join('\n')
+    if (signature === this.drawn.auto) return
+    this.drawn.auto = signature
     if (model.mode !== 'auto') {
       this.autoSlot.classList.add('hidden')
       this.autoSlot.replaceChildren()
       return
     }
+    // A reader at the keys on `apply` is on `stop` once the run starts, and back on `apply` after it.
+    const keyed = this.autoSlot.contains(document.activeElement)
     const parts: HTMLElement[] = []
     if (model.running) {
       const stop = act('stop', 'circle-stop', 'Stop the run after the step it is making: every step it made stays, to undo like any other', () => model.stopAuto())
       stop.classList.add('curate-suggestions-stop')
       parts.push(el('div', { class: 'edit-acts curate-suggestions-run' }, el('span', { class: 'curate-suggestions-running', text: 'applying…', attrs: { role: 'status' } }), stop))
     } else {
-      const sure = queue.filter((q) => q.confidence >= AUTO_THRESHOLD).length
       const threshold = `${Math.round(AUTO_THRESHOLD * 100)}%`
       const apply = act(
         sure === 0 ? `none at ${threshold} or more` : `apply ${fmt.int(sure)} at ${threshold} or more`,
@@ -271,7 +346,7 @@ export class SuggestionsCard {
               : el(
                   'li',
                   { class: 'curate-suggestions-held' },
-                  el('button', { class: 'curate-suggestions-held-button', title: 'Frame it on the pictures', attrs: { type: 'button' }, on: { click: () => this.press(question) } }, words, why),
+                  el('button', { class: 'curate-suggestions-held-button', title: 'Frame it on the pictures', attrs: { type: 'button' }, on: { click: () => this.press(this.fresh(question)) } }, words, why),
                 )
           list.appendChild(node)
         }
@@ -280,12 +355,16 @@ export class SuggestionsCard {
     }
     this.autoSlot.replaceChildren(...parts)
     this.autoSlot.classList.remove('hidden')
+    if (keyed) this.autoSlot.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true })
   }
 
   /** The kinds, counted in questions, one lit: every kind, or one. */
   private paintKinds(queue: readonly Question[]): void {
     const counts = new Map<SuggestionKind, number>()
     for (const q of queue) counts.set(q.kind, (counts.get(q.kind) ?? 0) + 1)
+    const signature = `${this.kind ?? 'all'}\t${[...counts].join(';')}`
+    if (signature === this.drawn.kinds) return
+    this.drawn.kinds = signature
     if (counts.size < 2) {
       this.kinds.classList.add('hidden')
       this.kinds.replaceChildren()
@@ -309,8 +388,11 @@ export class SuggestionsCard {
       const n = counts.get(kind)
       if (n !== undefined) chips.push(chip(kind, `${kind} ${fmt.int(n)}`, `Only the ${kind === 'link' ? 'host links' : kind === 'unlink' ? 'links to undo' : `${kind}s`}`))
     }
+    // A reader at the keys on a kind stays on that kind.
+    const focused = document.activeElement instanceof HTMLElement && this.kinds.contains(document.activeElement) ? document.activeElement.dataset.kind : undefined
     this.kinds.replaceChildren(...chips)
     this.kinds.classList.remove('hidden')
+    if (focused !== undefined) chips.find((button) => button.dataset.kind === focused)?.focus({ preventScroll: true })
   }
 
   /**
@@ -319,6 +401,7 @@ export class SuggestionsCard {
    * question reads the same, so a row under the pointer or the keyboard stays.
    */
   private paintList(queue: readonly Question[], shown: readonly Question[]): void {
+    const focus = this.listFocus()
     const likely = queue.filter((q) => q.confidence >= LIKELY).length
     const numberOf = new Map(queue.map((q, k) => [q.key, k < likely ? k + 1 : k - likely + 1]))
     // The window drawn: from the first, or around the question in review.
@@ -344,14 +427,44 @@ export class SuggestionsCard {
       nodes.push(view.node)
     }
     this.rows = next
-    this.list.replaceChildren(...nodes)
+    placeChildren(this.list, nodes)
     this.list.classList.toggle('hidden', nodes.length === 0)
+    this.restoreListFocus(focus)
     const after = shown.length - end
     this.more.textContent = after > 0 ? `and ${fmt.int(after)} more${this.kind === null ? '' : ` ${this.kind === 'link' ? 'host links' : `${this.kind}s`}`}: answer these, or narrow the list by kind` : ''
     this.more.classList.toggle('hidden', after === 0)
     // The row under the pointer is gone: let go of what it lit and drew.
     if (this.hovering !== null && !this.rowKnown(this.hovering)) this.endHover()
     this.shownCurrent = null
+  }
+
+  /** Where the keyboard is among the rows, or `null` where it is not on one. */
+  private listFocus(): ListFocus | null {
+    const active = document.activeElement
+    if (!(active instanceof HTMLElement) || !this.list.contains(active)) return null
+    const row = active.closest<HTMLElement>('.curate-suggestions-row')
+    if (row === null) return null
+    return {
+      key: row.dataset.key ?? '',
+      member: active.closest<HTMLElement>('.curate-suggestions-member')?.dataset.key ?? null,
+      role: active.dataset.role ?? 'main',
+      at: [...this.rows.values()].findIndex((view) => view.node === row),
+    }
+  }
+
+  /**
+   * The keyboard back among the rows once they are drawn again, where it fell
+   * with a row: on the same button of the same question, else on the question
+   * now at its place — the next one's `take` once one was taken.
+   */
+  private restoreListFocus(held: ListFocus | null): void {
+    if (held === null || this.list.contains(document.activeElement)) return
+    const views = [...this.rows.values()]
+    if (views.length === 0) return
+    const view = this.rows.get(held.key) ?? views[Math.min(Math.max(0, held.at), views.length - 1)]
+    const member = held.member === null ? undefined : view.members.find((made) => made.key === held.member)
+    const target = (member?.node ?? view.node).querySelector<HTMLElement>(`[data-role="${held.role}"]`) ?? view.node.querySelector<HTMLElement>('[data-role="main"]')
+    target?.focus({ preventScroll: true })
   }
 
   /** Whether a question or one of its suggestions is drawn. */
@@ -376,12 +489,15 @@ export class SuggestionsCard {
       {
         class: 'edit-suggestion-main curate-suggestions-main',
         title: `${capitalise(q.words)} · ${percent}: press to frame it on the pictures`,
-        attrs: { type: 'button' },
+        attrs: { type: 'button', 'data-role': 'main' },
         on: {
           click: () => this.press(this.fresh(q)),
-          focus: () => this.light(q),
+          // The keyboard on a row lights it as the pointer does, unless the pointer is on one.
+          focus: () => {
+            if (this.hovering === null) this.light(q, true)
+          },
           blur: () => {
-            if (this.hovering === q.key) this.endHover()
+            if (this.litByKeys && this.hovering === q.key) this.endHover()
           },
         },
       },
@@ -396,7 +512,8 @@ export class SuggestionsCard {
       ...q.evidence.map((chip) => el('span', { class: `edit-chip curate-suggestions-chip${WORRY.test(chip) ? ' is-warn' : ''}`, text: this.short(chip), title: chip })),
     )
     const many = q.members.length > 1
-    const take = this.answerButton('take', 'check', many ? `Take it whole: its ${fmt.int(q.steps.length)} ${q.steps.length === 1 ? 'step' : 'steps'}, one gesture` : 'Take it: its step, made', `Take ${words}`, () => model.accept(this.fresh(q)), 'y')
+    const whole = q.steps.length === 1 ? 'one step' : `${fmt.int(q.steps.length)} steps in one gesture`
+    const take = this.answerButton('take', 'check', many ? `Take it whole: its ${fmt.int(q.members.length)} suggestions, ${whole}` : 'Take it: its step, made', `Take ${words}`, () => model.accept(this.fresh(q)), 'y')
     const down = this.answerButton('turn down', 'x', many ? `Turn down every one of its ${fmt.int(q.members.length)} suggestions: none is offered again, and each is learned from` : 'Turn it down: never offered again, and learned from', `Turn down ${words}`, () => model.reject(this.fresh(q)), 'n')
     const node = el(
       'li',
@@ -498,6 +615,7 @@ export class SuggestionsCard {
    * — its key; a question's suggestion's, its mark alone.
    */
   private answerButton(label: string, mark: IconName, title: string, aria: string, run: () => void, keys: string, small = false): HTMLButtonElement {
+    const answer = this.answering(run)
     const button = el('button', {
       class: `btn edit-suggestion-act curate-suggestions-act${small ? ' is-small' : ''}`,
       title,
@@ -505,18 +623,22 @@ export class SuggestionsCard {
       on: {
         click: (event: MouseEvent) => {
           event.stopPropagation()
-          run()
+          answer()
         },
       },
     })
     button.append(icon(mark, { size: 13 }), el('span', { class: small ? 'curate-suggestions-act-word' : '', text: label }), keyBadge(keys, { class: 'kbd-inline' }))
     button.dataset.title = title
     button.dataset.keys = keys
+    button.dataset.role = keys === 'y' ? 'take' : 'down'
     return button
   }
 
   /** What was turned down, each to offer again. */
   private paintDeclined(declined: ReadonlyArray<{ key: string; suggestion: Suggestion | null }>): void {
+    const signature = declined.map(({ key, suggestion }) => (suggestion === null ? key : `${key}\t${this.short(suggestion.words)}\t${displayPercent(suggestion.confidence)}`)).join('\n')
+    if (signature === this.drawn.declined) return
+    this.drawn.declined = signature
     if (declined.length === 0) {
       this.declinedSlot.replaceChildren()
       return
@@ -549,6 +671,8 @@ export class SuggestionsCard {
   /** What the answers taught the ranking, and the way back to the stated weights. */
   private paintLearned(): void {
     const answers = this.ctx.model.answers
+    if (String(answers) === this.drawn.learned) return
+    this.drawn.learned = String(answers)
     if (answers === 0) {
       this.learnedSlot.replaceChildren()
       return
@@ -654,29 +778,28 @@ export class SuggestionsCard {
   }
 
   /** Light what a suggestion names, on every picture and list, and say it in the readout. */
-  private light(s: Suggestion): void {
+  private light(s: Suggestion, byKeys = false): void {
     if (this.ctx.dragging !== null) return
     this.hovering = s.key
+    this.litByKeys = byKeys
     this.ctx.model.hover(this.idOf(s.genomes[0]), s.contigs.length === 1 ? s.contigs[0] : -1)
     const evidence = s.evidence.map((chip) => this.short(chip))
     this.ctx.say([`${this.short(s.words)} · ${displayPercent(s.confidence)}%`, ...evidence].join(' · '))
     this.schedule('marks')
   }
 
-  /** The pointer on a row: what it names lit at once, the binning as it would leave it drawn once it rests. */
+  /**
+   * The pointer on a row: what it names lit at once, the binning as it would
+   * leave it drawn once it rests — a question's steps together, as taking it
+   * makes them, one gesture.
+   */
   private startHover(s: Suggestion, steps: readonly CurationStep[]): void {
     if (this.ctx.dragging !== null) return
     this.light(s)
     this.clearTimer()
-    if (steps.length !== 1) {
-      // Several steps are one gesture, and a preview is of one: nothing drawn.
-      this.endPreview()
-      return
-    }
-    const step = steps[0]
     this.previewTimer = setTimeout(() => {
       this.previewTimer = null
-      this.startPreview(step)
+      this.startPreview(steps)
     }, PREVIEW_DELAY)
   }
 
@@ -685,6 +808,7 @@ export class SuggestionsCard {
     this.endPreview()
     if (this.hovering === null) return
     this.hovering = null
+    this.litByKeys = false
     this.ctx.model.hover(null)
     this.ctx.say(null)
     this.schedule('marks')
@@ -697,28 +821,39 @@ export class SuggestionsCard {
 
   /**
    * Leave the preview to the stage: in review it prices the question asked,
-   * and a row the pointer rests on draws nothing more until it is entered again.
+   * and a row the pointer rests on draws nothing more until it is entered
+   * again. What a row drew is still let go of when the pointer leaves it,
+   * where it is still the row's — an auto run says it starts and ends as a
+   * mode does, under a pointer that may rest on a row.
    */
-  private forgetPreview(): void {
+  private leaveToTheStage(): void {
     this.clearTimer()
-    this.pricing = null
   }
 
-  private startPreview(step: CurationStep): void {
-    if (this.disposed) return
+  private startPreview(steps: readonly CurationStep[]): void {
     const model = this.ctx.model
-    const key = JSON.stringify(step)
-    if (this.pricing === null) this.pricing = { key, before: model.previewStep, drawn: model.previewing }
-    else this.pricing.key = key
-    model.preview(step, true)
+    // A step counted meanwhile: the row's steps are of the binning before it.
+    const key = previewKey(steps)
+    if (this.disposed || model.stale || key === null) return
+    this.pricing = { key, wasDrawn: model.previewing && previewKey(model.previewSteps) === key }
+    model.preview(steps, true)
   }
 
-  /** Let go of the step a row drew: the preview held before it — the review's price — is held again. */
+  /**
+   * Let go of the steps a row drew, where the preview is still the row's. The
+   * question review asks keeps its price, drawn again only by Space held — so
+   * a row never draws it after Space was let go —; any other is let go of, and
+   * the stage prices review's question again.
+   */
   private endPreview(): void {
     const held = this.pricing
     this.pricing = null
     if (held === null) return
     const model = this.ctx.model
-    if (JSON.stringify(model.previewStep) === held.key) model.preview(held.before, held.drawn)
+    if (previewKey(model.previewSteps) !== held.key) return
+    const asked = model.mode === 'review' ? model.current : null
+    if (asked !== null && previewKey(asked.steps) === held.key) {
+      if (!held.wasDrawn) model.drawPreview(false)
+    } else model.preview(null)
   }
 }

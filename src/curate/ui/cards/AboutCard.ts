@@ -6,9 +6,8 @@
  * height, and the confidences a suggestion is offered, first and taken at.
  *
  * The contacts' read is the stage's: it hands its result over through
- * `network`, or as `data.network` where the stage keeps it there; without it
- * the card says what the answers alone tell — the contacts read and the
- * background.
+ * `network`; without it the card says what the answers alone tell — the
+ * contacts read and the background.
  */
 
 import { el } from '../../../ui/dom'
@@ -16,7 +15,7 @@ import { fmt } from '../../../units'
 import type { CurationNetworkResult, CurationStateResult } from '../../../worker/curateProtocol'
 import { AUTO_THRESHOLD, LIKELY, OFFER_FLOOR } from '../../method'
 import type { CurateChange } from '../../model'
-import type { CurateContext, CurateData } from '../context'
+import type { CurateContext } from '../context'
 import { affinityText, card } from './card'
 
 export interface AboutOptions {
@@ -60,8 +59,7 @@ export class AboutCard {
     this.element = built.element
     this.body = built.body
     this.element.classList.add('curate-about-card')
-    // The stage's read, handed over, or kept on the data where the stage keeps it.
-    this.network = options.network ?? (() => (ctx.data as CurateData & { network?: CurationNetworkResult | null }).network ?? null)
+    this.network = options.network ?? (() => null)
     this.unsubscribe.push(ctx.model.subscribe((change) => this.update(change)))
     this.paint()
   }

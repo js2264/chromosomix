@@ -18,10 +18,11 @@ import { captionStamp, chooseSaveTarget, copyTextToClipboard, type SaveTarget } 
 import { fmt } from '../../../units'
 import type { Curation } from '../../../genome/curation'
 import type { CurationStore } from '../../../state/curation'
-import { contigGenomeTable, elementHostTable, elementsTable, genomesTable, type CurationTable } from '../../exports'
+import { contigGenomeTable, elementHostTable, elementsTable, genomesTable, linkDeciders, type CurationTable } from '../../exports'
 import type { CurateChange } from '../../model'
 import type { CurateContext } from '../context'
 import { card } from './card'
+import { releaseFocusOnPointerPress } from './keyboard'
 
 export interface ExportOptions {
   /** The stem every file is named from (`exportStem` of the map's label). */
@@ -78,6 +79,16 @@ export function mapArgument(title: string): string {
   return 'MAP'
 }
 
+/**
+ * What a table is written from: the binning, by its fingerprint — its genomes,
+ * their names and kinds, its links, every contig's genome —, and for the
+ * element ↔ host pairs who decided each link as well. An undo and a redo give
+ * the same binning, whose tables are as written.
+ */
+function writtenFrom(kind: TableKind, fingerprint: string, curation: Curation): string {
+  return kind === 'element-hosts' ? `${fingerprint}\n${JSON.stringify([...linkDeciders(curation)])}` : fingerprint
+}
+
 /** What a table's note says of what it holds: the facts, without the command the card prints whole. */
 function facts(note: string): string {
   const at = note.indexOf(': `')
@@ -97,8 +108,8 @@ export class ExportCard {
   private readonly now: () => Date
   /** The names the reader wrote the tables under, which the commands then use. */
   private readonly written = new Map<TableKind, string>()
-  /** The curation each table was written from: a step since makes it old. */
-  private readonly writtenFrom = new Map<TableKind, Curation>()
+  /** What each table was written from ({@link writtenFrom}): another binning since makes it old. */
+  private readonly writtenOf = new Map<TableKind, string>()
   private busy = false
   private frame = 0
   private disposed = false
@@ -129,8 +140,10 @@ export class ExportCard {
       this.files.appendChild(button)
     }
     this.status = el('p', { class: 'edit-note edit-export-status curate-export-status', attrs: { role: 'status' } })
-    this.stale = el('p', { class: 'edit-note curate-export-stale hidden', text: 'The curation has changed since: these tables are of the binning as it was.' })
+    this.stale = el('p', { class: 'edit-note curate-export-stale hidden', text: 'The binning has changed since: a table without its tick was written from the binning as it was.' })
     this.recipe = el('ol', { class: 'curate-export-recipe', attrs: { 'aria-label': 'The tables into a map' } })
+    // A table pressed keeps no keyboard: review's Space would open the dialog again.
+    releaseFocusOnPointerPress(this.element)
     built.body.append(
       el('p', { class: 'edit-note', text: 'Written from the curation; no file the session opened is touched.' }),
       this.files,
@@ -167,21 +180,23 @@ export class ExportCard {
 
   private paint(): void {
     if (this.disposed) return
-    const now = this.store.curation
+    const { binning, curation } = this.store
+    const fingerprint = binning.fingerprint()
+    const now = new Map(TABLES.map((table) => [table.kind, writtenFrom(table.kind, fingerprint, curation)]))
     for (const table of TABLES) {
       const button = this.buttons.get(table.kind)
       if (button === undefined) continue
       const why = this.refusal(table.kind)
       button.disabled = this.busy || why !== null
-      // Written from the curation as it stands: ticked, under the name it was written as.
-      const written = this.writtenFrom.get(table.kind) === now ? this.written.get(table.kind) : undefined
+      // Written from the binning as it stands: ticked, under the name it was written as.
+      const written = this.writtenOf.get(table.kind) === now.get(table.kind) ? this.written.get(table.kind) : undefined
       button.title = why ?? `${table.title} (${written === undefined ? this.name(table.kind) : `written as ${written}`})`
       button.classList.toggle('is-written', written !== undefined)
       const tick = button.querySelector('.curate-export-tick')
       if (written !== undefined && tick === null) button.appendChild(icon('check', { size: 13, class: 'curate-export-tick' }))
       else if (written === undefined) tick?.remove()
     }
-    this.stale.classList.toggle('hidden', ![...this.writtenFrom.values()].some((from) => from !== now))
+    this.stale.classList.toggle('hidden', ![...this.writtenOf].some(([kind, from]) => from !== now.get(kind)))
     this.paintRecipe()
   }
 
@@ -190,13 +205,19 @@ export class ExportCard {
     return `${this.stem}.${TABLES.find((table) => table.kind === kind)?.suffix ?? 'tsv'}`
   }
 
-  /** Why a table cannot be written now, or `null`: said on its button, before any dialog opens. */
+  /**
+   * Why a table cannot be written now, or `null`: said on its button, before
+   * any dialog opens. The binning is the store's, as the tables are — a step
+   * just made counts before it is counted —; only the element ↔ host pairs
+   * wait for the count, whose contacts they give.
+   */
   private refusal(kind: TableKind): string | null {
     if (kind !== 'elements' && kind !== 'element-hosts') return null
+    if (!this.store.binning.genomes.some((genome) => genome.kind === 'element')) return 'No mobile element in this binning: there is nothing to write.'
+    if (kind === 'elements') return null
     const answer = this.ctx.model.answer
     if (answer === null) return 'Once the binning is counted.'
-    if (!answer.genomes.some((genome) => genome.kind === 'element')) return 'No mobile element in this binning: there is nothing to write.'
-    if (kind === 'element-hosts' && !answer.counted) return 'Once the contacts are read: the table gives each pair’s contacts and affinity.'
+    if (!answer.counted) return 'Once the contacts are read: the table gives each pair’s contacts and affinity.'
     return null
   }
 
@@ -293,7 +314,7 @@ export class ExportCard {
       const blob = new Blob([table.text], { type: 'text/tab-separated-values' })
       await target.write(blob)
       this.written.set(kind, target.name)
-      this.writtenFrom.set(kind, from)
+      this.writtenOf.set(kind, from)
       const time = captionStamp(this.now()).slice(11)
       this.say(`Wrote ${target.name} (${fmt.bytes(blob.size)}) at ${time}. ${facts(table.note)}`)
     } catch (err) {
@@ -302,33 +323,40 @@ export class ExportCard {
   }
 
   /**
-   * A table of the binning as it stands, and the curation it was folded from;
-   * the element ↔ host pairs from that binning's own count, waited for.
+   * A table of the binning as it stands, and what it was written from
+   * ({@link writtenFrom}); the element ↔ host pairs from that binning's own
+   * count, waited for.
    */
-  private async table(kind: TableKind): Promise<{ table: CurationTable; from: Curation }> {
+  private async table(kind: TableKind): Promise<{ table: CurationTable; from: string }> {
     const { store } = this
     const { names, lengths } = store.file
-    const from = store.curation
+    if (kind === 'element-hosts') return this.hostTable()
+    const binning = store.binning
+    const from = writtenFrom(kind, binning.fingerprint(), store.curation)
     switch (kind) {
       case 'contig-genome':
-        return { table: contigGenomeTable(store.binning, names), from }
+        return { table: contigGenomeTable(binning, names), from }
       case 'genomes':
-        return { table: genomesTable(store.binning), from }
+        return { table: genomesTable(binning), from }
       case 'elements':
-        return { table: elementsTable(store.binning, names, lengths), from }
-      case 'element-hosts': {
-        const model = this.ctx.model
-        for (let k = 0; k < COUNTS_WAITED; k++) {
-          await model.settled()
-          const answer = model.answer
-          const now = store.curation
-          const binning = store.binning
-          // The pairs are the count's, by genome index: of this very binning, or none.
-          if (answer !== null && answer.counted && answer.fingerprint === binning.fingerprint()) return { table: elementHostTable(binning, answer.hosts, now), from: now }
-          if (answer !== null && !answer.counted) break
-        }
-        throw new Error('the contacts of the binning as it stands are not counted yet; try again in a moment')
-      }
+        return { table: elementsTable(binning, names, lengths), from }
     }
+  }
+
+  /** The element ↔ host pairs: the count's, by genome index, so of the binning that count is of, waited for, or none. */
+  private async hostTable(): Promise<{ table: CurationTable; from: string }> {
+    const { store } = this
+    const model = this.ctx.model
+    for (let k = 0; k < COUNTS_WAITED; k++) {
+      await model.settled()
+      const answer = model.answer
+      const { binning, curation } = store
+      const fingerprint = binning.fingerprint()
+      if (answer !== null && answer.counted && answer.fingerprint === fingerprint) {
+        return { table: elementHostTable(binning, answer.hosts, curation), from: writtenFrom('element-hosts', fingerprint, curation) }
+      }
+      if (answer !== null && !answer.counted) break
+    }
+    throw new Error('the contacts of the binning as it stands are not counted yet; try again in a moment')
   }
 }

@@ -6,9 +6,11 @@
  * questions in the queue's order, narrowed by kind, a row lighting what it
  * names and drawing the binning as it would be, framed on a press and asked in
  * review, taken and turned down, a question's suggestions answered one by
- * one, auto's run and what it held back; the history's rows in words, a
- * gesture one row, a press going back; the tables written through the save
- * dialog and the commands that take them; and what the stage read.
+ * one, auto's run and what it held back, nothing answered twice while a step
+ * is counted; the history's rows in words, a gesture one row, a press going
+ * back; the tables written through the save dialog and the commands that take
+ * them; what the stage read; and a press of the pointer leaving the keyboard on
+ * no button, so review's Space is the stage's.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -79,6 +81,28 @@ function saveDialog(as?: (offered: string) => string): void {
       }),
     }
   }
+}
+
+/** A stage counting as the worker does: an answer a while after it is asked, and a step stale until then. */
+function slowStage(): TestStage {
+  const stage = testContext()
+  const { base, evidence } = community()
+  const store = new CurationStore(`curate-cards-slow-${Math.random()}`, base, fileBinning(base), () => 0)
+  const slow: CurateClient = {
+    state: (curation, weights) => ({
+      promise: new Promise((resolve) => setTimeout(() => resolve(stateAnswer(evidence, CuratedBinning.of(base, curation), weights)), 15)),
+      cancel: () => {},
+    }),
+  }
+  const model = new CurateModel(store, slow, { schedule: (run) => (run(), () => {}) })
+  stage.model.dispose()
+  return { ...stage, model, store, ctx: { ...stage.ctx, model } }
+}
+
+/** A press of the pointer: a click with a count, as a mouse's is (`detail` 0 is a key's). */
+function pointerPress(node: HTMLElement): void {
+  node.focus()
+  node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }))
 }
 
 /** A stage whose counts read no contacts: the file's binning and its markers alone. */
@@ -165,13 +189,119 @@ describe('the suggestions card', () => {
     expect(m.said.at(-1)).toBeNull()
   })
 
-  it('draws nothing for a question of several steps, which a preview cannot hold', async () => {
+  it('draws a question of several steps whole, as taking it makes them', async () => {
     const m = await suggestions()
+    const host = m.model.queue().find((q) => q.key === 'host:P')
+    if (host === undefined) throw new Error('no host question')
+    expect(host.steps).toHaveLength(2)
     enter(rowOf('host:P'))
     await wait(200)
     expect(m.model.hovered.genome).toBe('P')
-    expect(m.model.previewStep).toBeNull()
+    expect(m.model.previewSteps).toEqual(host.steps)
+    await frame()
+    expect(m.model.previewing).toBe(true)
     leave(rowOf('host:P'))
+    expect(m.model.previewSteps).toBeNull()
+  })
+
+  it('lets go of what a row drew: review’s question priced again, drawn only while Space is held', async () => {
+    const m = await suggestions()
+    m.model.setMode('review')
+    const asked = m.model.current
+    if (asked === null) throw new Error('nothing asked')
+    // As the stage does: the question priced, then Space held.
+    m.model.preview(asked.steps, false)
+    await wait(0)
+    m.model.drawPreview(true)
+    const row = rowOf('recruit:u0>X1')
+    enter(row)
+    await wait(200)
+    expect(m.model.previewSteps).toEqual([{ op: 'move', contigs: ['u0'], to: 'X1' }])
+    expect(m.model.previewing).toBe(true)
+    // Space let go, then the row: nothing is drawn, and the preview is let go of for the stage to price its question again.
+    m.model.drawPreview(false)
+    leave(row)
+    expect(m.model.previewing).toBe(false)
+    expect(m.model.previewSteps).toBeNull()
+    // Review's own question: drawn while the pointer rests on its row, and left priced, undrawn.
+    m.model.preview(asked.steps, false)
+    await wait(0)
+    enter(rowOf(asked.key))
+    await wait(200)
+    expect(m.model.previewing).toBe(true)
+    leave(rowOf(asked.key))
+    expect(m.model.previewSteps).toEqual(asked.steps)
+    expect(m.model.previewing).toBe(false)
+  })
+
+  it('lets go of what a row drew once the pointer leaves it, the mode said to change meanwhile', async () => {
+    const m = await suggestions()
+    const row = rowOf('recruit:u0>X1')
+    enter(row)
+    await wait(200)
+    expect(m.model.previewSteps).toEqual([{ op: 'move', contigs: ['u0'], to: 'X1' }])
+    // An auto run says it starts and ends as a change of mode does, the pointer wherever it rests.
+    m.model.setMode('auto')
+    leave(row)
+    expect(m.model.previewSteps).toBeNull()
+  })
+
+  it('answers nothing while the last step is counted: a second press makes no second step', async () => {
+    const m = await suggestions(slowStage())
+    const take = answer(rowOf('merge:X1+X2'), 'take')
+    take.click()
+    take.click()
+    answer(rowOf('move:y5>Y'), 'turn down').click()
+    expect(m.store.curation.history).toHaveLength(1)
+    expect(m.model.answers).toBe(1)
+    expect(m.store.learned.rejected).toEqual([])
+    // The list is of the binning before the step, and says so.
+    expect(m.card.element.classList.contains('is-weighing')).toBe(true)
+    expect(m.card.element.classList.contains('is-waiting')).toBe(true)
+    await settle(m)
+    expect(m.card.element.classList.contains('is-weighing')).toBe(false)
+    expect(m.card.element.classList.contains('is-waiting')).toBe(false)
+    answer(rowOf('move:y5>Y'), 'turn down').click()
+    expect(m.store.learned.rejected).toEqual(['move:y5>Y'])
+  })
+
+  it('keeps the keyboard among the rows: on a row the count leaves as it was, on the next question once one is taken', async () => {
+    const m = await suggestions()
+    const main = rowOf('host:P').querySelector('.curate-suggestions-main') as HTMLButtonElement
+    main.focus()
+    m.model.recount(0)
+    await settle(m)
+    expect(document.activeElement).toBe(main)
+    // Taken by the keys (Enter on its take): the keyboard on the take of the question now in its place.
+    const take = answer(rowOf('merge:X1+X2'), 'take')
+    take.focus()
+    take.click()
+    await settle(m)
+    expect(rowOf('merge:X1+X2')).toBeNull()
+    expect(document.activeElement).toBe(answer(rows()[0], 'take'))
+  })
+
+  it('leaves the keyboard on no button the pointer pressed, so Space is review’s, and on one the keys pressed', async () => {
+    const m = await suggestions()
+    m.model.setMode('review')
+    await frame()
+    const row = rowOf('recruit:u0>X1')
+    const main = row.querySelector('.curate-suggestions-main') as HTMLButtonElement
+    enter(row)
+    pointerPress(main)
+    expect(m.model.currentQuestion?.key).toBe('recruit:u0>X1')
+    expect(document.activeElement).not.toBe(main)
+    // What the pointer rests on stays lit.
+    expect(m.model.hovered.genome).toBe('X1')
+    leave(row)
+    expect(m.model.hovered.genome).toBeNull()
+    // Reached by Tab, a row lights what it names, and keeps the keyboard when Enter presses it.
+    main.focus()
+    expect(m.model.hovered.genome).toBe('X1')
+    main.click()
+    expect(document.activeElement).toBe(main)
+    main.blur()
+    expect(m.model.hovered.genome).toBeNull()
   })
 
   it('frames a question pressed, and in review asks it, its answers wearing their keys', async () => {
@@ -250,18 +380,7 @@ describe('the suggestions card', () => {
 
   it('runs auto on the sure questions, says it is applying, and stops', async () => {
     // Counts that take a while, as the worker's do: the run is seen running.
-    const stage = testContext()
-    const { base, evidence } = community()
-    const store = new CurationStore(`curate-cards-auto-${Math.random()}`, base, fileBinning(base), () => 0)
-    const slow: CurateClient = {
-      state: (curation, weights) => ({
-        promise: new Promise((resolve) => setTimeout(() => resolve(stateAnswer(evidence, CuratedBinning.of(base, curation), weights)), 15)),
-        cancel: () => {},
-      }),
-    }
-    const model = new CurateModel(store, slow, { schedule: (run) => (run(), () => {}) })
-    stage.model.dispose()
-    const m = await suggestions({ ...stage, model, store, ctx: { ...stage.ctx, model } })
+    const m = await suggestions(slowStage())
     m.model.setMode('auto')
     await frame()
     const apply = document.querySelector('.curate-suggestions-apply') as HTMLButtonElement
@@ -274,6 +393,9 @@ describe('the suggestions card', () => {
     expect(stop.textContent).toBe('stop')
     // Stopped once it has made its first step: it makes no other.
     for (let k = 0; k < 200 && m.store.curation.history.length === 0; k++) await wait(2)
+    await frame()
+    // The same button through the run's counts: a press begun on it is not dropped by one.
+    expect(document.querySelector('.curate-suggestions-stop')).toBe(stop)
     stop.click()
     for (let k = 0; k < 100 && m.model.running; k++) await wait(5)
     await settle(m)
@@ -281,6 +403,8 @@ describe('the suggestions card', () => {
     // Stopped after the step it was making, which stays.
     expect(m.store.curation.history.length).toBe(1)
     expect(m.store.curation.history[0].by).toBe('auto')
+    // Counted between its steps, a run's list is not dimmed: its own line says it is working.
+    expect(m.card.element.classList.contains('is-weighing')).toBe(false)
     expect(document.querySelector('.curate-suggestions-running')).toBeNull()
     expect(document.querySelector('.curate-suggestions-apply')?.textContent).toMatch(/^apply \d at 80% or more$/)
   })
@@ -385,6 +509,18 @@ describe('the history card', () => {
     expect(document.querySelector('.curate-history-undone')?.classList.contains('hidden')).toBe(true)
   })
 
+  it('leaves the keyboard on no row the pointer pressed', async () => {
+    const stage = testContext()
+    mounted(new HistoryCard(stage.ctx, { store: stage.store }))
+    await settle(stage)
+    stage.store.apply({ op: 'dissolve', genome: 'Z' })
+    await frame()
+    const back = historyRow(0).querySelector('button') as HTMLButtonElement
+    pointerPress(back)
+    expect(stage.store.applied).toBe(0)
+    expect(document.activeElement).not.toBe(back)
+  })
+
   it('names a curation kept for another binning, held and not applied', async () => {
     const stage = testContext()
     const { base } = community()
@@ -482,6 +618,59 @@ describe('the export card', () => {
     expect(exportButton('elements').disabled).toBe(false)
     await press(button)
     expect(asked).toEqual([])
+  })
+
+  it('offers the elements as the binning stands before it is counted, and says why the pairs wait', async () => {
+    saveDialog()
+    const stage = testContext()
+    const { base } = community()
+    const store = new CurationStore(`curate-cards-uncounted-${Math.random()}`, base, fileBinning(base), () => 0)
+    // A count that has not landed: the tables but the pairs are the store's.
+    const model = new CurateModel(store, { state: () => ({ promise: new Promise(() => {}), cancel: () => {} }) }, { schedule: (run) => (run(), () => {}) })
+    stage.model.dispose()
+    mounted(new ExportCard({ ...stage.ctx, model }, { stem: 'community', store, now: () => new Date(2026, 10, 24, 14, 52) }))
+    await frame()
+    expect(exportButton('elements').disabled).toBe(false)
+    expect(exportButton('element-hosts').disabled).toBe(true)
+    expect(exportButton('element-hosts').title).toBe('Once the binning is counted.')
+    await press(exportButton('elements'))
+    expect(saved['community.elements.tsv']).toBe('element\tlength\tn_contigs\tcontigs\tn_hosts\thosts\nP\t100000\t2\tp0,p1\t1\tZ\n')
+    // The element dissolved: said at once, from the binning as it stands.
+    store.apply({ op: 'dissolve', genome: 'P' })
+    await frame()
+    expect(exportButton('elements').disabled).toBe(true)
+    expect(exportButton('elements').title).toBe('No mobile element in this binning: there is nothing to write.')
+  })
+
+  it('ticks a table written while the binning is the one it was written from, an undo and a redo included', async () => {
+    saveDialog()
+    const m = await exporting()
+    await press(exportButton('genomes'))
+    await frame()
+    const stale = (): boolean => document.querySelector('.curate-export-stale')?.classList.contains('hidden') === false
+    expect(exportButton('genomes').classList.contains('is-written')).toBe(true)
+    // A link moves no contig, and changes the genomes table: its mges.
+    m.store.apply({ op: 'link', element: 'P', mag: 'Y' })
+    await frame()
+    expect(exportButton('genomes').classList.contains('is-written')).toBe(false)
+    expect(stale()).toBe(true)
+    m.store.undo()
+    await frame()
+    expect(exportButton('genomes').classList.contains('is-written')).toBe(true)
+    expect(stale()).toBe(false)
+    m.store.redo()
+    await frame()
+    expect(stale()).toBe(true)
+  })
+
+  it('leaves the keyboard on no table the pointer pressed: Space would open the dialog again', async () => {
+    saveDialog()
+    await exporting()
+    const button = exportButton('contig-genome')
+    pointerPress(button)
+    for (let k = 0; k < 10; k++) await wait(0)
+    expect(asked).toEqual(['community.contig-genome.tsv'])
+    expect(document.activeElement).not.toBe(button)
   })
 
   it('copies a command, and names the map as metacooler does', async () => {
