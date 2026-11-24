@@ -17577,8 +17577,9 @@ Recruits at 80% or more into one MAG are one suggestion. **A contig the method t
 explains its own contacts**: whatever it carries between its MAG and another is not counted for their
 merge, nor for a link, until its move is answered. Counted again after every step. *Built*
 (`curate/suggest.ts`): on the mock community, the merges at 50% are 13 of 13 right; the recruits,
-314 contigs and 1.58 Mb at 96.6% (98.6% at 80%); the links metaTOR did not make, 11 of 12; the one
-unlink, metaTOR's *Vibrio* phage on a *Corynebacterium* MAG.
+314 contigs and 1.58 Mb at 96.6% (98.6% at 80%); the moves, 10 of the 12 the truth can judge (every
+one at 80%); the links metaTOR did not make, 11 of 12; the one unlink, metaTOR's *Vibrio* phage on a
+*Corynebacterium* MAG.
 
 **Quality.** Where the map holds each contig's marker genes (`metator markers`), a genome's
 Completeness, Redundancy, Weighted completeness and Weighted redundancy are miComplete's own
@@ -17652,6 +17653,11 @@ measures the file as it is.
 
 The method is held to the truth of the mock community MM133 — the contigs mapped to the genomes the
 community was made of (`scripts/make_mock_truth.py`, the table in `test/golden/demo/`) — in the
-unit suite, and the numbers are those of §33.5. The quality is held to miComplete's own run: on
-MM133, with the markers `metator markers` stores, the four numbers of all fifty MAGs written in the
-map's order are miComplete's exactly. The truth is for validation only: nothing in the app reads it.
+unit suite (`test/unit/curate-demo-truth.test.ts`), the demo read as the stage reads it, through the
+reader's own handlers, and the numbers are those of §33.5; a contig whose organism is unknown is
+neither right nor wrong. The quality is held to miComplete's own run: on MM133, with the markers
+`metator markers` stores, the four numbers of all fifty MAGs written in the map's order are
+miComplete's exactly, and the stage's are the map's own for 49 of them — the fiftieth,
+`MM133_metator_00706_00000`, lost 29 contigs to `mge --reassign` after its numbers were written, and
+the stage prices it as it is (miComplete's on its 63 contigs). The truth is for validation only:
+nothing in the app reads it.
