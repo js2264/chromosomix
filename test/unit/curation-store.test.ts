@@ -64,6 +64,23 @@ describe('the store', () => {
     expect(empty.applied).toBe(0)
   })
 
+  it('undoes and redoes a gesture’s steps together, and keeps it as one through a reload', () => {
+    const key = 'curate|gesture.metacool'
+    const store = new CurationStore(key, BASE, fileBinning(BASE), () => 9)
+    store.apply({ op: 'rename', genome: 'A', name: 'Alpha' })
+    store.applyAll([{ step: { op: 'dissolve', genome: 'A' } }, { step: { op: 'dissolve', genome: 'B' } }])
+    expect(store.applied).toBe(3)
+    store.undo()
+    expect(store.applied).toBe(1)
+    store.redo()
+    expect(store.applied).toBe(3)
+    const again = new CurationStore(key, BASE, fileBinning(BASE))
+    again.undo()
+    expect(again.applied).toBe(1)
+    again.undo()
+    expect(again.applied).toBe(0)
+  })
+
   it('keeps a curation made on another binning, says so, applies none of it, and leaves it until a new step', () => {
     const key = 'curate|d.metacool'
     const other = new CurationStore(key, { ...BASE, genomeOf: Int32Array.from([0, 1, 1, -1]) }, fileBinning({ ...BASE, genomeOf: Int32Array.from([0, 1, 1, -1]) }))

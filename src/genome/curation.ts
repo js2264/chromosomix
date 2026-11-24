@@ -24,7 +24,7 @@
  * map through it (`metacooler/curationLens.ts`), the exports write it.
  */
 
-import { appliedSteps, fnvHash, pushStep, stepBack, stepForward, type HistoryEntryOf, type StepAuthor } from './history'
+import { readEntry, appliedSteps, fnvHash, pushStep, stepBack, stepForward, type HistoryEntryOf, type StepAuthor } from './history'
 
 /** The name the format gives no genome (§7.4). */
 export const UNBINNED = '__unbinned__'
@@ -177,8 +177,8 @@ export function emptyCuration(original: FileBinning): Curation {
   return { version: 1, original: { ...original, genomes: original.genomes.map((genome) => ({ ...genome })) }, history: [], cursor: 0 }
 }
 
-export function withCurationStep(curation: Curation, step: CurationStep, by: StepAuthor, when: number, suggestion?: string): Curation {
-  return pushStep(curation, step, by, when, suggestion)
+export function withCurationStep(curation: Curation, step: CurationStep, by: StepAuthor, when: number, suggestion?: string, gesture?: string): Curation {
+  return pushStep(curation, step, by, when, suggestion, gesture)
 }
 
 export function curationUndone(curation: Curation): Curation {
@@ -442,15 +442,9 @@ export function readCuration(stored: unknown): Curation | null {
   if (!Array.isArray(history)) return null
   const entries: CurationEntry[] = []
   for (const item of history) {
-    if (item === null || typeof item !== 'object') return null
-    const { step, by, when, suggestion } = item as Record<string, unknown>
-    if (step === null || typeof step !== 'object' || typeof (step as { op?: unknown }).op !== 'string') return null
-    entries.push({
-      step: step as CurationStep,
-      by: by === 'suggestion' || by === 'auto' ? by : 'reader',
-      when: typeof when === 'number' && Number.isFinite(when) ? when : 0,
-      ...(typeof suggestion === 'string' ? { suggestion } : {}),
-    })
+    const entry = readEntry<CurationStep>(item)
+    if (entry === null) return null
+    entries.push(entry)
   }
   const cursor = value['cursor']
   return {

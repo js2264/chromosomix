@@ -157,10 +157,18 @@ export class CurationStore {
     this.set(withCurationStep(this.held, step, by, this.clock(), suggestion))
   }
 
-  /** Several steps as one history entry each, told to the listeners once. */
+  /**
+   * Several steps of one gesture: one history entry each, undone and redone
+   * together, told to the listeners once.
+   */
   applyAll(steps: ReadonlyArray<{ step: CurationStep; by?: StepAuthor; suggestion?: string }>): void {
+    if (steps.length === 0) return
+    const when = this.clock()
+    // One gesture's steps share its id: the time and where they start, which no
+    // other gesture of this history has.
+    const gesture = steps.length > 1 ? `${when.toString(36)}.${this.held.cursor}` : undefined
     let next = this.held
-    for (const { step, by, suggestion } of steps) next = withCurationStep(next, step, by ?? 'reader', this.clock(), suggestion)
+    for (const { step, by, suggestion } of steps) next = withCurationStep(next, step, by ?? 'reader', when, suggestion, gesture)
     this.set(next)
   }
 
