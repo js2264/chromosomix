@@ -506,3 +506,467 @@
 .curate-chooser-keys > span {
   margin-right: 0.45rem;
 }
+
+/* ---- The suggestions card (cards/SuggestionsCard.ts): the review's questions ---- */
+
+/* The kinds, one lit: every question, or the merges alone. */
+.curate-suggestions-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.curate-suggestions-kind {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The list scrolls inside the card, so the cards under it stay in reach: a
+   sunken well the rows stand in, whose edge says where the scroll cuts them.
+   Rows are measured against it when the question in review is scrolled to. */
+.curate-suggestions-list {
+  position: relative;
+  max-height: min(30rem, 56vh);
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  overscroll-behavior: contain;
+}
+.curate-suggestions-row {
+  flex: none;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.curate-suggestions-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.curate-suggestions-row.is-current {
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--bg));
+}
+.curate-suggestions-main {
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.curate-suggestions-main:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.curate-suggestions-words {
+  min-width: 0;
+  line-height: 1.35;
+}
+.curate-suggestions-confidence {
+  align-self: start;
+  padding-top: 0.05rem;
+}
+.curate-suggestions-n {
+  align-self: start;
+  margin-top: 0.05rem;
+  padding: 0 0.3rem;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+.curate-suggestions-main > svg {
+  align-self: start;
+  margin-top: 0.12rem;
+}
+/* A worry among the evidence — within the background, markers it has
+   already, markers shared — is to be looked at before the step is trusted. */
+.curate-suggestions-chip.is-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.curate-suggestions-acts {
+  margin-left: auto;
+}
+.curate-suggestions-act {
+  white-space: nowrap;
+}
+.curate-suggestions-act > .kbd-inline {
+  display: none;
+  margin-left: 0.15rem;
+}
+.curate-suggestions-act.is-keyed > .kbd-inline {
+  display: inline-block;
+}
+/* On the filled answer the key is drawn in its ink, not as a key cap pasted on. */
+.curate-suggestions-act.btn-primary > .kbd-inline {
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+  background: transparent;
+  color: inherit;
+  opacity: 0.85;
+}
+/* A question's suggestion answers with its mark alone: its word is its title's. */
+.curate-suggestions-act.is-small {
+  padding: 0.12rem 0.3rem;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+/* Its key is the title's too: the row keeps its room for what the suggestion says. */
+.curate-suggestions-act.is-small > .kbd-inline,
+.curate-suggestions-act.is-small.is-keyed > .kbd-inline {
+  display: none;
+}
+.curate-suggestions-act-word {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A question of several suggestions opens on them, each with its own answer. */
+.curate-suggestions-members {
+  margin: -0.1rem 0.5rem 0.4rem 2.1rem;
+}
+.curate-suggestions-members-head {
+  width: max-content;
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  cursor: pointer;
+  user-select: none;
+}
+.curate-suggestions-members-head:hover {
+  color: var(--accent);
+}
+.curate-suggestions-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.curate-suggestions-member {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  column-gap: 0.25rem;
+  padding: 0.1rem 0.2rem 0.1rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.curate-suggestions-member:hover {
+  background: color-mix(in srgb, var(--accent-soft) 60%, transparent);
+}
+.curate-suggestions-member.is-current {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.curate-suggestions-member-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.curate-suggestions-member-confidence {
+  min-width: 2.1rem;
+  text-align: right;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-variant-numeric: tabular-nums;
+}
+
+/* `less sure · 29`: the questions under even odds, numbered from 1 again as
+   the review's band numbers them. */
+.curate-suggestions-divider {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.25rem 0 0;
+  color: var(--text-faint);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.curate-suggestions-divider::after {
+  content: '';
+  flex: 1 1 auto;
+  border-top: 1px solid var(--border);
+}
+.curate-suggestions-divider.is-more {
+  margin: 0 0 0.1rem;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.curate-suggestions-more {
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+
+/* Auto: the run, and what it held back and why — a grade it would lower. */
+.curate-suggestions-auto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.curate-suggestions-run {
+  align-items: center;
+}
+.curate-suggestions-running {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-right: 0.2rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+.curate-suggestions-running::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: curate-suggestions-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes curate-suggestions-pulse {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .curate-suggestions-running::before {
+    animation: none;
+  }
+}
+.curate-suggestions-sub {
+  margin-top: 0.15rem;
+}
+.curate-suggestions-held-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.curate-suggestions-held,
+.curate-suggestions-held-button {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+.curate-suggestions-held {
+  padding: 0.2rem 0.45rem;
+  border-left: 3px solid var(--warn);
+  border-radius: 0 4px 4px 0;
+  background: var(--bg-sunken);
+}
+.curate-suggestions-held-button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.curate-suggestions-held-button:hover .curate-suggestions-held-words {
+  color: var(--accent);
+}
+.curate-suggestions-held-words {
+  overflow-wrap: anywhere;
+}
+.curate-suggestions-held-why {
+  color: var(--warn);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  overflow-wrap: anywhere;
+}
+
+/* What was turned down: the words struck through, `offer again` at the end. */
+.curate-suggestions-declined-list > li {
+  align-items: baseline;
+}
+.curate-suggestions-declined-list .edit-declined-words {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.curate-suggestions-declined-list .edit-declined-words.is-gone {
+  font-style: italic;
+}
+.curate-suggestions-restore {
+  flex: none;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+.curate-suggestions-learned {
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+
+/* ---- The history card (cards/HistoryCard.ts) ---- */
+
+.curate-history-list {
+  position: relative;
+  max-height: min(18rem, 40vh);
+}
+.curate-history-button {
+  align-items: baseline;
+  gap: 0.45rem;
+}
+.curate-history-text {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+.curate-history-by {
+  float: right;
+  margin: 0.05rem 0 0 0.4rem;
+}
+.curate-history-steps {
+  color: var(--text-faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.curate-history-row.is-current .curate-history-steps {
+  color: var(--text-dim);
+}
+.curate-history-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* A curation kept for another binning is held, not applied: look before trusting the rows. */
+.curate-history-refusal {
+  padding: 0.25rem 0.5rem;
+  border-left: 3px solid var(--warn);
+  border-radius: 0 4px 4px 0;
+  background: var(--warn-soft);
+  color: var(--text);
+}
+.curate-history-undone,
+.curate-history-hint {
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+
+/* ---- The export card (cards/ExportCard.ts) ---- */
+
+/* Four tables, two by two: each button named for its file. */
+.curate-export-files {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+.curate-export-file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-width: 0;
+  white-space: nowrap;
+}
+.curate-export-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Written from the curation as it stands: ticked in the finished colour. */
+.curate-export-tick {
+  flex: none;
+  color: var(--ok);
+}
+.curate-export-status {
+  overflow-wrap: anywhere;
+}
+.curate-export-status:empty {
+  display: none;
+}
+.curate-export-stale {
+  color: var(--warn);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+.curate-export-sub {
+  margin-top: 0.3rem;
+}
+
+/* The two commands, numbered, each a block to copy whole. */
+.curate-export-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: curate-export-step;
+}
+.curate-export-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 0.4rem;
+  counter-increment: curate-export-step;
+}
+.curate-export-step::before {
+  content: counter(curate-export-step);
+  min-width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.3rem;
+  border-radius: 999px;
+  background: var(--bg-muted);
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-weight: 600;
+  line-height: 1.15rem;
+  text-align: center;
+}
+.curate-export-command {
+  display: block;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1.5;
+  user-select: all;
+}
+/* A word moves to the next line whole: `--inplace` is never cut at its
+   hyphens, and only a word longer than the line breaks inside. */
+.curate-export-word {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.curate-export-copy {
+  margin-top: 0.15rem;
+  color: var(--text-dim);
+}
+.curate-export-copy.is-copied {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.curate-export-keeps {
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+
+/* ---- The card about the map (cards/AboutCard.ts) ---- */
+
+/* What was read and what the stage weighs by: a label, then its value, a
+   line under it saying how it was measured. */
+.curate-about-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.35rem 0.75rem;
+  margin: 0;
+}
+.curate-about-label {
+  color: var(--text-dim);
+}
+.curate-about-value {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.curate-about-note {
+  color: var(--text-faint);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1.4;
+}

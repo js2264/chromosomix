@@ -1,11 +1,16 @@
 /**
- * What a curation writes (SPECS §33.8): three tables, each a new file through
+ * What a curation writes (SPECS §33.8): four tables, each a new file through
  * the save dialog, none of them touching the file that was opened.
  *
  * - **contig → genome**: `contig_name` and `genome_name`, a header and every
  *   contig of the file in its order — one of no genome as `__unbinned__` — so
  *   `metacooler reassign --contigs` reads it with its default format and makes
  *   the curated binning the map's, elements included, whatever `--missing` says.
+ * - **genomes**: every curated genome with metaTOR's `mge` flag, exactly
+ *   `True` or `False`, and a MAG's elements (`n_mges`, `mges`) — for
+ *   `metacooler annotate --genomes --replace` after the reassignment, which
+ *   starts a renamed or new genome without the file's columns: what makes its
+ *   elements elements, and its links links, when the map is opened again.
  * - **elements**: one row per mobile element — its name, length, contigs and
  *   hosts.
  * - **element ↔ host**: one row per element and MAG in contact, or linked: the
@@ -51,6 +56,49 @@ export function contigGenomeTable(binning: CuratedBinning, names: readonly strin
   }
 }
 
+/**
+ * The genomes table, for `metacooler annotate MAP --genomes … --replace` once
+ * `metacooler reassign` has made the curated binning the map's: `genome_name`,
+ * then metaTOR's columns — `mge`, `True` for an element and `False` for a MAG,
+ * as `metator`'s `mge_genomes` reads it (the text exactly); `n_mges` and
+ * `mges`, a MAG's elements counted and named, joined by commas in the
+ * binning's order, `0` and nothing for a MAG with none, as `metator host`
+ * writes them; both blank for an element, which `annotate` stores as missing.
+ * Every genome that holds a contig, in the binning's order; the pool is none.
+ */
+export function genomesTable(binning: CuratedBinning): CurationTable {
+  // Each MAG's elements, in the order the binning keeps its genomes.
+  const hosted = new Map<string, number[]>()
+  for (const link of binning.links) {
+    const e = binning.indexOfId(link.element)
+    const m = binning.indexOfId(link.mag)
+    if (e === undefined || m === undefined || binning.genomes[e].kind !== 'element' || binning.genomes[m].kind !== 'mag') continue
+    const list = hosted.get(link.mag) ?? []
+    if (!list.includes(e)) list.push(e)
+    hosted.set(link.mag, list)
+  }
+  const lines = ['genome_name\tmge\tn_mges\tmges']
+  let elements = 0
+  let hosting = 0
+  for (const genome of binning.genomes) {
+    if (genome.kind === 'element') {
+      elements++
+      lines.push(`${cell(genome.name)}\tTrue\t\t`)
+      continue
+    }
+    const mges = (hosted.get(genome.id) ?? []).sort((a, b) => a - b).map((e) => cell(binning.genomes[e].name))
+    if (mges.length > 0) hosting++
+    lines.push(`${cell(genome.name)}\tFalse\t${mges.length}\t${mges.join(',')}`)
+  }
+  const rows = binning.genomes.length
+  const count = (n: number, one: string, many: string): string => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
+  return {
+    text: `${lines.join('\n')}\n`,
+    rows,
+    note: `${count(rows, 'genome', 'genomes')}, ${count(elements, 'mobile element', 'mobile elements')}, ${count(hosting, 'MAG hosting', 'MAGs hosting')} one or more: \`metacooler annotate MAP --genomes\` this table with \`--replace\` gives a reassigned map its elements and their hosts.`,
+  }
+}
+
 /** The elements table. */
 export function elementsTable(binning: CuratedBinning, names: readonly string[], lengths: readonly number[]): CurationTable {
   const hostsOf = new Map<string, string[]>()
@@ -73,7 +121,7 @@ export function elementsTable(binning: CuratedBinning, names: readonly string[],
     )
     rows++
   }
-  return { text: `${lines.join('\n')}\n`, rows, note: `${rows.toLocaleString('en-US')} mobile elements, each with its contigs and hosts.` }
+  return { text: `${lines.join('\n')}\n`, rows, note: `${rows.toLocaleString('en-US')} mobile ${rows === 1 ? 'element' : 'elements'}, each with its contigs and hosts.` }
 }
 
 /** Who decided a link last, by the steps applied: the file where none did. */
@@ -133,6 +181,6 @@ export function elementHostTable(binning: CuratedBinning, hosts: readonly HostPa
   return {
     text: `${lines.join('\n')}\n`,
     rows,
-    note: `${rows.toLocaleString('en-US')} pairs of an element and a MAG, ${binning.links.length.toLocaleString('en-US')} of them linked.`,
+    note: `${rows.toLocaleString('en-US')} ${rows === 1 ? 'pair' : 'pairs'} of an element and a MAG, ${binning.links.length.toLocaleString('en-US')} of them linked.`,
   }
 }

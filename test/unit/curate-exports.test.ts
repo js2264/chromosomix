@@ -1,12 +1,13 @@
 // @dev-feature curate
 /**
  * The curation's tables (SPECS §33.8): contig → genome for `metacooler
- * reassign`, the elements, and the element ↔ host pairs with who decided each.
+ * reassign`, the genomes with metaTOR's mge flag for `metacooler annotate`,
+ * the elements, and the element ↔ host pairs with who decided each.
  */
 
 import { describe, expect, it } from 'vitest'
 import { CuratedBinning, emptyCuration, fileBinning, withCurationStep, type BaseBinning, type Curation, type CurationStep } from '../../src/genome/curation'
-import { contigGenomeTable, elementHostTable, elementsTable, linkDeciders } from '../../src/curate/exports'
+import { contigGenomeTable, elementHostTable, elementsTable, genomesTable, linkDeciders } from '../../src/curate/exports'
 import type { HostPair } from '../../src/curate/suggest'
 
 const BASE: BaseBinning = {
@@ -32,6 +33,43 @@ describe('the contig → genome table', () => {
     expect(table.text).toBe('contig_name\tgenome_name\nc0\tK_pneumoniae\nc1\t__unbinned__\nc2\tB\np0\tP\np1\tP\nu0\tB\n')
     expect(table.rows).toBe(6)
     expect(table.note).toMatch(/6 contigs in 3 genomes, 1 in none/)
+  })
+})
+
+describe('the genomes table', () => {
+  it('flags every genome True or False, and names a MAG’s elements, as metaTOR writes them', () => {
+    const table = genomesTable(CuratedBinning.of(BASE, null))
+    expect(table.text).toBe('genome_name\tmge\tn_mges\tmges\nA\tFalse\t1\tP\nB\tFalse\t0\t\nP\tTrue\t\t\n')
+    expect(table.rows).toBe(3)
+    expect(table.note).toMatch(/^3 genomes, 1 mobile element, 1 MAG hosting one or more: `metacooler annotate MAP --genomes`/)
+  })
+
+  it('writes the curated genomes: renamed, new, merged away, their elements in the binning’s order', () => {
+    const held = curation(
+      [{ op: 'rename', genome: 'A', name: 'K_pneumoniae' }, 'reader'],
+      [{ op: 'create', id: 'curated:1', name: 'plasmid2', kind: 'element', contigs: ['u0'] }, 'reader'],
+      [{ op: 'link', element: 'curated:1', mag: 'A' }, 'suggestion'],
+      [{ op: 'link', element: 'P', mag: 'B' }, 'reader'],
+      [{ op: 'retype', genome: 'B', kind: 'element' }, 'reader'],
+    )
+    // B made an element: its links go, and it is flagged True.
+    expect(genomesTable(CuratedBinning.of(BASE, held)).text.split('\n')).toEqual([
+      'genome_name\tmge\tn_mges\tmges',
+      'K_pneumoniae\tFalse\t2\tP,plasmid2',
+      'B\tTrue\t\t',
+      'P\tTrue\t\t',
+      'plasmid2\tTrue\t\t',
+      '',
+    ])
+    const merged = curation([{ op: 'merge', into: 'B', genomes: ['A'] }, 'reader'])
+    // A merged into B: its element is B's now, A no row of its own.
+    expect(genomesTable(CuratedBinning.of(BASE, merged)).text).toBe('genome_name\tmge\tn_mges\tmges\nB\tFalse\t1\tP\nP\tTrue\t\t\n')
+  })
+
+  it('says True and False exactly, whatever else a name holds', () => {
+    const lines = genomesTable(CuratedBinning.of(BASE, null)).text.split('\n').slice(1, -1)
+    expect(lines.map((line) => line.split('\t')[1])).toEqual(['False', 'False', 'True'])
+    expect(lines.every((line) => line.split('\t').length === 4)).toBe(true)
   })
 })
 
