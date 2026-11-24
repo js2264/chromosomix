@@ -20,6 +20,7 @@ import type { StageInk } from '../../edit/draw'
 import { readInk } from '../../edit/draw'
 import { POOL_COLOUR, POOL_RGBA, genomeColour, slotApart, slotOf, type GenomeColour } from '../colours'
 import { CurateModel, displayPercent, type Cancellable, type CurateChange, type CurateClient } from '../model'
+import { counted } from '../changes'
 import { sharedPrefix, shortName } from '../names'
 import { newlyDuplicated, priceLines, priceOf, priceVerdict } from '../price'
 import type { Suggestion } from '../suggest'
@@ -63,7 +64,7 @@ export interface CurateParts {
   history(ctx: CurateContext, options: { store: CurationStore }): CurateCard
   exporting(ctx: CurateContext, options: { stem: string; store: CurationStore }): CurateCard
   about(ctx: CurateContext, options: { network: () => CurationNetworkResult | null }): CurateCard
-  chooser(ctx: CurateContext, kind: 'move' | 'merge' | 'link', anchor: HTMLElement, onChoose: (target: CurateDropTarget) => void): CurateChooser
+  chooser(ctx: CurateContext, kind: 'move' | 'merge' | 'link', anchor: HTMLElement | { x: number; y: number }, onChoose: (target: CurateDropTarget) => void): CurateChooser
 }
 
 /** The reader's requests the stage makes. */
@@ -313,7 +314,12 @@ export class CurateStage {
       return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
     }
     const colours = new Map<string, GenomeColour>()
+    /** The slot each genome is drawn with: a created one's, stepped apart from its neighbours'. */
+    const slots = new Map<string, number>()
     let coloursDark: boolean | null = null
+    /** A genome as drawn now — the preview's while one is — else as counted. */
+    const drawn = (id: string): CurationStateResult['genomes'][number] | undefined =>
+      stage.model.shown?.genomes.find((genome) => genome.id === id) ?? stage.model.answer?.genomes.find((genome) => genome.id === id)
     return {
       get model() {
         return stage.model
@@ -325,30 +331,36 @@ export class CurateStage {
           colours.clear()
           coloursDark = isDark
         }
-        const answer = stage.model.answer
-        // By kind too: a genome retyped is drawn in its new kind's lightness.
-        const kind = answer?.genomes.find((genome) => genome.id === id)?.kind ?? fileGenomes[fileIndex.get(id) ?? -1]?.kind ?? 'mag'
+        // By kind too: a genome retyped is drawn in its new kind's lightness —
+        // the preview's kind while a retype is drawn.
+        const kind = drawn(id)?.kind ?? fileGenomes[fileIndex.get(id) ?? -1]?.kind ?? 'mag'
         const key = `${kind}\t${id}`
         const held = colours.get(key)
         if (held !== undefined) return held
-        let slot = slotOf(fileIndex.get(id) ?? -1, id, fileGenomes.length)
+        let slot = slots.get(id) ?? slotOf(fileIndex.get(id) ?? -1, id, fileGenomes.length)
         // A genome a step made is laid beside the genome its contigs came from:
-        // its hue stands apart from its neighbours' (`colours.ts`).
-        if (!fileIndex.has(id)) {
+        // its hue stands apart from its neighbours' as they are drawn
+        // (`colours.ts`), fixed once it has its place — a preview's new genome
+        // has none yet, and is coloured for the moment only.
+        let placed = true
+        if (!fileIndex.has(id) && !slots.has(id)) {
           const order = stage.model.order
           const at = order.indexOf(id)
+          placed = at >= 0
           const near = [order[at - 1], order[at + 1]]
             .filter((other): other is string => at >= 0 && other !== undefined)
-            .map((other) => slotOf(fileIndex.get(other) ?? -1, other, fileGenomes.length))
+            .map((other) => slots.get(other) ?? slotOf(fileIndex.get(other) ?? -1, other, fileGenomes.length))
           slot = slotApart(slot, near)
+          if (placed) slots.set(id, slot)
         }
         const colour = genomeColour(slot, kind, isDark)
-        colours.set(key, colour)
+        if (placed) colours.set(key, colour)
         return colour
       },
       shortName(id: string): string {
         stage.refreshPrefixes()
-        const genome = stage.model.answer?.genomes.find((g) => g.id === id)
+        // As drawn: a preview's new genome by the name the step gives it.
+        const genome = drawn(id)
         if (genome === undefined) return id
         return shortName(genome.name, stage.prefixes[genome.kind])
       },
@@ -625,6 +637,8 @@ export class CurateStage {
             }),
           )
       }
+      // Rows with no marker gene to price them by say so, rather than nothing.
+      if (price.childElementCount === 0) price.append(el('span', { class: 'curate-band-price-none', text: 'no marker genes to price it by' }))
     } else price.append(el('span', { class: 'curate-band-price-none', text: 'pricing…' }))
     this.band.replaceChildren(line, price)
   }
@@ -693,13 +707,12 @@ export class CurateStage {
     const file = this.model.fileAnswer
     const fileMags = file?.genomes.filter((genome) => genome.kind === 'mag').length ?? mags.length
     const fileElements = (file?.genomes.length ?? answer.genomes.length) - fileMags
-    const counted = (n: number, one: string, many: string): string => `${fmt.int(n)} ${n === 1 ? one : many}`
     const was = (now: number, then: number, one: string, many: string): string => (now === then ? counted(now, one, many) : `${many} ${fmt.int(then)} → ${fmt.int(now)}`)
     const parts = [was(mags.length, fileMags, 'MAG', 'MAGs'), was(elements, fileElements, 'element', 'elements'), `${fmt.int(pooled)} unbinned`]
     if (tally === null || tally.steps === 0) parts.push('as in the file')
     else {
-      parts.push(`${fmt.int(tally.steps)} step${tally.steps === 1 ? '' : 's'}`)
-      if (tally.contigsMoved > 0) parts.push(`${fmt.int(tally.contigsMoved)} contigs moved`)
+      parts.push(counted(tally.steps, 'step'))
+      if (tally.contigsMoved > 0) parts.push(`${counted(tally.contigsMoved, 'contig')} moved`)
       if (tally.linksAdded + tally.linksDropped > 0) parts.push(`links +${tally.linksAdded} −${tally.linksDropped}`)
     }
     if (this.model.stale) parts.push('weighing…')
@@ -884,11 +897,9 @@ export class CurateStage {
       ghost.classList.add('is-ready')
       ghost.classList.remove('is-refused')
       this.ctx.say(`drop to ${plan.words}`)
-      // Resting on a target draws it made.
-      if (plan.steps.length === 1) {
-        const only = plan.steps[0]
-        rest = window.setTimeout(() => this.model.preview(only, true), DROP_PREVIEW_MS)
-      }
+      // Resting on a target draws it made, every step of it.
+      const steps = plan.steps
+      rest = window.setTimeout(() => this.model.preview(steps, true), DROP_PREVIEW_MS)
     }
     const up = (released: PointerEvent): void => {
       const found = this.dropTargetAt(released.clientX, released.clientY).target
@@ -957,7 +968,17 @@ export class CurateStage {
 
   private openChooser(kind: 'move' | 'merge' | 'link', at?: HTMLElement): void {
     this.chooser?.close()
-    const anchor = at ?? (this.cardOf.selection.element.querySelector('.edit-act') as HTMLElement | null) ?? this.cardOf.selection.element
+    let anchor: HTMLElement | { x: number; y: number } = at ?? (this.cardOf.selection.element.querySelector('.edit-act') as HTMLElement | null) ?? this.cardOf.selection.element
+    // Opened by a key, under the selection card's act where it is in view; the
+    // card scrolled away (in review the suggestions come first), at the
+    // pictures' corner, where the reader is looking.
+    if (at === undefined && anchor instanceof HTMLElement) {
+      const rect = anchor.getBoundingClientRect()
+      if (rect.width === 0 || rect.bottom <= 0 || rect.top >= window.innerHeight) {
+        const box = this.paneArea.getBoundingClientRect()
+        anchor = { x: box.left + 16, y: box.top + 16 }
+      }
+    }
     this.chooser = this.props.parts.chooser(this.ctx, kind, anchor, (target) => {
       this.chooser = null
       // As the chooser planned it: one MAG selected, the element chosen is linked to it.
@@ -979,9 +1000,14 @@ export class CurateStage {
     }
     // The list's own keys while it has the keyboard.
     if (this.list.contains(event.target) && this.list.key(event)) return true
-    // A picture's own — zoom, fit, its level — where the pointer is.
+    // A picture's own — zoom, fit, its level — where the pointer is. An Escape
+    // a picture took (a press or a lasso let go of) is the innermost thing:
+    // the stage's own Escape, which the dialog asks next, stands down.
     const over = this.paneUnderPointer()
-    if (over !== null && over.key(event)) return true
+    if (over !== null && over.key(event)) {
+      if (event.key === 'Escape') this.escapeTaken()
+      return true
+    }
     const mod = event.metaKey || event.ctrlKey
     const key = event.key
     const model = this.model
@@ -999,12 +1025,14 @@ export class CurateStage {
       return false
     }
     if (event.altKey) return false
+    // The digits by the key they are printed on, whatever the layout types
+    // there: AZERTY's bare `&` is its 1 (§16.5's digit row).
+    const digit = /^Digit([123])$/.exec(event.code)?.[1] ?? (key === '1' || key === '2' || key === '3' ? key : null)
+    if (digit !== null && !event.shiftKey) {
+      this.choose(PANES[Number(digit) - 1])
+      return true
+    }
     switch (key) {
-      case '1':
-      case '2':
-      case '3':
-        this.choose(PANES[Number(key) - 1])
-        return true
       case 'y':
       case 'Y':
       case 'n':
@@ -1131,8 +1159,22 @@ export class CurateStage {
     return null
   }
 
+  /** An Escape a part took; the dialog's call to {@link escape} for the same press finds it so. */
+  private escapeHeld = false
+
+  private escapeTaken(): void {
+    this.escapeHeld = true
+    queueMicrotask(() => {
+      this.escapeHeld = false
+    })
+  }
+
   /** Escape: the innermost thing, never the stage. */
   private escape(): void {
+    if (this.escapeHeld) {
+      this.escapeHeld = false
+      return
+    }
     const sheet = this.root.querySelector('.curate-keys')
     if (sheet !== null) {
       sheet.remove()

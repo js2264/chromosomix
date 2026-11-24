@@ -117,7 +117,13 @@ export function newlyDuplicated(row: PriceRow): string[] {
  * `1.10 · contaminated`.
  */
 export function redundancyText(x: number): string {
-  return REDUNDANCY_BOUNDS.some((bound) => Math.abs(x - bound) < 0.005) ? x.toFixed(3) : x.toFixed(2)
+  const bound = REDUNDANCY_BOUNDS.find((b) => Math.abs(x - b) < 0.005)
+  if (bound === undefined) return x.toFixed(2)
+  // Rounded onto the bound from either side, it is put a thousandth to its own
+  // side: 1.1004 is `1.101`, past it, and 1.0996 `1.099`; the bound itself is the bound.
+  const text = x.toFixed(3)
+  if (Number(text) === bound && x !== bound) return (bound + (x > bound ? 0.001 : -0.001)).toFixed(3)
+  return text
 }
 
 /** metaTOR's grade bounds on weighted redundancy (`ui/grade.ts`). */

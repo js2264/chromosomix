@@ -607,6 +607,16 @@ export class Chooser {
     const viewHeight = window.innerHeight
     const x = this.anchor instanceof HTMLElement ? this.anchor.getBoundingClientRect().left : this.anchor.x
     style.left = `${Math.round(Math.max(MARGIN, Math.min(x, viewWidth - width - MARGIN)))}px`
+    // An anchor scrolled out of the window: the chooser stands in the window all
+    // the same, where the anchor would come in, never off it with the keyboard in it.
+    const anchorRect = this.anchor instanceof HTMLElement ? this.anchor.getBoundingClientRect() : null
+    if (anchorRect !== null && (anchorRect.top >= viewHeight || anchorRect.bottom < 0)) {
+      const y = anchorRect.top >= viewHeight ? viewHeight - height - MARGIN : MARGIN
+      const top = Math.max(MARGIN, y)
+      style.top = `${Math.round(top)}px`
+      style.maxHeight = roomOf(viewHeight - MARGIN - top)
+      return
+    }
     if (this.anchor instanceof HTMLElement) {
       const rect = this.anchor.getBoundingClientRect()
       const below = viewHeight - MARGIN - (rect.bottom + GAP)

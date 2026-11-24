@@ -120,6 +120,8 @@ export class CurateModel {
   private readonly debounce: number
   private readonly schedule: (run: () => void, ms: number) => () => void
   private disposed = false
+  /** The highest `curated:N` this stage has seen made: an id is never minted twice, undone or not. */
+  private mintedMost = 0
 
   constructor(
     private readonly store: CurationStore,
@@ -134,10 +136,12 @@ export class CurateModel {
         return () => clearTimeout(timer)
       })
     this.unsubscribe = store.subscribe(() => {
+      this.noteMinted()
       // A preview is of one more step on the binning as it was: gone with it.
       this.clearPreview()
       this.recount()
     })
+    this.noteMinted()
     this.recount(0)
   }
 
@@ -571,7 +575,8 @@ export class CurateModel {
    * a second Y would take it twice.
    */
   get currentQuestion(): Question | null {
-    if (this.modeHeld !== 'review' || this.staleHeld) return null
+    // Nor after a count that failed: the queue is the binning's before the step.
+    if (this.modeHeld !== 'review' || this.staleHeld || this.errorHeld !== null) return null
     return this.questionOf(this.currentKey) ?? this.queue()[0] ?? null
   }
 
@@ -658,11 +663,13 @@ export class CurateModel {
     if (question === undefined || !question.members.some((m) => answered.has(m.key))) return
     const at = this.memberIndex(question)
     const left = question.members.filter((m) => !answered.has(m.key))
-    if (at >= 0 && left.length > 0) {
-      // By a member's key: the question regroups once the answer is counted.
-      const next = left[Math.min(at, left.length - 1)]
+    if (left.length > 0) {
+      // A part of the question answered — a member stepped into, or one taken
+      // from its card — and the rest of it is next, by a member's key: the
+      // question regroups once the answer is counted.
+      const next = left[Math.min(Math.max(at, 0), left.length - 1)]
       this.currentKey = next.key
-      this.memberKey = left.length > 1 ? next.key : null
+      this.memberKey = at >= 0 && left.length > 1 ? next.key : null
       return
     }
     const k = list.indexOf(question)
@@ -671,23 +678,43 @@ export class CurateModel {
   }
 
   /**
-   * Take a suggestion, or a question whole: its steps, one gesture marked as
-   * the suggestion's, and every member's answer learned.
+   * Whether an answer may be given now: not while a step is counted, nor after
+   * a count that failed — what is offered is the binning's before the step, and
+   * a second press would answer it again (the cards' buttons as the keys).
    */
-  accept(suggestion: Suggestion | Question, by: 'suggestion' | 'auto' = 'suggestion'): void {
+  get answerable(): boolean {
+    return !this.staleHeld && this.errorHeld === null && this.answerHeld !== null
+  }
+
+  /**
+   * Take a suggestion, or a question whole: its steps, one gesture marked as
+   * the suggestion's, and — the reader's answer — every member's learned.
+   * Auto's takes teach nothing, as the reference stage's do not (§27.6): a run
+   * would otherwise rank what it takes next by what it took, and leave answers
+   * nobody gave behind an undo. `false`, and nothing made, while
+   * {@link answerable} is not.
+   */
+  accept(suggestion: Suggestion | Question, by: 'suggestion' | 'auto' = 'suggestion'): boolean {
+    if (!this.answerable) return false
     const members = 'members' in suggestion ? suggestion.members : [suggestion]
     const steps = 'steps' in suggestion ? suggestion.steps : [suggestion.step]
     let learned = this.store.learned
-    for (const member of members) learned = this.learnedFrom(member, true, learned)
+    if (by === 'suggestion') for (const member of members) learned = this.learnedFrom(member, true, learned)
     const said = describeSuggestion(suggestion)
     this.moveOnFrom(new Set(members.map((member) => member.key)))
     if (steps.length === 1) this.store.apply(steps[0], by, said)
     else this.store.applyAll(steps.map((step) => ({ step, by, suggestion: said })))
-    this.store.keepLearned(learned)
+    if (by === 'suggestion') this.store.keepLearned(learned)
+    return true
   }
 
-  /** Turn a suggestion down, or a question's every member: none is offered again, and each answer is learned. */
-  reject(suggestion: Suggestion | Question): void {
+  /**
+   * Turn a suggestion down, or a question's every member: none is offered
+   * again, and each answer is learned. `false`, and nothing kept, while
+   * {@link answerable} is not.
+   */
+  reject(suggestion: Suggestion | Question): boolean {
+    if (!this.answerable) return false
     const members = 'members' in suggestion ? suggestion.members : [suggestion]
     let learned = this.store.learned
     for (const member of members) {
@@ -696,6 +723,7 @@ export class CurateModel {
     }
     this.moveOnFrom(new Set(members.map((member) => member.key)))
     this.store.keepLearned(learned)
+    return true
   }
 
   /** Offer a suggestion turned down again. */
@@ -780,8 +808,7 @@ export class CurateModel {
           this.heldBackList = [...this.heldBackList, { key: next.key, words: next.words, why }]
           continue
         }
-        this.accept(next, 'auto')
-        steps++
+        if (this.accept(next, 'auto')) steps++
       }
     } finally {
       if (this.autoRun === run) this.autoRun = null
@@ -972,13 +999,21 @@ export class CurateModel {
    */
   private mintId(): string {
     const taken = new Set(this.store.file.genomes.map((genome) => genome.name))
-    let most = 0
+    this.noteMinted()
+    for (let n = this.mintedMost + 1; ; n++) if (!taken.has(`${MINTED}${n}`)) return `${MINTED}${n}`
+  }
+
+  /**
+   * Every `curated:N` the history holds and the suggestions turned down name,
+   * remembered past the history's own: a create undone and dropped by the next
+   * step keeps its number taken for as long as the stage is open.
+   */
+  private noteMinted(): void {
     const seen = (text: string): void => {
-      for (const found of text.matchAll(MINTED_ID)) most = Math.max(most, Number(found[1]))
+      for (const found of text.matchAll(MINTED_ID)) this.mintedMost = Math.max(this.mintedMost, Number(found[1]))
     }
     for (const entry of this.store.curation.history) if (entry.step.op === 'create') seen(entry.step.id)
     for (const key of this.store.learned.rejected) seen(key)
-    for (let n = most + 1; ; n++) if (!taken.has(`${MINTED}${n}`)) return `${MINTED}${n}`
   }
 
   // -------------------------------------------------------------------------

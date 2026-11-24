@@ -39,6 +39,11 @@ describe('a redundancy as printed', () => {
     expect(redundancyText(1.0412)).toBe('1.04')
     expect(redundancyText(1.1021)).toBe('1.102')
     expect(redundancyText(1.0976)).toBe('1.098')
+    // Rounded onto a bound, a thousandth to its own side; the bound itself as it is.
+    expect(redundancyText(1.1004)).toBe('1.101')
+    expect(redundancyText(1.0996)).toBe('1.099')
+    expect(redundancyText(1.0504)).toBe('1.051')
+    expect(redundancyText(1.1)).toBe('1.100')
     expect(redundancyText(1.0489)).toBe('1.049')
     expect(redundancyText(1.2)).toBe('1.20')
   })

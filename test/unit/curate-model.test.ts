@@ -515,3 +515,76 @@ describe('the acts refuse what would make nothing', () => {
     expect(model.createFromSelected('mag')).toBe('curated:2')
   })
 })
+
+describe('what auto and the cards may answer (§33.3, §33.6)', () => {
+  it('auto teaches nothing: its takes are not the reader’s answers', async () => {
+    const { model, store } = setup()
+    await model.settled()
+    expect(await model.runAuto()).toBeGreaterThan(0)
+    expect(store.learned).toEqual({ weights: {}, answers: 0, rejected: [] })
+    expect(store.curation.history.every((entry) => entry.by === 'auto')).toBe(true)
+  })
+
+  it('answers nothing from a card while a step is counted: a double press takes once', async () => {
+    const { model, store, asked } = setup({ hold: true })
+    asked[0].resolve()
+    await model.settled()
+    const first = model.offered().find((s) => s.kind === 'merge')
+    if (first === undefined) throw new Error('no merge offered')
+    expect(model.accept(first)).toBe(true)
+    expect(model.accept(first)).toBe(false)
+    expect(model.reject(first)).toBe(false)
+    expect(store.curation.history.length).toBe(1)
+    expect(store.learned.answers).toBe(1)
+  })
+
+  it('answers nothing after a count that failed: review offers no question from the binning before the step', async () => {
+    const { base, evidence } = community()
+    const store = new CurationStore(`curate-model-${++keys}`, base, fileBinning(base), () => 0)
+    let fail = false
+    const client: CurateClient = {
+      state(curation, weights) {
+        if (fail) return { promise: Promise.reject(new Error('the worker stopped')), cancel: () => {} }
+        return { promise: Promise.resolve(stateAnswer(evidence, CuratedBinning.of(base, curation), weights)), cancel: () => {} }
+      },
+    }
+    const model = new CurateModel(store, client, { schedule: (run) => (run(), () => {}) })
+    await model.settled()
+    model.setMode('review')
+    const head = model.current
+    if (head === null) throw new Error('nothing in review')
+    fail = true
+    model.accept(head)
+    await model.settled()
+    expect(model.error).toBe('the worker stopped')
+    expect(model.current).toBeNull()
+    expect(model.accept(head)).toBe(false)
+    expect(store.curation.history.length).toBe(1)
+  })
+
+  it('stays on a question when one of its members is taken from its card', async () => {
+    const { model } = setup()
+    await model.settled()
+    model.setMode('review')
+    model.setCurrent('host:P')
+    const question = model.currentQuestion
+    if (question === null || question.members.length < 2) throw new Error('no host question of two')
+    const [one, other] = question.members
+    model.accept(one)
+    await model.settled()
+    expect(model.current?.members.map((m) => m.key)).toEqual([other.key])
+  })
+
+  it('never mints an id twice while the stage is open, a create undone and dropped included', async () => {
+    const { model, store } = setup()
+    await model.settled()
+    model.selectContigs([18])
+    expect(model.createFromSelected('mag')).toBe('curated:1')
+    await model.settled()
+    model.undo()
+    store.apply({ op: 'rename', genome: 'Z', name: 'Zeta' })
+    expect(store.curation.history.some((entry) => entry.step.op === 'create')).toBe(false)
+    model.selectContigs([18])
+    expect(model.createFromSelected('mag')).toBe('curated:2')
+  })
+})

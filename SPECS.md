@@ -17415,9 +17415,9 @@ genome's, a contig's (it would hide the contig in every box that finds a place),
 non-ASCII character, a comma (metaTOR lists genomes with them) or a colon, and any case of the words
 a table means no genome by — `__unbinned__`, `NA`, `nan`, `n/a`, `ND`, `n/d`, `-1`.
 
-**The readout**, one line under the toolbar, says what is under the pointer; idle, the curation's
-tally: `MAGs 50 → 45 · 127 elements · 12,412 unbinned contigs (9.8 Mb) · 6 steps · 400 contigs
-moved · links +3 −1`.
+**The readout**, under the toolbar — two lines where one does not hold it — says what is under the
+pointer; idle, the curation's tally: `MAGs 50 → 45 · 127 elements · 12,412 unbinned · 6 steps · 400
+contigs moved · links +3 −1`.
 
 **Who presses take** (§27.6): **manual** — the suggestions are drawn and listed and never apply
 themselves —, **review**, and **auto**. **Review asks questions, not pairs** (`curate/questions.ts`):

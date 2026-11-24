@@ -692,25 +692,38 @@ export class GenomeList {
       return
     }
     this.press = { x: event.clientX, y: event.clientY, row, pointer: event.pointerId }
+    const done = (): void => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', cancel)
+    }
     const move = (moved: PointerEvent): void => {
       const press = this.press
       if (press === null || moved.pointerId !== press.pointer) return
       if (Math.hypot(moved.clientX - press.x, moved.clientY - press.y) < DRAG_PX) return
       this.press = null
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
+      done()
       this.startDrag(press.row, moved)
     }
     const up = (released: PointerEvent): void => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
       const press = this.press
+      // Another pointer's release is not this press's.
+      if (press !== null && released.pointerId !== press.pointer) return
+      done()
       this.press = null
       if (press === null) return
       this.choose(press.row, released.shiftKey ? 'range' : released.metaKey || released.ctrlKey ? 'toggle' : 'replace')
     }
+    // A gesture the browser took over — a swipe that scrolls the list — is no
+    // press: the next tap anywhere must not select the row it began on.
+    const cancel = (cancelled: PointerEvent): void => {
+      if (this.press !== null && cancelled.pointerId !== this.press.pointer) return
+      done()
+      this.press = null
+    }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', cancel)
   }
 
   /** Drag a row: the selection when the row is in it, else the row alone. */

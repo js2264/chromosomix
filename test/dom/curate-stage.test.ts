@@ -34,16 +34,22 @@ afterEach(() => {
   teardown()
 })
 
-/** A picture that draws nothing and says what it was told. */
-function pane(name: string, told: string[]): CuratePane {
+/** A picture that draws nothing and says what it was told; `boxed`, it has a box and takes Escape, as a press in flight does. */
+function pane(name: string, told: string[], boxed = false): CuratePane {
+  const element = Object.assign(document.createElement('div'), { className: `stand-in-${name}` })
+  if (boxed) element.getBoundingClientRect = () => ({ left: 0, top: 0, right: 100, bottom: 100, width: 100, height: 100, x: 0, y: 0, toJSON: () => ({}) })
   return {
-    element: Object.assign(document.createElement('div'), { className: `stand-in-${name}` }),
+    element,
     title: name,
     update: () => {},
     resize: () => {},
     setLarge: (large) => told.push(`${name}:${large ? 'large' : 'small'}`),
     showSuggestion: (s) => told.push(`${name}:${s?.kind ?? 'none'}`),
-    key: () => false,
+    key: (event) => {
+      if (!boxed || event.key !== 'Escape') return false
+      told.push(`${name}:escape`)
+      return true
+    },
     dropTargetAt: () => null,
     dispose: () => {},
   }
@@ -55,7 +61,7 @@ function card(name: string): CurateCard {
   return { element, update: () => {} }
 }
 
-async function open(options: { failing?: () => boolean } = {}): Promise<{ stage: CurateStage; store: CurationStore; told: string[]; ctx: () => CurateContext }> {
+async function open(options: { failing?: () => boolean; boxed?: boolean } = {}): Promise<{ stage: CurateStage; store: CurationStore; told: string[]; ctx: () => CurateContext }> {
   const { base, evidence } = community()
   const store = new CurationStore(`curate-stage-${++keys}`, base, fileBinning(base), () => 0)
   const told: string[] = []
@@ -63,7 +69,7 @@ async function open(options: { failing?: () => boolean } = {}): Promise<{ stage:
   const parts: CurateParts = {
     contacts: (ctx) => {
       held = ctx
-      return pane('contacts', told)
+      return pane('contacts', told, options.boxed === true)
     },
     hosts: () => pane('hosts', told),
     scatter: () => pane('scatter', told),
@@ -278,5 +284,29 @@ describe('the curation stage', () => {
       input = document.querySelector('.curate-rename')
     }
     expect(input?.value).toBe('curated_MAG_1')
+  })
+
+  it('makes a picture large from the key its digit is printed on, whatever the layout types there', async () => {
+    await open()
+    // AZERTY: the key with 3 on it types a double quote.
+    key('"', { code: 'Digit3' })
+    expect(document.querySelector('.curate-slot.is-large')?.getAttribute('data-slot')).toBe('scatter')
+    key('&', { code: 'Digit1' })
+    expect(document.querySelector('.curate-slot.is-large')?.getAttribute('data-slot')).toBe('contacts')
+  })
+
+  it('lets a picture’s Escape be the innermost thing: a press let go of, the selection kept', async () => {
+    const { ctx, told } = await open({ boxed: true })
+    ctx().model.selectGenomes(['Y'])
+    document.querySelector('.curate-stage')?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 10, clientY: 10 }))
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    expect(told).toContain('contacts:escape')
+    expect(ctx().model.selection.genomes).toEqual(['Y'])
+    // The next Escape, nothing in flight but the picture still under the pointer, is its again;
+    // moved off it, the stage's: the selection let go of.
+    document.querySelector('.curate-stage')?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 500, clientY: 500 }))
+    await Promise.resolve()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    expect(ctx().model.selection.genomes).toEqual([])
   })
 })
