@@ -709,6 +709,13 @@ export interface AnalysisFraming {
    */
   edit?: string
   /**
+   * The curation of the binning the map was drawn through (§33.4), as the
+   * fingerprint of the curated binning (`genome/curation.ts`); absent for the
+   * file's own. A result is of the genomes it was computed on, and a step that
+   * changes them makes it stale — two histories that reach one binning do not.
+   */
+  curation?: string
+  /**
    * The resolution the reader added that the map was drawn at (§3.4), in base
    * pairs, where it was drawn at one; absent at a rung the file stores. Then it
    * is {@link binsize} too, and {@link rows} and {@link cols} count its bins:

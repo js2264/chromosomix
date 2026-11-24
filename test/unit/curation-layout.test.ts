@@ -13,6 +13,7 @@ import { describe, expect, it } from 'vitest'
 import { CuratedBinning, emptyCuration, fileBinning, withCurationStep, type BaseBinning, type Curation, type CurationStep } from '../../src/genome/curation'
 import { codePointCompare, curatedBins, curatedGenomes, curationLayout, dependsOnAssignment, gatherColumn, sliceTable } from '../../src/metacooler/curationLens'
 import { makeTable } from '../../src/h5/readTable'
+import { stableKey } from '../../src/worker/answers'
 
 /**
  * Seven contigs: c0–c2 in MAG `beta`, c3–c4 in MAG `Alpha`, c5 the element
@@ -152,5 +153,20 @@ describe('the pieces the handle is made of', () => {
     expect(dependsOnAssignment({ depends_on: ['pixels', 'genome_id'] })).toBe(true)
     expect(dependsOnAssignment({ depends_on: ['pixels', 'contigs/Hit'] })).toBe(false)
     expect(dependsOnAssignment({})).toBe(false)
+  })
+})
+
+describe('the name an open through a curation leaves the map under', () => {
+  it('is the curated binning’s fingerprint, and never the history it carries', () => {
+    const open = (key: string, steps: number) => ({
+      kind: 'open',
+      uri: 'm.metacool',
+      curation: { key, held: { version: 1, history: Array.from({ length: steps }, (_, i) => ({ step: { op: 'move', contigs: [`c${i}`], to: null } })), cursor: steps } },
+    })
+    // Two histories reaching one binning name one map…
+    expect(stableKey(open('3:abc', 2))).toBe(stableKey(open('3:abc', 400)))
+    // …two binnings, two.
+    expect(stableKey(open('3:abc', 2))).not.toBe(stableKey(open('3:abd', 2)))
+    expect(stableKey(open('3:abc', 2))).not.toContain('c0')
   })
 })

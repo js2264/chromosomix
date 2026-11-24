@@ -27,6 +27,7 @@ import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ResampleSpec } from '../metacooler/resample'
 import { EditedAssembly, editFingerprint, type ReferenceEdit } from '../genome/edit'
+import type { Curation } from '../genome/curation'
 import type { NameContext, NameMatch } from '../genome/naming'
 import { parseUri } from '../uri'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
@@ -161,6 +162,13 @@ interface Session {
    */
   lens: ReferenceEdit | null
   /**
+   * The curation of the binning the map is drawn through (§33.4), or `null`
+   * for the file's own binning. Held for {@link lens}'s reason: a rung opened
+   * later is drawn through it too, or a zoom would show the file's genomes
+   * under the curated ones' names.
+   */
+  curation: { key: string; held: Curation } | null
+  /**
    * The page's answer about the multi-genome containers (§29), as the open
    * that made this session carried it, so a sibling rung is opened under the
    * same one. A rung of a file that passed is a rung of the same file; this is
@@ -253,7 +261,7 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
       indexed: active.pairs.indexed,
       declaredRecords: active.pairs.declaredRecords,
     })
-    const seen = throughLens(active, built)
+    const seen = presented(active, built)
     drawnAsSession(active, seen)
     active.rungs.set(rung, seen)
     touchRung(active, rung)
@@ -279,7 +287,7 @@ async function mapFor(rung: string | undefined): Promise<MetaCooler> {
     // answers the same question at a different resolution.
     return active.mc
   }
-  opened = throughLens(active, opened)
+  opened = presented(active, opened)
   drawnAsSession(active, opened)
   active.rungs.set(rung, opened)
   touchRung(active, rung)
@@ -304,6 +312,26 @@ function throughLens(active: Session, rung: MetaCooler): MetaCooler {
   if (refusal === null) return map
   rung.close()
   return active.mc
+}
+
+/**
+ * A sibling rung drawn through the session's curation, as the open map is
+ * (§33.4): each rung's own bins regrouped by the same curated binning, so a
+ * zoom stays on the curated genomes. A rung it cannot be drawn on is answered
+ * by the open map, as {@link throughLens} answers one.
+ */
+function throughCuration(active: Session, rung: MetaCooler): MetaCooler {
+  if (active.curation === null) return rung
+  const { map, refusal } = MetaCooler.withCuration(rung, active.curation.held)
+  if (refusal === null) return map
+  rung.close()
+  return active.mc
+}
+
+/** A sibling rung as the session presents the open map: through its edit, or its curation. */
+function presented(active: Session, rung: MetaCooler): MetaCooler {
+  const seen = throughLens(active, rung)
+  return seen === active.mc ? seen : throughCuration(active, seen)
 }
 
 /**
@@ -692,11 +720,35 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
   // opened as it is, and from here on it is presented as the edited assembly.
   let lens: ReferenceEdit | null = null
   let lensRefusal: string | null = null
+  // The two lenses are not drawn one through the other: an open that asks for
+  // both draws neither, and says so of each.
+  const both = request.edit !== undefined && request.curation !== undefined
   if (request.edit !== undefined) {
-    const seen = MetaCooler.withLens(mc, request.edit)
-    mc = seen.map
-    lensRefusal = seen.refusal
-    if (seen.refusal === null) lens = request.edit
+    if (both) {
+      lensRefusal = 'An edit of the reference is not drawn together with a curation of the genomes.'
+    } else {
+      const seen = MetaCooler.withLens(mc, request.edit)
+      mc = seen.map
+      lensRefusal = seen.refusal
+      if (seen.refusal === null) lens = request.edit
+    }
+  }
+  // Through the curation of the binning, where the reader asked for one
+  // (§33.4): folded here over the file's own binning, read from the file as
+  // it is, and the map presented as `metacooler reassign` would write it.
+  let curation: Session['curation'] = null
+  let curated: OpenResult['curation']
+  if (request.curation !== undefined) {
+    const steps = request.curation.held.cursor
+    if (both) {
+      curated = { refusal: 'A curation of the genomes is not drawn together with an edit of the reference.', steps }
+    } else {
+      const seen = MetaCooler.withCuration(mc, request.curation.held)
+      mc = seen.map
+      const key = mc.curation?.key
+      curated = { refusal: seen.refusal, steps, ...(key === undefined ? {} : { key }) }
+      if (key !== undefined) curation = request.curation
+    }
   }
   session = {
     mc,
@@ -707,6 +759,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
     pairs,
     resample: null,
     lens,
+    curation,
     ...(request.metacool === undefined ? {} : { metacool: request.metacool }),
     ...(remoteBehind(source) === null ? {} : { plans: { open: remoteBehind(source)?.recorded() ?? null, view: null } }),
   }
@@ -719,6 +772,7 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
       ? {}
       : { pairs: summarise(pairs, request.binning.download === true, request.binning) }),
     ...(request.edit === undefined ? {} : { edit: { refusal: lensRefusal } }),
+    ...(curated === undefined ? {} : { curation: curated }),
     uri: mc.uri,
     layout: mc.layout,
     info: mc.info,
@@ -775,7 +829,14 @@ function handleGenomes(): GenomesResult {
   // dataset open, a metadata fetch, a malloc and a hyperslab read, all before
   // the landing table could paint.
   const density = mc.genomeDensities()
-  return { table: tableToPayload(genomes), display, density }
+  // Which columns are the curation's, where the map is drawn through one (§33.4).
+  const curation = mc.curation
+  return {
+    table: tableToPayload(genomes),
+    display,
+    density,
+    ...(curation === null ? {} : { curation: { steps: curation.steps, owned: [...curation.owned], recomputed: [...curation.recomputed] } }),
+  }
 }
 
 function handleContigs(): ContigsResult {
@@ -1156,8 +1217,12 @@ async function handleGenomeLinks(request: Extract<WorkerRequest, { kind: 'genome
     const [lo, hi] = mc.coords.contigBinExtent(c)
     binContig.fill(c, lo, hi)
   }
-  const genomeOf = mc.contigGenomeIds
-  const genomes = mc.genomeNames
+  // The partners' genomes as the session draws them: the curated binning's
+  // where the map is drawn through one (§33.4), each of the file's contigs
+  // through it, rather than the genomes the file stores.
+  const curation = open.curation
+  const genomeOf = curation === null ? mc.contigGenomeIds : Int32Array.from(curation.inverse, (contig) => open.contigGenomeIds[contig])
+  const genomes = curation === null ? mc.genomeNames : open.genomeNames
   const total = new Float64Array(n)
   const own = new Float64Array(n)
   const byGenome = new Map<number, Float64Array>()
@@ -2108,10 +2173,12 @@ function displayableContigs(mc: MetaCooler): number[] {
 async function handleOverviewSidecar(
   request: Extract<WorkerRequest, { kind: 'overviewSidecar' }>,
 ): Promise<OverviewResult> {
-  const { mc, resample } = requireSession()
+  const { mc, resample, curation } = requireSession()
   // The edge list counts the file as stored. A resampled map's overview is the
-  // resampled map's, so it is taken the way any other file's is (§6.5).
-  if (resample !== null) return handleOverview({ id: request.id, kind: 'overview', level: 'genome' })
+  // resampled map's, so it is taken the way any other file's is (§6.5) — and
+  // so is a curated map's, whose genomes are not the ones the list counts
+  // (§33.4).
+  if (resample !== null || curation !== null) return handleOverview({ id: request.id, kind: 'overview', level: 'genome' })
   const response = await fetch(request.url)
   if (!response.ok) {
     throw new ViewerError(
@@ -2182,7 +2249,10 @@ async function handleValidateDeep(
   // right to a progress bar and a cancel. It had neither, and on a
   // reference-scale file it is minutes of uninterruptible worker behind a static
   // label.
-  const result = await requireSession().mc.validateDeep({
+  // The file as it stores itself: a map drawn through a lens carries its
+  // pixels out of the file's order, and the check is of that order (§6.3).
+  const open = requireSession().mc
+  const result = await (open.unlensed ?? open).validateDeep({
     cancelled: () => cancelled.has(id),
     onProgress: (done, total) => post({ type: 'progress', id, done, total }),
   })

@@ -41,8 +41,24 @@ function textAt(value: string | number | undefined): string {
   return value === undefined || value === null ? '' : String(value)
 }
 
-/** Read the file's binning from the map as it is: pass `mc.unlensed ?? mc`. */
+/**
+ * What each map's binning was read as. A map's file does not change under it,
+ * and two readers of one map — the open that draws it through a curation
+ * (§33.4) and the stage's first request — then read it once between them.
+ */
+const reads = new WeakMap<MetaCooler, FileBinningRead>()
+
+/** Read the file's binning from the map as it is: pass `mc.unlensed ?? mc`. Read once per map. */
 export function readFileBinning(mc: MetaCooler): FileBinningRead {
+  let read = reads.get(mc)
+  if (read === undefined) {
+    read = readBinning(mc)
+    reads.set(mc, read)
+  }
+  return read
+}
+
+function readBinning(mc: MetaCooler): FileBinningRead {
   const names = [...mc.chromnames]
   const lengths = mc.contigs.numbers('length')
   const fileIds = mc.contigGenomeIds

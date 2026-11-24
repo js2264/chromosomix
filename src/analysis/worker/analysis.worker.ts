@@ -140,8 +140,23 @@ async function handleOpen(
   // reads it: a task on an edited map measures the edited assembly. Refused by
   // name where it cannot be, rather than measuring the file as it was under a
   // view that says otherwise.
+  if (request.edit !== undefined && request.curation !== undefined) {
+    mc.close()
+    throw new ViewerError('unsupported', 'An edit of the reference and a curation of the genomes are not drawn together.')
+  }
   if (request.edit !== undefined) {
     const seen = MetaCooler.withLens(mc, request.edit)
+    if (seen.refusal !== null) {
+      mc.close()
+      throw new ViewerError('unsupported', seen.refusal)
+    }
+    mc = seen.map
+  }
+  // …and through the curation of its binning (§33.4), for the same reason: a
+  // task reads the curated genomes, as the view draws them. Before the total
+  // and the resolution, which are drawn beneath it and summed over it.
+  if (request.curation !== undefined) {
+    const seen = MetaCooler.withCuration(mc, request.curation.held)
     if (seen.refusal !== null) {
       mc.close()
       throw new ViewerError('unsupported', seen.refusal)

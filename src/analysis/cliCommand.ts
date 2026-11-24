@@ -238,6 +238,15 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
           'apply: this line measures the file as it is.',
       )
     }
+    // …and so is the curation of its binning (§33.4), whose genomes the shell
+    // would read as the file stores them.
+    if (framing.curation !== undefined) {
+      notes.push(
+        'The map was drawn through a curation of its genomes, which the command line cannot yet ' +
+          'apply: this line measures the file as it is — `metacooler reassign` with the curation’s ' +
+          'contig → genome table writes the curated map.',
+      )
+    }
     // The ticked cells of an `.scool` are the session's and not the record's
     // (§3.8), so they are read off the context, and a command written with no
     // context to ask is told what it cannot say.

@@ -20,6 +20,7 @@
 
 import { ViewerError, type ErrorCode } from '../errors'
 import type { ReferenceEdit } from '../genome/edit'
+import type { Curation } from '../genome/curation'
 import type { FileCorner } from '../edit/corners'
 import type { GridLayout } from '../edit/grid'
 import type { WindowRead } from '../edit/paint'
@@ -427,6 +428,14 @@ export interface OpenResult {
    * assembly, or a container it is not yet drawn on. Absent where none was asked.
    */
   edit?: { refusal: string | null }
+  /**
+   * What became of the curation the open asked for (§33.4): `refusal` `null`
+   * where the map is drawn through it, the reason where it is not — a curation
+   * made on another binning, a map it is not drawn on; `steps` its applied
+   * steps; `key` the fingerprint of the binning drawn, where one is. Absent
+   * where none was asked.
+   */
+  curation?: { refusal: string | null; steps: number; key?: string }
   sourceKind: SourceKind
 }
 
@@ -445,6 +454,13 @@ export interface GenomesResult {
    * proxy wherever it is shown.
    */
   density: Float64Array
+  /**
+   * Where the map is drawn through a curation (§33.4): its steps, and which of
+   * the table's columns are the curation's own — `kind`, `curation`, metaTOR's
+   * `mge`, `n_mges` and `mges` — and which it recomputed from the contigs'
+   * markers, so the table titles them as such rather than as the file's.
+   */
+  curation?: { steps: number; owned: string[]; recomputed: string[] }
 }
 
 export interface ContigsResult {
@@ -927,6 +943,18 @@ export type WorkerRequest =
        * features are on (§29), and only for an edit that changes something.
        */
       edit?: ReferenceEdit
+      /**
+       * A curation of the metagenome's binning to draw the map through
+       * (§33.4): the file is opened as it is, then presented as the map
+       * `metacooler reassign` writes from the curated binning — its contigs
+       * regrouped, its genome layer replaced (`metacooler/curationLens.ts`) —
+       * and so is every rung opened after it. Folded here, over the file's own
+       * binning. `key` is the curated binning's fingerprint and names the map
+       * for the answers kept of it; `held` is the curation itself, which the
+       * answers' keys leave out (`answers.ts`), since a history of a thousand
+       * steps named in every key would be megabytes of them. Never with `edit`.
+       */
+      curation?: { key: string; held: Curation }
     }
   // Build the `.mcool` for the pairs import this session was opened from.
   // Separate from `open` because it is a second long job with its own
