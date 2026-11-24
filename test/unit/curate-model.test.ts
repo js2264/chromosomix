@@ -82,11 +82,12 @@ describe('the controller', () => {
     expect(model.answer?.genomes.length).toBe(4)
   })
 
-  it('lays out the MAGs in the file’s order, then the elements, and keeps the order across a step', async () => {
+  it('lays out the MAGs an organism’s fragments side by side, then the elements, and keeps the order across a step', async () => {
     const { model, store } = setup()
     await model.settled()
     const order = model.order
-    expect(order).toEqual(['X1', 'X2', 'Y', 'Z', 'P'])
+    expect(Math.abs(order.indexOf('X1') - order.indexOf('X2'))).toBe(1)
+    expect(order[order.length - 1]).toBe('P')
     // A new genome made of X2's contigs sits beside X2.
     store.apply({ op: 'create', id: 'curated:1', name: 'half', kind: 'mag', contigs: ['x4', 'x5'] })
     await model.settled()
@@ -235,6 +236,8 @@ describe('the controller', () => {
     expect(model.rename('X1', 'café')).toMatch(/ASCII/)
     expect(model.rename('X1', 'two words')).toMatch(/without spaces/)
     expect(model.rename('X1', 'a,b')).toMatch(/comma/)
+    expect(model.rename('X1', 'chr1:5')).toMatch(/colon/)
+    expect(model.rename('X1', 'u0')).toMatch(/A contig is named u0/)
     expect(model.rename('X1', 'Xanthomonas')).toBeNull()
     await model.settled()
     expect(model.answer?.genomes[0].name).toBe('Xanthomonas')

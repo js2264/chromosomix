@@ -99,6 +99,9 @@ export class CurateModel {
   /** Whether the pictures draw the preview (Space held), or it is only priced. */
   private previewDrawn = false
   private fileHeld: CurationStateResult | null = null
+  /** Whether the order was laid out on an answer that read the contacts. */
+  private laidOut = false
+  private contigNames: Set<string> | null = null
   private previewTicket = 0
   private previewRequest: Cancellable<CurationStateResult> | null = null
   private readonly listeners = new Set<(change: CurateChange) => void>()
@@ -251,8 +254,11 @@ export class CurateModel {
     else if (this.fileHeld === null || !this.fileHeld.counted) this.countFile()
     this.staleHeld = false
     this.errorHeld = null
-    if (first) this.orderHeld = this.freshOrder(answer)
+    // The order is laid out on the first answer, and again on the first that
+    // read the contacts; kept across steps from then on.
+    if (first || (answer.counted && !this.laidOut)) this.orderHeld = this.freshOrder(answer)
     else this.orderHeld = this.keptOrder(answer)
+    if (answer.counted) this.laidOut = true
     this.previousOwner = Array.from(answer.genomeOf, (g) => (g < 0 ? null : answer.genomes[g].id))
     this.previousKind = new Map(answer.genomes.map((genome) => [genome.id, genome.kind]))
     this.pruneSelection(answer)
@@ -363,8 +369,8 @@ export class CurateModel {
   }
 
   /**
-   * Lay the genomes out afresh, densest pairs side by side (`curate/order.ts`):
-   * *tidy*, asked for — never after a step, so nothing moves under the hand.
+   * Lay the genomes out again, densest pairs side by side (`curate/order.ts`):
+   * asked for — never after a step, so nothing moves under the hand.
    */
   tidy(): void {
     if (this.answerHeld === null) return
@@ -373,13 +379,14 @@ export class CurateModel {
   }
 
   /**
-   * The order the stage opens on: the file's — MAGs, then elements, each in
-   * the file's order, a genome a step created after them. A binner's sibling
-   * bins are neighbours there (metaTOR's `…_00700_00001`, `…_00700_00002`), and
-   * it is the order the reader knows.
+   * The order the stage opens on: the MAGs chained so the genomes that meet
+   * densely are neighbours, each element beside the MAG it meets most
+   * (`curate/order.ts`) — on MM133 the five organisms the binner left in
+   * pieces each one block, where the file's order joins one. Before the
+   * contacts are read, the file's: MAGs, then elements.
    */
   private freshOrder(answer: CurationStateResult): string[] {
-    return answer.genomes.map((genome) => genome.id)
+    return answer.counted ? this.chainedOrder(answer) : answer.genomes.map((genome) => genome.id)
   }
 
   private chainedOrder(answer: CurationStateResult): string[] {
@@ -727,7 +734,8 @@ export class CurateModel {
   /** Rename a genome; refused, with the reason, for a name {@link nameRefusal} refuses. */
   rename(id: string, name: string): string | null {
     const wanted = name.trim()
-    const refused = nameRefusal(wanted, this.answerHeld?.genomes.filter((genome) => genome.id !== id).map((genome) => genome.name) ?? [])
+    this.contigNames ??= new Set(this.store.file.names)
+    const refused = nameRefusal(wanted, this.answerHeld?.genomes.filter((genome) => genome.id !== id).map((genome) => genome.name) ?? [], this.contigNames)
     if (refused !== null) return refused
     if (this.genome(id)?.name === wanted) return null
     this.store.apply({ op: 'rename', genome: id, name: wanted })
@@ -818,12 +826,14 @@ export class CurateModel {
  * genome* by (`NA`, `nan`, `-1`, `__unbinned__`, …, in any case) would be read
  * by `metacooler reassign` as the pool.
  */
-export function nameRefusal(name: string, others: readonly string[]): string | null {
+export function nameRefusal(name: string, others: readonly string[], contigs?: ReadonlySet<string>): string | null {
   if (name === '') return 'A genome needs a name.'
   if (UNBINNED_WORDS.has(name.toLowerCase())) return `${name} is how a table says unbinned: metacooler would read this genome as none.`
   if (/[^\x21-\x7e]/.test(name)) return 'Names go to metacooler, which takes ASCII letters, digits and signs, without spaces.'
   if (name.includes(',')) return 'A name holds no comma: metaTOR lists genomes with them.'
+  if (name.includes(':')) return 'A name holds no colon: a locus box would read it as a place.'
   if (others.includes(name)) return `Another genome is named ${name}.`
+  if (contigs?.has(name) === true) return `A contig is named ${name}: the genome would hide it in every box that finds a place.`
   return null
 }
 

@@ -58,7 +58,8 @@ describe('the genome list', () => {
   it('shows the MAGs, the elements and the pool, a genome’s numbers on its row', async () => {
     await mount()
     expect(textsOf(document.body, '.curate-row-section .curate-section-title')).toEqual(['MAGs', 'elements', 'unbinned'])
-    expect(names()).toEqual(['X1', 'X2', 'Y', 'Z', 'P', 'u0'])
+    // The MAGs in the stage's order: the two halves of X side by side.
+    expect(names()).toEqual(['Y', 'X1', 'X2', 'Z', 'P', 'u0'])
     expect(row('g:Z').querySelector('.curate-row-complete')?.textContent).toBe('100%')
     expect(row('g:P').querySelector('.curate-row-hosts')?.textContent).toBe('→ Z')
   })
@@ -81,7 +82,7 @@ describe('the genome list', () => {
     press(row('g:X2'))
     key('ArrowRight')
     await frame()
-    expect(names()).toEqual(['X1', 'X2', 'x3', 'x4', 'x5', 'Y', 'Z', 'P', 'u0'])
+    expect(names()).toEqual(['Y', 'X1', 'X2', 'x3', 'x4', 'x5', 'Z', 'P', 'u0'])
     const box = document.querySelector('.curate-filter') as HTMLInputElement
     box.value = 'y5'
     box.dispatchEvent(new Event('input'))
@@ -104,7 +105,8 @@ describe('the genome list', () => {
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     await model.settled()
     await frame()
-    expect(names()[0]).toBe('Xanthomonas')
+    expect(names()).toContain('Xanthomonas')
+    expect(names()).not.toContain('X1')
   })
 
   it('drags a contig row onto a genome: the step a drop makes', async () => {

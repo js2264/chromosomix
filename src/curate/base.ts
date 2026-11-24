@@ -4,13 +4,20 @@
  *
  * - The **genomes** are `/genomes` but the pool, `__unbinned__`, which is matched
  *   by name and never by index (§7.4).
- * - A genome is an **element** when its `mge` column says `True`, or its name is
- *   a cluster's of metaTOR's round `mge`; a MAG otherwise.
- * - The clusters of round `mge` are elements **even where the file did not make
- *   them genomes**: their contigs are the element's, out of whatever genome
- *   holds them, as `metator host` counts them — so the binning is exclusive from
- *   the first step.
- * - The **host links** are round `mge`'s `hosts`, else every MAG's `mges` column.
+ * - Where `/genomes` has an `mge` column, it says which genomes are
+ *   **elements** — `True` — and nothing else does: it is what `metator mge
+ *   --reassign` writes and what a curation's `genomes` table sets after a
+ *   `metacooler reassign`, which carries metaTOR's clustering rounds unchanged.
+ *   Read from the rounds too, a reassigned map would bring back elements the
+ *   curation had merged away.
+ * - Without the column, an element is a genome named after a cluster of
+ *   metaTOR's round `mge`, and the round's clusters are elements **even where
+ *   the file did not make them genomes**: their contigs are the element's, out
+ *   of whatever genome holds them, as `metator host` counts them — so the
+ *   binning is exclusive from the first step.
+ * - The **host links** are every MAG's `mges` column where `/genomes` has one —
+ *   metaTOR writes it with the round's hosts, and a curation's table sets it —
+ *   else round `mge`'s `hosts`.
  * - With them, what the stage draws and weighs per contig: its GC content, where
  *   the map has one, and its marker genes under each set `metator markers`
  *   stored, with the sets' markers and weights from the map's metadata.
@@ -65,12 +72,14 @@ function readBinning(mc: MetaCooler): FileBinningRead {
   const genomeNames = mc.genomeNames
   const full = mc.fullGenomes()
   const flagged = new Set<string>()
-  if (full !== null && full.columns.includes('mge')) {
+  // The column, where there is one, is the whole word on which genome is an element.
+  const flags = full !== null && full.columns.includes('mge')
+  if (flags) {
     for (let r = 0; r < full.length; r++) if (textAt(full.get('mge', r)).toLowerCase() === 'true') flagged.add(textAt(full.get('name', r)))
   }
   const clusters = readClusters(mc.handle, names.length)
   const mgeRound = clusters === null ? [] : roundClusters(clusters, MGE_ROUND)
-  const roundNames = new Set(mgeRound.map((cluster) => cluster.name))
+  const roundNames = flags ? new Set<string>() : new Set(mgeRound.map((cluster) => cluster.name))
 
   // The file's genomes, but the pool.
   const genomes: Array<{ name: string; kind: GenomeKind }> = []
@@ -85,9 +94,10 @@ function readBinning(mc: MetaCooler): FileBinningRead {
   const genomeOf = new Int32Array(names.length)
   for (let c = 0; c < names.length; c++) genomeOf[c] = fileIds[c] >= 0 ? fileToBase[fileIds[c]] : -1
 
-  // Round mge's clusters the file did not make genomes: elements all the same.
+  // Round mge's clusters the file did not make genomes: elements all the same —
+  // but only where the genomes do not flag their elements themselves.
   let fromRoundOnly = 0
-  for (const cluster of mgeRound) {
+  for (const cluster of flags ? [] : mgeRound) {
     let g = indexOf.get(cluster.name)
     if (g === undefined) {
       g = genomes.length
@@ -110,13 +120,13 @@ function readBinning(mc: MetaCooler): FileBinningRead {
     seen.add(key)
     links.push({ element, mag })
   }
-  if (clusters !== null && clusters.table.columns.includes('hosts')) {
-    for (const cluster of mgeRound) for (const host of textAt(clusters.table.get('hosts', cluster.row)).split(',')) if (host.trim() !== '') addLink(cluster.name, host.trim())
-  } else if (full !== null && full.columns.includes('mges')) {
+  if (full !== null && full.columns.includes('mges')) {
     for (let r = 0; r < full.length; r++) {
       const mag = textAt(full.get('name', r))
       for (const element of textAt(full.get('mges', r)).split(',')) if (element.trim() !== '') addLink(element.trim(), mag)
     }
+  } else if (clusters !== null && clusters.table.columns.includes('hosts')) {
+    for (const cluster of mgeRound) for (const host of textAt(clusters.table.get('hosts', cluster.row)).split(',')) if (host.trim() !== '') addLink(cluster.name, host.trim())
   }
 
   const base: BaseBinning = { names, lengths, genomeOf, genomes, links }
@@ -153,10 +163,29 @@ function readMarkers(mc: MetaCooler, contigs: ReturnType<MetaCooler['fullContigs
     const { markers, weights } = value as Record<string, unknown>
     if (!Array.isArray(markers) || !Array.isArray(weights) || markers.length !== weights.length) continue
     if (!markers.every((m) => typeof m === 'string') || !weights.every((w) => typeof w === 'number' && Number.isFinite(w))) continue
-    const column = `markers_${name}`
+    // The column the entry names, else the one `metator markers` writes.
+    const named = (value as Record<string, unknown>)['column']
+    const column = typeof named === 'string' && named !== '' ? named : `markers_${name}`
     if (!contigs.columns.includes(column)) continue
     const set: MarkerSet = { name, markers: markers as string[], weights: weights as number[] }
-    out.push(markerTable(set, contigs.strings(column)))
+    out.push(markerTable(set, markerTexts(contigs, column)))
   }
   return out
 }
+
+/**
+ * A marker column's texts. A set with no marker on any contig is stored by
+ * metacooler as a number column, every value missing: no contig has a marker.
+ */
+function markerTexts(contigs: ReturnType<MetaCooler['fullContigs']>, column: string): string[] {
+  try {
+    return contigs.strings(column)
+  } catch (error) {
+    // Not text: a number column with nothing in it is a set no contig has; any
+    // other is not a marker column at all.
+    const values = contigs.numbers(column)
+    if (values.every((v) => !Number.isFinite(v))) return new Array<string>(contigs.length).fill('')
+    throw error
+  }
+}
+
