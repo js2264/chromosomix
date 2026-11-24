@@ -18,7 +18,7 @@
 
 import type { StageInk } from '../../edit/draw'
 import { readInk } from '../../edit/draw'
-import { POOL_COLOUR, POOL_RGBA, genomeColour, slotOf, type GenomeColour } from '../colours'
+import { POOL_COLOUR, POOL_RGBA, genomeColour, slotApart, slotOf, type GenomeColour } from '../colours'
 import { CurateModel, displayPercent, type Cancellable, type CurateChange, type CurateClient } from '../model'
 import { sharedPrefix, shortName } from '../names'
 import { newlyDuplicated, priceLines, priceOf, priceVerdict } from '../price'
@@ -331,7 +331,18 @@ export class CurateStage {
         const key = `${kind}\t${id}`
         const held = colours.get(key)
         if (held !== undefined) return held
-        const colour = genomeColour(slotOf(fileIndex.get(id) ?? -1, id, fileGenomes.length), kind, isDark)
+        let slot = slotOf(fileIndex.get(id) ?? -1, id, fileGenomes.length)
+        // A genome a step made is laid beside the genome its contigs came from:
+        // its hue stands apart from its neighbours' (`colours.ts`).
+        if (!fileIndex.has(id)) {
+          const order = stage.model.order
+          const at = order.indexOf(id)
+          const near = [order[at - 1], order[at + 1]]
+            .filter((other): other is string => at >= 0 && other !== undefined)
+            .map((other) => slotOf(fileIndex.get(other) ?? -1, other, fileGenomes.length))
+          slot = slotApart(slot, near)
+        }
+        const colour = genomeColour(slot, kind, isDark)
         colours.set(key, colour)
         return colour
       },

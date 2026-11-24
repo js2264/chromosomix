@@ -6,7 +6,8 @@
  * darker, the pool in grey.
  *
  * The slot of a genome of the file is its row in the file's genome table; one a
- * step created is after every file genome, by the number its id was minted with.
+ * step created is after every file genome, by the number its id was minted with,
+ * stepped on where its hue would be near its neighbours' ({@link slotApart}).
  */
 
 /** The pool's grey (`render/meta.ts`'s category grey). */
@@ -45,6 +46,27 @@ export function genomeColour(slot: number, kind: 'mag' | 'element', dark = false
 
 /** The pool's colour as packed RGBA. */
 export const POOL_RGBA = ((0xff << 24) | (0x7a << 16) | (0x7a << 8) | 0x7a) >>> 0
+
+/** How far apart two hues are, in degrees round the wheel: `0`–`180`. */
+export function hueDistance(a: number, b: number): number {
+  const d = Math.abs(a - b) % 360
+  return Math.min(d, 360 - d)
+}
+
+/**
+ * A slot stepped on until its hue stands at least `least` degrees from every
+ * slot `near` it — a genome a step creates is laid beside the genome its
+ * contigs came from, and a golden angle at a Fibonacci gap is a degree away
+ * (slots 34 and 178 on MM133). Twelve steps at most: the golden angle has
+ * found a free hue long before.
+ */
+export function slotApart(slot: number, near: readonly number[], least = 30): number {
+  for (let k = 0; k < 12; k++) {
+    const hue = slotHue(slot + k)
+    if (near.every((other) => hueDistance(hue, slotHue(other)) >= least)) return slot + k
+  }
+  return slot
+}
 
 /**
  * A genome's slot: the file genome's row, or — for one a step created, whose id

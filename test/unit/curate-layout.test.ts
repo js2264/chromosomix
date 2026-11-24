@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { chainOrder, elementOrder, keepOrder, type PairList } from '../../src/curate/order'
-import { genomeColour, hslToRgba, slotHue, slotOf } from '../../src/curate/colours'
+import { genomeColour, hslToRgba, hueDistance, slotApart, slotHue, slotOf } from '../../src/curate/colours'
 import { coverageTicks, DotGrid, dotRadius, drawOrder, gcTicks, insidePolygon, lassoContigs, scatterFrame, scatterPlaces } from '../../src/curate/scatter'
 
 /** Five MAGs: 0, 3 and 4 one organism's fragments, 1 and 2 another's; 0 and 1 barely meet. */
@@ -99,6 +99,18 @@ describe('the colours', () => {
   it('give a created genome a slot after the file’s, by the number in its id', () => {
     expect(slotOf(5, 'A', 50)).toBe(5)
     expect(slotOf(-1, 'curated_3', 50)).toBe(53)
+  })
+
+  it('step a created genome’s slot on until its hue stands apart from its neighbours’', () => {
+    // On MM133 a MAG made of slot 34's contigs would get slot 178: a degree away.
+    expect(hueDistance(slotHue(178), slotHue(34))).toBeLessThan(5)
+    const apart = slotApart(178, [34])
+    expect(apart).toBeGreaterThan(178)
+    expect(hueDistance(slotHue(apart), slotHue(34))).toBeGreaterThanOrEqual(30)
+    // Far enough already, kept; with no neighbour, kept.
+    expect(slotApart(1, [0])).toBe(1)
+    expect(slotApart(178, [])).toBe(178)
+    expect(hueDistance(350, 10)).toBe(20)
   })
 })
 

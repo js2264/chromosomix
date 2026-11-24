@@ -17363,8 +17363,9 @@ suggestions first in review and in auto. Every column keeps its width per file.
 **One selection, one hover**, in every part: whole genomes, or contigs, one kind at a time; a press
 selects, ⌘/Ctrl toggles, ⇧ extends. The genome under the pointer is lit in the list, the maps and
 the scatter at once. Every genome keeps one colour everywhere — a hue a golden angle from the last,
-by its row in the file's genomes (a created one after them), darker for an element, grey for the
-pool — so a merge or a sort changes none. A binner's long shared prefix is printed once, in its
+by its row in the file's genomes (a created one after them, stepped on where its hue would stand
+within 30° of a neighbour's), darker for an element, grey for the pool — so a merge or a sort
+changes none. A binner's long shared prefix is printed once, in its
 section's head (`MM133_metator_…`), and each genome by the rest (`00700_00001`); titles, exports and
 the history keep the whole name.
 
