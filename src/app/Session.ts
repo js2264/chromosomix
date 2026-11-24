@@ -42,6 +42,7 @@ import { CurationStore, keptCuration } from '../state/curation'
 import { CuratedBinning, curationFingerprint, type Curation } from '../genome/curation'
 import { carryGenomeView } from '../curate/places'
 import { CurationChip } from '../curate/CurationChip'
+import { exportStem } from '../edit/ExportCard'
 import { DEFAULT_UI_COLORMAP } from '../render/colormaps'
 import { ManualStore, type ManualMark } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
@@ -5995,9 +5996,12 @@ export class Session {
     if (held === null) return undefined
     const steps = curationFingerprint(held)
     const store = this.curationHeld?.key === key ? this.curationHeld.store : null
+    // One the store refused — kept for another binning of the file — is held
+    // untouched, never drawn (§33.2).
+    if (store !== null && store.refusal !== null) return undefined
     // The store folds the kept curation over the file's binning: its binning's
     // fingerprint is the reader's, where the two are the one history.
-    if (store !== null && store.refusal === null && curationFingerprint(store.curation) === steps) {
+    if (store !== null && curationFingerprint(store.curation) === steps) {
       return { key: store.binning.fingerprint(), held }
     }
     // A history the reader has folded before, by the binning it answered; one
@@ -6047,22 +6051,67 @@ export class Session {
   curateStage: { close(): void } | null = null
 
   /**
-   * Open the curation stage on the metagenome on screen (§33.3).
-   *
-   * TODO(§33.3): the stage itself is being built beside this (`curate/`): it is
-   * opened here with the store from {@link curationStore}, sets
-   * {@link curateStage}, and on closing clears it, syncs the chip, calls
-   * `host.sessionChanged(this)` and then {@link redrawThroughLenses}. Until it
-   * lands this opens nothing and says so on the console.
+   * Open the curation stage on the metagenome on screen (§33.3), with the store
+   * from {@link curationStore}; held as {@link curateStage} while it opens, so a
+   * second press opens nothing. Closing it clears it, syncs the heading's word,
+   * says the session changed and redraws the session through the curation
+   * (§33.4).
    *
    * @internal SessionCommands and the heading's word on the genomes open it.
    */
   async openCurateStage(): Promise<void> {
     if (!devFeature('curate') || !devFeature('metacool') || !this.isMetacool) return
     if (this.curateStage !== null || this.editStage !== null) return
+    const file = this.file
+    const reader = this.reader
+    if (file === null || reader === null) return
+    const opening = { close: () => {} }
+    this.curateStage = opening
     const store = await this.curationStore().catch(() => null)
-    if (store === null || this.destroyed) return
-    console.info('chromosomix: the curation stage is not built yet (§33.3)', { steps: store.applied })
+    if (store === null || this.destroyed || this.file !== file || this.curateStage !== opening) {
+      if (this.curateStage === opening) this.curateStage = null
+      return
+    }
+    // The stage and its parts are their own chunk: a session that never curates
+    // never loads them.
+    const [{ openCurationStage }, { curateParts }] = await Promise.all([import('../curate/ui/open'), import('../curate/ui/parts')])
+    if (this.destroyed || this.file !== file || this.curateStage !== opening) {
+      if (this.curateStage === opening) this.curateStage = null
+      return
+    }
+    const title = this.mapLabel(file.uri)
+    try {
+      const stage = await openCurationStage({
+        title,
+        stem: exportStem(title),
+        store,
+        reader,
+        sourceKind: file.info.sourceKind,
+        sourceBytes: file.info.sourceBytes ?? null,
+        parts: curateParts,
+        memoryKey: () => this.sessionKey() ?? file.uri,
+        onClose: () => {
+          this.curateStage = null
+          this.curationChip?.sync()
+          this.host.sessionChanged(this)
+          void this.redrawThroughLenses()
+        },
+      })
+      if (stage === null) {
+        this.curateStage = null
+        return
+      }
+      if (this.curateStage !== opening || this.destroyed) {
+        stage.close()
+        return
+      }
+      this.curateStage = stage
+    } catch (error) {
+      if (this.curateStage === opening) this.curateStage = null
+      console.error('chromosomix: the curation stage could not open', error)
+      return
+    }
+    this.host.sessionChanged(this)
   }
 
   /** The file's binning back: every step undone, and kept to be redone (§33.4). */
