@@ -116,7 +116,8 @@ console.log('history:', await history())
 
 // A host question in review: → until the band asks one, the host map large.
 for (let k = 0; k < 80; k++) {
-  if (/^review.*\b(link|unlink)\b/.test((await band()) ?? '')) break
+  // The question's own words: the band's spans run together in its text.
+  if (/^(link|unlink) /.test((await text('.curate-band-words')) ?? '')) break
   await page.keyboard.press('ArrowRight')
   await sleep(120)
 }
