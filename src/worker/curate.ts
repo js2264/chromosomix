@@ -1,0 +1,183 @@
+/**
+ * The curation stage's requests, answered in the reader's worker (SPECS §33):
+ * the file's binning, the contig network's pass, the method's state after each
+ * step, and a close-up's contacts.
+ *
+ * **What is kept outlives a session.** Closing the stage re-opens the file
+ * through the new curation, as a change of resolution re-opens it (§33.4), and a
+ * session's fields go with it — so the binning read and the network are kept
+ * here, at module scope, by the file they were read from: the map's URI, its
+ * contigs and its stored pixels. A pass of seven million pixels is not paid
+ * again for a re-open that changed nothing of them.
+ *
+ * Thin handlers over pure modules (`curate/base.ts`, `curate/network.ts`,
+ * `curate/suggest.ts`): this one only reads, keeps and copies.
+ */
+
+import { CuratedBinning } from '../genome/curation'
+import type { MetaCooler } from '../metacooler/MetaCooler'
+import { readFileBinning, type FileBinningRead } from '../curate/base'
+import { background, tally, visibility } from '../curate/method'
+import { binContigs, NetworkBuilder } from '../curate/network'
+import { curationState, methodBinning, neighbourLists, type CurationEvidence } from '../curate/suggest'
+import type { CurationBaseResult, CurationFocusResult, CurationNetworkResult, CurationRequest, CurationStateResult } from './curateProtocol'
+
+/** What one file's curation keeps. */
+interface Held {
+  key: string
+  read: FileBinningRead
+  evidence: CurationEvidence | null
+  summary: CurationNetworkResult | null
+}
+
+let held: Held | null = null
+
+/** The file a map is read from, as what is kept is keyed: its URI, contigs and pixels. */
+function fileKey(mc: MetaCooler): string {
+  return `${mc.uri}\u0000${mc.nContigs}\u0000${mc.nnz}`
+}
+
+/** The kept read of this file, made on the first ask. */
+function keptRead(mc: MetaCooler): Held {
+  const key = fileKey(mc)
+  if (held === null || held.key !== key) held = { key, read: readFileBinning(mc), evidence: null, summary: null }
+  return held
+}
+
+/** Forget what is kept: on `close`, and before a file of another key is read. */
+export function releaseCuration(): void {
+  held = null
+}
+
+/** The scan's hooks, as `reader.worker.ts`'s `scanHooks` makes them. */
+export interface CurationHooks {
+  cancelled(): boolean
+  onProgress(done: number, total: number, note?: string): void
+  pause?: () => Promise<void>
+}
+
+export function handleCurationBase(mc: MetaCooler): CurationBaseResult {
+  if (!mc.hasGenomes) throw new Error('Only a metagenome has a binning to curate.')
+  const kept = keptRead(mc)
+  const { base, file, elements, gc, markers } = kept.read
+  // Copies: what is posted is moved out of this worker, and these are kept.
+  return {
+    base: { ...base, genomeOf: base.genomeOf.slice(), names: [...base.names], lengths: [...base.lengths], genomes: base.genomes.map((g) => ({ ...g })), links: base.links.map((l) => ({ ...l })) },
+    file,
+    elements,
+    gc: gc === null ? null : gc.slice(),
+    markerSets: markers.map((table) => table.set.name),
+    pixels: mc.nnz,
+    networkHeld: kept.evidence !== null,
+  }
+}
+
+/**
+ * The contig network's pass: every stored pixel of the file once, in file
+ * order, summed by pair of contigs (§33.5). Cancelled as every scan is; a
+ * partial network is never kept.
+ */
+export async function handleCurationNetwork(mc: MetaCooler, hooks: CurationHooks, abort: () => Error): Promise<CurationNetworkResult> {
+  const kept = keptRead(mc)
+  if (kept.evidence !== null && kept.summary !== null) return { ...kept.summary }
+  const builder = new NetworkBuilder(binContigs(chromOffsetOf(mc)), mc.nContigs)
+  await mc.storedPixels.scanAll({
+    onChunk: (chunk) => {
+      if (hooks.cancelled()) return false
+      builder.add(chunk.bin1, chunk.bin2, chunk.count, chunk.length)
+      return true
+    },
+    onProgress: (done, all) => hooks.onProgress(done, all, 'reading every contact between contigs'),
+    ...(hooks.pause === undefined ? {} : { pause: hooks.pause }),
+  })
+  if (hooks.cancelled()) throw abort()
+  const network = builder.finish()
+  const t = visibility(network)
+  const binning = CuratedBinning.of(kept.read.base, null)
+  const method = methodBinning(binning)
+  const bg = background(tally(network, t, method), method.kinds)
+  kept.evidence = {
+    network,
+    visibility: t,
+    ...neighbourLists(network),
+    markers: kept.read.markers,
+    background: bg,
+    names: kept.read.base.names,
+    lengths: kept.read.base.lengths,
+  }
+  let within = 0
+  for (let c = 0; c < network.contigs; c++) within += network.within[c]
+  let between = 0
+  for (let k = 0; k < network.contacts.length; k++) between += network.contacts[k]
+  kept.summary = { contigs: network.contigs, pairs: network.first.length, pixels: builder.pixels, within, between, background: bg }
+  return { ...kept.summary }
+}
+
+/** Each contig's first bin, and the bins' end: `chrom_offset`, from the map's own coordinates. */
+function chromOffsetOf(mc: MetaCooler): Float64Array {
+  const out = new Float64Array(mc.nContigs + 1)
+  for (let c = 0; c < mc.nContigs; c++) {
+    const [lo, hi] = mc.coords.contigBinExtent(c)
+    out[c] = lo
+    out[c + 1] = hi
+  }
+  return out
+}
+
+function evidenceOf(mc: MetaCooler): { kept: Held; evidence: CurationEvidence } {
+  const kept = keptRead(mc)
+  if (kept.evidence === null) throw new Error('The contig network has not been read: the stage reads it first.')
+  return { kept, evidence: kept.evidence }
+}
+
+export function handleCurationState(mc: MetaCooler, request: Extract<CurationRequest, { kind: 'curationState' }>): CurationStateResult {
+  const { kept, evidence } = evidenceOf(mc)
+  const binning = CuratedBinning.of(kept.read.base, request.curation)
+  const state = curationState(evidence, binning, request.weights ?? {})
+  return {
+    fingerprint: binning.fingerprint(),
+    genomes: binning.genomes.map((genome, g) => ({
+      id: genome.id,
+      name: genome.name,
+      kind: genome.kind,
+      asInFile: genome.asInFile,
+      contigs: genome.contigs.length,
+      length: genome.contigs.reduce((sum, c) => sum + evidence.lengths[c], 0),
+      within: state.tally.within[g],
+      visibility: state.tally.visibility[g],
+      quality: state.quality[g] ?? null,
+    })),
+    genomeOf: binning.genomeOf.slice(),
+    links: binning.links.map((link) => ({ ...link })),
+    pairs: state.pairs,
+    hosts: state.hosts,
+    contigs: state.contigs,
+    suggestions: state.suggestions,
+  }
+}
+
+export function handleCurationFocus(mc: MetaCooler, request: Extract<CurationRequest, { kind: 'curationFocus' }>): CurationFocusResult {
+  const { evidence } = evidenceOf(mc)
+  const contigs = Int32Array.from(request.contigs)
+  const at = new Map<number, number>()
+  contigs.forEach((c, k) => at.set(c, k))
+  const i: number[] = []
+  const j: number[] = []
+  const contacts: number[] = []
+  contigs.forEach((c, k) => {
+    for (let n = evidence.offsets[c]; n < evidence.offsets[c + 1]; n++) {
+      const other = at.get(evidence.neighbours[n])
+      if (other === undefined || other <= k) continue
+      i.push(k)
+      j.push(other)
+      contacts.push(evidence.counts[n])
+    }
+  })
+  return {
+    contigs,
+    i: Int32Array.from(i),
+    j: Int32Array.from(j),
+    contacts: Float64Array.from(contacts),
+    within: Float64Array.from(contigs, (c) => evidence.network.within[c]),
+  }
+}

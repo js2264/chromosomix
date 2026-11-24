@@ -34,6 +34,7 @@ import type { ReadPlan } from '../sources/RemoteRangeSource'
 import type { Column, Extent, Info, Layout, ParsedRange, SourceStats, Table } from '../types'
 import type { Census, ResampleMode } from '../metacooler/resample'
 import type { PairStats } from '../pairs/stats'
+import type { CurationRequest, CurationResults } from './curateProtocol'
 
 // ---------------------------------------------------------------------------
 // Byte sources
@@ -869,7 +870,7 @@ export interface StatsResult {
 }
 
 /** Every request kind, mapped to what it resolves with. */
-export interface ResultMap {
+export interface ResultMap extends CurationResults {
   open: OpenResult
   genomes: GenomesResult
   contigs: ContigsResult
@@ -1204,6 +1205,7 @@ export type WorkerRequest =
       /** The contigs of one genome's edit, by name (§27.10). */
       contigs: string[]
     }
+  | CurationRequest
   | { id: number; kind: 'cancel'; target: number }
   | { id: number; kind: 'close' }
 

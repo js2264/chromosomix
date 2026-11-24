@@ -88,6 +88,7 @@ import { openMap } from './open'
 import { LOAD_REPORT_MS, startBusyProbe } from '../perf/busy'
 import { Foreground } from './foreground'
 import { resolutionLabel } from '../units'
+import { handleCurationBase, handleCurationFocus, handleCurationNetwork, handleCurationState, releaseCuration } from './curate'
 
 /**
  * `lib` includes both DOM and WebWorker, so `self` is typed as a window here.
@@ -364,6 +365,16 @@ function scanHooks(id: number): {
     onProgress: (done, total, note) =>
       post(note === undefined ? { type: 'progress', id, done, total } : { type: 'progress', id, done, total, note }),
   }
+}
+
+/**
+ * The map the curation's requests read (§33): the file as it is, never through
+ * a lens — the curation's own included — since a curation is made against the
+ * file's binning and its network is counted by the file's contigs.
+ */
+function curatedFrom(): MetaCooler {
+  const open = requireSession().mc
+  return open.unlensed ?? open
 }
 
 /** Raised when the user cancels a scan; the client maps it to a quiet no-op. */
@@ -2343,10 +2354,25 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleRefine(request)
     case 'genomeLinks':
       return handleGenomeLinks(request)
+    case 'curationBase':
+      return handleCurationBase(curatedFrom())
+    case 'curationNetwork': {
+      const hooks = scanHooks(request.id)
+      return handleCurationNetwork(
+        curatedFrom(),
+        request.background === true ? { ...hooks, pause: () => foreground.quiet(hooks.cancelled) } : hooks,
+        abortError,
+      )
+    }
+    case 'curationState':
+      return handleCurationState(curatedFrom(), request)
+    case 'curationFocus':
+      return handleCurationFocus(curatedFrom(), request)
     case 'cancel':
       cancelled.add(request.target)
       return null
     case 'close':
+      releaseCuration()
       releaseRungs(session)
       session?.mc.close()
       session = null

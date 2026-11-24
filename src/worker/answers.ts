@@ -69,6 +69,10 @@ const NEUTRAL: ReadonlySet<RequestKind> = new Set<RequestKind>([
   'suggest',
   'refine',
   'genomeLinks',
+  'curationBase',
+  'curationNetwork',
+  'curationState',
+  'curationFocus',
   'cancel',
 ])
 
