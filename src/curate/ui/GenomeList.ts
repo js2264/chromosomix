@@ -198,8 +198,8 @@ export class GenomeList {
   }
 
   /** Whether an element is in the list: the stage routes its keys here first. */
-  contains(node: Node | null): boolean {
-    return node !== null && this.element.contains(node)
+  contains(node: EventTarget | null): boolean {
+    return node instanceof Node && this.element.contains(node)
   }
 
   dispose(): void {
