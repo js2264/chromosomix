@@ -13,7 +13,7 @@
  * later step.
  */
 
-import { UNBINNED, withCurationStep, type Curation, type CurationStep, type GenomeKind } from '../genome/curation'
+import { UNBINNED_WORDS, withCurationStep, type Curation, type CurationStep, type GenomeKind } from '../genome/curation'
 import type { CurationLearned, CurationStore, LearnedKind } from '../state/curation'
 import type { CurationStateResult } from '../worker/curateProtocol'
 import { AUTO_THRESHOLD, INITIAL_WEIGHTS, learn, LIKELY, OFFER_FLOOR } from './method'
@@ -940,8 +940,6 @@ export function nameRefusal(name: string, others: readonly string[], contigs?: R
   return null
 }
 
-/** The words a contigs table means *no genome* by (metacooler's `_UNBINNED_SENTINELS`). */
-const UNBINNED_WORDS = new Set([UNBINNED.toLowerCase(), 'na', 'nan', 'n/a', 'nd', 'n/d', '-1'])
 
 /** Where each kind is answered in the queue: what changes the most first. */
 const KIND_RANK: Record<Suggestion['kind'], number> = { merge: 0, move: 1, recruit: 2, link: 3, unlink: 3 }

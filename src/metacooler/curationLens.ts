@@ -33,7 +33,7 @@
  * and left empty for any other, since a completeness or a taxonomy measured on
  * other contigs describes a genome that is no longer there; metaTOR's `mge`,
  * `n_mges` and `mges` written again from the curated kinds and links; the
- * `qc_*` tallies dropped, as `reassign` drops them; and where the map holds the
+ * `qc_*` tallies dropped (`reassign` measures them again from the pixels); and where the map holds the
  * contigs' marker genes, miComplete's four numbers recomputed for every MAG.
  * The `/contigs` columns are every one of the file's, carried with their
  * contigs, and a weight that depends on the assignment is hidden.

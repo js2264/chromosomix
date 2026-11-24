@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  acceptableName,
   CuratedBinning,
   curationFingerprint,
   curationMismatch,
@@ -178,8 +179,9 @@ describe('the history', () => {
     const andBack = curated({ op: 'move', contigs: ['c6'], to: 'A' }, { op: 'move', contigs: ['c6'], to: null })
     expect(andBack.fingerprint()).toBe(CuratedBinning.of(BASE, null).fingerprint())
     expect(there.fingerprint()).not.toBe(andBack.fingerprint())
-    // A link moves no contact.
-    expect(curated({ op: 'unlink', element: 'E', mag: 'A' }).fingerprint()).toBe(CuratedBinning.of(BASE, null).fingerprint())
+    // A link moves no contact, but the map's metaTOR columns are written from
+    // the links: a binning linked otherwise is another map.
+    expect(curated({ op: 'unlink', element: 'E', mag: 'A' }).fingerprint()).not.toBe(CuratedBinning.of(BASE, null).fingerprint())
     const one = withCurationStep(emptyCuration(fileBinning(BASE)), { op: 'dissolve', genome: 'B' }, 'reader', 0)
     expect(curationFingerprint(curationUndone(withCurationStep(one, { op: 'dissolve', genome: 'A' }, 'reader', 1)))).toBe(curationFingerprint(one))
   })
@@ -211,5 +213,53 @@ describe('a kept curation', () => {
     expect(readCuration({ ...curation, version: 2 })).toBeNull()
     expect(readCuration({ ...curation, original: { ...curation.original, genomes: [{ name: 'A', contigs: 3, kind: 'plasmid' }] } })).toBeNull()
     expect(readCuration({ ...curation, cursor: 99 })?.cursor).toBe(1)
+  })
+})
+
+describe('a curation from outside', () => {
+  const BASE_OUT = {
+    names: ['c0', 'c1', 'c2'],
+    lengths: [3000, 2000, 1000],
+    genomeOf: Int32Array.from([0, 0, 1]),
+    genomes: [
+      { name: 'A', kind: 'mag' as const },
+      { name: 'E', kind: 'element' as const },
+    ],
+    links: [],
+  }
+
+  it('skips a step of a known op and the wrong shape, as it skips an op it does not know', () => {
+    const steps = [
+      { op: 'move', contigs: null, to: 'A' },
+      { op: 'merge', into: 'A', genomes: 7 },
+      { op: 'create', id: 'x' },
+      { op: 'rename', genome: 'A', name: 'Alpha' },
+    ] as unknown as CurationStep[]
+    let curation = emptyCuration(fileBinning(BASE_OUT))
+    for (const step of steps) curation = withCurationStep(curation, step, 'reader', 0)
+    const binning = CuratedBinning.of(BASE_OUT, curation)
+    expect(binning.genomes.map((genome) => genome.name)).toEqual(['Alpha', 'E'])
+  })
+
+  it('takes no name metacooler would read as no genome, nor a contig’s, and names a created genome otherwise', () => {
+    let curation = emptyCuration(fileBinning(BASE_OUT))
+    for (const step of [
+      { op: 'rename', genome: 'A', name: 'NA' },
+      { op: 'rename', genome: 'A', name: 'c1' },
+      { op: 'rename', genome: 'A', name: 'two words' },
+      { op: 'create', id: 'n1', name: 'n/a', kind: 'mag', contigs: ['c1'] },
+    ] as CurationStep[])
+      curation = withCurationStep(curation, step, 'reader', 0)
+    const binning = CuratedBinning.of(BASE_OUT, curation)
+    expect(binning.genomes.map((genome) => genome.name)).toEqual(['A', 'genome', 'E'])
+    expect(acceptableName('MM133_curated_1')).toBe(true)
+    expect(['', 'nan', '-1', '__UNBINNED__', 'a,b', 'chr:1', 'é'].map(acceptableName)).toEqual([false, false, false, false, false, false, false])
+  })
+
+  it('names a binning linked otherwise by another fingerprint', () => {
+    const plain = CuratedBinning.of(BASE_OUT, null)
+    const linked = CuratedBinning.of(BASE_OUT, withCurationStep(emptyCuration(fileBinning(BASE_OUT)), { op: 'link', element: 'E', mag: 'A' }, 'reader', 0))
+    expect(linked.links.length).toBe(1)
+    expect(linked.fingerprint()).not.toBe(plain.fingerprint())
   })
 })

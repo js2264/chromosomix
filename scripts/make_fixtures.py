@@ -194,7 +194,7 @@ CURATED_MERGED = {"MAG_10": "MAG_09"}
 CURATED_DISSOLVED = {"MAG_04"}
 CURATED_RENAMED = {"MAG_02": "Acinetobacter_X"}
 #: What metacooler reads as no genome, as `create` read basic's table.
-UNBINNED_SENTINELS = {"", "na", "nan", "none", "nd", "n/d", "-1", "__unbinned__"}
+UNBINNED_SENTINELS = {"", "na", "nan", "n/a", "nd", "n/d", "-1", "__unbinned__"}
 
 
 def write_curated_contigs(src: Path, dst: Path) -> None:

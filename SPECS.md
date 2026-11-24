@@ -17324,7 +17324,9 @@ genomes of one kind under the first's name, `dissolve` a genome into the pool, `
 MAG as an element or back (its links go), `link` and `unlink`. Steps name contigs and genome **ids** —
 a genome of the file's stored name, kept through renames; a created one, the id its step minted — so
 a step means what it meant when it was made, and one that no longer applies (a genome merged away, a
-contig the file lacks, an operation a newer build wrote) changes nothing. Each carries who made it —
+contig the file lacks, an operation a newer build wrote, a step of the wrong shape from a link or a
+workspace, a name metacooler would read as no genome) changes nothing: a record handed to the app
+never makes a file fail to open. Each carries who made it —
 the reader, a suggestion, auto mode — when, and for a suggestion what it rested on. **Undo** and
 **redo** move the cursor; a step after an undo drops the steps past it. A **gesture** that makes
 several steps — three genomes dropped on the pool, an element's links taken at once — gives them one
@@ -17479,9 +17481,13 @@ whole map (`test/unit/curation-lens.test.ts`).
 kind, under whatever name — *changed* or *new*. The file's other columns are kept for a genome as in
 the file and left empty for any other: a completeness or a taxonomy measured on other contigs
 describes a genome that is no longer there. metaTOR's `mge`, `n_mges` and `mges` are written again
-from the curated kinds and host links; the `qc_*` tallies are dropped, as `reassign` drops them; and
-where the map holds the contigs' markers, Completeness, Redundancy, Weighted completeness and Weighted
-redundancy are recomputed for every MAG (§33.5), equal to the file's for a MAG as in the file.
+from the curated kinds and host links, so a link changed is a map drawn again; the `qc_*` tallies are
+dropped — `reassign` measures them again from the pixels, which the lens does not —; and where the
+map holds the contigs' markers, Completeness, Redundancy, Weighted completeness and Weighted
+redundancy are recomputed for every MAG (§33.5) from the contigs it holds — the file's own numbers
+for a MAG as in the file, but where the file measured a genome on contigs it no longer holds: on
+MM133, metaTOR's `mge --reassign` moved 29 contigs out of `MM133_metator_00706_00000` after its
+validation, and its redundancy is 1.0192, not the 1.0288 the file says.
 `/contigs` keeps every column with its contig, `genome_id` the curated map's; a `/bins` weight whose
 `depends_on` names `genome_id` is hidden, as `reassign` drops it.
 
@@ -17512,7 +17518,9 @@ binning (§33.2); a map with no genomes; a single-cell file; a map storing both 
 not drawn one through the other.
 
 **Costs.** Building the lens is a sort of the contigs and an array as long as the bins: 66 ms on the
-mock community's 20,566 contigs and 184,984 bins. A genome's map reads its contigs' rows in the file,
+mock community's 20,566 contigs and 184,984 bins, after the file's binning is read (141 ms there,
+on every open and every rung opened again); on two million contigs the read, the fold and the sort
+take seconds, and are not yet made cheaper. A genome's map reads its contigs' rows in the file,
 one band per run of them — a merged genome a band per genome it was made of; the whole map, the
 overview and a task's pass read every pixel, as without a curation; a balanced read takes the weight
 column whole, once.

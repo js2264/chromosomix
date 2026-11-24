@@ -260,6 +260,11 @@ export class CuratedBinning {
     }
     const steps = curation === null ? [] : appliedSteps(curation)
     for (const step of steps) {
+      // A step of the right op and the wrong shape — a link or a workspace
+      // written by hand, or by a build that spells it otherwise — changes
+      // nothing, as an op this build does not know changes nothing: an open
+      // never fails on a record it was given.
+      if (!wellFormed(step)) continue
       switch (step.op) {
         case 'move': {
           if (step.to === null) {
@@ -275,7 +280,7 @@ export class CuratedBinning {
           // An id already taken — a step replayed twice — makes nothing.
           if (slotOf.has(step.id)) break
           const s = slots.length
-          slots.push({ id: step.id, name: freeName(step.name, slots), kind: step.kind === 'element' ? 'element' : 'mag', file: -1, gone: false })
+          slots.push({ id: step.id, name: freeName(acceptableName(step.name) && !contigOf.has(step.name) ? step.name : '', slots), kind: step.kind === 'element' ? 'element' : 'mag', file: -1, gone: false })
           slotOf.set(step.id, s)
           for (const c of contigsNamed(step.contigs)) genomeOf[c] = s
           break
@@ -310,7 +315,8 @@ export class CuratedBinning {
         }
         case 'rename': {
           const s = live(step.genome)
-          if (s === undefined || step.name === '' || step.name === UNBINNED) break
+          // A name metacooler would read as no genome, or a contig's, is not taken.
+          if (s === undefined || !acceptableName(step.name) || contigOf.has(step.name)) break
           if (slots.some((slot, t) => t !== s && !slot.gone && slot.name === step.name)) break
           slots[s].name = step.name
           break
@@ -393,19 +399,65 @@ export class CuratedBinning {
 
   /**
    * A short name for the binning itself — which genome each contig is in, each
-   * genome's id, name and kind — that two histories reaching one binning share:
-   * the lens and a task's framing are keyed by it. The links move no contact
-   * and are left out.
+   * genome's id, name and kind, and the host links — that two histories
+   * reaching one binning share: the lens and a task's framing are keyed by it.
+   * The links move no contact, but the map's metaTOR columns are written from
+   * them, so a binning linked otherwise is another map.
    */
   fingerprint(): string {
     let hash = 2166136261
     for (const genome of this.genomes) hash = fnvHash(`${genome.id}\t${genome.name}\t${genome.kind}\n`, hash)
+    // The links, which move no contact but are the map's metaTOR columns
+    // (`mge`, `n_mges`, `mges`): a binning linked otherwise is drawn again.
+    for (const key of this.links.map((link) => `${link.element}\t${link.mag}`).sort()) hash = fnvHash(`${key}\n`, hash)
     const view = new Uint8Array(this.genomeOf.buffer, this.genomeOf.byteOffset, this.genomeOf.byteLength)
     for (let i = 0; i < view.length; i++) {
       hash ^= view[i]
       hash = Math.imul(hash, 16777619)
     }
     return `${this.genomes.length}:${(hash >>> 0).toString(36)}`
+  }
+}
+
+/** The words a contigs table means *no genome* by (metacooler's `_UNBINNED_SENTINELS`), lower-cased. */
+export const UNBINNED_WORDS: ReadonlySet<string> = new Set([UNBINNED.toLowerCase(), 'na', 'nan', 'n/a', 'nd', 'n/d', '-1'])
+
+/**
+ * Whether a genome may be called `name` in a curation: printable ASCII with no
+ * space (metacooler takes ASCII names), no comma (metaTOR lists genomes with
+ * them), no colon (a locus box would read a place), and none of the words a
+ * table means *no genome* by, in any case.
+ */
+export function acceptableName(name: unknown): name is string {
+  if (typeof name !== 'string' || name === '') return false
+  if (UNBINNED_WORDS.has(name.toLowerCase())) return false
+  return /^[\x21-\x7e]+$/.test(name) && !name.includes(',') && !name.includes(':')
+}
+
+const isText = (value: unknown): value is string => typeof value === 'string'
+const isTexts = (value: unknown): value is string[] => Array.isArray(value) && value.every(isText)
+
+/** Whether a step of a known op has the shape the fold reads; an op it does not know is let through. */
+function wellFormed(step: CurationStep): boolean {
+  const s = step as unknown as Record<string, unknown>
+  switch (step.op) {
+    case 'move':
+      return isTexts(s['contigs']) && (s['to'] === null || isText(s['to']))
+    case 'create':
+      return isText(s['id']) && s['id'] !== '' && isText(s['name']) && isTexts(s['contigs'])
+    case 'merge':
+      return isText(s['into']) && isTexts(s['genomes'])
+    case 'dissolve':
+      return isText(s['genome'])
+    case 'rename':
+      return isText(s['genome']) && isText(s['name'])
+    case 'retype':
+      return isText(s['genome']) && (s['kind'] === 'mag' || s['kind'] === 'element')
+    case 'link':
+    case 'unlink':
+      return isText(s['element']) && isText(s['mag'])
+    default:
+      return true
   }
 }
 
