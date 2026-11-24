@@ -17346,7 +17346,8 @@ contigs when the curation was made and holds 2 here`.
 *Curate the genomes* — the palette's, or a press on the heading's word on the genomes (§33.4) —
 opens a stage on the whole window (`stageDialog`, §27.3's shell), titled `Curate the genomes ·
 <map>`. **Escape never closes it**: it cancels the innermost thing — the keys' sheet, a chooser, a
-drag, a rename, a field's text (and then the field: the keyboard goes back to the list), an auto
+drag, a picture's own press or lasso in flight, a rename, a field's text (and then the field: the
+keyboard goes back to the list), an auto
 run, the selection — and `×` alone closes it, which loses nothing: every step is kept with the file
 as it is made, and the session is redrawn through the curation (§33.4).
 
@@ -17408,7 +17409,8 @@ means *into it* — contigs moved (recruited from the pool), genomes merged unde
 dropped on a MAG **linked** to it; on a section's head or the dock, *a new one* of contigs, or
 genomes made that kind; on the pool, *out* — contigs unbinned, genomes dissolved. A MAG dropped on
 an element is refused and says why. What is dragged follows the pointer with the step a drop there
-would make, and resting on a target draws the pictures as the drop would leave them.
+would make, and resting on a target draws the pictures as the drop would leave them, every step of
+it — two genomes dissolved, three elements linked.
 
 **Names** go to metacooler and metaTOR, and the stage refuses, saying why, an empty one, another
 genome's, a contig's (it would hide the contig in every box that finds a place), one with a space, a
@@ -17439,7 +17441,7 @@ it and why, any that would lower a MAG's grade (`merge 00700_00002 into 00700_00
 00700_00001 contaminated`).
 
 **Keys**, printed on their controls, live while the stage is on top (§26.4): `1 2 3` the large
-picture; `M` merge the selected genomes, or *move to…* the selected contigs, *merge into…* one
+picture — the keys the digits are printed on, whatever the layout types there (AZERTY's bare `&`); `M` merge the selected genomes, or *move to…* the selected contigs, *merge into…* one
 genome — MAGs with MAGs and elements with elements, the readout saying so otherwise; `L` link the
 selected element to the selected MAG, or *link to…* for elements or one MAG; `B` and `E` a new MAG or
 element of the selected contigs, or the selected genomes made one; `Delete` unbins contigs,
@@ -17450,10 +17452,11 @@ button and the arrows move a focused grip, as everywhere (§26.4). An act that w
 contigs moved where they are, the pool's contigs unbinned — makes no step.
 
 **One answer a press.** A question is answered only once the binning it was asked of is counted: Y
-or N pressed while the step just made is counted answers nothing (the band says *weighing…*), and a
-key held down answers once — a question just taken is still in the queue of the binning before it.
-After an answer review moves on: past a question answered whole, to the next along; inside a
-question, to the members left. An undo stops an auto run, and auto asks a question again where a
+or N — or a card's *take* and *turn down* — pressed while the step just made is counted, or after its
+count failed, answers nothing (the band says *weighing…*), and a key held down answers once — a
+question just taken is still in the queue of the binning before it. After an answer review moves on:
+past a question answered whole, to the next along; when part of it was answered — a member stepped
+into, or one taken from its card — to the members left. An undo stops an auto run, and auto asks a question again where a
 step was made while it was priced, never taking one priced on another binning. A genome a step makes
 gets an id never used before (`curated:N`), so what was turned down for one undone never holds for
 the next.
@@ -17604,7 +17607,11 @@ two organisms 1.67 redundant where miComplete says 1.18. *Built* (`curate/qualit
 Each answer is a step of logistic regression on its kind's weights towards it — a tenth of the way,
 pulled back towards the stated weights by 0.15 — as §27.6's: three answers cannot overturn the
 contacts, thirty teach the stage what this file's evidence means. An unlink taken teaches the link's
-weights a link turned down. A question answered teaches each of its members. A suggestion turned
+weights a link turned down. A question answered teaches each of its members. Only the reader's
+answers teach — review's and the cards' — never auto's takes, as §27.6's auto never does: a run would
+otherwise rank what it takes next by what it took, and leave answers nobody gave behind an undo. An
+answer is given only on a binning counted: none while a step is counted or after a count that failed,
+from a key or from a card. A suggestion turned
 down stays turned down after the steps that follow, listed with *offer again*; *forget* puts the
 stated weights back. What was learned is kept per file, apart from the curation
 (`map:curation-learned`), and carried with it in a workspace and a link. *Built* (`curate/model.ts`,
