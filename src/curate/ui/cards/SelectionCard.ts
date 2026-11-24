@@ -1305,8 +1305,10 @@ export class SelectionCard {
     if (spec.genome !== undefined) node.dataset.genome = spec.genome
     if (spec.suggestion !== undefined) node.dataset.suggestion = spec.suggestion
     this.lit.push({ node, genome: spec.genome, contigs: spec.contigs === undefined || spec.contigs.length === 0 ? null : new Set(spec.contigs), suggestion: spec.suggestion })
-    const main = el('span', { class: 'curate-selection-row-main' })
-    for (const part of spec.lead) if (part !== null) main.appendChild(part)
+    // Its swatch, name and chips held together; the confidence goes under them where the side is narrow.
+    const lead = el('span', { class: 'curate-selection-row-lead' })
+    for (const part of spec.lead) if (part !== null) lead.appendChild(part)
+    const main = el('span', { class: 'curate-selection-row-main' }, lead)
     if (spec.confidence !== undefined && spec.confidence !== null) main.appendChild(el('span', { class: 'curate-selection-row-confidence', text: spec.confidence }))
     node.append(main, el('span', { class: 'curate-selection-row-detail' }, ...(spec.detailLead ?? []), spec.detail))
     const a = spec.act

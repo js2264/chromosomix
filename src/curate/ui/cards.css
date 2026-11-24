@@ -140,8 +140,8 @@
    priced from under the pointer. */
 .curate-selection-quality {
   display: grid;
-  grid-template-columns: minmax(4.6rem, 1fr) repeat(2, auto);
-  column-gap: 0.6rem;
+  grid-template-columns: minmax(3.8rem, 1fr) repeat(2, auto);
+  column-gap: 0.5rem;
   row-gap: 0.05rem;
   font-variant-numeric: tabular-nums;
 }
@@ -156,6 +156,12 @@
   color: var(--text-dim);
 }
 .curate-selection-quality .is-head {
+  /* A head gives way before the numbers under it: at the side's narrowest the
+     columns are as wide as their numbers, and the table stays in the card. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: right;
   color: var(--text-faint);
   font-size: calc(var(--step--2) * var(--text-scale, 1));
@@ -171,10 +177,7 @@
   color: var(--text-dim);
 }
 .curate-selection-quality .is-head.is-after {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 7rem;
+  max-width: 9rem;
 }
 .curate-selection-quality .is-warn,
 .curate-selection-quality .is-after.is-demoted {
@@ -271,6 +274,9 @@
   border-color: var(--accent);
   box-shadow: inset 3px 0 0 var(--accent);
 }
+/* The first line: what the row names — its swatch, its name, its chips, held
+   together — and the confidence, which goes under them where the side is too
+   narrow for both. */
 .curate-selection-row-main {
   grid-area: main;
   display: flex;
@@ -279,7 +285,15 @@
   gap: 0 0.35rem;
   min-width: 0;
 }
-.curate-selection-row-main > .edit-chip {
+.curate-selection-row-lead {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.curate-selection-row-lead > .edit-chip,
+.curate-selection-row-lead > .curate-swatch {
   flex: none;
 }
 .curate-selection-row-name {
