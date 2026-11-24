@@ -24,6 +24,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   forgets it. A task that reads no map, a starred companion of a deck, an import and a ladder with
   nothing to choose have no such row.
 
+- **Curate the genomes: a stage that curates a metagenome's binning — a dev feature (§33.3).** The
+  palette's *Curate the genomes*, or the heading's word on the genomes, opens a stage on the whole
+  window: the genome list (MAGs, elements and the unbinned pool, each genome's quality recomputed from
+  its contigs' marker genes as miComplete computes it), one large picture with the other two small
+  beside it, and the inspector. Contigs are moved, recruited or unbinned, genomes merged, made,
+  dissolved, renamed or retyped, elements linked to the MAGs that host them — by dragging onto a
+  genome, a section or the pool, or by keys — each step undone with ⌘Z. The app suggests merges,
+  recruits, moves and host links from the contacts and the markers; review asks them as questions, an
+  organism's fragments one question, each with its price — every changed genome's completeness and
+  redundancy before → after, in metaTOR's grades — and auto takes the sure ones, holding back any that
+  would lower a grade. What the curation makes leaves as tables for `metacooler reassign` and
+  `metacooler annotate`, never as a written map.
+
 - **The session drawn through a curation of the genomes — a dev feature (§33.4).** A metagenome with
   a curation kept for it opens as the map `metacooler reassign` writes from the curation's contig →
   genome table: its contigs regrouped, the pool first and the genomes by name, each genome's contigs

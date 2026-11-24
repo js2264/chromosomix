@@ -15693,8 +15693,8 @@ everything else says *done*, and *the window closed while this was running* wher
 A field edited in place — a lane's name or an end of its range, in the browser and beside a map
 (§5.8); an end of a map's colour key (§7.1) or of a 3D model's (§25.5); a tab's name (§5.6); a
 deck cell's heading and a name on the Tracks, Metadata, Structures or Contact maps card (§16.10); a
-mark's place on the Manual annotations card (§8.1); a sequence's name on the editing stage (§27.3)
-— is one of a run of fields of its kind, and the run is what a reader working through a figure goes
+mark's place on the Manual annotations card (§8.1); a sequence's name on the editing stage (§27.3);
+a genome's name in the curation stage's list (§33.3) — is one of a run of fields of its kind, and the run is what a reader working through a figure goes
 down: naming four replicates, setting six tracks to one ceiling. So **Tab takes what was typed, as
 Enter does, and puts the caret in the next field of the same kind; Shift+Tab in the one before.**
 Past either end of the run the caret is let go, as Enter lets it go: Tab is Enter that goes on
@@ -16743,8 +16743,9 @@ writes none, which the note ends by saying in those words.
 A feature on `main` — built, specified, tested and released like any other — that a reader **does not
 see at all** unless the page asked for it. What it is for is the stretch between *it works* and *it is
 finished*: long enough that a branch would rot, and too unfinished for a reader who did not ask for it.
-**Built**: the switch, the registry (`state/devFeatures.ts`), and all three gates below — `metacool`'s,
-and `edit`'s and `dotplot`'s over as much of §27 and §28 as is built, each gated from its first line.
+**Built**: the switch, the registry (`state/devFeatures.ts`), and all four gates below — `metacool`'s,
+and `edit`'s, `dotplot`'s and `curate`'s over as much of §27, §28 and §33 as is built, each gated from
+its first line.
 
 ### 29.1 One switch
 
@@ -17279,22 +17280,40 @@ the whole session drawn through the curated binning. It is the whole-metagenome 
 which edits one genome's scaffolds.
 
 **Status: being built.** Every subsection below describes what will be, and says *built* as it lands:
-so far the model of a curation and its store (§33.2), the session drawn through the curated binning
-(§33.4), and the method — the contig network, affinity, the background, the suggestions and their
-confidence, and miComplete's numbers from the markers (§33.5). It is a **dev feature** (§29), `curate`, throughout. The design it was written from — the
+so far the model of a curation and its store (§33.2), the stage's frame, list, review and keys
+(§33.3), the session drawn through the curated binning (§33.4), and the method — the contig network,
+affinity, the background, the suggestions and their confidence, and miComplete's numbers from the
+markers (§33.5). It is a **dev feature** (§29), `curate`, throughout. The design it was written from — the
 decisions and who made them, the method with the numbers it was held to on the mock community — is
 `docs/genome-curation.md`. §13's first rule is untouched: **the app never modifies a file it
 opened.** A curation is a lens over the file, and what it produces is new files.
+
+### 33.1 Words
+
+- **The pool** — the contigs in no genome, `__unbinned__`; never a genome (§7.4).
+- **A MAG**, **an element** (a mobile genetic element: a plasmid, a phage) — the two kinds of genome.
+  Every contig is in one MAG, one element or the pool.
+- **A host link** — an element and a MAG that hosts it; never a membership.
+- **A curation** — the steps made on the file's binning, with a cursor; **a step** — one change, a
+  move, a merge, a link…; **a gesture** — the steps one drop or one answer makes, undone together.
+- **Affinity** — how densely a set of contigs meets a genome against how densely the genome's own
+  contigs meet each other: 1 is *as its own* (§33.5).
+- **A suggestion** — a step the method offers, with its confidence; **a question** — the suggestions
+  a curator answers as one (§33.3).
+- **The price** — what a step does to every genome it changes, before → after, in metaTOR's grades.
 
 ### 33.2 A curation
 
 The **original** binning is the file's: each contig in the genome `/contigs/genome_id` names, or in
 none — `__unbinned__`, the **pool**, never a genome (§7.4). A genome is a **MAG**, or a **mobile
-element** when its name is a cluster's of metaTOR's round `mge` or its `mge` column says `True`; the
-clusters of round `mge` are elements even where the file did not make them genomes, and their contigs
-the element's. Its **host links** are round `mge`'s `hosts`. Every contig is in exactly one MAG, one
+element** when its `mge` column says `True`. Where `/genomes` has no such column, an element is a
+genome named after a cluster of metaTOR's round `mge`, and the round's clusters are elements even
+where the file did not make them genomes, their contigs the element's; where it has one, the column
+alone decides — `metacooler reassign` carries the rounds as they were, and read from them a reassigned
+map would bring back elements a curation merged away. The **host links** are the MAGs' `mges` where
+`/genomes` has the column, else round `mge`'s `hosts`. Every contig is in exactly one MAG, one
 element or the pool — by construction, since a contig's genome is one value — and a host link joins an
-element to a MAG and is never a membership.
+element to a MAG and is never a membership. *Built* (`curate/base.ts`).
 
 A **curation** is an ordered **history** of **steps** with a cursor, folded over the original:
 `move` contigs to a genome or the pool, `create` a genome of contigs (a MAG or an element), `merge`
@@ -17304,14 +17323,125 @@ a genome of the file's stored name, kept through renames; a created one, the id 
 a step means what it meant when it was made, and one that no longer applies (a genome merged away, a
 contig the file lacks, an operation a newer build wrote) changes nothing. Each carries who made it —
 the reader, a suggestion, auto mode — when, and for a suggestion what it rested on. **Undo** and
-**redo** move the cursor; a step after an undo drops the steps past it. *Built* (`genome/curation.ts`,
-`genome/history.ts`, `state/curation.ts`).
+**redo** move the cursor; a step after an undo drops the steps past it. A **gesture** that makes
+several steps — three genomes dropped on the pool, an element's links taken at once — gives them one
+id, and undo and redo take them together. *Built* (`genome/curation.ts`, `genome/history.ts`,
+`state/curation.ts`).
 
 **It is a fact about the file**, kept as the reference edit is (§27.2): per file, in a saved workspace
 and a shared link. It carries a fingerprint of the binning it was made on — the contigs' names and
 lengths, which genome holds each, the genomes in order with their counts and kinds, and the links —
 and is **kept, not applied**, on a file whose binning differs, naming what differs first: `A held 3
 contigs when the curation was made and holds 2 here`.
+
+### 33.3 The stage
+
+*Curate the genomes* — the palette's, or a press on the heading's word on the genomes (§33.4) —
+opens a stage on the whole window (`stageDialog`, §27.3's shell), titled `Curate the genomes ·
+<map>`. **Escape never closes it**: it cancels the innermost thing — a chooser, a drag, a rename, an
+auto run, the selection — and `×` alone closes it, which loses nothing: every step is kept with the
+file as it is made, and the session is redrawn through the curation (§33.4).
+
+**Three columns.** The **genome list** on the left never leaves the screen, so whatever is held can
+be dropped on it. The **pictures** fill the middle: one **large**, the other two **small** beside it
+as live thumbnails lit with it — `1`, `2`, `3` (or a press on a small one's head) make the contact
+map, the host map or the GC × coverage scatter large, kept per file; in review the large one is the
+one the question's evidence is in, the contact map for a merge, a move or a recruit, the host map for
+a link. Narrower than 840 px, the large one shows alone and tabs choose it. The **inspector** on the
+right is the reference stage's sunken column of cards (§27.3), in the mode's order: *who presses
+take*, then the selection, the history, the suggestions, the export and *about the map* — the
+suggestions first in review and in auto. Every column keeps its width per file.
+
+**One selection, one hover**, in every part: whole genomes, or contigs, one kind at a time; a press
+selects, ⌘/Ctrl toggles, ⇧ extends. The genome under the pointer is lit in the list, the maps and
+the scatter at once. Every genome keeps one colour everywhere — a hue a golden angle from the last,
+by its row in the file's genomes (a created one after them), darker for an element, grey for the
+pool — so a merge or a sort changes none. A binner's long shared prefix is printed once, in its
+section's head (`MM133_metator_…`), and each genome by the rest (`00700_00001`); titles, exports and
+the history keep the whole name.
+
+**The order.** The MAGs are laid out chained, the two that meet most densely side by side, then the
+next densest joined at an end (the greedy multiple-fragment chain over the method's pairs), each
+element beside the MAG it meets most: on MM133 each of the five organisms the binner left in pieces
+is one block, where the file's order joins only *B. cereus*'s. It is laid out once the contacts are
+read and then **kept across steps** — a genome a step makes goes beside the genome its contigs came
+from, one merged away leaves no hole, a retyped one goes to its kind's block — so nothing moves under
+the hand; *tidy* lays it out again. The stage's order is its own: the session draws the curated map in
+`metacooler reassign`'s (§33.4).
+
+**The genome list** (`curate/ui/GenomeList.ts`) has three sections, the MAGs, the elements and the
+**unbinned pool**, each a head with its count that folds and takes a drop. A genome's row: its
+colour (a disc for a MAG, a ring for an element), its short name, what the curation changed (`+30`,
+`−2`, `new`, `renamed`, `was an element`, the change in words in its title), its length, its
+weighted completeness over a bar and its weighted redundancy — `--warn` above 1.10, the bar `--ok`
+at metaTOR's high quality — or, for an element, its host (`→ 00003_00001`, `3 hosts`, `no host`),
+and a disc counting the suggestions that name it. It opens on its contigs, longest first, each with
+its length, its GC content and the suggestion that would move it (`→ 00700_00002 99%`), or where a
+step brought it from. The pool lists its contigs, its likeliest recruits first. One box filters, by
+part of a name, a `/pattern/` or a **pasted list of names** (`12 of 12 found · select them`, and the
+names it could not find); chips keep only the changed, the suggested, the at least half complete,
+the redundant, or the elements with no host; the genomes sort by the stage's order, length,
+completeness, redundancy, contigs, suggestions or name, and the pool by likeliness, length or name.
+↑ ↓ walk the rows, → opens a genome, ← closes it or climbs to it, `F2` or `R` renames in place — Tab
+takes the name and opens the next genome's (§26.8), a refused name keeps the caret and says why. A
+virtual list: twenty thousand contigs scroll as fifty genomes do. Three targets docked at its foot,
+*+ new MAG*, *+ new element* and *unbinned*, never scroll away.
+
+**One drop grammar**, the same on the list and the pictures (`curate/drop.ts`): dropped on a genome
+means *into it* — contigs moved (recruited from the pool), genomes merged under its name, an element
+dropped on a MAG **linked** to it; on a section's head or the dock, *a new one* of contigs, or
+genomes made that kind; on the pool, *out* — contigs unbinned, genomes dissolved. A MAG dropped on
+an element is refused and says why. What is dragged follows the pointer with the step a drop there
+would make, and resting on a target draws the pictures as the drop would leave them.
+
+**Names** go to metacooler and metaTOR, and the stage refuses, saying why, an empty one, another
+genome's, a contig's (it would hide the contig in every box that finds a place), one with a space, a
+non-ASCII character, a comma (metaTOR lists genomes with them) or a colon, and any case of the words
+a table means no genome by — `__unbinned__`, `NA`, `nan`, `n/a`, `ND`, `n/d`, `-1`.
+
+**The readout**, one line under the toolbar, says what is under the pointer; idle, the curation's
+tally: `MAGs 50 → 45 · 127 elements · 12,412 unbinned contigs (9.8 Mb) · 6 steps · 400 contigs
+moved · links +3 −1`.
+
+**Who presses take** (§27.6): **manual** — the suggestions are drawn and listed and never apply
+themselves —, **review**, and **auto**. **Review asks questions, not pairs** (`curate/questions.ts`):
+the merges at even odds or more grouped by the genomes they join — one question an organism, merged
+into its most complete member, at the confidence of its **weakest needed pair**, the least sure join
+of the surest tree that joins them —, the moves by the genome they leave and the one they join, the
+recruits by the genome they join, an element's links and unlinks together; what is less sure stays a
+question of its own. They come likely first, and among those the merges, then the moves, the recruits
+and the host links, since a merge changes every affinity of the genome it makes (on MM133 one merge
+answers eighteen moves between three fragments). The **band** under the toolbar says `review · 3 of
+41`, the question, its confidence and its keys, and its **price**: every MAG it changes, weighted
+completeness and redundancy before → after, `--warn` where a grade falls (`contaminated`, `a grade
+lower`), `--ok` where one reaches high quality, and the markers it makes present twice — what a rise
+in redundancy is made of. `Y` takes a question whole, one gesture; `N` turns every member down; ← →
+move between questions, ↓ ↑ answer a question's members one by one, `Space` held draws every picture
+as the question would leave the binning. **Auto** takes the questions at 80% or more in that order,
+one gesture each, counting again between two, two hundred at most a run, and **holds back**, naming
+it and why, any that would lower a MAG's grade (`merge 00700_00002 into 00700_00001: it would make
+00700_00001 contaminated`).
+
+**Keys**, printed on their controls, live while the stage is on top (§26.4): `1 2 3` the large
+picture; `M` merge the selected genomes, or *move to…* the selected contigs, *merge into…* one
+genome; `L` link the selected element to the selected MAG, or *link to…*; `B` and `E` a new MAG or
+element of the selected contigs, or the selected genomes made one; `Delete` unbins contigs,
+dissolves genomes, unlinks a selected element and MAG; `F2`/`R` rename; `Enter` the selected
+genomes' contigs close up, `⇧Enter` back; `/` the list's filter; ⌘Z, ⇧⌘Z undo and redo; `Y N ← → ↓ ↑
+Space` in review; `0 + −` the picture under the pointer; `?` this list.
+
+**The contacts' read.** The stage opens at once: before the contacts are read, the list, the
+quality, the cards and the scatter's colours work from the file and its markers. The pass over every
+stored pixel (§33.5) starts by itself, a bar and a *cancel* in the stage, and the maps, the host links
+and the suggestions arrive with it; a remote file past 64 MiB asks first, saying its pixels and its
+download, as the overview does (§7.3). A file's network is kept by the reader for the session, so the
+stage opened again does not read it again.
+
+*Built*: the frame, the list, the order, the colours, the names, the drop grammar, the readout, the
+modes, the questions, the band and its price, auto and its holding back, the keys and the contacts'
+read (`curate/ui/CurateStage.ts`, `curate/model.ts`, `curate/questions.ts`, `curate/price.ts`,
+`curate/order.ts`, `curate/colours.ts`, `curate/names.ts`, `curate/drop.ts`, `curate/listRows.ts`).
+*Being built*: the three pictures and the inspector's cards.
 
 ### 33.4 The session through the curated binning
 
@@ -17428,3 +17558,74 @@ unlink, metaTOR's *Vibrio* phage on a *Corynebacterium* MAG.
 Completeness, Redundancy, Weighted completeness and Weighted redundancy are miComplete's own
 arithmetic over its contigs' markers — rounding to the last bit, Python's half to even on the binary
 value — under the set with the higher weighted completeness. *Built* (`curate/quality.ts`).
+
+### 33.6 What the review learns
+
+Each answer is a step of logistic regression on its kind's weights towards it — a tenth of the way,
+pulled back towards the stated weights by 0.15 — as §27.6's: three answers cannot overturn the
+contacts, thirty teach the stage what this file's evidence means. An unlink taken teaches the link's
+weights a link turned down. A question answered teaches each of its members. A suggestion turned
+down stays turned down after the steps that follow, listed with *offer again*; *forget* puts the
+stated weights back. What was learned is kept per file, apart from the curation
+(`map:curation-learned`), and carried with it in a workspace and a link. *Built* (`curate/model.ts`,
+`state/curation.ts`).
+
+### 33.7 Kept and carried
+
+A curation is kept per file as it is made — every step, the cursor, and what the review learned — in
+the browser's memory of the session (`map:curation`, `map:curation-learned`), and carried in a saved
+workspace and a shared link as `curation` and `curationLearned` beside the reference edit's fields, so
+a link opens the session drawn through the same binning. With the dev features off, a curation
+carried is kept and not applied (§29.4): the map is drawn as the file has it, and the record left as
+it was. *Built* (`state/SessionConfig.ts`, `state/curation.ts`).
+
+### 33.8 The tables a curation writes
+
+The stage writes **tables, never a map** — `metacooler reassign` writes the map, and the app never
+modifies a file it opened (§13). Each through the save dialog (§26.6), named after the map:
+
+- **contig → genome** (`<map>.contig-genome.tsv`): `contig_name` and `genome_name`, a header and
+  every contig of the file in its order, one in no genome as `__unbinned__` — `metacooler reassign
+  MAP --contigs` reads it with its default format, whatever `--missing` says.
+- **genomes** (`<map>.genomes.tsv`): every curated genome with metaTOR's `mge` — exactly `True` or
+  `False` — and, for a MAG, its elements (`n_mges`, `mges`), for `metacooler annotate --genomes
+  --replace` after the reassignment: a renamed or new genome starts without the file's columns, and
+  this is what makes its elements elements and its links links when the map is opened again.
+- **elements** (`<map>.elements.tsv`): every element, its length, its contigs and its hosts.
+- **element ↔ host** (`<map>.element-hosts.tsv`): every element and MAG in contact or linked, the
+  contacts and affinity between them, the share of the element's contacts with MAGs, the method's
+  confidence, whether a link holds — and **who decided it**: the file, a suggestion, auto mode or the
+  reader.
+
+Tab-separated, one header line, numbers to four significant places. The card prints the two commands
+with a copy button each, and says what a reassignment keeps of the file: metaTOR's clustering rounds
+as they were, a changed genome's own columns as they were, and no weight that depends on the
+assignment. *Built* (`curate/exports.ts`); *being built*, the card.
+
+### 33.9 Costs
+
+| Operation | Budget |
+|---|---|
+| Opening the stage | the file's binning, its clusters and its markers, read once per map: 91 ms on MM133 |
+| The contacts' read | every stored pixel once, in the reader's worker, with a bar and a cancel: 7,081,501 pixels in 631 ms on MM133; kept for the session |
+| A step | **0** reads; the method counted again over every pair of contigs, off the page's thread: 124 ms on MM133's 263,961 pairs |
+| A price, a preview | one count of the binning with one more step, as a step's |
+| The close-up | the pairs among the selected contigs, from the network the worker holds: **0** reads |
+| Closing the stage | the session opened again through the curation (§33.4) |
+
+### 33.10 Refused, and not yet built
+
+Refused: the stage on a map with no genomes, a single-cell file or a curation kept for another
+binning (§33.2), which is held untouched until a new step; writing a `.metacool` — `metacooler
+reassign` writes it from the stage's table. *Not yet built*: a question that weighs an element's held
+hosts against each other (the method suggests an unlink only for a link it gives under 15%); the
+contacts' read on a large remote file in chunks the reader can resume; the command line, which
+measures the file as it is.
+
+### 33.11 Validation
+
+The method is held to the truth of the mock community MM133 — the contigs mapped to the genomes the
+community was made of (`scripts/make_mock_truth.py`, the table in `test/golden/demo/`) — in the
+unit suite, and the numbers are those of §33.5. The quality is held to miComplete's own run: on
+MM133, with the markers `metator markers` stores, the four numbers of all fifty MAGs written in the
+map's order are miComplete's exactly. The truth is for validation only: nothing in the app reads it.
