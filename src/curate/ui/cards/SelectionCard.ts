@@ -34,7 +34,7 @@ import type { CurationStateResult } from '../../../worker/curateProtocol'
 import { changeChip, changeWords, curationChanges, type CurationChanges } from '../../changes'
 import { LIKELY, lowerAffinity } from '../../method'
 import type { CurateChange, CurateSelection, CurateTally } from '../../model'
-import { priceOf } from '../../price'
+import { priceOf, redundancyText } from '../../price'
 import type { Quality } from '../../quality'
 import type { Question } from '../../questions'
 import type { Suggestion } from '../../suggest'
@@ -116,6 +116,8 @@ interface RowSpec {
   /** The suggestion it shows, by key: lit while it is the review's, or a member of it. */
   suggestion?: string
   lead: Array<Node | null>
+  /** What opens the second line, before its words: where a contig would go. */
+  detailLead?: Array<Node | string | null>
   detail: string
   /** The row in a line, in the names the stage prints: the readout's words while the pointer is on it. */
   words: string
@@ -134,6 +136,9 @@ interface LitRow {
   suggestion: string | undefined
 }
 
+/** Where a price is drawn: over what follows the acts, for an act's step; at the card's foot, for a row's or one priced elsewhere. */
+type PriceSlot = 'acts' | 'rows'
+
 /** Where the keyboard was in the card before it was drawn again. */
 interface HeldFocus {
   /** The act's `data-focus`: its view's word, or its row's and its word. */
@@ -150,7 +155,16 @@ export class SelectionCard {
   private numbers: { answer: CurationStateResult; pooled: number; pooledLength: number; tally: CurateTally | null } | null = null
   /** Where the quality table and the price are drawn again when a step is priced. */
   private qualitySlot: { node: HTMLElement; genome: Genome } | null = null
-  private priceSlot: HTMLElement | null = null
+  /**
+   * The price's places, neither of which moves an act or a row the pointer may
+   * rest on: under the acts, a popover over what follows them, for an act's
+   * step; at the card's foot, in the flow, for a row's step or one priced
+   * elsewhere. In the flow above the acts, the price pushed the act priced out
+   * from under the pointer, which let go of the price, which brought the act
+   * back — a flicker for as long as the pointer stayed; in the flow under
+   * them, the rows jumped as the pointer left the acts for them.
+   */
+  private priceSlots: { acts: HTMLElement | null; rows: HTMLElement | null } = { acts: null, rows: null }
   /** The acts the chooser opens from, for the stage to anchor it. */
   private readonly chooseActs = new Map<'move' | 'merge' | 'link', HTMLButtonElement>()
   /** The lists opened past their first rows, by genome or selection and list. */
@@ -162,8 +176,12 @@ export class SelectionCard {
   private dirty = { all: true, preview: false, hover: false }
   private frame = 0
   private priceTimer: ReturnType<typeof setTimeout> | null = null
-  /** The step an act's hover prices, and the preview held before it — one step or a question's — given back when the pointer leaves. */
-  private pricing: { key: string; before: readonly CurationStep[] | null; drawn: boolean } | null = null
+  /**
+   * The step an act's hover prices, where the act is (in the acts or a list's
+   * row), and the preview held before it — one step or a question's — given
+   * back when the pointer leaves.
+   */
+  private pricing: { key: string; from: PriceSlot; before: readonly CurationStep[] | null; drawn: boolean } | null = null
   private disposed = false
   private readonly unsubscribe: Array<() => void> = []
 
@@ -261,7 +279,7 @@ export class SelectionCard {
     this.endPricing()
     this.letGoOfHover()
     this.qualitySlot = null
-    this.priceSlot = null
+    this.priceSlots = { acts: null, rows: null }
     this.chooseActs.clear()
     this.lit = []
     const model = this.ctx.model
@@ -275,6 +293,8 @@ export class SelectionCard {
       else this.paintElement(answer, view.g)
     } else if (view.kind === 'pair') this.paintPair(answer, view.element, view.mag)
     else this.paintGenomes(answer, view.genomes)
+    // A step priced already — the review's question, a suggestion hovered — in its place.
+    this.paintPrice()
     this.markWeighing()
     this.restoreFocus(focus)
   }
@@ -317,15 +337,25 @@ export class SelectionCard {
     }
   }
 
-  /** What a priced step would leave: the quality table's after column, the price. */
+  /** What a priced step would leave: the quality table's after column, the price under what priced it. */
   private paintPreview(): void {
     const slot = this.qualitySlot
     if (slot !== null && slot.node.isConnected) slot.node.replaceChildren(...this.qualityParts(slot.genome))
-    const price = this.priceSlot
-    if (price !== null && price.isConnected) {
-      const list = this.priceNow()
-      price.replaceChildren(...(list === null ? [] : [list]))
-      price.classList.toggle('hidden', list === null)
+    this.paintPrice()
+  }
+
+  /** The price of the step priced now in its place, the other place emptied. */
+  private paintPrice(): void {
+    const { acts, rows } = this.priceSlots
+    // An act's step over what follows the acts; a row's, or one priced elsewhere — the review's
+    // question, a suggestion hovered — at the foot, where it moves nothing that is priced.
+    const into = this.pricing?.from === 'acts' && acts !== null ? acts : rows
+    const list = into === null ? null : this.priceNow()
+    for (const node of [acts, rows]) {
+      if (node === null || !node.isConnected) continue
+      const shown = node === into && list !== null
+      node.replaceChildren(...(shown && list !== null ? [list] : []))
+      node.classList.toggle('hidden', !shown)
     }
   }
 
@@ -430,10 +460,8 @@ export class SelectionCard {
         this.act('rename', 'pencil', `Rename ${this.short(genome.id)}, in the list`, () => this.hooks.rename(genome.id), SELECTION_KEYS.rename),
         merge,
         this.act('close-up', 'zoom-in', 'Its contigs, and the ones that may belong in it, on the contact map', () => this.hooks.closeUp(), SELECTION_KEYS.closeUp),
-        this.priced(
-          this.stepAct('make it an element', 'arrow-left-right', 'Declare it a mobile element: a plasmid or a phage, never graded; its links go', () => model.retypeSelected('element'), SELECTION_KEYS.newElement),
-          () => ({ op: 'retype', genome: genome.id, kind: 'element' }),
-        ),
+        // A retype moves no contig: there is no price to show for it.
+        this.stepAct('make it an element', 'arrow-left-right', 'Declare it a mobile element: a plasmid or a phage, never graded; its links go', () => model.retypeSelected('element'), SELECTION_KEYS.newElement),
         this.priced(this.stepAct('dissolve', 'trash-2', 'Send its contigs to the pool: the genome is gone', () => model.dissolveSelected(), SELECTION_KEYS.remove), () => ({ op: 'dissolve', genome: genome.id })),
       ),
     )
@@ -481,7 +509,13 @@ export class SelectionCard {
     return node
   }
 
-  /** Completeness and redundancy, weighted and not, now — and after, while a step is priced. */
+  /**
+   * Completeness and redundancy, weighted and plain, now — and, while a step
+   * is priced, after it in the plain numbers' place: metaTOR grades on the
+   * weighted ones, and two columns of numbers beside the labels are what the
+   * side has room for at its narrowest without cutting one. The table keeps its
+   * height either way: it stands above the acts.
+   */
   private qualityParts(genome: Genome): HTMLElement[] {
     const q = genome.quality
     if (q === null) return []
@@ -490,20 +524,16 @@ export class SelectionCard {
     const wasQ = genome.asInFile ? null : (file?.quality ?? null)
     const grid = el('div', { class: `curate-selection-quality${after === null ? '' : ' has-after'}`, attrs: { role: 'table', 'aria-label': 'Quality' } })
     const cell = (text: string, cls: string, title?: string): HTMLElement => el('span', { class: cls, text, attrs: { role: 'cell' }, ...(title === undefined ? {} : { title }) })
-    const heads = [cell('', 'is-label'), cell('weighted', 'is-head'), cell('plain', 'is-head', 'Every marker counted alike')]
-    if (after !== null) heads.push(cell(after.head, 'is-head is-after', after.title))
+    const heads = [cell('', 'is-label'), cell('weighted', 'is-head')]
+    heads.push(after === null ? cell('plain', 'is-head', 'Every marker counted alike') : cell(after.head, 'is-head is-after', after.title))
     grid.append(el('div', { class: 'curate-selection-quality-row', attrs: { role: 'row' } }, ...heads))
     const row = (label: string, weighted: string, plain: string, warn: boolean, was: string | null, afterText: string | null, shift: Shift): void => {
-      const cells = [
-        cell(label, 'is-label', label),
-        cell(weighted, `is-value${warn ? ' is-warn' : ''}`, was === null ? undefined : `${was} in the file`),
-        cell(plain, 'is-value is-plain'),
-      ]
-      if (after !== null) cells.push(cell(afterText ?? '—', `is-value is-after${shift === null ? '' : ` is-${shift}`}`, after.title))
+      const cells = [cell(label, 'is-label', label), cell(weighted, `is-value${warn ? ' is-warn' : ''}`, was === null ? undefined : `${was} in the file`)]
+      cells.push(after === null ? cell(plain, 'is-value is-plain') : cell(afterText ?? '—', `is-value is-after${shift === null ? '' : ` is-${shift}`}`, after.title))
       grid.append(el('div', { class: 'curate-selection-quality-row', attrs: { role: 'row' } }, ...cells))
     }
     const pct = (x: number): string => fmt.pct(x, 1)
-    const ratio = (x: number): string => fmt.fixed(x, 2)
+    const ratio = redundancyText
     const aq = after?.quality ?? null
     // The number that moves its grade, and only that one, wears the colour.
     const shift = aq === null ? { completeness: null, redundancy: null } : qualityShift(q, aq)
@@ -662,9 +692,12 @@ export class SelectionCard {
     const one = s.contigs.length === 1
     const c = s.contigs[0]
     const own = answer.genomeOf[c]
-    const lead: Array<Node | null> = []
-    if (side === 'out') lead.push(el('span', { class: 'curate-selection-row-name', text: names[c] ?? `#${c}`, title: names[c] }), el('span', { class: 'curate-selection-arrow', text: '→' }), swatch(this.ctx.colourOf(target.id).css, target.kind), this.nameOf(target))
-    else lead.push(el('span', { class: 'curate-selection-row-name', text: one ? (names[c] ?? `#${c}`) : `${fmt.int(s.contigs.length)} contigs`, title: one ? names[c] : s.contigs.map((k) => names[k]).join(', ') }))
+    const lead: Array<Node | null> = [
+      el('span', { class: 'curate-selection-row-name', text: one ? (names[c] ?? `#${c}`) : `${fmt.int(s.contigs.length)} contigs`, title: one ? names[c] : s.contigs.map((k) => names[k]).join(', ') }),
+    ]
+    // Out: where it would go opens the second line, so neither name is cut to make room for the other.
+    const detailLead: Array<Node | string | null> = []
+    if (side === 'out') detailLead.push(el('span', { class: 'curate-selection-to' }, el('span', { class: 'curate-selection-arrow', text: '→' }), swatch(this.ctx.colourOf(target.id).css, target.kind), this.nameOf(target)), ' · ')
     const lower = affinityText(lowerAffinity(s.affinity, s.contacts))
     let detail: string
     if (side === 'out') detail = `its own ${affinityText(answer.contigs.ownAffinity[c])} · there ${affinityText(s.affinity)} (at least ${lower}) · ${contactsText(s.contacts)}`
@@ -677,6 +710,7 @@ export class SelectionCard {
       contigs: s.contigs,
       suggestion: s.key,
       lead,
+      detailLead,
       detail,
       words: `${one ? (names[c] ?? `#${c}`) : `${fmt.int(s.contigs.length)} contigs`} ${side === 'out' ? '→' : 'into'} ${this.short(target.id)} · ${detail} · ${confidenceText(s.confidence)}`,
       title: `${s.words} · ${confidenceText(s.confidence)} · ${s.evidence.join(' · ')}`,
@@ -699,8 +733,9 @@ export class SelectionCard {
         this.chooseAct('link', 'link to…', 'link', `Link ${this.short(genome.id)} to the MAG that hosts it`),
         this.chooseAct('merge', 'merge into…', 'merge', `Merge ${this.short(genome.id)} into another element, which keeps its name`),
         this.act('rename', 'pencil', `Rename ${this.short(genome.id)}, in the list`, () => this.hooks.rename(genome.id), SELECTION_KEYS.rename),
-        this.priced(this.stepAct('make it a MAG', 'arrow-left-right', 'Declare it a MAG, graded by its markers; its links go', () => model.retypeSelected('mag'), SELECTION_KEYS.newMag), () => ({ op: 'retype', genome: genome.id, kind: 'mag' })),
-        this.priced(this.stepAct('dissolve', 'trash-2', 'Send its contigs to the pool: the element is gone', () => model.dissolveSelected(), SELECTION_KEYS.remove), () => ({ op: 'dissolve', genome: genome.id })),
+        // An element is never graded: neither act has a price to show.
+        this.stepAct('make it a MAG', 'arrow-left-right', 'Declare it a MAG, graded by its markers; its links go', () => model.retypeSelected('mag'), SELECTION_KEYS.newMag),
+        this.stepAct('dissolve', 'trash-2', 'Send its contigs to the pool: the element is gone', () => model.dissolveSelected(), SELECTION_KEYS.remove),
       ),
     )
     const offered = model.offered()
@@ -844,7 +879,6 @@ export class SelectionCard {
     // The head counts one kind; of two, the facts say how many of each.
     const counts = kinds.size > 1 ? [countWords(mags.length, 'MAG', 'MAGs'), countWords(elements.length, 'element', 'elements')] : []
     const parts: Array<HTMLElement | null> = [el('div', { class: 'curate-selection-facts', text: [...counts, fmt.bp(length), countWords(contigs, 'contig', 'contigs')].join(' · ') })]
-    parts.push(this.priceBlock())
     // The longest keeps its name, as `merge` makes it.
     const survivor = [...genomes].sort((x, y) => answer.genomes[y].length - answer.genomes[x].length)[0]
     const merge = this.priced(
@@ -862,7 +896,7 @@ export class SelectionCard {
     if (elements.length === 0) refuse(link, 'Select an element and the MAG that hosts it to link them')
     else if (mags.length !== 1) refuse(link, mags.length === 0 ? 'Select the MAG that hosts them too' : 'Link elements to one MAG at a time')
     parts.push(
-      this.acts(
+      this.pricedActs(
         merge,
         kinds.size > 1 ? link : null,
         this.act('close-up', 'zoom-in', 'Their contigs, side by side, on the contact map', () => this.hooks.closeUp(), SELECTION_KEYS.closeUp),
@@ -878,7 +912,7 @@ export class SelectionCard {
       return {
         genome: genome.id,
         lead: [el('span', { class: 'curate-selection-index', text: String(k + 1) }), swatch(this.ctx.colourOf(genome.id).css, genome.kind), this.nameOf(genome)],
-        detail: `${fmt.bp(genome.length)} · ${countWords(genome.contigs, 'contig', 'contigs')}${q === null ? '' : ` · ${fmt.pct(q.weightedCompleteness, 0)} complete · ${fmt.fixed(q.weightedRedundancy, 2)}`}`,
+        detail: `${fmt.bp(genome.length)} · ${countWords(genome.contigs, 'contig', 'contigs')}${q === null ? '' : ` · ${fmt.pct(q.weightedCompleteness, 0)} complete · ${redundancyText(q.weightedRedundancy)} redundant`}`,
         words: `${this.short(genome.id)} · ${fmt.bp(genome.length)} · ${countWords(genome.contigs, 'contig', 'contigs')}`,
         title: `${genome.name} · ${fmt.bp(genome.length)} · ${countWords(genome.contigs, 'contig', 'contigs')}`,
       }
@@ -887,6 +921,7 @@ export class SelectionCard {
     if (genomes.length > shown.length) parts.push(this.note(`and ${fmt.int(genomes.length - shown.length)} more, left out of the affinities`))
     if (!answer.counted) parts.push(this.uncounted('Their affinities with one another, once the contacts are read.'))
     else parts.push(this.sub('affinities'), this.matrix(answer, shown, model.offered()))
+    parts.push(this.priceBlock('rows'))
     this.body.replaceChildren(...parts.filter((part): part is HTMLElement => part !== null))
   }
 
@@ -965,7 +1000,6 @@ export class SelectionCard {
       if (held.length > 3) bits.push(`${fmt.int(held.slice(3).reduce((sum, [, n]) => sum + n, 0))} in ${fmt.int(held.length - 3)} more`)
       parts.push(el('div', { class: 'curate-selection-facts', text: bits.join(' · ') }))
     }
-    parts.push(this.priceBlock())
     const names = contigs.map((c) => file.names[c]).filter((name): name is string => name !== undefined)
     const binned = contigs.filter((c) => answer.genomeOf[c] >= 0)
     const unbin = this.priced(this.stepAct('unbin', 'minus', one ? 'Send it to the pool, out of every genome' : 'Send them to the pool, out of every genome', () => model.moveSelected(null), SELECTION_KEYS.remove), () =>
@@ -973,7 +1007,7 @@ export class SelectionCard {
     )
     if (binned.length === 0) refuse(unbin, one ? 'It is unbinned already' : 'They are unbinned already')
     parts.push(
-      this.acts(
+      this.pricedActs(
         this.chooseAct('move', 'move to…', 'move', one ? 'Move it to a genome, chosen by what it meets most' : 'Move them to a genome, chosen by what they meet most'),
         this.priced(this.stepAct('new MAG', 'plus', one ? 'A new MAG of it' : 'A new MAG of them', () => model.createFromSelected('mag'), SELECTION_KEYS.newMag), () => {
           const minted = model.mint('mag')
@@ -988,6 +1022,7 @@ export class SelectionCard {
     )
     if (!answer.counted) parts.push(this.uncounted(one ? 'The genomes it meets most, once the contacts are read.' : 'The genomes they meet most, once the contacts are read.'))
     else parts.push(...this.contigsMeet(answer, contigs))
+    parts.push(this.priceBlock('rows'))
     this.body.replaceChildren(...parts.filter((part): part is HTMLElement => part !== null))
   }
 
@@ -1079,14 +1114,22 @@ export class SelectionCard {
     return el('p', { class: 'edit-note curate-selection-uncounted', text })
   }
 
-  /** The price of the step priced now, where it concerns the selection; hidden while none does. */
-  private priceBlock(): HTMLElement {
-    const node = el('div', { class: 'curate-selection-price', attrs: { 'aria-live': 'polite' } })
-    const list = this.priceNow()
-    if (list === null) node.classList.add('hidden')
-    else node.appendChild(list)
-    this.priceSlot = node
+  /**
+   * A place for the price of the step priced now: over what follows the acts
+   * (`acts`, a popover the pointer passes through), or at the card's foot
+   * (`rows`); hidden while no step that concerns the selection is priced there.
+   */
+  private priceBlock(slot: PriceSlot): HTMLElement {
+    const node = el('div', { class: `curate-selection-price${slot === 'acts' ? ' is-over' : ''} hidden`, attrs: { 'aria-live': 'polite', 'data-slot': slot } })
+    this.priceSlots[slot] = node
     return node
+  }
+
+  /** The selection's acts with a place for their steps' price, over what follows them. */
+  private pricedActs(...buttons: Array<HTMLButtonElement | null>): HTMLElement {
+    const row = this.acts(...buttons)
+    row.appendChild(this.priceBlock('acts'))
+    return row
   }
 
   /**
@@ -1157,14 +1200,18 @@ export class SelectionCard {
     return button
   }
 
-  /** An act whose step is priced while the pointer or the keyboard rests on it. */
-  private priced(button: HTMLButtonElement, step: () => CurationStep | null): HTMLButtonElement {
+  /**
+   * An act whose step is priced while the pointer or the keyboard rests on it:
+   * in the card's acts, or in a row of a list (`from`), which says where its
+   * price is drawn.
+   */
+  private priced(button: HTMLButtonElement, step: () => CurationStep | null, from: PriceSlot = 'acts'): HTMLButtonElement {
     const start = (): void => {
       if (button.disabled) return
       this.cancelPriceTimer()
       this.priceTimer = setTimeout(() => {
         this.priceTimer = null
-        this.startPricing(step())
+        this.startPricing(step(), from)
       }, PRICE_DELAY)
     }
     const stop = (): void => {
@@ -1183,14 +1230,16 @@ export class SelectionCard {
     this.priceTimer = null
   }
 
-  private startPricing(step: CurationStep | null): void {
+  private startPricing(step: CurationStep | null, from: PriceSlot): void {
     const model = this.ctx.model
     // A step counted meanwhile: the act's step is of the binning before it.
     if (step === null || this.disposed || model.stale) return
     const key = previewKey(step) as string
-    if (this.pricing === null) this.pricing = { key, before: model.previewSteps, drawn: model.previewing }
-    else this.pricing.key = key
+    if (this.pricing === null) this.pricing = { key, from, before: model.previewSteps, drawn: model.previewing }
+    else Object.assign(this.pricing, { key, from })
     model.preview(step, false)
+    // Priced already (asked again): drawn where this act wants it.
+    this.schedule('preview')
   }
 
   /** Let go of the step an act priced: the preview held before it — one step or a question's — is held again. */
@@ -1244,7 +1293,7 @@ export class SelectionCard {
     const main = el('span', { class: 'curate-selection-row-main' })
     for (const part of spec.lead) if (part !== null) main.appendChild(part)
     if (spec.confidence !== undefined && spec.confidence !== null) main.appendChild(el('span', { class: 'curate-selection-row-confidence', text: spec.confidence }))
-    node.append(main, el('span', { class: 'curate-selection-row-detail', text: spec.detail }))
+    node.append(main, el('span', { class: 'curate-selection-row-detail' }, ...(spec.detailLead ?? []), spec.detail))
     const a = spec.act
     if (a !== undefined && a !== null) {
       const press = this.stepping(a.run)
@@ -1261,7 +1310,7 @@ export class SelectionCard {
         },
       })
       button.dataset.focus = `row:${spec.suggestion ?? spec.genome ?? spec.contigs?.join(',') ?? ''}:${a.label}`
-      node.appendChild(a.step === undefined ? button : this.priced(button, a.step))
+      node.appendChild(a.step === undefined ? button : this.priced(button, a.step, 'rows'))
     }
     node.addEventListener('pointerenter', () => {
       if (this.ctx.dragging !== null) return

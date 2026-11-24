@@ -15,7 +15,7 @@ import { CurateModel } from '@/curate/model'
 import type { Suggestion } from '@/curate/suggest'
 import type { CurateContext } from '@/curate/ui/context'
 import { SelectionCard, type SelectionHooks } from '@/curate/ui/cards/SelectionCard'
-import { qualityShift } from '@/curate/ui/cards/card'
+import { priceList, qualityShift } from '@/curate/ui/cards/card'
 import type { Quality } from '@/curate/quality'
 import { CuratedBinning, fileBinning } from '@/genome/curation'
 import { CurationStore } from '@/state/curation'
@@ -128,7 +128,8 @@ describe('the selection card, by what is selected', () => {
       'Z | affinity 0.0020 (at least 0.00021) · 1 contact',
     ])
     expect(rowsUnder('belong here').map(rowText)).toEqual(['u098% | from the pool · affinity 1.95 (at least 1.77) · 180 contacts'])
-    expect(rowsUnder('may belong elsewhere').map(rowText)).toEqual(['y5→Y97% | its own 0 · there 1.25 (at least 1.16) · 300 contacts'])
+    // Where it would go opens the second line, so neither name is cut for the other.
+    expect(rowsUnder('may belong elsewhere').map(rowText)).toEqual(['y597% | →Y · its own 0 · there 1.25 (at least 1.16) · 300 contacts'])
   })
 
   it('shows an element: its hosts held and offered', async () => {
@@ -316,7 +317,8 @@ describe('the acts', () => {
     await wait(0)
     await frame()
     expect(m.model.previewStep).toEqual({ op: 'merge', into: 'X1', genomes: ['X2'] })
-    expect(textsOf(document.body, '.curate-selection-quality .is-head')).toEqual(['weighted', 'plain', 'after'])
+    // After the step, in the plain numbers' place: the side has room for two columns of numbers.
+    expect(textsOf(document.body, '.curate-selection-quality .is-head')).toEqual(['weighted', 'after'])
     expect(textsOf(document.body, '.curate-selection-quality .is-after.is-value')).toEqual(['100.0%', '1.00'])
     expect(document.querySelector('.curate-selection-quality .is-after.is-value')?.classList.contains('is-promoted')).toBe(true)
     merge.dispatchEvent(new PointerEvent('pointerleave'))
@@ -354,6 +356,35 @@ describe('the acts', () => {
     await frame()
     const current = [...document.querySelectorAll<HTMLElement>('.curate-selection-row.is-current')].map((row) => row.dataset.suggestion)
     expect(current.sort()).toEqual(['link:P>Y', 'unlink:P>Z'])
+  })
+
+  it('draws a price where it moves nothing priced: an act’s over what follows the acts, a row’s at the card’s foot', async () => {
+    const m = await mount()
+    await select(m, { contigs: [0, 1, 2, 3] })
+    const slots = (): Array<string | undefined> => [...document.querySelectorAll<HTMLElement>('.curate-selection-price:not(.hidden)')].map((node) => node.dataset.slot)
+    // An act of the card: its price stands over what follows the acts, in the acts' own box.
+    act('new MAG').dispatchEvent(new PointerEvent('pointerenter'))
+    await wait(200)
+    await wait(0)
+    await frame()
+    expect(slots()).toEqual(['acts'])
+    const over = document.querySelector('.curate-selection-price[data-slot="acts"]') as HTMLElement
+    expect(over.parentElement?.classList.contains('curate-selection-acts')).toBe(true)
+    expect(over.classList.contains('is-over')).toBe(true)
+    act('new MAG').dispatchEvent(new PointerEvent('pointerleave'))
+    await frame()
+    expect(slots()).toEqual([])
+    // A row's act: its price at the card's foot, which nothing priced follows.
+    const move = rowAct(rowsUnder('meet most')[1])
+    move.dispatchEvent(new PointerEvent('pointerenter'))
+    await wait(200)
+    await wait(0)
+    await frame()
+    expect(slots()).toEqual(['rows'])
+    const body = document.querySelector('.curate-selection-card .curate-card-body') as HTMLElement
+    expect(body.lastElementChild?.getAttribute('data-slot')).toBe('rows')
+    // The genome that takes the contig in first.
+    expect(textsOf(document.body, '.curate-selection-price:not(.hidden) .curate-card-price-name')).toEqual(['Y', 'X1'])
   })
 
   it('gives back the steps priced before an act was, a question of several steps too', async () => {
@@ -417,6 +448,15 @@ describe('what a step does to a grade', () => {
     expect(qualityShift(q(0.6, 1.0), q(0.62, 1.0))).toEqual({ completeness: null, redundancy: null })
   })
 
+  it('blames the redundancy for a MAG made contaminated, though the completeness made it graded at all', () => {
+    // An ungraded fragment that takes in the rest of its organism and one marker too many.
+    expect(qualityShift(q(0.12, 1.16), q(0.84, 1.1003))).toEqual({ completeness: null, redundancy: 'demoted' })
+    // A genome the step makes has no grade to fall from.
+    expect(qualityShift(null, q(0.97, 1.46))).toEqual({ completeness: null, redundancy: 'demoted' })
+    expect(qualityShift(null, q(0.95, 1.0))).toEqual({ completeness: 'promoted', redundancy: null })
+    expect(qualityShift(null, q(0.6, 1.0))).toEqual({ completeness: null, redundancy: null })
+  })
+
   it('prices a merge of several genomes, its redundancy in the warning colour where it makes the MAG contaminated', async () => {
     const m = await mount()
     await select(m, { genomes: ['X1', 'X2', 'Y'] })
@@ -425,26 +465,58 @@ describe('what a step does to a grade', () => {
     await wait(0)
     await frame()
     expect(textsOf(document.body, '.curate-selection-price .curate-card-price-name')).toEqual(['Y'])
-    expect(textsOf(document.body, '.curate-selection-price .curate-card-price-line')).toEqual(['completeness 100% + 50% + 50% → 100%', 'redundancy 1.00 + 1.00 + 1.00 → 2.00'])
-    expect(textsOf(document.body, '.curate-selection-price .is-demoted')).toEqual(['redundancy 1.00 + 1.00 + 1.00 → 2.00'])
+    expect(textsOf(document.body, '.curate-selection-price .curate-card-price-line')).toEqual(['complete 100% + 50% + 50% → 100%', 'redundant 1.00 + 1.00 + 1.00 → 2.00'])
+    expect(textsOf(document.body, '.curate-selection-price .is-demoted')).toEqual(['redundant 1.00 + 1.00 + 1.00 → 2.00'])
     m.model.preview(null)
     await frame()
-    expect(document.querySelector('.curate-selection-price')?.classList.contains('hidden')).toBe(true)
+    expect(document.querySelectorAll('.curate-selection-price:not(.hidden)')).toHaveLength(0)
+  })
+
+  it('prices a genome a step makes by its own numbers, and sums three genomes at most', async () => {
+    const m = await mount()
+    const before = m.model.answer
+    if (before === null) throw new Error('not counted')
+    // A new MAG of X2's contigs and Z's: two genomes taken whole, and one made.
+    const minted = m.model.mint('mag')
+    m.model.preview({ op: 'create', id: minted.id, name: minted.name, kind: 'mag', contigs: ['x3', 'x4', 'x5', 'z0', 'z1', 'z2', 'z3'] }, false)
+    await wait(0)
+    const made = priceList(before, m.model.previewed ?? before, (_, name) => name) as HTMLElement
+    expect(textsOf(made, '.curate-card-price-name')).toEqual([`${minted.name}new`])
+    expect(textsOf(made, '.curate-card-price-line')).toEqual(['complete 100%', 'redundant 1.50'])
+    // Contaminated is its redundancy's doing.
+    expect(textsOf(made, '.is-demoted')).toEqual(['redundant 1.50'])
+    // Four genomes in one: three summed, the fourth counted.
+    m.model.preview({ op: 'merge', into: 'X1', genomes: ['X2', 'Y', 'Z'] }, false)
+    await wait(0)
+    const merged = priceList(before, m.model.previewed ?? before, (_, name) => name) as HTMLElement
+    expect(textsOf(merged, '.curate-card-price-line')[0]).toBe('complete 50% + 100% + 100% + 1 more → 100%')
+    // A genome without a marker of the set adds nothing to a sum: counted, not printed as 0%.
+    m.store.apply({ op: 'create', id: 'curated:1', name: 'E0', kind: 'mag', contigs: ['x2'] })
+    await settle(m)
+    const now = m.model.answer
+    if (now === null) throw new Error('not counted')
+    expect(now.genomes.find((genome) => genome.id === 'curated:1')?.quality?.weightedCompleteness).toBe(0)
+    m.model.preview({ op: 'merge', into: 'Y', genomes: ['curated:1', 'X2'] }, false)
+    await wait(0)
+    const empty = priceList(now, m.model.previewed ?? now, (_, name) => name) as HTMLElement
+    expect(textsOf(empty, '.curate-card-price-line')).toEqual(['complete 100% + 50% + 1 more → 100%', 'redundant 1.00 + 1.00 + 1 more → 1.50'])
   })
 
   it('prices only a step that concerns the selection: the review’s question about other genomes is the band’s', async () => {
     const m = await mount()
     await select(m, { genomes: ['X1', 'X2'] })
+    const shown = (): Array<string | undefined> => [...document.querySelectorAll<HTMLElement>('.curate-selection-price:not(.hidden)')].map((node) => node.dataset.slot)
+    // A step priced elsewhere is drawn at the card's foot, never over the acts.
     m.model.preview({ op: 'move', contigs: ['y5'], to: 'Y' }, false)
     await wait(0)
     await frame()
-    expect(document.querySelector('.curate-selection-price')?.classList.contains('hidden')).toBe(false)
+    expect(shown()).toEqual(['rows'])
     m.model.preview({ op: 'move', contigs: ['p0'], to: 'Z' }, false)
     await wait(0)
     await frame()
     expect(m.model.previewed).not.toBeNull()
-    expect(document.querySelector('.curate-selection-price')?.classList.contains('hidden')).toBe(true)
+    expect(shown()).toEqual([])
     await select(m, { contigs: [16] })
-    expect(document.querySelector('.curate-selection-price')?.classList.contains('hidden')).toBe(false)
+    expect(shown()).toEqual(['rows'])
   })
 })

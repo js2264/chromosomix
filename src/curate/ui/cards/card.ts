@@ -17,7 +17,7 @@ import { fmt } from '../../../units'
 import type { CurationStep, GenomeKind } from '../../../genome/curation'
 import type { CurationStateResult } from '../../../worker/curateProtocol'
 import { displayPercent } from '../../model'
-import { priceOf, priceVerdict } from '../../price'
+import { priceOf, priceVerdict, redundancyText, type PriceRow } from '../../price'
 import type { Quality } from '../../quality'
 import { grade } from '../grade'
 
@@ -161,14 +161,25 @@ function gradeRank(completeness: number, redundancy: number): number {
  * `after`: a grade that falls marks the number that pulls it down — the
  * redundancy past 1.05 or 1.10, the completeness under a threshold — and one
  * that reaches high quality the number that lifts it; the other is `null`.
+ * Contaminated is the redundancy's doing whatever made the genome graded at
+ * all: an ungraded fragment merged into a contaminated MAG gained completeness,
+ * and it is not the completeness that wears the warning. `before` is `null`
+ * for a genome the step makes, which has no grade to fall from: contaminated
+ * marks its redundancy, high quality its completeness.
  */
-export function qualityShift(before: Quality, after: Quality): { completeness: Shift; redundancy: Shift } {
+export function qualityShift(before: Quality | null, after: Quality): { completeness: Shift; redundancy: Shift } {
+  const gradeAfter = grade(after.weightedCompleteness, after.weightedRedundancy)
+  if (before === null) {
+    if (gradeAfter === 'contaminated') return { completeness: null, redundancy: 'demoted' }
+    return { completeness: gradeAfter === 'high' ? 'promoted' : null, redundancy: null }
+  }
   const was = gradeRank(before.weightedCompleteness, before.weightedRedundancy)
-  const now = gradeRank(after.weightedCompleteness, after.weightedRedundancy)
+  const now = GRADE_RANK[gradeAfter ?? 'none']
   // Each number moved alone, the other kept as it was.
   const byCompleteness = gradeRank(after.weightedCompleteness, before.weightedRedundancy)
   const byRedundancy = gradeRank(before.weightedCompleteness, after.weightedRedundancy)
   if (now < was) {
+    if (gradeAfter === 'contaminated') return { completeness: null, redundancy: 'demoted' }
     const redundancy = byRedundancy < was
     return { completeness: byCompleteness < was || !redundancy ? 'demoted' : null, redundancy: redundancy ? 'demoted' : null }
   }
@@ -180,15 +191,22 @@ export function qualityShift(before: Quality, after: Quality): { completeness: S
   return { completeness: null, redundancy: null }
 }
 
+/** The genomes a price sums at most before it counts the rest. */
+const SUMMANDS = 3
+
 /**
  * What a step would leave, genome by genome (`curate/price.ts`): each genome
  * it changes, its weighted completeness and redundancy before → after, a line
- * each — `50% + 50% → 100%` where it takes in whole genomes, `100% → 100%`
- * where it gains or loses some contigs, the genomes those come from on rows of
- * their own — the number that makes its grade fall in the warning colour, the
- * one that makes it high quality in the finished one; its length where the map
- * holds no markers. `null` when the step changes no genome's contigs (a link,
- * a rename).
+ * each, in the band's words — `complete 50% + 50% → 100%` where it takes in
+ * whole genomes (three that bring markers at most, then how many more),
+ * `complete 100% → 100%` where it gains or loses some contigs, the genomes
+ * those come from on rows of their own; a genome the step makes, its numbers
+ * as they would be — the number that makes its grade fall (contaminated, its
+ * redundancy) in the warning colour, the one that makes it high quality in the
+ * finished one; its length where the map holds no markers. The genomes that
+ * take contigs in come first, then those whose grade moves, then the furthest
+ * moved: `limit` rows, and how many more. `null` when the step changes no
+ * genome's contigs (a link, a rename).
  *
  * @param nameOf A genome's name as printed, by id, given the name it has after.
  */
@@ -198,25 +216,35 @@ export function priceList(
   nameOf: (id: string, name: string) => string,
   limit = 3,
 ): HTMLElement | null {
-  const rows = priceOf(before, after)
+  const rows = priceOrder(priceOf(before, after), after)
   if (rows.length === 0) return null
   const present = new Set(after.genomes.map((genome) => genome.id))
+  const existed = new Set(before.genomes.map((genome) => genome.id))
   const list = el('ul', { class: 'curate-card-price' })
   for (const row of rows.slice(0, limit)) {
     const genome = after.genomes.find((g) => g.id === row.id)
+    const made = !existed.has(row.id)
     // What it was made of: itself, and the genomes it takes in whole. A genome
-    // that only gives it some contigs is not summed in: it has its own row.
-    const parts = row.from.filter((from) => from.id === row.id || !present.has(from.id))
+    // that only gives it some contigs is not summed in: it has its own row. A
+    // genome the step makes has nothing to add up.
+    const parts = made ? [] : row.from.filter((from) => from.id === row.id || !present.has(from.id))
     const q = row.after
     const lines: Array<{ text: string; shift: Shift }> = []
     if (q !== null && parts.every((from) => from.quality !== null)) {
-      const sum = (pick: (quality: Quality) => number, form: (x: number) => string): string =>
-        parts.length === 0 ? form(pick(q)) : `${parts.map((from) => form(pick(from.quality as Quality))).join(' + ')} → ${form(pick(q))}`
-      const first = parts[0]?.quality ?? null
-      const shift = first === null ? { completeness: null, redundancy: null } : qualityShift(first, q)
+      // Summed: the genome itself, then those that bring a marker of the set —
+      // an element or a marker-less fragment adds nothing to a sum, `0% + 0%`:
+      // counted, not printed — three at most.
+      const telling = parts.filter((from, k) => k === 0 || (from.quality as Quality).weightedCompleteness > 0).slice(0, SUMMANDS)
+      const more = parts.length - telling.length
+      const sum = (pick: (quality: Quality) => number, form: (x: number) => string): string => {
+        if (parts.length === 0) return form(pick(q))
+        const shown = telling.map((from) => form(pick(from.quality as Quality)))
+        return `${shown.join(' + ')}${more > 0 ? ` + ${fmt.int(more)} more` : ''} → ${form(pick(q))}`
+      }
+      const shift = qualityShift(made ? null : (parts[0]?.quality ?? null), q)
       lines.push(
-        { text: `completeness ${sum((x) => x.weightedCompleteness, (x) => fmt.pct(x, 0))}`, shift: shift.completeness },
-        { text: `redundancy ${sum((x) => x.weightedRedundancy, (x) => fmt.fixed(x, 2))}`, shift: shift.redundancy },
+        { text: `complete ${sum((x) => x.weightedCompleteness, (x) => fmt.pct(x, 0))}`, shift: shift.completeness },
+        { text: `redundant ${sum((x) => x.weightedRedundancy, redundancyText)}`, shift: shift.redundancy },
       )
     } else {
       const length = genome?.length ?? 0
@@ -225,13 +253,34 @@ export function priceList(
       lines.push({ text: `${parts.length === 0 ? fmt.bp(length) : `${fmt.bp(was)} → ${fmt.bp(length)}`} · ${fmt.int(contigs)} ${contigs === 1 ? 'contig' : 'contigs'}`, shift: null })
     }
     const verdict = priceVerdict(row)
-    const title = `${row.name}: ${lines.map((line) => line.text).join(', ')}${verdict === 'demoted' ? ' — its grade falls' : verdict === 'promoted' ? ' — high quality' : ''}`
-    // A genome the step makes: nothing to add up, its numbers as they would be.
-    const name = el('span', { class: 'curate-card-price-name' }, nameOf(row.id, row.name), parts.length === 0 ? el('span', { class: 'curate-card-price-new', text: 'new' }) : null)
+    const from = made && row.from.length > 0 ? `; of contigs from ${fmt.int(row.from.length)} ${row.from.length === 1 ? 'genome' : 'genomes'}` : ''
+    const title = `${row.name}${made ? ', new' : ''}: ${lines.map((line) => line.text).join(', ')}${verdict === 'demoted' ? ' — its grade falls' : verdict === 'promoted' ? ' — high quality' : ''}${from}`
+    const name = el('span', { class: 'curate-card-price-name' }, nameOf(row.id, row.name), made ? el('span', { class: 'curate-card-price-new', text: 'new' }) : null)
     const item = el('li', { class: `curate-card-price-row${lines.length > 1 ? ' is-two' : ''}`, title }, name)
     for (const line of lines) item.appendChild(el('span', { class: `curate-card-price-line${line.shift === null ? '' : ` is-${line.shift}`}`, text: line.text }))
     list.appendChild(item)
   }
   if (rows.length > limit) list.appendChild(el('li', { class: 'curate-card-price-more', text: `and ${fmt.int(rows.length - limit)} more` }))
   return list
+}
+
+/**
+ * A price's rows in the order a reader looks for them: the genomes that take
+ * contigs in — the target of a move, a genome the step makes — then those
+ * whose grade the step moves, then by how far their completeness moves;
+ * `priceOf`'s own order (MAGs, then by name) breaks a tie. In that order a
+ * move of 376 contigs out of 41 genomes shows its target, not three of the
+ * genomes it empties a little.
+ */
+function priceOrder(rows: readonly PriceRow[], after: CurationStateResult): PriceRow[] {
+  const contigsAfter = new Map(after.genomes.map((genome) => [genome.id, genome.contigs]))
+  return rows
+    .map((row, at) => {
+      const self = row.from.find((from) => from.id === row.id)
+      const gains = self === undefined || (contigsAfter.get(row.id) ?? 0) > self.contigs
+      const was = self?.quality?.weightedCompleteness ?? 0
+      return { row, at, gains, moved: priceVerdict(row) !== null, delta: Math.abs((row.after?.weightedCompleteness ?? 0) - was) }
+    })
+    .sort((x, y) => Number(y.gains) - Number(x.gains) || Number(y.moved) - Number(x.moved) || y.delta - x.delta || x.at - y.at)
+    .map(({ row }) => row)
 }

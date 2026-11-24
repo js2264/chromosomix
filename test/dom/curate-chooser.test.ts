@@ -222,8 +222,9 @@ describe('the popover', () => {
     await wait(0)
     expect(s.model.previewed).not.toBeNull()
     expect(document.querySelector('.curate-chooser-words')?.textContent).toBe('move y5 into Y')
-    expect(textsOf(document.body, '.curate-card-price-name')).toEqual(['X1', 'Y'])
-    expect(textsOf(document.body, '.curate-card-price-line')).toEqual(['completeness 50% → 50%', 'redundancy 1.00 → 1.00', 'completeness 100% → 100%', 'redundancy 1.00 → 1.00'])
+    // The genome the contig goes to first, then the one it leaves.
+    expect(textsOf(document.body, '.curate-card-price-name')).toEqual(['Y', 'X1'])
+    expect(textsOf(document.body, '.curate-card-price-line')).toEqual(['complete 100% → 100%', 'redundant 1.00 → 1.00', 'complete 50% → 50%', 'redundant 1.00 → 1.00'])
     key('Escape')
     expect(Chooser.isOpen()).toBe(false)
     expect(s.model.previewStep).toEqual(held)
