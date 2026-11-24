@@ -1,6 +1,13 @@
 {
-  "latest": "bd65339",
+  "latest": "6fc09fc",
   "versions": [
+    {
+      "commit": "6fc09fc",
+      "version": "0.21.0",
+      "date": "2026-11-24T21:43:38+01:00",
+      "subject": "Add ideogram visualization of chromosomes (#181)",
+      "tag": ""
+    },
     {
       "commit": "bd65339",
       "version": "0.21.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "426edae",
-      "version": "0.20.0",
-      "date": "2026-11-05T10:39:55+01:00",
-      "subject": "ci: modify laptop and timing.plot.R",
-      "tag": ""
-    },
-    {
       "commit": "40ec1ec",
       "version": "0.20.0",
       "date": "2026-11-04T23:19:15+01:00",
@@ -268,13 +268,6 @@
       "title": "Draw a metagenome's map as a circle or as two lines",
       "branch": "js/circular-view",
       "date": "2026-11-20T16:08:32Z"
-    },
-    {
-      "number": 181,
-      "commit": "c37c40c",
-      "title": "Add ideogram visualization of chromosomes",
-      "branch": "js/ideogram",
-      "date": "2026-11-20T15:57:05Z"
     }
   ]
 }
