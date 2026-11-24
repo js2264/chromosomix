@@ -296,3 +296,21 @@ describe('a drop through the controller', () => {
     expect(store.applied).toBe(2)
   })
 })
+
+describe('as it would be', () => {
+  it('counts one more step without making it, and lets go of it when a step is made', async () => {
+    const { model, store } = setup()
+    await model.settled()
+    model.preview({ op: 'merge', into: 'X1', genomes: ['X2'] })
+    expect(model.previewStep).toEqual({ op: 'merge', into: 'X1', genomes: ['X2'] })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(model.previewed?.genomes.map((genome) => genome.name)).toEqual(['X1', 'Y', 'Z', 'P'])
+    expect(model.shown).toBe(model.previewed)
+    expect(store.applied).toBe(0)
+    store.apply({ op: 'rename', genome: 'Z', name: 'Zeta' })
+    expect(model.previewStep).toBeNull()
+    await model.settled()
+    expect(model.shown).toBe(model.answer)
+  })
+})

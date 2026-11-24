@@ -23,6 +23,7 @@ import type { CurateChange } from '../model'
 import type { Suggestion } from '../suggest'
 import type { CurationStateResult } from '../../worker/curateProtocol'
 import type { CurateContext, CurateFrame } from './context'
+import { grade } from './grade'
 
 /** A row's height, in CSS pixels. */
 export const LIST_ROW = 28
@@ -30,16 +31,6 @@ export const LIST_ROW = 28
 const OVERSCAN = 8
 /** How far a press moves before it is a drag. */
 const DRAG_PX = 4
-
-/** metaTOR's grades (`validation.py::bin_quality`), on the weighted pair. */
-export function grade(completeness: number, redundancy: number): 'high' | 'medium' | 'low' | 'contaminated' | null {
-  if (!Number.isFinite(completeness) || !Number.isFinite(redundancy)) return null
-  if (redundancy > 1.1) return 'contaminated'
-  if (completeness >= 0.9 && redundancy <= 1.05) return 'high'
-  if (completeness >= 0.7) return 'medium'
-  if (completeness >= 0.5) return 'low'
-  return null
-}
 
 /** What the list keeps of one answer: counted once per answer. */
 interface Derived {

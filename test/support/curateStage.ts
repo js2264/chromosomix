@@ -49,6 +49,8 @@ export function testContext(): TestStage {
       background: evidence.background.rho,
     },
     colourOf: (id) => genomeColour(Math.max(0, base.genomes.findIndex((genome) => genome.name === id)), 'mag'),
+    shortName: (id) => model.answer?.genomes.find((genome) => genome.id === id)?.name ?? id,
+    prefixOf: () => '',
     poolColour: { css: POOL_COLOUR, rgba: 0xff7a7a7a },
     ink: () => ({ text: '#111', dim: '#555', faint: '#777', accent: '#1f5fa9', accentSoft: '#dce8f7', background: '#fff', font: '10px sans-serif' }),
     focus: () => ({ promise: new Promise<CurationFocusResult>(() => {}), cancel: () => {} }),

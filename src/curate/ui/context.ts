@@ -9,7 +9,8 @@ import type { BaseBinning } from '../../genome/curation'
 import type { StageInk } from '../../edit/draw'
 import type { CurationFocusResult } from '../../worker/curateProtocol'
 import type { GenomeColour } from '../colours'
-import type { Cancellable, CurateModel } from '../model'
+import type { Cancellable, CurateChange, CurateModel } from '../model'
+import type { Suggestion } from '../suggest'
 
 /** The file's facts the stage draws from, read once as it opens. */
 export interface CurateData {
@@ -55,6 +56,14 @@ export interface CurateContext {
   readonly data: CurateData
   /** A genome's colour, by id: kept by its slot, so a merge or a sort changes none. */
   colourOf(id: string): GenomeColour
+  /**
+   * A genome's name as the stage prints it: without the prefix its section
+   * shares (`00700_00001` for `MM133_metator_00700_00001`), whole where it
+   * shares none. Titles, exports and the history keep the full name.
+   */
+  shortName(id: string): string
+  /** The prefix a section's names share, printed once in its head; `''` for none. */
+  prefixOf(kind: 'mag' | 'element'): string
   /** The pool's colour. */
   readonly poolColour: GenomeColour
   /** The stage's ink for canvases, read again when the theme changes. */
@@ -78,4 +87,28 @@ export interface CurateContext {
   dropWords(target: CurateDropTarget): { words: string; refused: boolean } | null
   /** Drop the drag in flight on a target: the step, made. */
   drop(target: CurateDropTarget): boolean
+}
+
+/**
+ * One of the stage's pictures: the contact map, the host map, the GC ×
+ * coverage scatter. The stage places it — large, or small beside the large
+ * one — and tells it what changed; it draws, and answers the hand.
+ */
+export interface CuratePane {
+  readonly element: HTMLElement
+  /** Its name, as its tab and key say it. */
+  readonly title: string
+  /** Repaint for what changed (`model.shown` is what to draw). */
+  update(change: CurateChange): void
+  /** Its box changed: a resize, or a move between the large place and a small one. */
+  resize(): void
+  /** Shown large, with all its furniture, or small, as a live thumbnail. */
+  setLarge(large: boolean): void
+  /** Frame a suggestion's evidence (the review's current one), or nothing. */
+  showSuggestion(suggestion: Suggestion | null): void
+  /** A key while the pointer or the focus is on it: zoom, fit, a level; `true` when taken. */
+  key(event: KeyboardEvent): boolean
+  /** Where something held at a viewport point would drop on it, or `null`. */
+  dropTargetAt(x: number, y: number): CurateDropTarget | null
+  dispose(): void
 }

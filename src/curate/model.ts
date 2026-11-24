@@ -13,7 +13,7 @@
  * later step.
  */
 
-import { UNBINNED, type Curation, type CurationStep, type GenomeKind } from '../genome/curation'
+import { UNBINNED, withCurationStep, type Curation, type CurationStep, type GenomeKind } from '../genome/curation'
 import type { CurationLearned, CurationStore, LearnedKind } from '../state/curation'
 import type { CurationStateResult } from '../worker/curateProtocol'
 import { AUTO_THRESHOLD, INITIAL_WEIGHTS, learn, LIKELY, OFFER_FLOOR } from './method'
@@ -37,7 +37,7 @@ export interface CurateClient {
 export type CurateMode = 'manual' | 'review' | 'auto'
 
 /** What changed, for the stage to repaint only that. */
-export type CurateChange = 'state' | 'counting' | 'selection' | 'hover' | 'mode' | 'current' | 'error'
+export type CurateChange = 'state' | 'counting' | 'selection' | 'hover' | 'mode' | 'current' | 'error' | 'preview'
 
 /** What is selected: whole genomes by id, and contigs by index of the file's. */
 export interface CurateSelection {
@@ -95,6 +95,9 @@ export class CurateModel {
   private currentKey: string | null = null
   private autoRun: { stopped: boolean } | null = null
   private waiters: Array<() => void> = []
+  private previewHeld: { key: string; step: CurationStep; answer: CurationStateResult | null } | null = null
+  private previewTicket = 0
+  private previewRequest: Cancellable<CurationStateResult> | null = null
   private readonly listeners = new Set<(change: CurateChange) => void>()
   private readonly unsubscribe: () => void
   private readonly debounce: number
@@ -113,7 +116,11 @@ export class CurateModel {
         const timer = setTimeout(run, ms)
         return () => clearTimeout(timer)
       })
-    this.unsubscribe = store.subscribe(() => this.recount())
+    this.unsubscribe = store.subscribe(() => {
+      // A preview is of one more step on the binning as it was: gone with it.
+      this.clearPreview()
+      this.recount()
+    })
     this.recount(0)
   }
 
@@ -136,6 +143,8 @@ export class CurateModel {
     this.unsubscribe()
     this.pending?.cancel()
     this.pending = null
+    this.previewRequest?.cancel()
+    this.previewRequest = null
     this.cancelTimer?.()
     this.cancelTimer = null
     if (this.autoRun !== null) this.autoRun.stopped = true
@@ -225,6 +234,66 @@ export class CurateModel {
     this.pruneSelection(answer)
     this.release()
     this.emit('state')
+  }
+
+  // -------------------------------------------------------------------------
+  // As it would be.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Count the binning as it would be with one more step — the review's Space
+   * held, a suggestion hovered, a drop about to be made — as a step is
+   * counted, kept by the step (asking the same twice counts once) and dropped
+   * by any step made. `null` lets go of it.
+   */
+  preview(step: CurationStep | null): void {
+    if (step === null) {
+      this.clearPreview()
+      return
+    }
+    const key = JSON.stringify(step)
+    if (this.previewHeld?.key === key) return
+    this.previewRequest?.cancel()
+    const ticket = ++this.previewTicket
+    this.previewHeld = { key, step, answer: null }
+    const request = this.client.state(withCurationStep(this.store.curation, step, 'reader', 0), this.weights)
+    this.previewRequest = request
+    request.promise.then(
+      (answer) => {
+        if (ticket !== this.previewTicket || this.disposed || this.previewHeld?.key !== key) return
+        this.previewRequest = null
+        this.previewHeld = { key, step, answer }
+        this.emit('preview')
+      },
+      () => {
+        if (ticket === this.previewTicket) this.previewRequest = null
+      },
+    )
+    this.emit('preview')
+  }
+
+  /** The step previewed, counted or not. */
+  get previewStep(): CurationStep | null {
+    return this.previewHeld?.step ?? null
+  }
+
+  /** The binning as it would be, once counted; `null` while counting or with no preview. */
+  get previewed(): CurationStateResult | null {
+    return this.previewHeld?.answer ?? null
+  }
+
+  /** What the pictures draw: the binning as it would be while one is previewed and counted, else as it is. */
+  get shown(): CurationStateResult | null {
+    return this.previewHeld?.answer ?? this.answerHeld
+  }
+
+  private clearPreview(): void {
+    if (this.previewHeld === null && this.previewRequest === null) return
+    this.previewTicket++
+    this.previewRequest?.cancel()
+    this.previewRequest = null
+    this.previewHeld = null
+    if (!this.disposed) this.emit('preview')
   }
 
   // -------------------------------------------------------------------------
