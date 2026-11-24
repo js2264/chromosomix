@@ -177,23 +177,8 @@ export function markedPairs(s: Asked): MarkedPair[] {
   return out
 }
 
-/**
- * A question's number as the review's band and the suggestions card print it
- * — the likely ones from 1, the less sure from 1 again — found by its key or a
- * member's (a member stepped into wears its question's); `null` for one the
- * queue does not hold.
- */
-export function questionNumber(
-  queue: ReadonlyArray<{ key: string; confidence: number; members: ReadonlyArray<{ key: string }> }>,
-  key: string,
-  likely: number,
-): number | null {
-  let at = queue.findIndex((q) => q.key === key)
-  if (at < 0) at = queue.findIndex((q) => q.members.some((m) => m.key === key))
-  if (at < 0) return null
-  const first = queue.filter((q) => q.confidence >= likely).length
-  return at < first ? at + 1 : at - first + 1
-}
+/** A question's number: the one rule, in `curate/questions.ts`. */
+export { questionNumber } from '../questions'
 
 /**
  * The genomes previewed steps make or change, by id: where the binning as it

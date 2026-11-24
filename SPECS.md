@@ -17415,6 +17415,47 @@ an element is refused and says why. What is dragged follows the pointer with the
 would make, and resting on a target draws the pictures as the drop would leave them, every step of
 it — two genomes dissolved, three elements linked.
 
+**The contact map** (`curate/ui/ContactPane.ts`) has two levels, a crumb between them. The **genome
+level**: a uniform cell a genome in the stage's order, MAGs then elements, never the pool; a cell the
+lower bound of the two genomes' affinity, on a log scale from the background to *as its own*, so a cell
+resting on a read pair or two is pale. The **close-up** (`Enter`, or a double press on the diagonal;
+`⇧Enter` back): the selected genomes' contigs genome by genome, longest first, then the candidates an
+offered recruit or move would bring in, a cell a contig pair's contacts over chance. Both are painted as
+a figure, on paper, in either theme; the key stands under the map. Along the top and the left, bars in
+each genome's colour with its short name where a block holds one, and a name on a plate where it does
+not, the sections' labels kept clear of it. The selection is outlined, the genome lit in every pane
+dashed, a merge on offer an L at its cell's corner, a link a ring, an unlink a cross; the question shown
+— review's, whole: each pair of an organism's fragments, each link and unlink of a host question — is
+drawn thicker with the number the band gives it, and framed once, as it is first shown; while a step is
+previewed the genome it makes is outlined. A press on the diagonal or a bar selects a genome, off it
+the pair; a drag along the diagonal selects the run; a drag from the selection carries it.
+
+**The host map** (`curate/ui/HostPane.ts`): the MAGs on the left in the stage's order, the elements on
+the right, each beside the MAG it meets most, kept where they are placed — an element a step makes
+beside the genome its contigs came from; the elements that meet no MAG folded into the foot (*46 meet
+no MAG ▸*). A node is a bar as wide as its genome is long, on a log scale. A link **held** is a curve in
+ink as wide as the share of the element's contacts with MAGs it takes, a link **offered** dashed in the
+accent, a held link a suggestion would undo crossed; the question shown thicker, with its number. An
+element dragged onto a MAG is linked to it. Past three hundred genomes a side, or by its head's choice,
+it shows only what is around the selection.
+
+**The scatter** (`curate/ui/ScatterPane.ts`): every contig a dot — its GC content across, its Hi-C
+contacts per kb up on a log scale, its area its length, its colour its genome's, the pool faint — so an
+organism is one cloud and a contig binned out of its cloud stands out. Before the contacts are read, GC
+alone, in a band; a contig with no contact sits in a strip at the foot. A drag lassoes (⇧ adds, ⌥ takes
+away), a press selects a dot's contig and a second its genome; the question shown rings its contigs,
+outlines its genomes and draws a line to where it would take them. Nothing is dropped on it: clouds
+overlap, and a drop is never a guess.
+
+**The inspector's cards** (`curate/ui/cards/`): the **selection** — a genome's numbers and quality,
+weighted and not, the genomes it meets most, each with its merge; several genomes' sum and their
+affinities with one another; contigs' homes — with the acts on it and their keys, each step priced while
+the pointer or the keyboard rests on its act; the **suggestions** — the questions in the queue's order,
+numbered as the band numbers them, filtered by kind, each with *take* and *turn down*, a question's
+members one by one, the turned down with *offer again*, and in auto the run and what it held back; the
+**history** — every step with who made it, a row pressed going back to it; the **export** (§33.8); and
+**about the map** — the file, its markers, the contacts' read and what the method measured.
+
 **Names** go to metacooler and metaTOR, and the stage refuses, saying why, an empty one, another
 genome's, a contig's (it would hide the contig in every box that finds a place), one with a space, a
 non-ASCII character, a comma (metaTOR lists genomes with them) or a colon, and any case of the words

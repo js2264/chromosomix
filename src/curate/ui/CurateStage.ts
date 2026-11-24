@@ -22,6 +22,7 @@ import { POOL_COLOUR, POOL_RGBA, genomeColour, slotApart, slotOf, type GenomeCol
 import { CurateModel, displayPercent, type Cancellable, type CurateChange, type CurateClient } from '../model'
 import { counted } from '../changes'
 import { sharedPrefix, shortName } from '../names'
+import { questionNumber } from '../questions'
 import { newlyDuplicated, priceLines, priceOf, priceVerdict } from '../price'
 import type { Suggestion } from '../suggest'
 import { AUTO_THRESHOLD, LIKELY } from '../method'
@@ -578,13 +579,14 @@ export class CurateStage {
     }
     const queue = model.queue()
     const question = model.currentQuestion
-    const at = queue.findIndex((q) => q.key === question?.key)
     const likely = queue.filter((q) => q.confidence >= LIKELY).length
+    // Numbered as the pictures and the suggestions card number it (`curate/questions.ts`).
+    const number = question === null ? 0 : (questionNumber(queue, question.key, LIKELY) ?? 0)
+    const isLikely = question !== null && question.confidence >= LIKELY
     const member = model.member
-    const where =
-      at < likely
-        ? `review · ${at + 1} of ${fmt.int(likely)}${queue.length > likely ? ` · ${fmt.int(queue.length - likely)} less sure after` : ''}`
-        : `review · less sure · ${at + 1 - likely} of ${fmt.int(queue.length - likely)}`
+    const where = isLikely
+      ? `review · ${number} of ${fmt.int(likely)}${queue.length > likely ? ` · ${fmt.int(queue.length - likely)} less sure after` : ''}`
+      : `review · less sure · ${number} of ${fmt.int(queue.length - likely)}`
     const keys = el(
       'span',
       { class: 'curate-band-keys' },
