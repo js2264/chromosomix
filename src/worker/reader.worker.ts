@@ -69,6 +69,7 @@ import {
   type PictureResult,
   type ResampleResult,
   type SourceKind,
+  type SourceSpec,
   type StageWindowSide,
   type ReadPlans,
   type StatsResult,
@@ -652,6 +653,11 @@ function reporter(id: number): (done: number, total: number, note: string) => vo
   }
 }
 
+/** What tells one file from another across opens: a local one by its name, size and last change; a remote one by its address. */
+function fileIdentity(source: SourceSpec): string {
+  return source.kind === 'local' ? `local\u0000${source.file.name}\u0000${source.file.size}\u0000${source.file.lastModified}` : `remote\u0000${source.url}`
+}
+
 async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Promise<OpenResult> {
   // Before the session is torn down, because it is the thing being reused.
   const reusable = importedRungFor(session, request.uri)
@@ -755,8 +761,10 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
       if (key !== undefined) curation = request.curation
     }
   }
-  // What the curation stage keeps is of this source's file alone (§33.9).
-  openedThrough(source)
+  // What the curation stage keeps is of this file alone (§33.9): known again by
+  // its name, size and last change, or its address — the byte source is a new
+  // wrapper on every open, and the File a new copy on every message.
+  openedThrough(fileIdentity(request.source))
   session = {
     mc,
     source,

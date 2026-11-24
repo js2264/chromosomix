@@ -588,3 +588,14 @@ describe('what auto and the cards may answer (§33.3, §33.6)', () => {
     expect(model.createFromSelected('mag')).toBe('curated:2')
   })
 })
+
+describe('an element is never graded (§33.5)', () => {
+  it('prices a MAG by its markers and an element by none, once the contacts are read as before', async () => {
+    const { model } = setup()
+    await model.settled()
+    const answer = model.answer
+    expect(answer?.counted).toBe(true)
+    expect(answer?.genomes.find((genome) => genome.id === 'P')?.quality).toBeNull()
+    expect(answer?.genomes.find((genome) => genome.id === 'Z')?.quality).not.toBeNull()
+  })
+})

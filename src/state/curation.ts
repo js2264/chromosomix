@@ -88,8 +88,15 @@ export class CurationStore {
   private held: Curation
   private folded: CuratedBinning | null = null
   private readonly listeners = new Set<() => void>()
-  /** Why a stored curation is not applied here, or `null`. */
-  readonly refusal: string | null
+  private refused: string | null
+
+  /**
+   * Why a stored curation is not applied here, or `null` — and `null` once a
+   * step of the reader's has replaced the record it was about.
+   */
+  get refusal(): string | null {
+    return this.refused
+  }
 
   /**
    * @param base The file's binning, read from the file itself — never from
@@ -104,7 +111,7 @@ export class CurationStore {
   ) {
     const stored = readCuration(recall<unknown>(key, CURATION_SCOPE))
     const wrong = stored === null ? null : curationMismatch(stored, file)
-    this.refusal = wrong === null ? null : `The curation kept for this file was made on another binning: ${wrong}.`
+    this.refused = wrong === null ? null : `The curation kept for this file was made on another binning: ${wrong}.`
     this.held = stored !== null && wrong === null ? stored : emptyCuration(file)
   }
 
@@ -212,6 +219,8 @@ export class CurationStore {
     if (next === this.held) return
     this.held = next
     this.folded = null
+    // The record refused is written over: the refusal was about it.
+    this.refused = null
     // An empty history is not kept at all, so a file nobody curated leaves no
     // record — and a workspace from it carries no `curation` field.
     remember(this.key, CURATION_SCOPE, next.history.length === 0 ? null : next)

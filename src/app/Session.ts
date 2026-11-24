@@ -5997,15 +5997,19 @@ export class Session {
     const held = keptCuration(key)
     if (held === null) return undefined
     const steps = curationFingerprint(held)
+    // A map that stores both triangles is never drawn through a curation (§33.4):
+    // asking would re-open the file only to be told so again.
+    if (this.file?.info.info['storage-mode'] === 'square') return undefined
     const store = this.curationHeld?.key === key ? this.curationHeld.store : null
-    // One the store refused — kept for another binning of the file — is held
-    // untouched, never drawn (§33.2).
-    if (store !== null && store.refusal !== null) return undefined
     // The store folds the kept curation over the file's binning: its binning's
-    // fingerprint is the reader's, where the two are the one history.
+    // fingerprint is the reader's, where the two are the one history — the
+    // reader's own steps too, made after a record the store refused.
     if (store !== null && curationFingerprint(store.curation) === steps) {
       return { key: store.binning.fingerprint(), held }
     }
+    // A record the store refused — kept for another binning of the file — is
+    // held untouched, never drawn (§33.2).
+    if (store !== null && store.refusal !== null) return undefined
     // A history the reader has folded before, by the binning it answered; one
     // it has not, by its steps — another name for the same map, never one map's
     // name for another.
@@ -6074,15 +6078,16 @@ export class Session {
       if (this.curateStage === opening) this.curateStage = null
       return
     }
-    // The stage and its parts are their own chunk: a session that never curates
-    // never loads them.
-    const [{ openCurationStage }, { curateParts }] = await Promise.all([import('../curate/ui/open'), import('../curate/ui/parts')])
-    if (this.destroyed || this.file !== file || this.curateStage !== opening) {
-      if (this.curateStage === opening) this.curateStage = null
-      return
-    }
     const title = this.mapLabel(file.uri)
     try {
+      // The stage and its parts are their own chunk: a session that never
+      // curates never loads them — and one that cannot load them (a build
+      // replaced since the page was, no network) says so, and can try again.
+      const [{ openCurationStage }, { curateParts }] = await Promise.all([import('../curate/ui/open'), import('../curate/ui/parts')])
+      if (this.destroyed || this.file !== file || this.curateStage !== opening) {
+        if (this.curateStage === opening) this.curateStage = null
+        return
+      }
       const stage = await openCurationStage({
         title,
         stem: exportStem(title),
@@ -6111,6 +6116,7 @@ export class Session {
     } catch (error) {
       if (this.curateStage === opening) this.curateStage = null
       console.error('chromosomix: the curation stage could not open', error)
+      this.say(`The curation stage could not open: ${error instanceof Error ? error.message : String(error)}. Reload the page to try again with this build.`)
       return
     }
     this.host.sessionChanged(this)

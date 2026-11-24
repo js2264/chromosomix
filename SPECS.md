@@ -17339,7 +17339,8 @@ id, and undo and redo take them together. *Built* (`genome/curation.ts`, `genome
 and a shared link. It carries a fingerprint of the binning it was made on — the contigs' names and
 lengths, which genome holds each, the genomes in order with their counts and kinds, and the links —
 and is **kept, not applied**, on a file whose binning differs, naming what differs first: `A held 3
-contigs when the curation was made and holds 2 here`.
+contigs when the curation was made and holds 2 here` — until the reader's first step on this file,
+which starts a curation of its own in its place, drawn as any other.
 
 ### 33.3 The stage
 
@@ -17468,7 +17469,9 @@ quality, the cards and the scatter's colours work from the file and its markers.
 stored pixel (§33.5) starts by itself, a bar and a *cancel* in the stage, and the maps, the host links
 and the suggestions arrive with it; a remote file past 64 MiB asks first, saying its pixels and its
 download, as the overview does (§7.3). A file's network is kept by the reader for the session, so the
-stage opened again does not read it again.
+stage opened again does not read it again — known again by its name, size and last change (or its
+address), so a file dropped again after `metacooler reassign` or `metator markers --inplace` wrote
+into it is read anew.
 
 *Built*: the frame, the list, the order, the colours, the names, the drop grammar, the readout, the
 modes, the questions, the band and its price, auto and its holding back, the keys and the contacts'

@@ -90,6 +90,10 @@ describe('the store', () => {
     expect(store.refusal).toBe('The curation kept for this file was made on another binning: A held 1 contigs when the curation was made and holds 2 here.')
     expect(store.applied).toBe(0)
     expect(recall(key, CURATION_SCOPE)).toEqual(kept)
+    // A step of the reader's writes over the record refused: the refusal goes with it.
+    store.apply({ op: 'rename', genome: 'A', name: 'Alpha' })
+    expect(store.refusal).toBeNull()
+    expect(recall(key, CURATION_SCOPE)).not.toEqual(kept)
   })
 
   it('keeps what the review taught, checked on the way back, and nothing where nothing was', () => {

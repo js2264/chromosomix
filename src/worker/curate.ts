@@ -33,17 +33,18 @@ interface Held {
 }
 
 let held: Held | null = null
-/** The byte source what is held was read through. */
+/** The file what is held was read from, as {@link openedThrough} names it. */
 let heldSource: unknown = null
 
 /**
- * A map opened through a byte source: what is held of another source is let
- * go of. A file dropped again under the same name, with the same contigs and
- * pixels — after `metacooler reassign` wrote the stage's table into it, or
- * `metator markers --inplace` stored its markers — is another file, and its
- * binning, markers and network are read again; the same source opened again
- * (another rung, the session through a curation) keeps them. A remote file is
- * one source per address for as long as the reader holds it.
+ * A map opened from a file, named by what tells it from another across opens
+ * (its name, size and last change, or its address): what is held of another
+ * file is let go of. A file dropped again under the same name, with the same
+ * contigs and pixels — after `metacooler reassign` wrote the stage's table into
+ * it, or `metator markers --inplace` stored its markers — has another size or
+ * time, and its binning, markers and network are read again; the same file
+ * opened again (another rung, the session through a curation) keeps them. A
+ * remote file is one file per address for as long as the reader holds it.
  */
 export function openedThrough(source: unknown): void {
   if (source === heldSource) return
