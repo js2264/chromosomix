@@ -30,6 +30,7 @@
 import { CIRCULAR_EVIDENCE_SCOPE, CIRCULAR_SCOPE } from './circular'
 import { ORIGIN_SCOPE } from './origins'
 import { EDIT_SCOPE, LEARNED_SCOPE, genomeEditKey, readEdit, readLearned, type Learned } from './referenceEdit'
+import { ORDER_SCOPE, readOrder, storedOrder } from './readerOrder'
 import type { ReferenceEdit } from '../genome/edit'
 import { RESOLUTIONS_SCOPE } from './resolutions'
 import { IDEOGRAM_SCOPE, readIdeogramLook, type IdeogramLook } from './ideogramLook'
@@ -222,6 +223,12 @@ export interface SessionConfig {
    * rather than none of it. Absent where no genome has one.
    */
   genomeEdits?: Record<string, { edit?: ReferenceEdit; learned?: Learned }>
+  /**
+   * The reader's order of a metagenome's genomes, and of the contigs within
+   * each (§7.6), by name — carried so a workspace or a link of a circle the
+   * reader rearranged opens arranged. Absent where nothing was moved.
+   */
+  order?: { genomes?: string[]; contigs?: Record<string, string[]> }
   /**
    * Resolutions the reader **added** to this file's ladder, in bp (§3.4).
    *
@@ -493,6 +500,7 @@ const SCOPES = {
   circularEvidence: CIRCULAR_EVIDENCE_SCOPE,
   origins: ORIGIN_SCOPE,
   edit: EDIT_SCOPE,
+  order: ORDER_SCOPE,
   resolutions: RESOLUTIONS_SCOPE,
   groups: 'browser:groups',
   scaling: 'browser:scaling',
@@ -589,6 +597,7 @@ export function buildConfig(options: {
     ...editOf(recall<unknown>(key, SCOPES.edit)),
     ...learnedOf(recall<unknown>(key, LEARNED_SCOPE)),
     ...genomeEditsOf(key),
+    ...orderOf(recall<unknown>(key, SCOPES.order)),
     ...resolutionsOf(recall<number[]>(key, SCOPES.resolutions)),
     groups: recall<GroupModes>(key, SCOPES.groups) ?? {},
     scaling: recall<GroupModes>(key, SCOPES.scaling) ?? {},
@@ -704,6 +713,12 @@ function readGenomeEdits(stored: unknown): { genomeEdits?: SessionConfig['genome
   return Object.keys(out).length > 0 ? { genomeEdits: out } : {}
 }
 
+/** `{ order: … }` where the reader moved a genome or a contig (§7.6), checked by the store's own reader. */
+function orderOf(stored: unknown): { order?: SessionConfig['order'] } {
+  const order = storedOrder(readOrder(stored))
+  return order === null ? {} : { order }
+}
+
 /** `{ resolutions: … }` for a file the reader added one to, else nothing. */
 function resolutionsOf(sizes: number[] | null): { resolutions?: number[] } {
   return Array.isArray(sizes) && sizes.length > 0 ? { resolutions: sizes } : {}
@@ -755,6 +770,7 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
     if (record.edit !== undefined) remember(genomeEditKey(key, genome), EDIT_SCOPE, record.edit)
     if (record.learned !== undefined) remember(genomeEditKey(key, genome), LEARNED_SCOPE, record.learned)
   }
+  if (config.order !== undefined) remember(key, SCOPES.order, config.order)
   if (config.resolutions !== undefined) {
     remember(key, SCOPES.resolutions, config.resolutions)
   }
@@ -1021,6 +1037,7 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
     ...editOf(row['edit']),
     ...learnedOf(row['editLearned']),
     ...readGenomeEdits(row['genomeEdits']),
+    ...orderOf(row['order']),
     ...resolutionsOf(
       Array.isArray(row['resolutions'])
         ? (row['resolutions'] as unknown[]).filter(

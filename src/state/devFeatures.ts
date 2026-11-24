@@ -39,6 +39,12 @@ export const DEV_FEATURES = {
   /** Two sequences on two axes (§28). */
   dotplot: 'The dot plot is not validated yet.',
   /**
+   * A metagenome drawn round (§7.6): the toggle, the Genomes table's button,
+   * the command, and the key it writes in a link. Its own line rather than a
+   * clause of `metacool`'s, so the format can be published without it.
+   */
+  circle: 'The circle of genomes is not validated yet.',
+  /**
    * Every chromosome drawn whole, side by side, with the tracks beside each
    * (§5.11): the Tracks cards' switch and the ideogram's rows, the command and
    * its key, and the key it writes in a link.

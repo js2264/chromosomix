@@ -56,9 +56,20 @@ export const LINK_VIEWS: ReadonlyArray<{ view: ViewKind; meaning: string }> = [
 
 /**
  * Keys the reader takes that this page does not name: the dev features' (§29) —
- * the multi-genome format's and the ideogram's.
+ * the multi-genome format's, the circle's and two lines' drawn of it (§7.6),
+ * and the ideogram's.
  */
-export const UNDOCUMENTED_KEYS: readonly string[] = ['genome', 'genome2', 'genomes', 'ideogram']
+export const UNDOCUMENTED_KEYS: readonly string[] = [
+  'genome',
+  'genome2',
+  'genomes',
+  'ideogram',
+  'circle',
+  'sections',
+  'lines',
+  'split',
+  'top',
+]
 
 const SMOOTHS = SMOOTH_CHOICES.map((choice) => choice.id)
 
