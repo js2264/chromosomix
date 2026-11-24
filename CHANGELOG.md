@@ -24,6 +24,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   forgets it. A task that reads no map, a starred companion of a deck, an import and a ladder with
   nothing to choose have no such row.
 
+- **The session drawn through a curation of the genomes — a dev feature (§33.4).** A metagenome with
+  a curation kept for it opens as the map `metacooler reassign` writes from the curation's contig →
+  genome table: its contigs regrouped, the pool first and the genomes by name, each genome's contigs
+  longest first — every view, table and task reading the curated genomes, and a test holding the
+  map, pixel for pixel, to `reassign`'s own file of it. The genomes table has a `kind` and a
+  `curation` column and leaves a changed genome's file columns empty; the contigs table names each
+  contig's genome; the File card counts MAGs and elements apart and says the binning is curated; the
+  Binning QC card sets the file's pool beside the curated one. The heading's word reads `genomes ·
+  curated · 7 steps`, and its arrow puts the file's binning back, carrying the view to where a
+  renamed or merged genome went. A workspace and a link carry the curation. Not yet: the stage that
+  makes one.
+
 ### Changed
 
 - **With no map starred, a deck's map tasks run on every map at once (§18.1).** They used to be

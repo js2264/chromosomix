@@ -17279,9 +17279,9 @@ the whole session drawn through the curated binning. It is the whole-metagenome 
 which edits one genome's scaffolds.
 
 **Status: being built.** Every subsection below describes what will be, and says *built* as it lands:
-so far the model of a curation and its store (§33.2), and the method — the contig network, affinity,
-the background, the suggestions and their confidence, and miComplete's numbers from the markers
-(§33.5). It is a **dev feature** (§29), `curate`, throughout. The design it was written from — the
+so far the model of a curation and its store (§33.2), the session drawn through the curated binning
+(§33.4), and the method — the contig network, affinity, the background, the suggestions and their
+confidence, and miComplete's numbers from the markers (§33.5). It is a **dev feature** (§29), `curate`, throughout. The design it was written from — the
 decisions and who made them, the method with the numbers it was held to on the mock community — is
 `docs/genome-curation.md`. §13's first rule is untouched: **the app never modifies a file it
 opened.** A curation is a lens over the file, and what it produces is new files.
@@ -17312,6 +17312,83 @@ and a shared link. It carries a fingerprint of the binning it was made on — th
 lengths, which genome holds each, the genomes in order with their counts and kinds, and the links —
 and is **kept, not applied**, on a file whose binning differs, naming what differs first: `A held 3
 contigs when the curation was made and holds 2 here`.
+
+### 33.4 The session through the curated binning
+
+The file is never written (§13). A metagenome with a curation kept for it is opened as it is and then
+**presented as the map `metacooler reassign --layout genome-then-length` writes** from the curation's
+contig → genome table — its contigs regrouped, its genome layer replaced — in the reader
+(`metacooler/curationLens.ts`), so every view, table and task reads the curated genomes and nothing
+above the reader knows there is a curation. So is each rung opened after it for a zoom, and the
+analysis worker's mount, so a task measures the curated genomes; a result's framing carries the
+binning, and one that changes the genomes makes the result stale.
+
+**Pixels.** Contigs move whole and forward: every bin of the curated map is one stored bin, every
+stored bin lands once, and a pixel keeps its count and its two bins, which take new indices —
+swapped into the upper triangle where two contigs' order turned. It is the special case of a
+reference edit's lens (§27.7) in which every piece is a whole original sequence: nothing is summed,
+re-sorted or approximated, and each contig keeps the bins the file gave it. A total drawn to (§6.5) is
+drawn **beneath** the lens — the file's map is drawn, and every pixel of the draw carried — since a
+draw above it would read a contig's rows in its own batch and drop every pair the lens had turned.
+
+**The order is `reassign`'s, and held to it.** `__unbinned__` first where it holds a contig — by
+name, never by index (§7.4) — then the genomes by name in code-point order (Python's `sorted`, not a
+locale's collation, which would put `MetaTOR_*` before `MM133_*`), each genome's contigs longest
+first and a tie by name. `npm run fixtures` writes a curation of `basic.metacool` — contigs moved, one
+recruited from the pool, a genome merged into another and one dissolved, a MAG and an element
+created, a genome renamed to sort first — and runs `reassign` over it; the suite holds the map drawn
+through the same curation to that file: its contigs and their genomes, both offset indexes, every
+genome's counts, the bins, and every pixel, dense, genome by genome, between genomes and over the
+whole map (`test/unit/curation-lens.test.ts`).
+
+**The genome layer is replaced.** Each genome's `length`, `n_contigs` and `n_bins` are counted. A
+`kind` column says MAG or element, and a `curation` column *as in the file* — the file's contigs and
+kind, under whatever name — *changed* or *new*. The file's other columns are kept for a genome as in
+the file and left empty for any other: a completeness or a taxonomy measured on other contigs
+describes a genome that is no longer there. metaTOR's `mge`, `n_mges` and `mges` are written again
+from the curated kinds and host links; the `qc_*` tallies are dropped, as `reassign` drops them; and
+where the map holds the contigs' markers, Completeness, Redundancy, Weighted completeness and Weighted
+redundancy are recomputed for every MAG (§33.5), equal to the file's for a MAG as in the file.
+`/contigs` keeps every column with its contig, `genome_id` the curated map's; a `/bins` weight whose
+`depends_on` names `genome_id` is hidden, as `reassign` drops it.
+
+**What each view says.** The genomes table lists the curated genomes, the curation's own columns and
+the recomputed ones titled as such and the file's others as left empty where the curation changed the
+genome; the contigs table names each contig's genome; the genome and genome-pair views and the
+genome × genome overview read the curated genomes — a genome edge list beside the file, which counts
+the file's genomes, set aside (§7.3); the record card leads with a genome's kind and curation; the
+File card counts the MAGs and the elements apart and says `binning curated · 7 steps (file: 177
+genomes)`; the Binning QC card gives the curated pool, and the file's beside it where the two differ.
+A genome's stage (§27.10) draws the curated genome's contigs from the file as it is, and counts where
+they belong by the curated genomes.
+
+**The heading says so.** The word on the genomes, before the reference's, reads `genomes · as in the
+file`, or `genomes · curated · 7 steps`, lit; a press opens the stage (§33.3), and the arrow beside it
+puts the file's binning back — every step undone and kept to be redone. The palette has *Curate the
+genomes*. The session is **redrawn through the curation** when the stage closes on another binning
+and when the arrow puts the file's back: the file opened again, as a change of resolution opens it,
+with the view carried — a genome followed by its id to its new name, or to the genome it was merged
+into or that took most of its contigs; a pair made one genome, that genome; a genome dissolved, the
+genomes table; a place on a contig kept, with the genome it was opened from the one it is in now. Two
+histories that reach one binning draw one map: the map, the answers kept of it and a task's mount
+are named by the fingerprint of the binning, not of the steps.
+
+**Refused**, the map drawn as the file has it and a line saying why: a curation made on another
+binning (§33.2); a map with no genomes; a single-cell file; a map storing both triangles, which
+`reassign` will not regroup; and a curation together with an edit of the reference, the two lenses
+not drawn one through the other.
+
+**Costs.** Building the lens is a sort of the contigs and an array as long as the bins: 66 ms on the
+mock community's 20,566 contigs and 184,984 bins. A genome's map reads its contigs' rows in the file,
+one band per run of them — a merged genome a band per genome it was made of; the whole map, the
+overview and a task's pass read every pixel, as without a curation; a balanced read takes the weight
+column whole, once.
+
+*Built*: all of the above (`metacooler/curationLens.ts`, `curate/places.ts`,
+`curate/CurationChip.ts`). *Not yet*: the stage the heading's word opens (§33.3); a genome's edit
+(§27.10) checked against the curated genome's contigs, which is kept and applied by the contigs it
+names; the command line, whose line for a task on a curated map says it measures the file as it is;
+and a deck's companions, drawn as their files are.
 
 ### 33.5 The method
 

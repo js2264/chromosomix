@@ -149,10 +149,13 @@ curation changed is kept, not applied, by the rule that edit already has.
 ## 4. The lens: the session through the curated binning
 
 The file is never written (§13). The curated binning is **presented**: the reader opens the file as
-it is and presents it with its contigs regrouped — **genome then length**, the curated genomes in the
-file's order (a merged genome where its first was, a created one after the file's), `__unbinned__`
-where the file has it, each genome's contigs longest first — and a genome layer of the curated
-genomes: their names, kinds, lengths, contigs and bins, their offsets, and their metadata columns.
+it is and presents it as the map `metacooler reassign --layout genome-then-length` writes from the
+curation's contig → genome table (§6) — its contigs regrouped in `reassign`'s order: `__unbinned__`
+first where it holds a contig, then the genomes by name in code-point order, each genome's contigs
+longest first and a tie by name — and a genome layer of the curated genomes: their names, kinds,
+lengths, contigs and bins, their offsets, and their metadata columns. `reassign`'s order rather than
+the file's, so that the session drawn through a curation is, bin for bin, the map its export makes —
+and is tested against that map (SPECS §33.4).
 
 - **Contigs move whole and forward**, so every bin is a stored bin and every count the integer the
   file stored: the lens is a permutation of contigs, the special case of a reference edit's lens
