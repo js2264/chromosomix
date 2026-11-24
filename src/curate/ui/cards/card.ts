@@ -14,7 +14,7 @@ import { el } from '../../../ui/dom'
 import { icon, type IconName } from '../../../ui/icons'
 import { keyBadge, withKey } from '../../../ui/commands'
 import { fmt } from '../../../units'
-import type { GenomeKind } from '../../../genome/curation'
+import type { CurationStep, GenomeKind } from '../../../genome/curation'
 import type { CurationStateResult } from '../../../worker/curateProtocol'
 import { displayPercent } from '../../model'
 import { priceOf, priceVerdict } from '../../price'
@@ -102,15 +102,31 @@ export function acts(...buttons: Array<HTMLButtonElement | null>): HTMLElement {
 
 /**
  * An affinity as the stage prints it: two significant figures below 1, two
- * decimals from 1 — `0.084`, `0.84`, `1.16`; a dash where there is none.
+ * decimals from 1 — `0.084`, `0.84`, `1.16`; past four decimal places an
+ * exponent, as the contact map's readout and an axis take one (`2.1e-5`, not a
+ * run of zeros); a dash where there is none.
  */
 export function affinityText(value: number): string {
   if (!Number.isFinite(value)) return '—'
   if (value <= 0) return '0'
   if (value >= 1) return value.toFixed(2)
+  if (value < 1e-4) return value.toExponential(1)
   const text = value.toPrecision(2)
   // 0.999 rounds up to the next decade: printed as 1 is, from 1.
   return text === '1.0' ? '1.00' : text
+}
+
+/**
+ * A preview's key, as the model keys one (`CurateModel.preview`): a step's
+ * own, a question's steps together; `null` for none. What a card or the
+ * chooser compares to know the preview held is still its own.
+ */
+export function previewKey(steps: CurationStep | readonly CurationStep[] | null): string | null {
+  if (steps === null) return null
+  if (!Array.isArray(steps)) return JSON.stringify(steps)
+  const list = steps as readonly CurationStep[]
+  if (list.length === 0) return null
+  return JSON.stringify(list.length === 1 ? list[0] : list)
 }
 
 /** Contacts counted: `1 contact`, `2,286 contacts`. */

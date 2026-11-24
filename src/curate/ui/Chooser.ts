@@ -31,7 +31,7 @@ import { lowerAffinity } from '../method'
 import type { CurateModel, CurateSelection } from '../model'
 import type { Suggestion } from '../suggest'
 import type { CurateContext, CurateDragged, CurateDropTarget } from './context'
-import { affinityText, confidenceText, contactsText, priceList, swatch } from './cards/card'
+import { affinityText, confidenceText, contactsText, previewKey, priceList, swatch } from './cards/card'
 
 /** What a chooser chooses: where contigs go, what genomes merge into, what an element is linked to. */
 export type ChooserKind = 'move' | 'merge' | 'link'
@@ -451,8 +451,8 @@ export class Chooser {
   private priceTimer: ReturnType<typeof setTimeout> | null = null
   /** The step this chooser previews, by its key. */
   private previewKey: string | null = null
-  /** The preview held when it opened, given back when it closes unchosen. */
-  private readonly before: { step: CurationStep | null; drawn: boolean }
+  /** The preview held when it opened — one step, or the review's question's every step — given back when it closes unchosen. */
+  private readonly before: { steps: readonly CurationStep[] | null; drawn: boolean }
   private readonly opener: Element | null
   private readonly id = `curate-chooser-${++serial}`
   private readonly unsubscribe: Array<() => void> = []
@@ -463,7 +463,7 @@ export class Chooser {
     private readonly anchor: HTMLElement | { x: number; y: number },
     private readonly onChoose: (target: CurateDropTarget) => void,
   ) {
-    this.before = { step: ctx.model.previewStep, drawn: ctx.model.previewing }
+    this.before = { steps: ctx.model.previewSteps, drawn: ctx.model.previewing }
     this.opener = document.activeElement
     this.head = el('span', { class: 'curate-chooser-title' })
     this.input = el('input', {
@@ -490,9 +490,9 @@ export class Chooser {
       attrs: { role: 'listbox', 'aria-label': 'Where to' },
       on: {
         // A press on a row keeps the caret in the box: the keys stay the chooser's.
-        pointerdown: (event: PointerEvent) => {
-          if ((event.target as Element | null)?.closest('.curate-chooser-row') !== null) event.preventDefault()
-        },
+        // The mouse's own press is the one that moves the focus.
+        pointerdown: (event: PointerEvent) => keepCaret(event),
+        mousedown: (event: MouseEvent) => keepCaret(event),
       },
     })
     this.foot = el('div', { class: 'curate-chooser-foot', attrs: { 'aria-live': 'polite' } })
@@ -549,9 +549,9 @@ export class Chooser {
   /** Close without choosing: the preview held before it opened is held again. */
   cancel(): void {
     if (this.closed) return
-    const mine = this.previewKey !== null && previewKey(this.ctx.model.previewStep) === this.previewKey
+    const mine = this.previewKey !== null && previewKey(this.ctx.model.previewSteps) === this.previewKey
     this.teardown()
-    if (mine) this.ctx.model.preview(this.before.step, this.before.drawn)
+    if (mine) this.ctx.model.preview(this.before.steps, this.before.drawn)
   }
 
   /** Close: as {@link cancel}. */
@@ -566,7 +566,7 @@ export class Chooser {
     this.teardown()
     this.onChoose(row.target)
     // A choice that made no step leaves the preview it was priced by: give back what was held.
-    if (mine !== null && previewKey(this.ctx.model.previewStep) === mine) this.ctx.model.preview(this.before.step, this.before.drawn)
+    if (mine !== null && previewKey(this.ctx.model.previewSteps) === mine) this.ctx.model.preview(this.before.steps, this.before.drawn)
   }
 
   private mount(): void {
@@ -588,26 +588,41 @@ export class Chooser {
     return dialogs[dialogs.length - 1] ?? document.body
   }
 
-  /** Under its anchor, or above it where there is no room below; inside the window. */
+  /**
+   * Under its anchor, or above it where there is more room there than below
+   * and too little below; inside the window. Held by the edge that faces the
+   * anchor and kept to the room on that side, so the rows and the price it
+   * grows by once counted push it away from the anchor, never over it or out
+   * of the window: the list scrolls instead.
+   */
   private place(): void {
+    const style = this.element.style
+    style.top = ''
+    style.bottom = ''
+    style.maxHeight = ''
     const box = this.element.getBoundingClientRect()
     const width = box.width
     const height = box.height
-    let x: number
-    let y: number
+    const viewWidth = window.innerWidth
+    const viewHeight = window.innerHeight
+    const x = this.anchor instanceof HTMLElement ? this.anchor.getBoundingClientRect().left : this.anchor.x
+    style.left = `${Math.round(Math.max(MARGIN, Math.min(x, viewWidth - width - MARGIN)))}px`
     if (this.anchor instanceof HTMLElement) {
       const rect = this.anchor.getBoundingClientRect()
-      x = rect.left
-      y = rect.bottom + 4
-      if (y + height > window.innerHeight - 8 && rect.top - height - 4 >= 8) y = rect.top - height - 4
-    } else {
-      x = this.anchor.x
-      y = this.anchor.y
+      const below = viewHeight - MARGIN - (rect.bottom + GAP)
+      const above = rect.top - GAP - MARGIN
+      if (height <= below || below >= above) {
+        style.top = `${Math.round(rect.bottom + GAP)}px`
+        style.maxHeight = roomOf(below)
+      } else {
+        style.bottom = `${Math.round(viewHeight - rect.top + GAP)}px`
+        style.maxHeight = roomOf(above)
+      }
+      return
     }
-    x = Math.max(8, Math.min(x, window.innerWidth - width - 8))
-    y = Math.max(8, Math.min(y, window.innerHeight - height - 8))
-    this.element.style.left = `${Math.round(x)}px`
-    this.element.style.top = `${Math.round(y)}px`
+    const y = Math.max(MARGIN, Math.min(this.anchor.y, viewHeight - height - MARGIN))
+    style.top = `${Math.round(y)}px`
+    style.maxHeight = roomOf(viewHeight - MARGIN - y)
   }
 
   private readonly outside = (event: PointerEvent): void => {
@@ -660,7 +675,7 @@ export class Chooser {
       query === '' || answer === null
         ? rows
         : rows.filter((row) => {
-            if (row.label !== null) return row.label.includes(query)
+            if (row.label !== null) return row.label.toLowerCase().includes(query)
             const genome = answer.genomes[row.genome]
             return genome.name.toLowerCase().includes(query) || this.ctx.shortName(genome.id).toLowerCase().includes(query)
           })
@@ -692,6 +707,8 @@ export class Chooser {
     } else if (this.shown.length === 0) {
       parts.push(el('div', { class: 'curate-chooser-empty', text: 'Nothing here is named like that.' }))
     } else {
+      // Before the network's pass there is nothing to rank by: the genomes in the stage's order.
+      if (!answer.counted) parts.push(el('div', { class: 'curate-chooser-note', text: 'Not ranked until the contacts are read.' }))
       let group: ChooserRow['group'] | null = null
       this.shown.forEach((row, k) => {
         if (row.group !== group) {
@@ -770,7 +787,7 @@ export class Chooser {
     const step = plan?.steps?.length === 1 ? plan.steps[0] : null
     if (step === null) {
       // Nothing to count for it: a preview of this chooser's goes.
-      if (this.previewKey !== null && previewKey(this.ctx.model.previewStep) === this.previewKey) this.ctx.model.preview(this.before.step, this.before.drawn)
+      if (this.previewKey !== null && previewKey(this.ctx.model.previewSteps) === this.previewKey) this.ctx.model.preview(this.before.steps, this.before.drawn)
       this.previewKey = null
       this.paintFoot()
       return
@@ -801,7 +818,7 @@ export class Chooser {
       const words = answer === null ? null : chooserWords(answer, plan, row.target, this.ctx.data.file.names, (id) => this.ctx.shortName(id))
       parts.push(el('div', { class: 'curate-chooser-words', text: words ?? step.words }))
       const key = step.steps.length === 1 ? previewKey(step.steps[0]) : null
-      if (key !== null && answer !== null && previewKey(model.previewStep) === key) {
+      if (key !== null && answer !== null && previewKey(model.previewSteps) === key) {
         const after = model.previewed
         if (after === null) parts.push(el('div', { class: 'curate-chooser-counting', text: 'counting what it makes…' }))
         else {
@@ -874,15 +891,27 @@ function groupWords(plan: ChooserPlan, row: ChooserRow, answer: CurationStateRes
   }
 }
 
-/** A step's key, as the model keys a preview. */
-function previewKey(step: CurationStep | null): string | null {
-  return step === null ? null : JSON.stringify(step)
+/** How far the chooser stands from its anchor, and from the window's edges, in CSS pixels. */
+const GAP = 4
+const MARGIN = 8
+
+/** The most the chooser may be tall on a side with `room` pixels: the stylesheet's own cap, or the room. */
+function roomOf(room: number): string {
+  return `min(32rem, 72vh, ${Math.max(120, Math.floor(room))}px)`
 }
 
-/** Scroll `list` so `node` is in view. */
+/** A press on a row keeps the caret in the filter box, so the keys stay the chooser's. */
+function keepCaret(event: Event): void {
+  if ((event.target as Element | null)?.closest('.curate-chooser-row') !== null) event.preventDefault()
+}
+
+/**
+ * Scroll `list` so `node` is in view, by their boxes: a row's `offsetTop` is
+ * from the chooser, the list's nearest positioned ancestor, not from the list.
+ */
 function revealIn(list: HTMLElement, node: HTMLElement): void {
-  const top = node.offsetTop
-  const bottom = top + node.offsetHeight
-  if (top < list.scrollTop) list.scrollTop = top
-  else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight
+  const box = list.getBoundingClientRect()
+  const row = node.getBoundingClientRect()
+  if (row.top < box.top) list.scrollTop -= box.top - row.top
+  else if (row.bottom > box.bottom) list.scrollTop += row.bottom - box.bottom
 }

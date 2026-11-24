@@ -9,9 +9,14 @@
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { bareAnswer } from '@/curate/answer'
+import { CurateModel } from '@/curate/model'
 import { Chooser, chooserPlan, chooserWords, chooseStep, type ChooserKind } from '@/curate/ui/Chooser'
 import type { CurateDropTarget } from '@/curate/ui/context'
+import { CuratedBinning, fileBinning } from '@/genome/curation'
+import { CurationStore } from '@/state/curation'
 import { setUpDom, textsOf, type DomTeardown } from '../support/dom'
+import { community } from '../support/curateCommunity'
 import { testContext, type TestStage } from '../support/curateStage'
 
 let teardown: DomTeardown
@@ -181,6 +186,31 @@ describe('the popover', () => {
     expect(chosen).toEqual([{ kind: 'section', section: 'mags' }])
   })
 
+  it('finds a row whatever the case typed', async () => {
+    const s = await stage({ contigs: [3] })
+    open(s, 'move')
+    type('MAG')
+    expect(rowNames()).toEqual(['a new MAG'])
+    type('mag')
+    expect(rowNames()).toEqual(['a new MAG'])
+    type('UNB')
+    expect(rowNames()).toEqual(['unbinned'])
+  })
+
+  it('gives back the steps of a question priced before it opened, on Escape', async () => {
+    const s = await stage({ contigs: [3] })
+    const held = [
+      { op: 'move' as const, contigs: ['u0'], to: 'X1' },
+      { op: 'merge' as const, into: 'X1', genomes: ['X2'] },
+    ]
+    s.model.preview(held, false)
+    open(s, 'move')
+    await wait(120)
+    expect(s.model.previewStep).toEqual({ op: 'move', contigs: ['y5'], to: 'Y' })
+    key('Escape')
+    expect(s.model.previewSteps).toEqual(held)
+  })
+
   it('prices the row under the keyboard, and gives the preview held before back on Escape', async () => {
     const s = await stage({ contigs: [3] })
     const held = { op: 'dissolve' as const, genome: 'Z' }
@@ -223,6 +253,35 @@ describe('the popover', () => {
     open(s, 'merge')
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
     expect(Chooser.isOpen()).toBe(false)
+  })
+
+  it('keeps the caret in its box when a row is pressed', async () => {
+    const s = await stage({ genomes: ['X1'] })
+    open(s, 'merge')
+    const row = document.querySelector<HTMLElement>('.curate-chooser-row') as HTMLElement
+    const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    row.dispatchEvent(down)
+    expect(down.defaultPrevented).toBe(true)
+  })
+
+  it('says the genomes are not ranked before the contacts are read', async () => {
+    const s = testContext()
+    // The answer before the network's pass: the genomes and their links, no pairs.
+    const { base, evidence } = community()
+    const store = new CurationStore(`curate-bare-${Math.random()}`, base, fileBinning(base), () => 0)
+    const model = new CurateModel(
+      store,
+      { state: (curation) => ({ promise: Promise.resolve(bareAnswer(CuratedBinning.of(base, curation), base.lengths, evidence.markers)), cancel: () => {} }) },
+      { schedule: (run) => (run(), () => {}) },
+    )
+    s.model.dispose()
+    const bare: TestStage = { ...s, model, store, ctx: { ...s.ctx, model } }
+    await model.settled()
+    model.select({ genomes: ['X1'], contigs: [] })
+    open(bare, 'merge')
+    expect(document.querySelector('.curate-chooser-note')?.textContent).toBe('Not ranked until the contacts are read.')
+    expect(rowNames()).toEqual(['X2', 'Y', 'Z'])
+    model.dispose()
   })
 })
 

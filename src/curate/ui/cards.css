@@ -26,6 +26,11 @@
   padding: 0.28rem 0.5rem;
   white-space: nowrap;
 }
+/* A key is never printed on a dead control (§26.4): an act held back keeps
+   its word and its title's reason, and its key's place, so the grid holds. */
+.curate-card-acts .edit-act:disabled > .kbd-inline {
+  visibility: hidden;
+}
 
 /* What a step would leave, genome by genome (card.ts → priceList): the name,
    then its completeness and its redundancy a line each. A price, so dim; the
@@ -80,6 +85,25 @@
 
 /* ---- The selection card (cards/SelectionCard.ts) ---- */
 
+/* While a step is counted the card shows the binning before it, and its acts
+   answer nothing: dimmed — after a moment, so a quick count does not flicker
+   it, and at once when an act was pressed meanwhile. */
+.curate-selection-card .curate-card-body {
+  transition: opacity 120ms ease;
+}
+.curate-selection-card.is-weighing .curate-card-body {
+  opacity: 0.55;
+  transition-delay: 180ms;
+}
+.curate-selection-card.is-weighing.is-waiting .curate-card-body {
+  transition-delay: 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .curate-selection-card .curate-card-body {
+    transition-duration: 0s;
+  }
+}
+
 .curate-selection-facts {
   display: flex;
   flex-wrap: wrap;
@@ -122,6 +146,10 @@
   display: contents;
 }
 .curate-selection-quality .is-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-dim);
 }
 .curate-selection-quality .is-head {
@@ -304,8 +332,11 @@
   font-weight: 600;
 }
 
-/* Each two genomes' affinity, tinted from the background to twice a genome's
-   own density in the accent — light enough that the number on it reads. */
+/* Each two genomes' affinity, tinted as the contact map colours the pair — by
+   its lower bound, from the background to twice a genome's own density — in
+   the ink, since a tint is no act (§26.5): light enough that the number on it
+   reads in either theme. A merge on offer is ringed in the accent, as the map
+   marks one. */
 .curate-selection-matrix {
   display: grid;
   grid-template-columns: 1.1rem repeat(var(--n, 2), minmax(0, 1fr));
@@ -326,12 +357,16 @@
   border-radius: 3px;
   text-align: center;
   color: var(--text);
-  background: color-mix(in srgb, var(--accent) calc(5% + var(--heat, 0) * 38%), transparent);
+  background: color-mix(in srgb, var(--text) calc(4% + var(--heat, 0) * 20%), transparent);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.curate-selection-cell.is-self {
+.curate-selection-cell.is-offered {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.curate-selection-cell.is-self,
+.curate-selection-cell.is-none {
   background: none;
   color: var(--text-faint);
 }
@@ -465,6 +500,12 @@
 .curate-chooser-more {
   padding: 0.6rem 0.45rem;
   color: var(--text-dim);
+}
+/* Before the contacts are read: the genomes in the stage's order, and why. */
+.curate-chooser-note {
+  padding: 0.45rem 0.45rem 0;
+  color: var(--text-faint);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
 }
 .curate-chooser-more {
   padding-top: 0.3rem;

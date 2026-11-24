@@ -120,7 +120,7 @@ describe('the selection card, by what is selected', () => {
     expect(textsOf(document.body, '.curate-selection-quality .is-value')).toEqual(['50.0%', '50.0%', '1.00', '1.00'])
     expect(document.querySelector('.curate-selection-grade')?.textContent).toBe('Bact4 · 2 of 4 markers · low quality')
     expect(actLabels()).toEqual(['rename', 'merge into…', 'close-up', 'make it an element', 'dissolve'])
-    expect(actKeys()).toEqual(['F2', 'M', '⏎', '⌫'])
+    expect(actKeys()).toEqual(['F2', 'M', '⏎', 'E', '⌫'])
     expect(subs()).toEqual(['meets most', 'belong here · 1', 'may belong elsewhere · 1'])
     expect(rowsUnder('meets most').map(rowText)).toEqual([
       'X2merge 99% | affinity 1.50 (at least 1.42) · 540 contacts',
@@ -165,7 +165,13 @@ describe('the selection card, by what is selected', () => {
     expect(head()).toBe('2 MAGs')
     expect(document.querySelector('.curate-selection-facts')?.textContent).toBe('350.0 kb · 7 contigs')
     expect(actLabels()).toEqual(['merge', 'close-up', 'make them elements', 'dissolve'])
+    expect(actKeys()).toEqual(['M', '⏎', 'E', '⌫'])
     expect(textsOf(document.body, '.curate-selection-cell:not(.is-self)')).toEqual(['1.50', '1.50'])
+    // The merge on offer between them is marked, as the map marks it; the tint is the map's lower bound.
+    const cells = [...document.querySelectorAll<HTMLElement>('.curate-selection-cell:not(.is-self)')]
+    expect(cells.map((cell) => cell.classList.contains('is-offered'))).toEqual([true, true])
+    expect(cells[0].title).toBe('X1 × X2 · affinity 1.50 (at least 1.42) · 540 contacts · merge 99% on offer')
+    expect(Number(cells[0].style.getPropertyValue('--heat'))).toBeGreaterThan(0.9)
     act('merge').click()
     await settle(m)
     expect(m.model.answer?.genomes.map((genome) => genome.id)).toEqual(['X1', 'Y', 'Z', 'P'])
@@ -249,7 +255,7 @@ describe('the acts', () => {
     expect(textsOf(document.body, '.curate-selection-quality .is-value')).toEqual(['100.0%', '100.0%', '1.00', '1.00'])
   })
 
-  it('takes the likely suggestions into a MAG in one press', async () => {
+  it('takes the likely suggestions into a MAG in one press: one step, undone at once, every answer learned', async () => {
     const m = await mount()
     const real = m.model.offered()
     const recruit = real.find((s) => s.kind === 'recruit') as Suggestion
@@ -259,10 +265,45 @@ describe('the acts', () => {
     m.model.offered = () => [...offered(), move]
     await select(m, { genomes: ['X1'] })
     expect(actLabels()).toContain('take 2 at 50% or more')
+    const answers = m.model.answers
     act('take 2 at 50% or more').click()
     await settle(m)
     const x1 = m.store.binning.indexOfId('X1')
     expect([m.store.binning.genomeOf[18], m.store.binning.genomeOf[4]]).toEqual([x1, x1])
+    expect(m.store.curation.history).toHaveLength(1)
+    expect(m.store.curation.history[0].by).toBe('suggestion')
+    expect(m.model.answers).toBe(answers + 2)
+    m.model.undo()
+    await settle(m)
+    expect([m.store.binning.genomeOf[18], m.store.binning.genomeOf[4]]).toEqual([-1, m.store.binning.indexOfId('X2')])
+  })
+
+  it('answers nothing while the step just made is counted: a double press makes it once', async () => {
+    const m = await mount()
+    await select(m, { genomes: ['X1'] })
+    const take = rowAct(rowsUnder('belong here')[0])
+    take.click()
+    expect(m.model.stale).toBe(true)
+    expect(m.card.element.classList.contains('is-weighing')).toBe(true)
+    take.click()
+    act('make it an element').click()
+    await settle(m)
+    expect(m.store.curation.history).toHaveLength(1)
+    expect(m.card.element.classList.contains('is-weighing')).toBe(false)
+    // Counted, it answers again.
+    act('make it an element').click()
+    await settle(m)
+    expect(m.store.curation.history).toHaveLength(2)
+  })
+
+  it('keeps the keyboard on the act of the same name when the card is drawn again', async () => {
+    const m = await mount()
+    await select(m, { genomes: ['X1'] })
+    act('close-up').focus()
+    m.model.selectGenomes(['X2'])
+    await frame()
+    expect(head()).toBe('MAG · X2')
+    expect(document.activeElement).toBe(act('close-up'))
   })
 
   it('prices a step while the pointer rests on its act, fills the after column, and lets go of it', async () => {
@@ -300,6 +341,35 @@ describe('the acts', () => {
     expect(m.said.at(-1)).toBeNull()
     row.click()
     expect(m.framed.at(-1)).toEqual({ genomes: ['X2'] })
+  })
+
+  it('marks the rows of the question in review, a member of a question of several too', async () => {
+    const m = await mount()
+    await select(m, { genomes: ['P'] })
+    m.model.setMode('review')
+    // P's link to Y and its unlink from Z are one question, keyed by the element.
+    const question = m.model.queue().find((q) => q.members.some((s) => s.key === 'link:P>Y'))
+    expect(question?.members.map((s) => s.key).sort()).toEqual(['link:P>Y', 'unlink:P>Z'])
+    m.model.setCurrent(question?.key ?? '')
+    await frame()
+    const current = [...document.querySelectorAll<HTMLElement>('.curate-selection-row.is-current')].map((row) => row.dataset.suggestion)
+    expect(current.sort()).toEqual(['link:P>Y', 'unlink:P>Z'])
+  })
+
+  it('gives back the steps priced before an act was, a question of several steps too', async () => {
+    const m = await mount()
+    await select(m, { genomes: ['X1'] })
+    const held = [
+      { op: 'move' as const, contigs: ['u0'], to: 'X1' },
+      { op: 'move' as const, contigs: ['y5'], to: 'Y' },
+    ]
+    m.model.preview(held, false)
+    const merge = rowAct(rowsUnder('meets most')[0])
+    merge.dispatchEvent(new PointerEvent('pointerenter'))
+    await wait(200)
+    expect(m.model.previewStep).toEqual({ op: 'merge', into: 'X1', genomes: ['X2'] })
+    merge.dispatchEvent(new PointerEvent('pointerleave'))
+    expect(m.model.previewSteps).toEqual(held)
   })
 })
 
@@ -360,5 +430,21 @@ describe('what a step does to a grade', () => {
     m.model.preview(null)
     await frame()
     expect(document.querySelector('.curate-selection-price')?.classList.contains('hidden')).toBe(true)
+  })
+
+  it('prices only a step that concerns the selection: the review’s question about other genomes is the band’s', async () => {
+    const m = await mount()
+    await select(m, { genomes: ['X1', 'X2'] })
+    m.model.preview({ op: 'move', contigs: ['y5'], to: 'Y' }, false)
+    await wait(0)
+    await frame()
+    expect(document.querySelector('.curate-selection-price')?.classList.contains('hidden')).toBe(false)
+    m.model.preview({ op: 'move', contigs: ['p0'], to: 'Z' }, false)
+    await wait(0)
+    await frame()
+    expect(m.model.previewed).not.toBeNull()
+    expect(document.querySelector('.curate-selection-price')?.classList.contains('hidden')).toBe(true)
+    await select(m, { contigs: [16] })
+    expect(document.querySelector('.curate-selection-price')?.classList.contains('hidden')).toBe(false)
   })
 })
