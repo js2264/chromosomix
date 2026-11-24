@@ -15532,7 +15532,9 @@ structure* card however many models the deck draws.
   *Ctrl+backtick*.
 - **A key pressed over a dialog is the dialog's.** The window's own keys stand down while any dialog
   is open — a stage, a chooser, a question — since everything behind one is inert: a letter a stage
-  has no use for runs nothing on the session under it. A stage listens through `ui/stageKeys.ts`,
+  has no use for runs nothing on the session under it. A command that belongs to a dialog says so
+  (`inDialog`, an element inside it) and is heard while that dialog is on top: the enlarged 3D
+  model's letters (§25.3), which are the session's commands. A stage listens through `ui/stageKeys.ts`,
   which answers only while the stage is the dialog on top, and leaves a field's keys to the field, an
   open menu's to the menu (whose ↓ would otherwise also move the stage's selection) and a focused
   button's Space to the button.

@@ -68,6 +68,7 @@ import {
   type Command,
 } from '../ui/commands'
 import { learnKey, readLayout } from '../ui/keyboardLayout'
+import { topDialog } from '../ui/stageKeys'
 import { openAbout, openShortcuts } from '../ui/dialogs'
 import { readTourProgress, setTourRunning, writeTourProgress } from '../state/tour'
 import type { Tour } from '../ui/Tour'
@@ -2719,10 +2720,13 @@ export class App implements SessionHost {
     // resolution or refitted it under a press that was about something else.
     if (event.defaultPrevented) return
     if (this.modal !== null) return
-    // **Nor is a key pressed over a dialog.** A stage, a chooser or a question
-    // makes everything behind it inert, and a letter the stage has no use for —
-    // `t`, `g`, a digit, `<` — ran a command on the session behind it.
-    if (document.querySelector('.modal-backdrop') !== null) return
+    // **Nor is a key pressed over a dialog,** unless the command is that
+    // dialog's own. A stage, a chooser or a question makes everything behind it
+    // inert, and a letter the stage has no use for — `t`, `g`, a digit, `<` —
+    // ran a command on the session behind it. The enlarged 3D model's letters
+    // are the session's commands, bound only while its dialog is up (§25.3), and
+    // say which dialog is theirs.
+    const dialog = topDialog()
     const typing = isTypingTarget(event.target)
     // Above the loop, not inside it.
     //
@@ -2735,6 +2739,7 @@ export class App implements SessionHost {
     if (typing && !isChord(event)) return
     for (const command of this.commands()) {
       if (command.keys === undefined || command.enabled === false) continue
+      if (dialog !== null && (command.inDialog === undefined || !dialog.contains(command.inDialog))) continue
       // ⌘ or Ctrl, and Control on a Mac: the tabs' `ctrl+<` from a filter box is
       // still the next tab, as `mod+p` there is still the palette.
       if (typing && !/^(mod|ctrl)\+/.test(command.keys)) continue

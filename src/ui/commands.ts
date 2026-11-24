@@ -336,6 +336,14 @@ export interface Command {
    */
   enabled?: boolean
   /**
+   * The dialog these keys belong to (§26.4): an element inside it. While any
+   * dialog is open the window's keys stand down — everything behind a dialog is
+   * inert — except a command whose `inDialog` is in the dialog on top. The
+   * enlarged 3D model's letters (§25.3) are bound this way, only while its
+   * dialog is up, since the model is the whole window there.
+   */
+  inDialog?: Element
+  /**
    * Stand down when the keystroke is really about text.
    *
    * For the one binding that collides with something the browser already does:

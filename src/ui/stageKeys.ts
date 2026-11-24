@@ -25,10 +25,15 @@ export interface StageKeyHandler {
   blur?(): void
 }
 
+/** The dialog on top, the last one opened, or `null` with none open. */
+export function topDialog(): Element | null {
+  const dialogs = document.querySelectorAll('.modal-backdrop')
+  return dialogs.length === 0 ? null : dialogs[dialogs.length - 1]
+}
+
 /** Whether `root` is in the dialog on top: a dialog stacked over a stage takes its keys. */
 export function onTop(root: Element): boolean {
-  const dialogs = document.querySelectorAll('.modal-backdrop')
-  return dialogs.length > 0 && dialogs[dialogs.length - 1].contains(root)
+  return topDialog()?.contains(root) === true
 }
 
 /** Whether a key belongs to something on the stage before the stage: a field, a menu, a button's Space. */
