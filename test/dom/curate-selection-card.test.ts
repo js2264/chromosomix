@@ -297,14 +297,22 @@ describe('the acts', () => {
     expect(m.store.curation.history).toHaveLength(2)
   })
 
-  it('keeps the keyboard on the act of the same name when the card is drawn again', async () => {
+  it('keeps the keyboard on the act of the same name when the card is drawn again, for a reader at the keys', async () => {
     const m = await mount()
     await select(m, { genomes: ['X1'] })
     act('close-up').focus()
+    act('close-up').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
     m.model.selectGenomes(['X2'])
     await frame()
     expect(head()).toBe('MAG · X2')
     expect(document.activeElement).toBe(act('close-up'))
+    // After a press of the pointer it falls with the act: a button focused unseen would take the stage's Space and Enter.
+    act('close-up').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    act('close-up').focus()
+    m.model.selectGenomes(['X1'])
+    await frame()
+    expect(head()).toBe('MAG · X1')
+    expect(m.card.element.contains(document.activeElement)).toBe(false)
   })
 
   it('prices a step while the pointer rests on its act, fills the after column, and lets go of it', async () => {

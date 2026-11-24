@@ -173,6 +173,8 @@ export class SelectionCard {
   private lit: LitRow[] = []
   /** Whether a row's hover is on the model and the readout: let go of when the rows are drawn again. */
   private saying = false
+  /** Whether the reader's last gesture in the card was a key: only then is the keyboard put back on an act after a repaint. */
+  private byKeys = false
   private dirty = { all: true, preview: false, hover: false }
   private frame = 0
   private priceTimer: ReturnType<typeof setTimeout> | null = null
@@ -194,6 +196,12 @@ export class SelectionCard {
     this.head = built.head
     this.body = built.body
     this.element.classList.add('curate-selection-card')
+    // A key pressed in the card, or the focus brought in by one (Tab from outside); a press of the pointer.
+    this.element.addEventListener('keydown', () => (this.byKeys = true), true)
+    this.element.addEventListener('focusin', (event) => {
+      if (event.target instanceof Element && focusVisible(event.target)) this.byKeys = true
+    })
+    this.element.addEventListener('pointerdown', () => (this.byKeys = false), true)
     this.unsubscribe.push(ctx.model.subscribe((change) => this.update(change)))
     this.schedule('all')
   }
@@ -299,10 +307,17 @@ export class SelectionCard {
     this.restoreFocus(focus)
   }
 
-  /** The act the keyboard is on, if it is in the card: its key and its place. */
+  /**
+   * The act the keyboard is on, if it is in the card and the reader is at the
+   * keys: its key and its place. After a press of the pointer the focus is left
+   * to fall with the act — put back on a button nobody sees focused, it would
+   * take the stage's Space and Enter (a focused button's own, §26.4), and Space
+   * in review would press it rather than show the question as it would be.
+   */
   private heldFocus(): HeldFocus | null {
     const active = document.activeElement
     if (!(active instanceof HTMLElement) || !this.body.contains(active)) return null
+    if (!this.byKeys) return null
     const buttons = this.focusable()
     return { key: active.dataset.focus ?? null, at: buttons.indexOf(active as HTMLButtonElement) }
   }
@@ -1365,6 +1380,15 @@ export class SelectionCard {
   private linkAll(answer: CurationStateResult, elements: readonly number[], mags: readonly number[]): void {
     if (elements.length === 0 || mags.length !== 1) return
     this.ctx.model.drop({ kind: 'genomes', ids: elements.map((g) => answer.genomes[g].id) }, { kind: 'genome', id: answer.genomes[mags[0]].id })
+  }
+}
+
+/** Whether an element shows its focus — put there by the keys — where the browser can say. */
+function focusVisible(node: Element): boolean {
+  try {
+    return node.matches(':focus-visible')
+  } catch {
+    return false
   }
 }
 
