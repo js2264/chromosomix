@@ -236,11 +236,12 @@
 }
 
 .curate-change {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: clip;
+  flex: 0 0 auto;
   margin-right: auto;
+}
+/* A changed genome's row gives its bar's room to the change: the percentage stays. */
+.curate-row.has-change .curate-bar {
+  display: none;
 }
 
 .curate-row-length,
@@ -260,7 +261,8 @@
   color: var(--text-faint);
 }
 .curate-row-redundant {
-  width: 2.2rem;
+  /* Room for a third decimal near a grade's bound (1.049). */
+  width: 2.7rem;
 }
 .curate-row-redundant.is-warn {
   color: var(--warn);

@@ -547,6 +547,7 @@ export class GenomeList {
     swatch.style.setProperty('--swatch', colour.css)
     const change = derived.changes.genomes[row.genome]
     const chip = changeChip(change)
+    node.classList.toggle('has-change', chip !== null)
     const name = el('span', { class: 'curate-row-name', text: this.ctx.shortName(genome.id), title: `${genome.name} · ${counted(genome.contigs, 'contig')} · ${fmt.bp(genome.length)}` })
     const parts: Array<HTMLElement | null> = [
       disclosure,
