@@ -1,6 +1,13 @@
 {
-  "latest": "6fc09fc",
+  "latest": "de4357d",
   "versions": [
+    {
+      "commit": "de4357d",
+      "version": "0.21.0",
+      "date": "2026-11-24T22:17:38+01:00",
+      "subject": "Draw a metagenome's map as a circle or as two lines (#182)",
+      "tag": ""
+    },
     {
       "commit": "6fc09fc",
       "version": "0.21.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "e3ca5f8",
-      "version": "0.20.0",
-      "date": "2026-11-05T20:02:42+01:00",
-      "subject": "Weekly notebooks, a green `npm test` with dev tests behind `--mode dev`, GitHub installs for the widgets, contributor files, and Node 24 actions (#163)",
-      "tag": ""
-    },
-    {
       "commit": "40ec1ec",
       "version": "0.20.0",
       "date": "2026-11-04T23:19:15+01:00",
@@ -261,13 +261,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 182,
-      "commit": "94fe203",
-      "title": "Draw a metagenome's map as a circle or as two lines",
-      "branch": "js/circular-view",
-      "date": "2026-11-24T20:54:30Z"
-    }
-  ]
+  "pulls": []
 }
