@@ -13,7 +13,13 @@
 import { el } from '../../../ui/dom'
 import { icon, type IconName } from '../../../ui/icons'
 import { keyBadge, withKey } from '../../../ui/commands'
+import { fmt } from '../../../units'
+import type { GenomeKind } from '../../../genome/curation'
+import type { CurationStateResult } from '../../../worker/curateProtocol'
 import { displayPercent } from '../../model'
+import { priceOf, priceVerdict } from '../../price'
+import type { Quality } from '../../quality'
+import { grade } from '../grade'
 
 /** A card: its root, its heading and the body under it. */
 export interface Card {
@@ -107,7 +113,109 @@ export function affinityText(value: number): string {
   return text === '1.0' ? '1.00' : text
 }
 
+/** Contacts counted: `1 contact`, `2,286 contacts`. */
+export function contactsText(contacts: number): string {
+  const n = Math.round(contacts)
+  return `${fmt.int(n)} ${n === 1 ? 'contact' : 'contacts'}`
+}
+
 /** A confidence as a whole percent, never 100: `97%`. */
 export function confidenceText(confidence: number): string {
   return `${displayPercent(confidence)}%`
+}
+
+/** A genome's swatch, as the list draws it: a MAG's filled, an element's a ring, in the genome's colour. */
+export function swatch(css: string, kind: GenomeKind): HTMLElement {
+  const node = el('span', { class: `curate-swatch curate-swatch-${kind}`, attrs: { 'aria-hidden': 'true' } })
+  node.style.setProperty('--swatch', css)
+  return node
+}
+
+/** How a step moves one of a genome's numbers in metaTOR's grades: down, up to high quality, or neither. */
+export type Shift = 'demoted' | 'promoted' | null
+
+const GRADE_RANK: Record<string, number> = { high: 4, medium: 3, low: 2, none: 1, contaminated: 0 }
+
+function gradeRank(completeness: number, redundancy: number): number {
+  return GRADE_RANK[grade(completeness, redundancy) ?? 'none']
+}
+
+/**
+ * Which of a genome's two weighted numbers moves its grade, from `before` to
+ * `after`: a grade that falls marks the number that pulls it down — the
+ * redundancy past 1.05 or 1.10, the completeness under a threshold — and one
+ * that reaches high quality the number that lifts it; the other is `null`.
+ */
+export function qualityShift(before: Quality, after: Quality): { completeness: Shift; redundancy: Shift } {
+  const was = gradeRank(before.weightedCompleteness, before.weightedRedundancy)
+  const now = gradeRank(after.weightedCompleteness, after.weightedRedundancy)
+  // Each number moved alone, the other kept as it was.
+  const byCompleteness = gradeRank(after.weightedCompleteness, before.weightedRedundancy)
+  const byRedundancy = gradeRank(before.weightedCompleteness, after.weightedRedundancy)
+  if (now < was) {
+    const redundancy = byRedundancy < was
+    return { completeness: byCompleteness < was || !redundancy ? 'demoted' : null, redundancy: redundancy ? 'demoted' : null }
+  }
+  if (now > was && now === GRADE_RANK.high) {
+    const completeness = byCompleteness > was
+    const redundancy = byRedundancy > was
+    return { completeness: completeness || !redundancy ? 'promoted' : null, redundancy: redundancy ? 'promoted' : null }
+  }
+  return { completeness: null, redundancy: null }
+}
+
+/**
+ * What a step would leave, genome by genome (`curate/price.ts`): each genome
+ * it changes, its weighted completeness and redundancy before → after, a line
+ * each — `50% + 50% → 100%` where it takes in whole genomes, `100% → 100%`
+ * where it gains or loses some contigs, the genomes those come from on rows of
+ * their own — the number that makes its grade fall in the warning colour, the
+ * one that makes it high quality in the finished one; its length where the map
+ * holds no markers. `null` when the step changes no genome's contigs (a link,
+ * a rename).
+ *
+ * @param nameOf A genome's name as printed, by id, given the name it has after.
+ */
+export function priceList(
+  before: CurationStateResult,
+  after: CurationStateResult,
+  nameOf: (id: string, name: string) => string,
+  limit = 3,
+): HTMLElement | null {
+  const rows = priceOf(before, after)
+  if (rows.length === 0) return null
+  const present = new Set(after.genomes.map((genome) => genome.id))
+  const list = el('ul', { class: 'curate-card-price' })
+  for (const row of rows.slice(0, limit)) {
+    const genome = after.genomes.find((g) => g.id === row.id)
+    // What it was made of: itself, and the genomes it takes in whole. A genome
+    // that only gives it some contigs is not summed in: it has its own row.
+    const parts = row.from.filter((from) => from.id === row.id || !present.has(from.id))
+    const q = row.after
+    const lines: Array<{ text: string; shift: Shift }> = []
+    if (q !== null && parts.every((from) => from.quality !== null)) {
+      const sum = (pick: (quality: Quality) => number, form: (x: number) => string): string =>
+        parts.length === 0 ? form(pick(q)) : `${parts.map((from) => form(pick(from.quality as Quality))).join(' + ')} → ${form(pick(q))}`
+      const first = parts[0]?.quality ?? null
+      const shift = first === null ? { completeness: null, redundancy: null } : qualityShift(first, q)
+      lines.push(
+        { text: `completeness ${sum((x) => x.weightedCompleteness, (x) => fmt.pct(x, 0))}`, shift: shift.completeness },
+        { text: `redundancy ${sum((x) => x.weightedRedundancy, (x) => fmt.fixed(x, 2))}`, shift: shift.redundancy },
+      )
+    } else {
+      const length = genome?.length ?? 0
+      const was = parts.reduce((total, from) => total + (before.genomes.find((g) => g.id === from.id)?.length ?? 0), 0)
+      const contigs = genome?.contigs ?? 0
+      lines.push({ text: `${parts.length === 0 ? fmt.bp(length) : `${fmt.bp(was)} → ${fmt.bp(length)}`} · ${fmt.int(contigs)} ${contigs === 1 ? 'contig' : 'contigs'}`, shift: null })
+    }
+    const verdict = priceVerdict(row)
+    const title = `${row.name}: ${lines.map((line) => line.text).join(', ')}${verdict === 'demoted' ? ' — its grade falls' : verdict === 'promoted' ? ' — high quality' : ''}`
+    // A genome the step makes: nothing to add up, its numbers as they would be.
+    const name = el('span', { class: 'curate-card-price-name' }, nameOf(row.id, row.name), parts.length === 0 ? el('span', { class: 'curate-card-price-new', text: 'new' }) : null)
+    const item = el('li', { class: `curate-card-price-row${lines.length > 1 ? ' is-two' : ''}`, title }, name)
+    for (const line of lines) item.appendChild(el('span', { class: `curate-card-price-line${line.shift === null ? '' : ` is-${line.shift}`}`, text: line.text }))
+    list.appendChild(item)
+  }
+  if (rows.length > limit) list.appendChild(el('li', { class: 'curate-card-price-more', text: `and ${fmt.int(rows.length - limit)} more` }))
+  return list
 }

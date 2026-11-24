@@ -23,5 +23,486 @@
 }
 
 .curate-card-acts .edit-act {
+  padding: 0.28rem 0.5rem;
   white-space: nowrap;
+}
+
+/* What a step would leave, genome by genome (card.ts → priceList): the name,
+   then its completeness and its redundancy a line each. A price, so dim; the
+   number that makes a grade fall in the warning colour, the one that makes it
+   high quality in the finished one. */
+.curate-card-price {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-variant-numeric: tabular-nums;
+}
+.curate-card-price-row {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  column-gap: 0.6rem;
+  align-items: baseline;
+}
+.curate-card-price-row.is-two > .curate-card-price-name {
+  grid-row: span 2;
+}
+.curate-card-price-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 11rem;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.curate-card-price-new {
+  color: var(--text-faint);
+}
+.curate-card-price-line {
+  grid-column: 2;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.curate-card-price-line.is-demoted {
+  color: var(--warn);
+}
+.curate-card-price-line.is-promoted {
+  color: var(--ok);
+}
+.curate-card-price-more {
+  color: var(--text-faint);
+}
+
+/* ---- The selection card (cards/SelectionCard.ts) ---- */
+
+.curate-selection-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.45rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.curate-selection-hosts {
+  color: var(--text-faint);
+}
+
+.curate-selection-tally {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-top: 0.15rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.curate-selection-grades,
+.curate-selection-steps {
+  color: var(--text-faint);
+}
+
+/* Completeness and redundancy, weighted and plain, and after a priced step:
+   numbers under one another, the after column a price. */
+.curate-selection-quality {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(2, minmax(3.4rem, auto));
+  column-gap: 0.7rem;
+  row-gap: 0.05rem;
+  font-variant-numeric: tabular-nums;
+}
+.curate-selection-quality.has-after {
+  grid-template-columns: minmax(0, 1fr) repeat(3, minmax(3.4rem, auto));
+}
+.curate-selection-quality-row {
+  display: contents;
+}
+.curate-selection-quality .is-label {
+  color: var(--text-dim);
+}
+.curate-selection-quality .is-head {
+  text-align: right;
+  color: var(--text-faint);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+.curate-selection-quality .is-value {
+  text-align: right;
+  color: var(--text);
+}
+.curate-selection-quality .is-plain {
+  color: var(--text-dim);
+}
+.curate-selection-quality .is-after {
+  color: var(--text-dim);
+}
+.curate-selection-quality .is-head.is-after {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 6rem;
+}
+.curate-selection-quality .is-warn,
+.curate-selection-quality .is-after.is-demoted {
+  color: var(--warn);
+}
+.curate-selection-quality .is-after.is-promoted {
+  color: var(--ok);
+}
+.curate-selection-grade {
+  color: var(--text-faint);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+.curate-selection-grade .is-high {
+  color: var(--ok);
+}
+.curate-selection-grade .is-warn {
+  color: var(--warn);
+}
+
+.curate-selection-price:not(.hidden) {
+  padding: 0.3rem 0.45rem;
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+
+.curate-selection-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+/* The selection's acts in a grid: two to a row in the side's usual width,
+   their keys in a column at the right, the act that unmakes something last. */
+.curate-selection-acts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.3rem;
+}
+.curate-selection-acts > .edit-act {
+  justify-content: flex-start;
+  min-width: 0;
+}
+.curate-selection-acts > .edit-act > .kbd-inline {
+  margin-left: auto;
+}
+
+/* A row: what it names on the first line, what the contacts say on the
+   second, its act at the end — the edit stage's genome rows. */
+.curate-selection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.curate-selection-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'main act'
+    'detail act';
+  column-gap: 0.5rem;
+  align-items: center;
+  padding: 0.22rem 0.25rem 0.22rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+}
+.curate-selection-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+.curate-selection-row.is-lit {
+  background: var(--bg-muted);
+}
+.curate-selection-row.is-current {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.curate-selection-row-main {
+  grid-area: main;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.curate-selection-row-main > .edit-chip {
+  flex: none;
+}
+.curate-selection-row-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.curate-selection-arrow {
+  flex: none;
+  color: var(--text-faint);
+}
+.curate-selection-index {
+  flex: none;
+  min-width: 0.9rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.curate-selection-row-confidence {
+  flex: none;
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-variant-numeric: tabular-nums;
+}
+.curate-selection-row-detail {
+  grid-area: detail;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-variant-numeric: tabular-nums;
+}
+.curate-selection-row-act {
+  grid-area: act;
+  padding: 0.12rem 0.5rem;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+.curate-selection-more {
+  align-self: flex-start;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+
+.curate-selection-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.curate-selection-pair-genome {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.curate-selection-dim {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.curate-selection-numbers {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.curate-selection-offer {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Each two genomes' affinity, tinted from the background to twice a genome's
+   own density in the accent — light enough that the number on it reads. */
+.curate-selection-matrix {
+  display: grid;
+  grid-template-columns: 1.1rem repeat(var(--n, 2), minmax(0, 1fr));
+  gap: 2px;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-variant-numeric: tabular-nums;
+}
+.curate-selection-matrix-head {
+  text-align: center;
+  color: var(--text-faint);
+}
+.curate-selection-matrix-head.is-row {
+  text-align: right;
+  padding-right: 0.15rem;
+}
+.curate-selection-cell {
+  padding: 0.18rem 0.1rem;
+  border-radius: 3px;
+  text-align: center;
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) calc(5% + var(--heat, 0) * 38%), transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.curate-selection-cell.is-self {
+  background: none;
+  color: var(--text-faint);
+}
+
+/* ---- The chooser (Chooser.ts): the popover move to…, merge into…, link to… open ---- */
+
+.curate-chooser {
+  position: fixed;
+  z-index: 110;
+  width: 23rem;
+  max-width: calc(100vw - 16px);
+  max-height: min(32rem, 72vh);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-2);
+  color: var(--text);
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  overflow: hidden;
+}
+.curate-chooser-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.65rem 0.3rem;
+}
+.curate-chooser-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.curate-chooser-head > .curate-chooser-glyph {
+  flex: none;
+  color: var(--text-faint);
+}
+.curate-chooser-filter {
+  margin: 0 0.6rem 0.45rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.curate-chooser-filter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.curate-chooser-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0.3rem 0.35rem;
+  border-top: 1px solid var(--border);
+}
+.curate-chooser-group {
+  padding: 0.45rem 0.4rem 0.15rem;
+  color: var(--text-faint);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.curate-chooser-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.curate-chooser-row.is-ranked {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 0.45rem;
+  row-gap: 0.05rem;
+}
+.curate-chooser-row.is-ranked > .curate-chooser-evidence {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.curate-chooser-row.is-ranked > .curate-chooser-confidence {
+  grid-column: 3;
+  grid-row: 1;
+}
+.curate-chooser-row.is-active {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.curate-chooser-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.curate-chooser-row.is-extra > .curate-chooser-glyph {
+  flex: none;
+  color: var(--accent);
+}
+.curate-chooser-evidence {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--text-dim);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-variant-numeric: tabular-nums;
+}
+.curate-chooser-confidence {
+  flex: none;
+  min-width: 2.1rem;
+  text-align: right;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-variant-numeric: tabular-nums;
+}
+.curate-chooser-empty,
+.curate-chooser-more {
+  padding: 0.6rem 0.45rem;
+  color: var(--text-dim);
+}
+.curate-chooser-more {
+  padding-top: 0.3rem;
+  color: var(--text-faint);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+.curate-chooser-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.4rem 0.65rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-sunken);
+}
+.curate-chooser-words {
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.curate-chooser-words.is-refused {
+  color: var(--text-dim);
+}
+.curate-chooser-counting {
+  color: var(--text-faint);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+.curate-chooser-keys {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.3rem 0.65rem 0.4rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+}
+.curate-chooser-keys > .kbd-inline {
+  margin-left: 0;
+}
+.curate-chooser-keys > span {
+  margin-right: 0.45rem;
 }
