@@ -12,11 +12,13 @@
  *
  * - **Completeness**: the markers present over the markers of the set.
  * - **Redundancy**: every accepted hit over the markers present.
- * - **Weighted completeness**: the weights of the markers present; `0.0001`
- *   where that rounds to nothing.
+ * - **Weighted completeness**: the weights of the markers miComplete **sees** —
+ *   present, or seen and dropped by its suspicion check (`NAME*0` in the
+ *   column: its `seen_hmms` is filled before the check, its present markers
+ *   after); `0.0001` where that rounds to nothing.
  * - **Weighted redundancy**: the weights of the markers present twice or more —
- *   each once, whatever its copies — plus the weighted completeness, over the
- *   weighted completeness, unrounded.
+ *   each once, whatever its copies — plus the seen weights, over the seen
+ *   weights, unrounded.
  *
  * Every number is Python's `round(x, 4)`: half to even, on the binary value the
  * division made — which `toFixed` is not (`1.03125` is `1.0312` in Python and
@@ -50,9 +52,9 @@ export interface Quality {
 
 /**
  * The markers of a contig, from its column's text: `Ribosomal_L22,SecY*2` is one
- * `Ribosomal_L22` and two `SecY`. An empty text is none. A term this build
- * cannot read is skipped, never guessed: a count of zero, or one that is not a
- * whole number.
+ * `Ribosomal_L22` and two `SecY`, and `CoaE*0` a marker miComplete saw and
+ * dropped. An empty text is none. A term this build cannot read is skipped,
+ * never guessed: a count that is not a whole number, or below nought.
  */
 export function parseMarkers(text: string): Map<string, number> {
   const out = new Map<string, number>()
@@ -63,7 +65,7 @@ export function parseMarkers(text: string): Map<string, number> {
     const star = trimmed.lastIndexOf('*')
     const name = star === -1 ? trimmed : trimmed.slice(0, star)
     const count = star === -1 ? 1 : Number(trimmed.slice(star + 1))
-    if (name === '' || !Number.isInteger(count) || count < 1) continue
+    if (name === '' || !Number.isInteger(count) || count < 0) continue
     out.set(name, (out.get(name) ?? 0) + count)
   }
   return out
@@ -104,28 +106,46 @@ export interface ContigMarkers {
   counts: Int32Array
 }
 
-/** The per-marker hits of a set of contigs. */
+/**
+ * The per-marker hits of a set of contigs: `-1` for a marker none of them shows,
+ * `0` for one seen and dropped, else the accepted hits.
+ */
 export function markerCounts(table: ContigMarkers, contigs: Iterable<number>): Int32Array {
-  const out = new Int32Array(table.set.markers.length)
+  const out = new Int32Array(table.set.markers.length).fill(-1)
   for (const c of contigs) {
-    for (let k = table.offsets[c]; k < table.offsets[c + 1]; k++) out[table.ids[k]] += table.counts[k]
+    for (let k = table.offsets[c]; k < table.offsets[c + 1]; k++) {
+      const m = table.ids[k]
+      out[m] = out[m] < 0 ? table.counts[k] : out[m] + table.counts[k]
+    }
   }
   return out
 }
 
-/** miComplete's four numbers from a set's per-marker hits. */
+/** Two sets' per-marker hits together, `-1` where neither shows the marker. */
+export function addCounts(a: ArrayLike<number>, b: ArrayLike<number>): Int32Array {
+  const out = new Int32Array(a.length)
+  for (let k = 0; k < a.length; k++) out[k] = a[k] < 0 && b[k] < 0 ? -1 : Math.max(a[k], 0) + Math.max(b[k], 0)
+  return out
+}
+
+/**
+ * miComplete's four numbers from a set's per-marker hits (see
+ * {@link markerCounts}: `-1` unseen, `0` seen and dropped).
+ */
 export function qualityOf(set: MarkerSet, counts: ArrayLike<number>): Quality {
   let present = 0
   let hits = 0
   let weighted = 0
   let duplicated = 0
   for (let k = 0; k < set.markers.length; k++) {
-    const n = counts[k] ?? 0
-    if (n <= 0) continue
+    const n = counts[k] ?? -1
+    if (n < 0) continue
+    const w = set.weights[k] ?? 0
+    // Seen, whether its hits passed the suspicion check or not.
+    weighted += w
+    if (n === 0) continue
     present++
     hits += n
-    const w = set.weights[k] ?? 0
-    weighted += w
     // A marker present twice or more weighs once in the redundancy, whatever
     // its copies (`attribute_weights`).
     if (n > 1) duplicated += w

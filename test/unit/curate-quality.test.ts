@@ -39,8 +39,9 @@ describe('Python’s round, to the last bit', () => {
 })
 
 describe('a contig’s markers', () => {
-  it('reads a count after a star, and one without', () => {
-    expect([...parseMarkers('Ribosomal_L22,SecY*2')]).toEqual([
+  it('reads a count after a star, and one without, and a marker seen and dropped as nought', () => {
+    expect([...parseMarkers('CoaE*0,Ribosomal_L22,SecY*2')]).toEqual([
+      ['CoaE', 0],
       ['Ribosomal_L22', 1],
       ['SecY', 2],
     ])
@@ -48,7 +49,7 @@ describe('a contig’s markers', () => {
   })
 
   it('skips what it cannot read rather than guess', () => {
-    expect([...parseMarkers('A*0,B*x,,C*1.5,D')]).toEqual([['D', 1]])
+    expect([...parseMarkers('A*-1,B*x,,C*1.5,D')]).toEqual([['D', 1]])
   })
 })
 
@@ -57,8 +58,8 @@ const SET: MarkerSet = { name: 'Bact4', markers: ['A', 'B', 'C', 'D'], weights: 
 
 describe('miComplete’s four numbers', () => {
   it('count the markers present, the hits, and the weights of each', () => {
-    // A twice, B once: two of four present, three hits.
-    const q = qualityOf(SET, [2, 1, 0, 0])
+    // A twice, B once: two of four present, three hits; C and D unseen.
+    const q = qualityOf(SET, [2, 1, -1, -1])
     expect(q.present).toBe(2)
     expect(q.hits).toBe(3)
     expect(q.completeness).toBe(0.5)
@@ -68,29 +69,42 @@ describe('miComplete’s four numbers', () => {
     expect(q.weightedRedundancy).toBe(pyRound((0.1 + (0.1 + 0.2)) / (0.1 + 0.2), 4))
   })
 
+  it('weigh a marker seen and dropped in the weighted completeness, and nowhere else', () => {
+    // A present twice, C seen and dropped (its hits failed the suspicion check).
+    const q = qualityOf(SET, [2, -1, 0, -1])
+    expect(q.present).toBe(1)
+    expect(q.completeness).toBe(0.25)
+    expect(q.redundancy).toBe(2)
+    expect(q.weightedCompleteness).toBe(0.4)
+    expect(q.weightedRedundancy).toBe(pyRound((0.1 + 0.4) / 0.4, 4))
+  })
+
   it('divide the weighted redundancy by the weighted completeness before it is rounded', () => {
     const set: MarkerSet = { name: 'S', markers: ['A', 'B'], weights: [0.123456, 0.3] }
-    const q = qualityOf(set, [3, 0])
+    const q = qualityOf(set, [3, -1])
     expect(q.weightedCompleteness).toBe(0.1235)
     expect(q.weightedRedundancy).toBe(2)
   })
 
   it('write a weighted completeness that rounds to nothing as 0.0001', () => {
     const set: MarkerSet = { name: 'S', markers: ['A', 'B'], weights: [0.00001, 0.99999] }
-    expect(qualityOf(set, [1, 0]).weightedCompleteness).toBe(0.0001)
+    expect(qualityOf(set, [1, -1]).weightedCompleteness).toBe(0.0001)
   })
 
-  it('are all nought where no marker is present, as miComplete writes them', () => {
-    expect(qualityOf(SET, [0, 0, 0, 0])).toMatchObject({ completeness: 0, redundancy: 0, weightedCompleteness: 0, weightedRedundancy: 0 })
+  it('are all nought where no marker is present, a marker seen and dropped included, as miComplete writes them', () => {
+    expect(qualityOf(SET, [-1, -1, -1, -1])).toMatchObject({ completeness: 0, redundancy: 0, weightedCompleteness: 0, weightedRedundancy: 0 })
+    expect(qualityOf(SET, [0, -1, -1, -1])).toMatchObject({ completeness: 0, redundancy: 0, weightedCompleteness: 0, weightedRedundancy: 0 })
   })
 })
 
 describe('a set of contigs', () => {
-  const texts = ['A,B', 'A*2', '', 'C,Z', 'D']
+  const texts = ['A,B', 'A*2', '', 'C,Z', 'D', 'D*0']
   const table = markerTable(SET, texts)
 
-  it('sums its contigs’ markers, and leaves out a marker the set does not list', () => {
-    expect([...markerCounts(table, [0, 1, 3])]).toEqual([3, 1, 1, 0])
+  it('sums its contigs’ markers, unseen as −1, and leaves out a marker the set does not list', () => {
+    expect([...markerCounts(table, [0, 1, 3])]).toEqual([3, 1, 1, -1])
+    expect([...markerCounts(table, [5])]).toEqual([-1, -1, -1, 0])
+    expect([...markerCounts(table, [4, 5])]).toEqual([-1, -1, -1, 1])
   })
 
   it('is judged by the set with the higher weighted completeness, the first on a tie', () => {

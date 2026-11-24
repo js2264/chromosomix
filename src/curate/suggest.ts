@@ -45,7 +45,7 @@ import {
   type SuggestionKind,
   type Weights,
 } from './method'
-import { markerCounts, qualityOf, type ContigMarkers, type Quality } from './quality'
+import { addCounts, markerCounts, qualityOf, type ContigMarkers, type Quality } from './quality'
 
 /** Recruits at this confidence or more into one MAG are offered as one suggestion. */
 export const SURE = 0.8
@@ -307,11 +307,7 @@ function merges(
     let before = ''
     let after = ''
     if (perGenome.length > 0) {
-      const union = perGenome.map((sets) => {
-        const sum = new Int32Array(sets[a].length)
-        for (let k = 0; k < sum.length; k++) sum[k] = sets[a][k] + sets[b][k]
-        return sum
-      })
+      const union = perGenome.map((sets) => addCounts(sets[a], sets[b]))
       const s = bestSet(evidence, union)
       if (s >= 0) {
         const ca = perGenome[s][a]
@@ -426,7 +422,7 @@ function contigSuggestions(
       if (s >= 0) {
         const table = evidence.markers[s]
         const have = perGenome[s][best]
-        for (let k = table.offsets[c]; k < table.offsets[c + 1]; k++) if (have[table.ids[k]] > 0) duplicated++
+        for (let k = table.offsets[c]; k < table.offsets[c + 1]; k++) if (table.counts[k] > 0 && have[table.ids[k]] > 0) duplicated++
       }
     }
     const features = contigFeatures(lower, kind === 'move' ? ownAffinity : next, duplicated, p)
