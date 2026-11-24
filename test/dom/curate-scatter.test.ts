@@ -7,14 +7,16 @@
  * press selecting a dot's contig, then its genome; a lasso selecting what it
  * holds, adding with ⇧ and taking away with ⌥; the rest faded while a genome is
  * selected; the selection carried; the genome lit in every pane; the question
- * shown; the wheel, `0`, GC alone before the coverage, a map without GC, the
- * thumbnail, and the binning as a preview would leave it.
+ * shown and its number; the wheel, Space held, `0`, Escape; the first count
+ * awaited, GC alone before the coverage, a map without GC, the head short of
+ * room, the thumbnail, and the binning as a preview would leave it.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { ScatterPane } from '@/curate/ui/ScatterPane'
 import type { CuratePane } from '@/curate/ui/context'
+import { optionKey, shiftKey } from '@/ui/commands'
 import { NAMES } from '../support/curateCommunity'
 import { testContext, type TestStage } from '../support/curateStage'
 import { setUpDom, type DomTeardown } from '../support/dom'
@@ -103,6 +105,14 @@ function at(name: string): { clientX: number; clientY: number } {
   return { clientX: x + ((GC[name] - gc0) / (gc1 - gc0)) * w, clientY: y + h - ((Math.log10(cover) - log0) / (log1 - log0)) * h }
 }
 
+/** A point of the strip at the foot, at a GC: where the contigs without a contact are drawn. */
+function inStrip(gc: number): { clientX: number; clientY: number } {
+  const [x, , w] = numbers(hand().dataset.plot)
+  const [gc0, gc1] = numbers(hand().dataset.domain)
+  const [y, h] = numbers(hand().dataset.strip)
+  return { clientX: x + ((gc - gc0) / (gc1 - gc0)) * w, clientY: y + h / 2 }
+}
+
 function pointer(type: string, where: { clientX: number; clientY: number }, init: PointerEventInit = {}): void {
   hand().dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, pointerId: 1, ...where, ...init }))
 }
@@ -145,6 +155,7 @@ describe('the GC × coverage scatter', () => {
     const [stripY] = numbers(hand().dataset.strip)
     expect(stripY).toBeGreaterThan(y + h)
     expect(document.querySelector('.curate-scatter-counts')?.textContent).toBe('19 contigs\u00a0· 1 without contacts')
+    expect(document.querySelector('.curate-scatter-counts')?.getAttribute('title')).toBe('Of the map’s contigs, 1 without contacts, drawn in the strip at the foot.')
     expect(pane.element.classList.contains('is-empty')).toBe(false)
     // Up is more coverage, across more GC.
     expect(at('p0').clientY).toBeLessThan(at('y0').clientY)
@@ -165,6 +176,9 @@ describe('the GC × coverage scatter', () => {
     pointer('pointermove', { clientX, clientY: clientY + 60 })
     expect(said.at(-1)).toMatch(/^GC 44\.0% · \d+(\.\d)? Hi-C contacts per kb · drag to lasso$/)
     expect(model.hovered.contig).toBe(-1)
+    // The strip at the foot, where no dot is: in the head's own words.
+    pointer('pointermove', inStrip(44))
+    expect(said.at(-1)).toBe('GC 44.0% · without contacts · drag to lasso')
     hand().dispatchEvent(new PointerEvent('pointerleave'))
     expect(said.at(-1)).toBeNull()
   })
@@ -218,6 +232,37 @@ describe('the GC × coverage scatter', () => {
     expect(pane.key(new KeyboardEvent('keydown', { key: 'Escape' }))).toBe(false)
   })
 
+  it('takes a lasso’s Escape whole: the dialog’s own Escape, which lets go of the selection, never hears it', async () => {
+    const { model, pane } = await mount()
+    model.selectGenomes(['Y'])
+    // As the stage lays them: its keys on the window, then the dialog's Escape beside them.
+    const dialog: string[] = []
+    const stageKeys = (event: KeyboardEvent): void => {
+      if (pane.key(event)) event.preventDefault()
+    }
+    const dialogKeys = (event: KeyboardEvent): void => {
+      dialog.push(event.key)
+    }
+    window.addEventListener('keydown', stageKeys, true)
+    window.addEventListener('keydown', dialogKeys, true)
+    try {
+      const start = at('x0')
+      pointer('pointerdown', { clientX: start.clientX - 12, clientY: start.clientY - 12 })
+      pointer('pointermove', { clientX: start.clientX + 40, clientY: start.clientY - 12 })
+      pointer('pointermove', { clientX: start.clientX + 40, clientY: start.clientY + 20 })
+      hand().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      expect(dialog).toEqual([])
+      pointer('pointerup', { clientX: start.clientX - 12, clientY: start.clientY + 20 })
+      expect(model.selection).toEqual({ genomes: ['Y'], contigs: [] })
+      // With nothing in hand, Escape is the stage's.
+      hand().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      expect(dialog).toEqual(['Escape'])
+    } finally {
+      window.removeEventListener('keydown', stageKeys, true)
+      window.removeEventListener('keydown', dialogKeys, true)
+    }
+  })
+
   it('fades every other dot while genomes are selected, and rings the selected contigs over them', async () => {
     const { model } = await mount()
     expect([dots().dataset.full, dots().dataset.faded, dots().dataset.ringed]).toEqual(['19', '0', '0'])
@@ -233,7 +278,7 @@ describe('the GC × coverage scatter', () => {
   })
 
   it('carries the selected contigs when a drag starts on one, and lassoes when it starts on another', async () => {
-    const { ctx, model, pane } = await mount()
+    const { ctx, model, pane, said } = await mount()
     // From a dot not selected: a lasso, which replaces the selection.
     model.selectContigs([index('y5'), index('u0')])
     await frame()
@@ -252,6 +297,9 @@ describe('the GC × coverage scatter', () => {
     pointer('pointermove', { clientX: from.clientX + 30, clientY: from.clientY + 10 })
     expect(ctx.dragging).toEqual({ kind: 'contigs', contigs: contigs('y5', 'u0') })
     expect(ctx.dropWords({ kind: 'genome', id: 'Y' })?.refused).toBe(false)
+    // The readout is the drop's from here, never the dot the drag left.
+    expect(said.at(-1)).toBeNull()
+    expect(model.hovered).toEqual({ genome: null, contig: -1 })
     // Nothing drops on the scatter itself: clouds overlap.
     const asPane: CuratePane = pane
     expect(asPane.dropTargetAt(from.clientX, from.clientY)).toBeNull()
@@ -279,19 +327,25 @@ describe('the GC × coverage scatter', () => {
     await frame()
     expect(marks().dataset.featured).toBe('1')
     expect(hand().dataset.current).toBe('move:y5>Y')
+    // Its number is its place in the review's queue: after the merge of X's two halves.
+    expect(model.queue()[0].kind).toBe('merge')
+    expect(model.queue().findIndex((q) => q.key === 'move:y5>Y')).toBe(1)
+    expect(marks().dataset.number).toBe('2')
     pane.showSuggestion(null)
     await frame()
     expect(marks().dataset.featured).toBe('0')
+    expect(marks().dataset.number).toBe('')
     // In review, the current question by itself.
     model.setMode('review')
     model.moveCurrent(1)
     await frame()
     expect(model.current?.key).toBe('move:y5>Y')
     expect(marks().dataset.featured).toBe('1')
+    expect(marks().dataset.number).toBe('2')
   })
 
   it('zooms with the wheel at the pointer, and fits again with 0', async () => {
-    const { pane } = await mount()
+    const { pane, said } = await mount()
     const before = numbers(hand().dataset.domain)
     const under = at('y2')
     hand().dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: -300, ...under }))
@@ -300,6 +354,8 @@ describe('the GC × coverage scatter', () => {
     const after = numbers(hand().dataset.domain)
     expect(after[1] - after[0]).toBeLessThan(before[1] - before[0])
     expect(after[3] - after[2]).toBeLessThan(before[3] - before[2])
+    // What is under the still pointer, said as the view moves under it.
+    expect(said.at(-1)).toMatch(/^y2 · 50\.0 kb · GC 53\.0% · /)
     // The dot under the pointer stays under it; the clouds far from it leave the view.
     expect(at('y2').clientX).toBeCloseTo(under.clientX, 1)
     expect(at('y2').clientY).toBeCloseTo(under.clientY, 1)
@@ -308,6 +364,95 @@ describe('the GC × coverage scatter', () => {
     await frame()
     expect(pane.element.dataset.zoom).toBe('fit')
     expect(numbers(hand().dataset.domain)).toEqual(before)
+  })
+
+  it('pans with Space held, and leaves a focused button its Space', async () => {
+    const { model, pane } = await mount()
+    pane.key(new KeyboardEvent('keydown', { key: '+' }))
+    pane.key(new KeyboardEvent('keydown', { key: '+' }))
+    await frame()
+    const zoomed = numbers(hand().dataset.domain)
+    const from = at('y2')
+    pointer('pointermove', from)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }))
+    expect(hand().dataset.cursor).toBe('grab')
+    pointer('pointerdown', from)
+    pointer('pointermove', { clientX: from.clientX + 60, clientY: from.clientY })
+    pointer('pointerup', { clientX: from.clientX + 60, clientY: from.clientY })
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ' }))
+    await frame()
+    // The dots dragged right: the view's GC lower, and nothing selected on the way.
+    const panned = numbers(hand().dataset.domain)
+    expect(panned[0]).toBeLessThan(zoomed[0])
+    expect(panned[1] - panned[0]).toBeCloseTo(zoomed[1] - zoomed[0], 6)
+    expect(model.selection).toEqual({ genomes: [], contigs: [] })
+    // Space on a focused button presses it: the next drag is no pan.
+    const button = pane.element.querySelector('.curate-scatter-tools button') as HTMLElement
+    button.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
+    expect(hand().dataset.cursor).not.toBe('grab')
+    const still = at('y2')
+    pointer('pointerdown', { clientX: still.clientX + 30, clientY: still.clientY - 30 })
+    pointer('pointermove', { clientX: still.clientX + 90, clientY: still.clientY - 30 })
+    pointer('pointerup', { clientX: still.clientX + 90, clientY: still.clientY - 30 })
+    button.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }))
+    await frame()
+    expect(numbers(hand().dataset.domain)).toEqual(panned)
+  })
+
+  it('waits for the first count, saying so, and is drawn once it lands', async () => {
+    const stage = testContext()
+    stage.ctx.data.gc = Float64Array.from(NAMES, (name) => GC[name])
+    stage.ctx.data.coverage = Float64Array.from(NAMES, (name) => COVERAGE[name])
+    const pane = new ScatterPane(stage.ctx)
+    panes.push(pane)
+    stage.model.subscribe((change) => pane.update(change))
+    document.body.appendChild(pane.element)
+    expect(pane.view).toBe('waiting')
+    expect(pane.element.dataset.view).toBe('waiting')
+    expect(pane.element.dataset.ready).toBe('false')
+    expect(document.querySelector('.curate-scatter-note')?.textContent).toBe('weighing the binning…')
+    await stage.model.settled()
+    await frame()
+    expect(pane.view).toBe('gc-coverage')
+    expect(pane.element.dataset.ready).toBe('true')
+    expect(document.querySelector('.curate-scatter-note')?.classList.contains('hidden')).toBe(true)
+  })
+
+  it('gives way piece by piece when its head is short of room — the sizes, the strip’s count, the hint’s words, the hint — and cuts no word', async () => {
+    const { pane } = await mount()
+    const head = pane.element.querySelector('.curate-scatter-head') as HTMLElement
+    const piece = (name: string): HTMLElement => pane.element.querySelector(`.curate-scatter-${name}`) as HTMLElement
+    // Each piece's width at the stage's text (the hint's with its `drag to `), laid out with the head's padding and gaps.
+    const width: Record<string, number> = { counts: 122, bare: 198, hint: 341, verb: 52, legend: 254, tools: 115 }
+    const shown = (name: string): boolean => !piece(name).classList.contains('hidden')
+    const hint = (): number => (shown('hint') ? 12 + width.hint - (shown('hint-verb') ? 0 : width.verb) : 0)
+    const content = (): number => 19 + width.counts + (shown('bare') ? width.bare : 0) + hint() + (shown('legend') ? 12 + width.legend : 0) + 12 + width.tools
+    let room = 1200
+    Object.defineProperty(head, 'clientWidth', { configurable: true, get: () => room })
+    Object.defineProperty(head, 'scrollWidth', { configurable: true, get: () => Math.max(room, content()) })
+    const gone = (): string[] => ['legend', 'bare', 'hint-verb', 'hint'].filter((name) => !shown(name))
+    const widths: Array<[number, string[]]> = [
+      [1200, []],
+      [1000, ['legend']],
+      [700, ['legend', 'bare']],
+      [600, ['legend', 'bare', 'hint-verb']],
+      [500, ['legend', 'bare', 'hint-verb', 'hint']],
+      [1100, []],
+    ]
+    for (const [wide, expected] of widths) {
+      room = wide
+      pane.resize()
+      await frame()
+      expect(gone()).toEqual(expected)
+    }
+    // What is left of the hint is `lasso`, and its keys.
+    room = 600
+    pane.resize()
+    await frame()
+    const shownText = (node: Node): string =>
+      node instanceof Element ? (node.classList.contains('hidden') ? '' : [...node.childNodes].map(shownText).join('')) : (node.textContent ?? '')
+    const left = [...piece('hint').children].map((node) => `${node.tagName === 'KBD' ? 'key' : 'word'}:${shownText(node)}`)
+    expect(left).toEqual(['word:lasso', `key:${shiftKey()}`, 'word:adds', `key:${optionKey()}`, 'word:takes away'])
   })
 
   it('draws GC alone in a band until the contacts are read, and says so', async () => {
@@ -336,7 +481,11 @@ describe('the GC × coverage scatter', () => {
   it('as a thumbnail, draws the dots and the selection, without its head or the hand', async () => {
     const { model, pane } = await mount()
     model.selectGenomes(['Y'])
+    pointer('pointermove', at('x1'))
+    expect(model.hovered.genome).toBe('X1')
     pane.setLarge(false)
+    // Under no pointer now: X1 no longer lit from here.
+    expect(model.hovered).toEqual({ genome: null, contig: -1 })
     await frame()
     expect(pane.element.classList.contains('is-small')).toBe(true)
     expect(dots().dataset.full).toBe('5')

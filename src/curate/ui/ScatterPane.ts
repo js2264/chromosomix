@@ -37,7 +37,7 @@
 
 import type { StageInk } from '../../edit/draw'
 import { Scale } from '../../render/scale'
-import { optionKey, shiftKey, withKey } from '../../ui/commands'
+import { optionKey, shiftKey, wantsSpace, withKey } from '../../ui/commands'
 import { el } from '../../ui/dom'
 import { iconButton } from '../../ui/icons'
 import { scaleFont, subscribeTextScale } from '../../ui/textScale'
@@ -278,17 +278,15 @@ function membersOf(genomeOf: Int32Array, genomes: number): { offsets: Int32Array
   return { offsets, contigs }
 }
 
-function typing(target: EventTarget | null): boolean {
-  const node = target as HTMLElement | null
-  return node !== null && (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA' || node.tagName === 'SELECT' || node.isContentEditable === true)
-}
-
 export class ScatterPane implements CuratePane {
   readonly element: HTMLElement
   readonly title = 'scatter'
   private readonly head: HTMLElement
+  private readonly countsNode: HTMLElement
   private readonly countNode: HTMLElement
   private readonly bareNode: HTMLElement
+  /** The head's pieces that give way, whole, when it is short of room: in this order. */
+  private readonly yielding: readonly HTMLElement[]
   private readonly tools: HTMLElement
   private readonly plot: HTMLElement
   private readonly dots: HTMLCanvasElement
@@ -325,6 +323,7 @@ export class ScatterPane implements CuratePane {
   private dotsDirty = true
   private marksDirty = true
   private handDirty = true
+  private headDirty = true
   private frameId = 0
   // The hand.
   private press: Press | null = null
@@ -344,10 +343,12 @@ export class ScatterPane implements CuratePane {
     this.radius = Float32Array.from(ctx.data.file.lengths, (length) => dotRadius(length))
     const shift = el('kbd', { class: 'kbd kbd-inline', text: shiftKey() })
     const option = el('kbd', { class: 'kbd kbd-inline', text: optionKey() })
+    // `drag to` gives way before the keys do: the readout says it over the plot, and nothing else names the keys.
+    const verb = el('span', { class: 'curate-scatter-hint-verb', text: 'drag to ' })
     const hint = el(
       'span',
       { class: 'curate-scatter-hint', title: 'Drag round dots to select their contigs; press a dot for its contig, again for its genome; drag a selected contig to carry the selection' },
-      el('span', { text: 'drag to lasso' }),
+      el('span', {}, verb, 'lasso'),
       shift,
       el('span', { text: 'adds' }),
       option,
@@ -363,6 +364,7 @@ export class ScatterPane implements CuratePane {
     }
     this.countNode = el('span', { class: 'curate-scatter-count' })
     this.bareNode = el('span', { class: 'curate-scatter-bare' })
+    this.countsNode = el('span', { class: 'curate-scatter-counts' }, this.countNode, this.bareNode)
     this.tools = el(
       'div',
       { class: 'curate-scatter-tools' },
@@ -370,8 +372,9 @@ export class ScatterPane implements CuratePane {
       iconButton('zoom-out', withKey('Zoom out', '-'), () => this.zoomBy(1.25), { class: 'btn btn-icon', size: 14 }),
       iconButton('zoom-in', withKey('Zoom in', '+'), () => this.zoomBy(0.8), { class: 'btn btn-icon', size: 14 }),
     )
-    // Short of room, the sizes give way first, then the strip's count, then the hint (`scatter.css`).
-    this.head = el('div', { class: 'curate-scatter-head' }, el('span', { class: 'curate-scatter-counts' }, this.countNode, this.bareNode), hint, legend, this.tools)
+    // Short of room, the sizes give way first, then the strip's count, then the hint, `drag to` before its keys (`fitHead`).
+    this.yielding = [legend, this.bareNode, verb, hint]
+    this.head = el('div', { class: 'curate-scatter-head' }, this.countsNode, hint, legend, this.tools)
     this.dots = el('canvas', { class: 'curate-scatter-dots', attrs: { 'aria-hidden': 'true' } })
     this.marks = el('canvas', { class: 'curate-scatter-marks', attrs: { 'aria-hidden': 'true' } })
     this.hand = el('canvas', {
@@ -476,6 +479,10 @@ export class ScatterPane implements CuratePane {
         return true
       case 'Escape':
         if (this.press === null) return false
+        // The lasso let go of, and nothing more: the dialog's own Escape, which
+        // lets go of the selection, listens on the window beside the stage's
+        // keys and would hear this one too.
+        event.stopImmediatePropagation()
         this.cancelPress()
         return true
       default:
@@ -867,7 +874,27 @@ export class ScatterPane implements CuratePane {
     this.dotsDirty = true
     this.marksDirty = true
     this.handDirty = true
+    // The head is as wide as the plot, and its words as large as the text scale.
+    this.headDirty = true
     this.paintNote()
+  }
+
+  /**
+   * Short of room, whole pieces of the head give way — the sizes, then the
+   * strip's count, then the hint's `drag to`, then the hint — and no word is
+   * cut: measured, not set by thresholds, since the reader's text scale grows
+   * the words and not the buttons, and a count's length moves what fits.
+   */
+  private fitHead(): void {
+    this.headDirty = false
+    for (const piece of this.yielding) piece.classList.remove('hidden')
+    const head = this.head
+    if (!this.large || head.clientWidth === 0) return
+    const cut = (node: HTMLElement): boolean => node.scrollWidth > node.clientWidth
+    for (const piece of this.yielding) {
+      if (!cut(head) && !cut(this.countsNode) && !cut(this.bareNode)) return
+      piece.classList.add('hidden')
+    }
   }
 
   /** The foot of the plot: the strip's, or the main plot's. */
@@ -987,6 +1014,7 @@ export class ScatterPane implements CuratePane {
     const dpr = window.devicePixelRatio > 0 ? window.devicePixelRatio : 1
     if (dpr !== this.dpr) this.layoutDirty = true
     if (this.layoutDirty) this.layout()
+    if (this.headDirty) this.fitHead()
     if (this.placesDirty) this.place()
     if (this.liveDirty) this.relive()
     if (this.dotsDirty) this.paintDots()
@@ -1377,6 +1405,7 @@ export class ScatterPane implements CuratePane {
     let lit = 0
     let candidates = 0
     let featuredCount = 0
+    let number = 0
     const places = this.places
     const plan = this.plan
     const view = this.viewFrame()
@@ -1398,6 +1427,7 @@ export class ScatterPane implements CuratePane {
       // The question shown: its genomes lifted and edged in the accent.
       const featured = this.featuredNow()
       const genomes = featured === null ? [] : this.shownGenomesOf(featured)
+      if (featured !== null) number = this.numberOf(featured)
       if (g !== null) for (const k of genomes) this.lifted(g, ink, shownOf(k), this.ctx.colourOf(plan.shown.genomes[k].id).css, ink.accent, 0.9, 0.85)
       // The genome lit in every pane: its dots lifted, full, outlined in the ink.
       const litIndex = this.litDrawn === null ? undefined : this.indexOf.get(this.litDrawn)
@@ -1430,6 +1460,7 @@ export class ScatterPane implements CuratePane {
     this.marks.dataset.lit = String(lit)
     this.marks.dataset.candidates = String(candidates)
     this.marks.dataset.featured = String(featuredCount)
+    this.marks.dataset.number = String(number || '')
   }
 
   /**
@@ -1470,10 +1501,8 @@ export class ScatterPane implements CuratePane {
     if (target !== null && inside(target)) this.cross(g, ink, target.x, target.y, this.large ? 6 : 4)
     g.restore()
     if (!this.large) return
-    // The number, as the suggestions card and the review's band count it.
-    const queue = this.ctx.model.queue()
-    const at = queue.findIndex((q) => q.key === s.key || q.members.some((m) => m.key === s.key))
-    if (at < 0) return
+    const number = this.numberOf(s)
+    if (number === 0) return
     let anchor: { x: number; y: number } | null = null
     if (s.kind === 'recruit' || s.kind === 'move') {
       const shown = s.contigs.filter((c) => this.inView[c] === 1)
@@ -1491,7 +1520,12 @@ export class ScatterPane implements CuratePane {
       anchor = other === null ? target : { x: (target.x + other.x) / 2, y: (target.y + other.y) / 2 }
     }
     if (anchor === null || !inside(anchor)) return
-    this.disc(g, ink, anchor.x + 14, anchor.y - 14, at + 1)
+    this.disc(g, ink, anchor.x + 14, anchor.y - 14, number)
+  }
+
+  /** A question's number, as the suggestions card and the review's band count it: its place in the queue, from 1; `0` for none. */
+  private numberOf(s: Suggestion): number {
+    return this.ctx.model.queue().findIndex((q) => q.key === s.key || q.members.some((m) => m.key === s.key)) + 1
   }
 
   /** A cross at a genome's middle, in the accent over a halo. */
@@ -1625,15 +1659,19 @@ export class ScatterPane implements CuratePane {
 
   // --- The head and the note -------------------------------------------------------
 
+  /** What the strip at the foot holds, in the head's words and the readout's: `without contacts`. */
+  private withoutWords(): string {
+    return /contact/i.test(this.ctx.data.coverageLabel) ? 'without contacts' : 'without coverage'
+  }
+
   private paintHead(): void {
     const placing = this.placing
     const more: string[] = []
     const details: string[] = []
     if (placing !== null) {
       if (placing.mode === 'gc-coverage' && placing.bareCount > 0) {
-        const without = /contact/i.test(this.ctx.data.coverageLabel) ? 'without contacts' : 'without coverage'
-        more.push(`${fmt.int(placing.bareCount)} ${without}`)
-        details.push(`${fmt.int(placing.bareCount)} with no ${this.ctx.data.coverageLabel}, in the strip at the foot`)
+        more.push(`${fmt.int(placing.bareCount)} ${this.withoutWords()}`)
+        details.push(`${fmt.int(placing.bareCount)} ${this.withoutWords()}, drawn in the strip at the foot`)
       }
       if (placing.unplaced > 0) {
         more.push(`${fmt.int(placing.unplaced)} without GC`)
@@ -1641,10 +1679,14 @@ export class ScatterPane implements CuratePane {
       }
     }
     const n = placing?.contigs.length ?? 0
-    this.countNode.textContent = placing === null ? '' : `${fmt.int(n)} contig${n === 1 ? '' : 's'}`
+    const count = placing === null ? '' : `${fmt.int(n)} contig${n === 1 ? '' : 's'}`
     // A no-break space before the separator: a flex item's leading space is trimmed.
-    this.bareNode.textContent = more.map((part) => `\u00a0· ${part}`).join('')
-    this.countNode.parentElement?.setAttribute('title', details.length === 0 ? '' : `Of the map’s contigs, ${details.join('; ')}.`)
+    const bare = more.map((part) => `\u00a0· ${part}`).join('')
+    // Measured again only when its words change: not after every step.
+    if (this.countNode.textContent !== count || this.bareNode.textContent !== bare) this.headDirty = true
+    this.countNode.textContent = count
+    this.bareNode.textContent = bare
+    this.countsNode.setAttribute('title', details.length === 0 ? '' : `Of the map’s contigs, ${details.join('; ')}.`)
     // Nothing placed: nothing to lasso, size or zoom.
     this.element.classList.toggle('is-empty', placing === null)
   }
@@ -1694,9 +1736,10 @@ export class ScatterPane implements CuratePane {
       if (this.large) event.preventDefault()
     })
     // Space held pans: heard on the window, never taken from the stage, which
-    // previews the review's step with it.
+    // previews the review's step with it; left, as the stage leaves it, to a
+    // field and to a focused button.
     const down = (event: KeyboardEvent): void => {
-      if (event.key === ' ' && !typing(event.target)) this.setSpace(true)
+      if (event.key === ' ' && !wantsSpace(event.target)) this.setSpace(true)
     }
     const up = (event: KeyboardEvent): void => {
       if (event.key === ' ') this.setSpace(false)
@@ -1828,6 +1871,10 @@ export class ScatterPane implements CuratePane {
         } else this.click(press.dot, press.mod)
         break
       case 'pan':
+        // The dots moved under the pointer: what is under it now, said (a
+        // lasso's words stay until the hand moves on).
+        this.pointer = this.local(event)
+        this.refreshHover()
         break
     }
     this.live = []
@@ -1865,11 +1912,13 @@ export class ScatterPane implements CuratePane {
     this.schedule()
   }
 
-  /** The pane made small: nothing held, nothing said. */
+  /** The pane made small: nothing held, nothing said, nothing lit from here. */
   private letGo(): void {
     if (this.press !== null) this.release(this.press.pointer)
     this.press = null
     this.pointer = null
+    // A dot under the pointer lit its genome in every pane; a thumbnail is under no pointer.
+    if (this.underPointer >= 0 && this.ctx.dragging === null) this.ctx.model.hover(null)
     this.underPointer = -1
     this.live = []
     if (this.said !== null) {
@@ -1888,11 +1937,11 @@ export class ScatterPane implements CuratePane {
     if (!this.large || this.placing === null) return
     event.preventDefault()
     const { x, y } = this.local(event)
-    if (!event.ctrlKey && (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY))) {
-      this.panBy(-(event.shiftKey ? event.deltaY : event.deltaX), 0)
-      return
-    }
-    this.zoomAt(x, y, Math.exp(-event.deltaY * (event.deltaMode === 1 ? 0.05 : 0.002)))
+    this.pointer = { x, y }
+    if (!event.ctrlKey && (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY))) this.panBy(-(event.shiftKey ? event.deltaY : event.deltaX), 0)
+    else this.zoomAt(x, y, Math.exp(-event.deltaY * (event.deltaMode === 1 ? 0.05 : 0.002)))
+    // The view moved under a still pointer: what is under it, and the readout, again.
+    this.refreshHover()
   }
 
   private paintCursor(x: number, y: number, dot: number): void {
@@ -1968,13 +2017,20 @@ export class ScatterPane implements CuratePane {
     this.sayLasso(press, inside, true)
   }
 
-  /** Carry the selected contigs: the stage draws them held and makes the drop's step. */
+  /**
+   * Carry the selected contigs: the stage draws them held and makes the drop's
+   * step, and its readout says the drop's words — never the dot this drag left.
+   */
   private carry(event: PointerEvent): void {
     const selection = this.ctx.model.selection
     if (selection.contigs.length === 0) return
+    this.underPointer = -1
     this.ctx.model.hover(null)
-    this.said = null
     this.ctx.startDrag({ kind: 'contigs', contigs: [...selection.contigs] }, event)
+    if (this.said !== null) {
+      this.said = null
+      this.ctx.say(null)
+    }
     this.handDirty = true
     this.schedule()
   }
@@ -2030,7 +2086,7 @@ export class ScatterPane implements CuratePane {
     const at = this.dataAt(x, y)
     if (at === null) return null
     const parts = [`GC ${fmt.pct(at.gc / 100, 1)}`]
-    if (this.placing?.mode === 'gc-coverage') parts.push(at.log === null ? 'none' : coverageWords(10 ** at.log, this.ctx.data.coverageLabel))
+    if (this.placing?.mode === 'gc-coverage') parts.push(at.log === null ? this.withoutWords() : coverageWords(10 ** at.log, this.ctx.data.coverageLabel))
     parts.push('drag to lasso')
     return parts.join(' · ')
   }

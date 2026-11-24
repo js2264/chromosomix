@@ -13,9 +13,13 @@
   min-height: 0;
   height: 100%;
   background: var(--bg);
-  container-type: inline-size;
 }
 
+/* Short of room, whole pieces give way, never a word cut: the sizes first,
+   then the strip's count, then the hint's `drag to`, then the hint; the count
+   and the zoom stay. Measured by the pane (`fitHead`), which hides each with
+   `.hidden`: the reader's text scale grows the words and not the buttons, so no
+   width holds at every scale. */
 .curate-scatter-head {
   display: flex;
   align-items: center;
@@ -57,19 +61,14 @@
   display: none;
 }
 
-/* How the hand selects: one quiet line, its keys printed. It goes whole when
-   the room goes (below), and is cut only past that — at a larger text. */
+/* How the hand selects: one quiet line, its keys printed, never cut — it goes
+   whole when the room goes. */
 .curate-scatter-hint {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-.curate-scatter-hint > * {
   flex: 0 0 auto;
+  white-space: nowrap;
 }
 .curate-scatter-hint > kbd {
   margin-left: 0.3rem;
@@ -112,26 +111,6 @@
 .curate-scatter.is-empty .curate-scatter-legend,
 .curate-scatter.is-empty .curate-scatter-tools {
   display: none;
-}
-
-/* Short of room, whole pieces give way, never a word cut: the sizes first,
-   then the strip's count, then the hint; the count and the zoom stay. Each
-   threshold is what the pieces left measure at the stage's text, with a little
-   to spare. */
-@container (max-width: 68rem) {
-  .curate-scatter-legend {
-    display: none;
-  }
-}
-@container (max-width: 51rem) {
-  .curate-scatter-bare {
-    display: none;
-  }
-}
-@container (max-width: 38.5rem) {
-  .curate-scatter-hint {
-    display: none;
-  }
 }
 
 /* ---------------------------------------------------------------------------
