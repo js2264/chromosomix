@@ -162,6 +162,7 @@ function leadPanel() {
     blockLevel: () => 'bin',
     frameSpan: () => at.frame,
     lockOrigin: () => ({ rows: at.origin, cols: at.origin }),
+    lockPlaces: () => null,
     blockSpan: () => ({ rows: at.cells * at.bp, cols: at.cells * at.bp, sequences: { rows: 1, cols: 1 } }),
     viewport: () => ({ rows: [0, at.cells], cols: [0, at.cells] }),
     get hasBlock(): boolean {

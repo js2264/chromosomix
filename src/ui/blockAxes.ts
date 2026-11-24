@@ -23,8 +23,9 @@
  * here, and the panel keeps only the state the arithmetic is applied to.
  */
 
+import type { PlaceAxis } from '../panels/lock'
 import type { AxisCoords, AxisSpan, SeparatorSet } from '../render/heatmap'
-import { bpAt, type LocusAxis } from '../render/locus'
+import { bpAt, stretchOf, strandOf, unitAt, type LocusAxis, type LocusSegment } from '../render/locus'
 import type { RotatedBlock } from '../render/rotate'
 import type { DenseMatrix, Extent, Separator } from '../types'
 import type { AxisGroup, MatrixResult } from '../worker/protocol'
@@ -241,6 +242,165 @@ export function unitsOfPlaces(
   const first = stretches[0].segment
   const last = stretches[stretches.length - 1].segment
   return [from - places.before / first.bpPerUnit, to + places.after / last.bpPerUnit]
+}
+
+/**
+ * One stretch of sequence a view was first drawn over, as the deck's lock lays
+ * it along a line ({@link frameOf}).
+ */
+export interface FrameStretch {
+  contig: string
+  /** The stretch of its sequence the view holds, low and high, in base pairs. */
+  from: number
+  to: number
+  /** Which way it reads along the axis (`LocusSegment.strand`). */
+  strand: 1 | -1
+  /** The place on the line where it begins. */
+  start: number
+}
+
+/**
+ * The sequences one axis of a view was first drawn over, laid end to end: the
+ * line the deck's lock counts places on where the axis holds more than one of
+ * them (`panels/lock.ts`, `PlaceAxis`).
+ *
+ * Taken from the block a view **first** drew, the region it names read whole,
+ * and kept through every refine, as `MatrixPanel.frameSpan` is: a block a zoom
+ * read inside it has lost the sequences either side of it, and the line is what
+ * says where they were. Each stretch is its sequence's own length, not its
+ * cells', so two maps of one genome at two grids lay it out alike: the short
+ * last cell of each sequence (§3.3) is not carried on into the next. The first
+ * stretch begins at its own first base pair, so on one sequence the line is
+ * that sequence's coordinate, which is the lock's currency there already.
+ */
+export function frameOf(axis: LocusAxis | null): FrameStretch[] | null {
+  if (axis === null || axis.segments.length === 0) return null
+  const out: FrameStretch[] = []
+  let start: number | null = null
+  for (const segment of axis.segments) {
+    if (!(segment.bpPerUnit > 0)) return null
+    const [low, high] = stretchOf(segment)
+    const a = bpAt(segment, segment.unitStart)
+    const b = bpAt(segment, segment.unitEnd)
+    const from = clampTo(Math.min(a, b), low, high)
+    const to = clampTo(Math.max(a, b), low, high)
+    if (start === null) start = from
+    out.push({ contig: segment.contig, from, to, strand: strandOf(segment), start })
+    start += to - from
+  }
+  return out
+}
+
+function clampTo(value: number, low: number, high: number): number {
+  return value < low ? low : value > high ? high : value
+}
+
+/**
+ * A block's cells as places on its view's line ({@link frameOf}), for the deck's
+ * lock on an axis of more than one sequence.
+ *
+ * A cell is turned into a base pair of its own sequence by the block's axis,
+ * exactly as the readout does, and that base pair into a place by where its
+ * sequence lies on the line; a place goes back the same way. So a block that
+ * begins in chrVII and one that begins in chrI, on two maps of one genome, are
+ * put on one place, which counted from where each block began they were not.
+ * Inside the block a place is held to its sequence, so the short last cell of
+ * one sequence is not counted into the next; past either end it goes on at the
+ * block's step from the block's edge, which is what a window the block holds
+ * too little of is converted by before it is read (`LockMember.reach`).
+ *
+ * `null` where the line is one sequence, whose cells an origin and a step say
+ * exactly — and which a circle panned across its own origin (§8.15) needs said
+ * that way, its axis carrying the sequence twice; and `null` where the block
+ * carries a sequence the line does not, which no place can be given.
+ */
+export function placesOnFrame(
+  frame: readonly FrameStretch[] | null,
+  axis: LocusAxis | null,
+): PlaceAxis | null {
+  if (frame === null || axis === null || axis.segments.length === 0) return null
+  if (new Set(frame.map((stretch) => stretch.contig)).size < 2) return null
+  const byContig = new Map<string, FrameStretch[]>()
+  for (const stretch of frame) {
+    const held = byContig.get(stretch.contig)
+    if (held === undefined) byContig.set(stretch.contig, [stretch])
+    else held.push(stretch)
+  }
+  /** The stretch of a sequence that holds `bp`, or the nearest of them. */
+  const stretchAt = (contig: string, bp: number): FrameStretch | null => {
+    let best: FrameStretch | null = null
+    let distance = Infinity
+    for (const stretch of byContig.get(contig) ?? []) {
+      const off = bp < stretch.from ? stretch.from - bp : bp > stretch.to ? bp - stretch.to : 0
+      if (off < distance) {
+        best = stretch
+        distance = off
+      }
+    }
+    return best
+  }
+  /** The block's own stretch of a sequence that holds `bp`, or the nearest of them. */
+  const ownStretch = (contig: string, bp: number): LocusSegment | null => {
+    let best: LocusSegment | null = null
+    let distance = Infinity
+    for (const segment of axis.segmentsOf(contig)) {
+      if (!(segment.bpPerUnit > 0)) continue
+      const unit = unitAt(segment, bp)
+      const off = unit < segment.unitStart ? segment.unitStart - unit : unit > segment.unitEnd ? unit - segment.unitEnd : 0
+      if (off < distance) {
+        best = segment
+        distance = off
+      }
+    }
+    return best
+  }
+  const along = (stretch: FrameStretch, bp: number): number =>
+    stretch.start + (stretch.strand === 1 ? bp - stretch.from : stretch.to - bp)
+  // Every stretch of the block has its place on the line, or there is no line.
+  const homes = new Map<LocusSegment, FrameStretch>()
+  for (const segment of axis.segments) {
+    if (!(segment.bpPerUnit > 0)) return null
+    const home = stretchAt(segment.contig, bpAt(segment, (segment.unitStart + segment.unitEnd) / 2))
+    if (home === null) return null
+    homes.set(segment, home)
+  }
+  const first = axis.segments[0]
+  const last = axis.segments[axis.segments.length - 1]
+  /** A cell edge inside the block, held to its sequence. */
+  const inside = (cell: number): number => {
+    // The block's last edge is past every stretch's half-open end, and is the last one's.
+    const segment = axis.segmentAt(cell) ?? last
+    const home = homes.get(segment) as FrameStretch
+    return along(home, clampTo(bpAt(segment, cell), home.from, home.to))
+  }
+  const low = inside(first.unitStart)
+  const high = inside(last.unitEnd)
+  const place = (cell: number): number => {
+    if (cell < first.unitStart) return low - (first.unitStart - cell) * first.bpPerUnit
+    if (cell > last.unitEnd) return high + (cell - last.unitEnd) * last.bpPerUnit
+    return inside(cell)
+  }
+  const cell = (at: number): number => {
+    // The stretch of the line this place is on: the last to begin at or before it.
+    let lo = 0
+    let hi = frame.length - 1
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if (frame[mid].start <= at) lo = mid
+      else hi = mid - 1
+    }
+    const stretch = frame[lo]
+    const offset = at - stretch.start
+    const bp = stretch.strand === 1 ? stretch.from + offset : stretch.to - offset
+    const segment = ownStretch(stretch.contig, bp)
+    if (segment !== null) return unitAt(segment, bp)
+    // A sequence this block does not carry: on past the end of the block it is
+    // before or after, at the block's step.
+    if (at <= low) return first.unitStart - (low - at) / first.bpPerUnit
+    if (at >= high) return last.unitEnd + (at - high) / last.bpPerUnit
+    return first.unitStart + ((at - low) / Math.max(1e-9, high - low)) * (last.unitEnd - first.unitStart)
+  }
+  return { place, cell }
 }
 
 /**

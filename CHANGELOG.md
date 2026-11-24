@@ -77,6 +77,38 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   map moving. Choosing the rung the task would read anyway clears the choice, and another file
   forgets it. A task that reads no map, a starred companion of a deck, an import and a ladder with
   nothing to choose have no such row.
+- **An ideogram view: every chromosome whole, side by side, with the tracks beside each (§5.11), as
+  a dev feature (§29).** The switch in the Tracks card's new `picture` row — the browser's, and a
+  map's — the palette's *Ideogram* or `z` draws the sequences ticked on the Sequences card, or the
+  whole genome where none is, as a karyotype on one scale: standing in a row, each read downward with
+  its tracks to its right, or, flipped, lying in a column with its tracks above it; one chromosome
+  alone lies; the longest forty at most. Over a contact map the switch or `z` puts the map down
+  first, as `v` does. Put away — the switch, `z`, a click on a chromosome or a drag along one — it
+  gives back the picture it replaced, the 1D browser or the map, on the chromosome or stretch the
+  click or the drag named, in one step that Back undoes. Every lane of the browser's stack is drawn
+  beside every chromosome by the browser's own painters — area, line, bars, points, heatmap, ribbon,
+  features, arcs — on one axis per track over every chromosome drawn, shrunk by one factor to fit the
+  window and never past their heights in the browser, down to four pixels. The wheel magnifies the
+  picture gradually about the pointer, both ways at once — the chromosome under it longer, thicker
+  and its lanes wider, its neighbours leaving the window on either side — to a base a pixel, and back
+  to every chromosome whole; a sideways scroll or, magnified, a drag moves it, Shift-drag chooses a
+  stretch, the zoom buttons, `+` and `−` magnify it about the middle, and `W` and `0` put it back. The
+  key stays put, the names are held at the window's edge, and a thin bar at its foot and right edge
+  says which part of a picture larger than the window is shown; magnified, each chromosome in the
+  window is read for its own stretch there. A cytoBand fills the chromosomes with its bands by
+  default; *colour by* fills them with one colour, a track (in its lane's colours, white to its
+  colour unless the lane is a heatmap, with its colour scale, unboxed, in the key's corner) or a
+  feature set's own colours. A pair set's pairs on one chromosome are its lane's arcs and its pairs
+  between two are curves leaving each chromosome straight across it, under every lane, the strongest
+  4,000; a set with only those takes no lane. The
+  reader's lines, boxes and arrowheads are drawn across each chromosome; the pointer draws the
+  hairline across one chromosome and its lanes, and the card names the band and every track there.
+  The key over the chromosomes is the browser's lane labels, names and ranges typed into as in a lane.
+  The ideogram's settings are rows of the Tracks card while it is drawn — flip, colour by, colour,
+  width, gap, height and the tracks' fit — kept with the file and in a workspace
+  (`SessionConfig.ideogram`); the orientation is in the link (`ideogram=vertical|horizontal`), and
+  the figure exports as PNG or PDF — the whole picture at rest, the window as framed when magnified.
+  `scripts/ui-ideogram-view.mjs` drives it on the yeast and human demos.
 
 ### Changed
 
@@ -420,6 +452,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The maps of a deck stay on one place across the whole genome (§16.3).** Zoomed or panned fast,
+  the maps of a deck on the whole genome went on moving together but showed two places: the yeast
+  micro-C twice, zoomed fast into the whole genome, showed chrVII:378–632 kb on the first map and
+  chrII:148–402 kb on the second, and a slow pan brought them back together for a while. Each map's
+  zoom reads a window of its own inside the genome, and the deck counted each map's window from where
+  its block began *in its sequence*: 378 kb into chrVII on one map was put 378 kb into the genome on
+  the other, whose block began in chrI. Slow steps let the two blocks begin in the same sequence;
+  a fast wheel, a fast pan, or a resolution picked with *refine on zoom* off did not. The deck now
+  counts the genome as its sequences laid end to end, each its own length, and puts every map on one
+  place whatever block each holds. A selection of several sequences is counted the same way.
 - **A deck turned 45° moves as one (§16.4, §17.3).** Two copies of the yeast micro-C zoomed into IV
   and then turned left the second *not following: this block spans 26.2 kb × 442.6 kb where the first
   map spans 26.2 kb × 439.8 kb. The same name resolved against different sequences*; stepped on to

@@ -80,6 +80,8 @@ function leadPanel() {
 
     lockOrigin: () => ({ rows: 0, cols: 0 }),
 
+    lockPlaces: () => null,
+
     blockSpan: () => ({ rows: 400_000, cols: 400_000, sequences: { rows: 1, cols: 1 } }),
     viewport: () => ({ rows: [0, 400], cols: [0, 400] }),
     get hasBlock(): boolean {

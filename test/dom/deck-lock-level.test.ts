@@ -260,6 +260,8 @@ function leadRollUp() {
 
     lockOrigin: () => ({ rows: 0, cols: 0 }),
 
+    lockPlaces: () => null,
+
     blockSpan: () => ({
       rows: CONTIGS * binsPer(1000) * 1000,
       cols: CONTIGS * binsPer(1000) * 1000,

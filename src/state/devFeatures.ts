@@ -44,6 +44,12 @@ export const DEV_FEATURES = {
    * clause of `metacool`'s, so the format can be published without it.
    */
   circle: 'The circle of genomes is not validated yet.',
+  /**
+   * Every chromosome drawn whole, side by side, with the tracks beside each
+   * (§5.11): the Tracks cards' switch and the ideogram's rows, the command and
+   * its key, and the key it writes in a link.
+   */
+  ideogram: 'The ideogram view is not finished yet.',
 } as const
 
 export type DevFeature = keyof typeof DEV_FEATURES

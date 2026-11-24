@@ -141,6 +141,8 @@ function leadPanel(
 
     lockOrigin: () => ({ rows: 0, cols: 0 }),
 
+    lockPlaces: () => null,
+
     blockSpan: () => ({
       rows: cells * bpPerCell,
       cols: cells * bpPerCell,
