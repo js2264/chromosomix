@@ -17288,7 +17288,8 @@ which edits one genome's scaffolds.
 so far the model of a curation and its store (§33.2), the stage — its frame, list, review, keys,
 pictures, cards and chooser (§33.3) —, the session drawn through the curated binning
 (§33.4), the method — the contig network, affinity, the background, the suggestions and their
-confidence, and miComplete's numbers from the markers (§33.5) — and the tables (§33.8). It is a **dev feature** (§29), `curate`, throughout. The design it was written from — the
+confidence, and miComplete's numbers from the markers (§33.5) —, what the answers teach (§33.6),
+what is kept and carried (§33.7) and the tables (§33.8). It is a **dev feature** (§29), `curate`, throughout. The design it was written from — the
 decisions and who made them, the method with the numbers it was held to on the mock community — is
 `docs/genome-curation.md`. §13's first rule is untouched: **the app never modifies a file it
 opened.** A curation is a lens over the file, and what it produces is new files.
@@ -17385,7 +17386,10 @@ the hand; *tidy* lays it out again. The stage's order is its own: the session dr
 colour (a disc for a MAG, a ring for an element), its short name, what the curation changed (`+30`,
 `−2`, `new`, `renamed`, `was an element`, the change in words in its title), its length, its
 weighted completeness over a bar and its weighted redundancy — `--warn` above 1.10, the bar `--ok`
-at metaTOR's high quality — or, for an element, its host (`→ 00003_00001`, `3 hosts`, `no host`),
+at metaTOR's high quality, and the percentage itself where the bar is not drawn: on a changed
+genome's row, whose change takes the bar's room, and in a narrow list; a redundancy within half a
+hundredth of 1.05 or 1.10 printed to a third decimal, off the bound, so the number says which side of
+it the grade went (1.1004 is `1.101`), here, in the band and in the cards — or, for an element, its host (`→ 00003_00001`, `3 hosts`, `no host`),
 and a disc counting the suggestions that name it. It opens on its contigs, longest first, each with
 its length, its GC content and the suggestion that would move it (`→ 00700_00002 99%`), or where a
 step brought it from. The pool lists its contigs, its likeliest recruits first. One box filters, by
@@ -17461,14 +17465,15 @@ genome's, a contig's (it would hide the contig in every box that finds a place),
 non-ASCII character, a comma (metaTOR lists genomes with them) or a colon, and any case of the words
 a table means no genome by — `__unbinned__`, `NA`, `nan`, `n/a`, `ND`, `n/d`, `-1`.
 
-**The readout**, under the toolbar — two lines where one does not hold it — says what is under the
+**The readout**, in the toolbar between the pictures' tabs and the tools — two lines where one does not hold it — says what is under the
 pointer; idle, the curation's tally: `MAGs 50 → 45 · 127 elements · 12,412 unbinned · 6 steps · 400
 contigs moved · links +3 −1`.
 
 **Who presses take** (§27.6): **manual** — the suggestions are drawn and listed and never apply
 themselves —, **review**, and **auto**. **Review asks questions, not pairs** (`curate/questions.ts`):
 the merges at even odds or more grouped by the genomes they join — one question an organism, merged
-into its most complete member, at the confidence of its **weakest needed pair**, the least sure join
+into its most complete member (the longest on a tie, a lone pair's as a group's), at the confidence of
+its **weakest needed pair**, the least sure join
 of the surest tree that joins them —, the moves by the genome they leave and the one they join, the
 recruits by the genome they join, an element's links and unlinks together; what is less sure stays a
 question of its own. They come likely first, and among those the merges, then the moves, the recruits
@@ -17508,8 +17513,11 @@ element and a MAG take the link or the unlink on offer, as the card's act does.
 
 **One answer a press.** A question is answered only once the binning it was asked of is counted: Y
 or N — or a card's *take* and *turn down* — pressed while the step just made is counted, or after its
-count failed, answers nothing (the band says *weighing…*), and a key held down answers once — a
-question just taken is still in the queue of the binning before it. After an answer review moves on:
+count failed, answers nothing (the band says *weighing…*, or that the count failed, to count again),
+and a key held down answers once — a question just taken is still in the queue of the binning before
+it. Nor does a card's act, or the key printed on it (`M`, `L`, `B`, `E`, `Delete`), make a step then:
+it is taken, the card dims, and nothing is made — not the link or unlink on offer, nor, in its place,
+the genomes dissolved. After an answer review moves on:
 past a question answered whole, to the next along; when part of it was answered — a member stepped
 into, or one taken from its card — to the members left. An undo stops an auto run, and auto asks a question again where a
 step was made while it was priced, never taking one priced on another binning. A genome a step makes
@@ -17602,8 +17610,8 @@ binning (§33.2); a map with no genomes; a single-cell file; a map storing both 
 not drawn one through the other.
 
 **Costs.** Building the lens is a sort of the contigs and an array as long as the bins: 66 ms on the
-mock community's 20,566 contigs and 184,984 bins, after the file's binning is read (141 ms there,
-on every open and every rung opened again); on two million contigs the read, the fold and the sort
+mock community's 20,566 contigs and 184,984 bins, after the file's binning is read (about 150 ms
+there, §33.9's figure, on every open and every rung opened again); on two million contigs the read, the fold and the sort
 take seconds, and are not yet made cheaper. A genome's map reads its contigs' rows in the file,
 one band per run of them — a merged genome a band per genome it was made of; the whole map, the
 overview and a task's pass read every pixel, as without a curation; a balanced read takes the weight
@@ -17644,7 +17652,9 @@ than its own, against a prior that the binning put it there; **link** an element
 the share of the element's contacts with MAGs); **unlink** a link whose own confidence is under 15%.
 Recruits at 80% or more into one MAG are one suggestion. **A contig the method takes to be misplaced
 explains its own contacts**: whatever it carries between its MAG and another is not counted for their
-merge, nor for a link, until its move is answered. Counted again after every step. *Built*
+merge, nor for a link, until its move is answered — taken, the contig moves; turned down, the reader
+has said it is where it is, and its contacts count there (the keys turned down go with every count).
+Counted again after every step and every answer. *Built*
 (`curate/suggest.ts`): on the mock community, the merges at 50% are 13 of 13 right; the recruits,
 314 contigs and 1.58 Mb at 96.6% (98.6% at 80%); the moves, 10 of the 12 the truth can judge (every
 one at 80%); the links metaTOR did not make, 11 of 12; the one unlink, metaTOR's *Vibrio* phage on a
@@ -17670,7 +17680,7 @@ otherwise rank what it takes next by what it took, and leave answers nobody gave
 answer is given only on a binning counted: none while a step is counted or after a count that failed,
 from a key or from a card. A suggestion turned
 down stays turned down after the steps that follow, listed with *offer again*; *forget* puts the
-stated weights back. What was learned is kept per file, apart from the curation
+stated weights back and offers again everything that was turned down. What was learned is kept per file, apart from the curation
 (`map:curation-learned`), and carried with it in a workspace and a link. *Built* (`curate/model.ts`,
 `state/curation.ts`).
 
@@ -17702,7 +17712,9 @@ modifies a file it opened (§13). Each through the save dialog (§26.6), named a
   reader.
 
 Tab-separated, one header line, numbers to four significant places. The card prints the two commands
-with a copy button each, and says what a reassignment keeps of the file: metaTOR's clustering rounds
+with a copy button each — `reassign` with `--layout genome-then-length`, so the map it writes is
+grouped as the session drew it (§33.4) whatever order the file kept, since `auto` keeps the order of a
+map that was not grouped by genome — and says what a reassignment keeps of the file: metaTOR's clustering rounds
 as they were, a changed genome's own columns as they were, and no weight that depends on the
 assignment. *Built* (`curate/exports.ts`, `curate/ui/cards/ExportCard.ts`): on MM133, the four
 tables of a curation of sixteen steps, given to `metacooler reassign` and then `annotate`, make a
@@ -17713,7 +17725,7 @@ link.
 
 | Operation | Budget |
 |---|---|
-| Opening the stage | the file's binning, its clusters and its markers, read once per map: 91 ms on MM133 |
+| Opening the stage | the file's binning, its clusters and its markers, read once per map: about 150 ms on MM133, a fresh open in Node (150–220 ms over four) |
 | The contacts' read | every stored pixel once, in the reader's worker, with a bar and a cancel: 7,081,501 pixels in 631 ms on MM133; kept for the session |
 | A step | **0** reads; the method counted again over every pair of contigs, off the page's thread: 124 ms on MM133's 263,961 pairs |
 | A price, a preview | one count of the binning with one more step, as a step's |

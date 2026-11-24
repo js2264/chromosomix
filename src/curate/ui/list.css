@@ -240,12 +240,16 @@
   flex: 0 0 auto;
   margin-right: auto;
 }
-/* A changed genome's row gives its bar's room to the change: the percentage stays, its box as wide as it. */
+/* A changed genome's row gives its bar's room to the change: the percentage
+   stays, its box as wide as it, and says high quality in the bar's colour. */
 .curate-row.has-change .curate-bar {
   display: none;
 }
 .curate-row.has-change .curate-row-quality {
   width: auto;
+}
+.curate-row.has-change .curate-row-complete.is-high {
+  color: var(--ok);
 }
 /* The numbers and the suggestions' disc never give way: the name and the change do. */
 .curate-row-quality,
@@ -377,13 +381,29 @@
   .curate-change {
     display: none;
   }
+  /* The chip gone, a changed genome's bar is back in its room. */
+  .curate-row.has-change .curate-bar {
+    display: block;
+  }
+  .curate-row.has-change .curate-row-quality {
+    width: 4.4rem;
+  }
+  .curate-row.has-change .curate-row-complete.is-high {
+    color: var(--text-dim);
+  }
 }
 @container (max-width: 270px) {
-  .curate-bar {
+  .curate-bar,
+  .curate-row.has-change .curate-bar {
     display: none;
   }
-  .curate-row-quality {
+  .curate-row-quality,
+  .curate-row.has-change .curate-row-quality {
     width: auto;
+  }
+  .curate-row-complete.is-high,
+  .curate-row.has-change .curate-row-complete.is-high {
+    color: var(--ok);
   }
 }
 @container (max-width: 250px) {

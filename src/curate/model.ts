@@ -32,7 +32,8 @@ export interface Cancellable<T> {
 
 /** How the stage counts: the worker in the app, the method in the tests. */
 export interface CurateClient {
-  state(curation: Curation | null, weights: KindWeights): Cancellable<CurationStateResult>
+  /** `declined`: the suggestions turned down, whose moves explain no contact (§33.5). */
+  state(curation: Curation | null, weights: KindWeights, declined?: readonly string[]): Cancellable<CurationStateResult>
 }
 
 /** Who presses accept: the reader alone, the reader one suggestion at a time, or the stage for the sure ones. */
@@ -210,7 +211,7 @@ export class CurateModel {
     this.cancelTimer = this.schedule(() => {
       this.cancelTimer = null
       if (ticket !== this.ticket || this.disposed) return
-      const request = this.client.state(this.store.curation, this.weights)
+      const request = this.client.state(this.store.curation, this.weights, this.store.learned.rejected)
       this.pending = request
       request.promise.then(
         (answer) => {
@@ -307,7 +308,7 @@ export class CurateModel {
     this.previewRequest?.cancel()
     const ticket = ++this.previewTicket
     this.previewHeld = { key, steps, answer: null }
-    const request = this.client.state(withSteps(this.store.curation, steps, 'reader'), this.weights)
+    const request = this.client.state(withSteps(this.store.curation, steps, 'reader'), this.weights, this.store.learned.rejected)
     this.previewRequest = request
     request.promise.then(
       (answer) => {
@@ -455,15 +456,19 @@ export class CurateModel {
     return this.selectionHeld
   }
 
-  /** Select genomes by id. */
+  /**
+   * Select genomes by id. One kind at a time, whatever part asks (§33.3): a
+   * ⌘ or ⇧ on a genome keeps the genomes selected and lets the contigs go, as
+   * the list's ⌘ on a row of the other kind does.
+   */
   selectGenomes(ids: Iterable<string>, how: SelectHow = 'replace'): void {
-    this.setSelection({ genomes: combine(this.selectionHeld.genomes, [...ids], how), contigs: how === 'replace' ? [] : this.selectionHeld.contigs })
+    this.setSelection({ genomes: combine(this.selectionHeld.genomes, [...ids], how), contigs: [] })
   }
 
-  /** Select contigs by index of the file's. */
+  /** Select contigs by index of the file's: one kind at a time, as {@link selectGenomes}. */
   selectContigs(contigs: Iterable<number>, how: SelectHow = 'replace'): void {
     const next = combine(this.selectionHeld.contigs, [...contigs], how).sort((a, b) => a - b)
-    this.setSelection({ genomes: how === 'replace' ? [] : this.selectionHeld.genomes, contigs: next })
+    this.setSelection({ genomes: [], contigs: next })
   }
 
   /** Select exactly these genomes and contigs. */
@@ -826,7 +831,7 @@ export class CurateModel {
     if (before === null) return null
     // A link moves no contig: no genome's markers change.
     if (question.steps.every((step) => step.op === 'link' || step.op === 'unlink' || step.op === 'rename')) return null
-    const after = await this.client.state(withSteps(this.store.curation, question.steps, 'auto'), this.weights).promise.catch(() => null)
+    const after = await this.client.state(withSteps(this.store.curation, question.steps, 'auto'), this.weights, this.store.learned.rejected).promise.catch(() => null)
     if (after === null) return null
     const worse = priceOf(before, after).find((row) => priceVerdict(row) === 'demoted')
     if (worse === undefined) return null

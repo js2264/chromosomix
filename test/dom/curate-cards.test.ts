@@ -560,7 +560,7 @@ describe('the export card', () => {
     expect(textsOf(document.body, '.curate-export-file')).toEqual(['contig → genome', 'genomes', 'elements', 'element ↔ host'])
     expect(document.querySelector('.curate-export-card .edit-note')?.textContent).toBe('Written from the curation; no file the session opened is touched.')
     expect(commands()).toEqual([
-      'metacooler reassign community.metacool --contigs community.contig-genome.tsv -o community.curated.metacool',
+      'metacooler reassign community.metacool --contigs community.contig-genome.tsv --layout genome-then-length -o community.curated.metacool',
       'metacooler annotate community.curated.metacool --genomes community.genomes.tsv --replace --inplace',
     ])
     expect(exportButton('contig-genome').title).toMatch(/metacooler reassign takes \(community\.contig-genome\.tsv\)$/)
@@ -602,7 +602,7 @@ describe('the export card', () => {
     const m = await exporting()
     await press(exportButton('contig-genome'))
     await frame()
-    expect(commands()[0]).toBe('metacooler reassign community.metacool --contigs my_curation.contig-genome.tsv -o community.curated.metacool')
+    expect(commands()[0]).toBe('metacooler reassign community.metacool --contigs my_curation.contig-genome.tsv --layout genome-then-length -o community.curated.metacool')
     expect(document.querySelector('.curate-export-stale')?.classList.contains('hidden')).toBe(true)
     m.store.apply({ op: 'dissolve', genome: 'Z' })
     await frame()

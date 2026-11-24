@@ -577,7 +577,8 @@ export class GenomeList {
         bar.appendChild(fill)
         const title = `${fmt.pct(q.weightedCompleteness, 1)} complete and ${fmt.fixed(q.weightedRedundancy, 3)} redundant, weighted (${q.set}); ${fmt.pct(q.completeness, 1)} and ${fmt.fixed(q.redundancy, 3)} unweighted; ${q.present} of ${q.markers} markers${g === null ? '' : ` · ${g === 'contaminated' ? 'contaminated' : `${g} quality`}`}`
         parts.push(
-          el('span', { class: 'curate-row-quality', title }, bar, el('span', { class: 'curate-row-complete', text: fmt.pct(q.weightedCompleteness, 0) })),
+          // High quality is the bar's colour, and the percentage's where a changed row or a narrow list hides the bar.
+          el('span', { class: 'curate-row-quality', title }, bar, el('span', { class: `curate-row-complete${g === 'high' ? ' is-high' : ''}`, text: fmt.pct(q.weightedCompleteness, 0) })),
           el('span', { class: `curate-row-redundant${q.weightedRedundancy > 1.1 ? ' is-warn' : ''}`, text: redundancyText(q.weightedRedundancy), title }),
         )
       }

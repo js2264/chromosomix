@@ -11,9 +11,9 @@ import type { CurationStateResult } from '../worker/curateProtocol'
 import { bestQuality, type ContigMarkers } from './quality'
 import { curationState, type CurationEvidence, type KindWeights } from './suggest'
 
-/** The method's state of `binning`, as the stage reads it. */
-export function stateAnswer(evidence: CurationEvidence, binning: CuratedBinning, weights: KindWeights = {}): CurationStateResult {
-  const state = curationState(evidence, binning, weights)
+/** The method's state of `binning`, as the stage reads it; `declined`, the suggestions the reader turned down. */
+export function stateAnswer(evidence: CurationEvidence, binning: CuratedBinning, weights: KindWeights = {}, declined: readonly string[] = []): CurationStateResult {
+  const state = curationState(evidence, binning, weights, declined)
   return {
     fingerprint: binning.fingerprint(),
     counted: true,

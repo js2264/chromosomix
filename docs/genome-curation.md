@@ -5,6 +5,8 @@
 > decisions and who made them, the model of a curation, the lens the session is drawn through, the
 > method behind the suggestions with the numbers it was held to, the stage, and the order it is built
 > in. It is a **dev feature** (§29): on `main`, invisible to a reader who has not asked for it.
+> Where the build settled a rule differently, the sections below say what it is now and §33 says
+> why; where this note and §33 disagree, §33 holds.
 
 The feature in one sentence: **a stage where the reader curates a metagenome's binning — moves
 contigs between genomes, merges the fragments of one organism, recruits the contigs binning left
@@ -106,9 +108,11 @@ and for a suggestion **the evidence it was accepted on**, frozen. **Undo** and *
 cursor; a step made after an undo drops the steps past it.
 
 **Names.** A genome keeps its file name for as long as it exists, through every contig moved in or
-out. A merge keeps the first genome's name. A genome the curation creates is named `<map>_curated_001`,
-`_002`, … for a MAG and `<map>_element_001`, … for an element — never a name the file already uses —
-and the reader renames; a rename is a step, refused for a name another genome has or `__unbinned__`.
+out. A merge keeps the survivor's name — the more complete for a suggestion, the longest for a merge
+by hand. A genome the curation creates is named `curated_MAG_1`, `curated_MAG_2`, … for a MAG and
+`curated_element_1`, … for an element (its id `curated:N`, never minted twice) — never a name the
+file already uses — and the reader renames; a rename is a step, refused for a name another genome
+has or `__unbinned__`.
 
 **The fingerprint.** A curation carries the number of contigs of the file and a digest of the
 binning it was made against — every contig's name, length and genome name, in the file's order, and
@@ -118,14 +122,17 @@ reference edit made on another assembly is (§27.2).
 
 ### 3.2 The original binning, read
 
-- A genome is a **MAG** unless it is an element. It is an **element** when its name is a cluster's of
-  the clustering round `mge` (metaTOR made it a genome of the map) or its `mge` column says `True`.
-- **The clusters of round `mge` are elements even where the file's genomes are not**: a map on which
+- A genome is a **MAG** unless it is an element. **Where `/genomes` has an `mge` column, it alone
+  decides**: an element is a genome whose `mge` says `True`. Read from the rounds instead, a map
+  `reassign`ed from a curation would bring back elements the curation merged away, since `reassign`
+  carries metaTOR's rounds as they were (§33.2).
+- **Only where there is no such column** are the clusters of round `mge` elements: a map on which
   `metator mge` ran without making its clusters genomes holds them only in `/clusters`. Their contigs
   are the element's — taken out of whatever genome the file has them in, as `metator host` counts them
   — so the curated binning is exclusive from the first step.
-- The **host links** of the file are the `hosts` of round `mge` (`metator host`): each a link the
-  curation starts from, kept until a step drops it.
+- The **host links** of the file are the MAGs' own `mges` lists where `/genomes` has that column, and
+  only otherwise the `hosts` of round `mge` (`metator host`): each a link the curation starts from,
+  kept until a step drops it.
 - `__unbinned__` is the pool, wherever it is, by name and never by index (§7.4).
 
 ### 3.3 The curated binning
@@ -220,13 +227,14 @@ taken by auto mode from 80% (a step that moves contigs between organisms asks mo
 
 | Kind | What it proposes | Confidence = σ(…) |
 |---|---|---|
-| **merge** | two MAGs made one | `2·log₂(A/0.1) + 0.5·(log₁₀(1+o) − 2) − 6·overlap·min(1, m/10)` |
+| **merge** | two MAGs made one | `2·log₂(A_lo/0.1) + 0.5·(log₁₀(1+o) − 2) − 6·overlap·min(1, m/10) − 3·[p > 10⁻³]` |
 | **recruit** | an unbinned contig into a MAG | `2·clip(log₂(A_lo/0.5), −4, 2) + clip(log₂(A_lo/A₂), 0, 3) − 3·min(d, 2) − 3·[p > 10⁻³]` |
 | **move** | a binned contig to another MAG | as a recruit, `A₂` its affinity with its own genome, less 2 (the binning put it there) |
 | **link** | an element hosted by a MAG | `2·clip(log₂(A_lo/0.2), −4, 2) + 2·clip(log₂(s/0.1), −3, 2) − 3·[p > 10⁻³]` |
 | **unlink** | a link the binning no longer supports | the link's own confidence under 15% |
 
-`o` the contacts the step rests on; `A₂` the contig's next best affinity; `overlap` the share of the
+`o` the contacts the step rests on; `A_lo` the lower bound of the affinity over those contacts;
+`p` how likely the background alone makes them; `A₂` the contig's next best affinity; `overlap` the share of the
 smaller genome's present markers that the other has too, and `m` how many it has, so a fragment with
 one marker neither helps nor harms; `d` the contig's markers the genome already has; `s` the share of
 the element's contacts with MAGs that go to this one.
@@ -264,7 +272,7 @@ From the stage's export card, each a new file through the save dialog (§26.6), 
 | `<map>.contig-genome.tsv` | `contig_name	genome_name`, a header and every contig of the file — an unbinned one as `__unbinned__` — so `metacooler reassign --contigs` makes the curated binning the map's |
 | `<map>.genomes.tsv` | every curated genome with metaTOR's `mge` (`True`/`False`) and a MAG's elements (`n_mges`, `mges`), for `metacooler annotate --genomes --replace` after the reassignment — without it a renamed or new element is not an element when the map is opened again, since `reassign` carries the file's columns by name and metaTOR's rounds as they were |
 | `<map>.elements.tsv` | one row per element: its name, its contigs, its length and its hosts |
-| `<map>.element-hosts.tsv` | one row per element and MAG in contact: the affinity, the contacts, the share, the confidence, and whether a link holds between them — from the file, taken, added by the hand or turned down — and who decided it |
+| `<map>.element-hosts.tsv` | one row per element and MAG in contact or linked: the contacts, the affinity, the share, the confidence, whether a link holds (`yes`/`no`) and who decided it — the file, a suggestion, auto mode or the reader |
 
 ---
 
@@ -361,8 +369,10 @@ off, none of it is drawn and a kept curation is left in storage as it was. It is
   species; the stage merges what the reader takes. Strain resolution is not this stage's.
 - **An element with no contacts.** 46 of MM133's 127 elements touch no MAG: the host map collects them
   apart, and the method says nothing of them rather than guess.
-- **The background on a map with no binning.** `ρ` is measured from the file's MAGs; a map with none
-  takes the median over pairs of contigs instead, and says so.
+- **The background on a map with no binning.** `ρ` is measured from the file's MAGs: the median of
+  every two MAGs' observed over expected, or — where more than half the pairs share nothing — the
+  total over the total expected, a stricter background said as such. A map with fewer than two MAGs
+  in contact takes one contact over everything (`floor`), and the about card says so.
 - **Scale.** The network holds a pair per two contigs in contact: 0.26 million on MM133, and on a
   metagenome of two million contigs perhaps a hundred times that — the pass is gated as the overview's
   is, and what does not fit is refused with its size.

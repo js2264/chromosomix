@@ -2606,7 +2606,9 @@ export class ContactPane implements CuratePane {
     const model = this.ctx.model
     const run = this.unitsBetween(anchor, to)
     if (mod.meta || mod.shift) {
-      model.select({ genomes: [...base.genomes, ...run.genomes], contigs: [...base.contigs, ...run.contigs] })
+      // Added to what was selected of the run's kind: one kind at a time (§33.3).
+      if (this.level === 'genomes') model.select({ genomes: [...base.genomes, ...run.genomes], contigs: [] })
+      else model.select({ genomes: [], contigs: [...base.contigs, ...run.contigs] })
       return
     }
     if (this.level === 'genomes') model.selectGenomes(run.genomes)
@@ -2624,7 +2626,7 @@ export class ContactPane implements CuratePane {
       const held = new Set(selection.contigs)
       const all = contigs.every((c) => held.has(c))
       const next = all && mod.meta ? selection.contigs.filter((c) => !contigs.includes(c)) : [...selection.contigs, ...contigs]
-      model.select({ genomes: selection.genomes, contigs: next })
+      model.select({ genomes: [], contigs: next })
     } else model.selectContigs(contigs)
     this.anchor = this.anchorOf(span.from)
   }

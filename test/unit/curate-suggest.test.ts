@@ -34,6 +34,19 @@ describe('the suggestions on a small community', () => {
     expect(by('unlink')).toEqual(['unlink P from Z'])
   })
 
+  it('count a misplaced contig’s contacts where it is once its move is turned down', () => {
+    const move = state.suggestions.find((s) => s.kind === 'move' && s.confidence >= 0.5)
+    expect(move?.words).toBe('move y5 from X1 to Y')
+    // On offer, its move explains y5's contacts: with Y, and with Y's element.
+    expect(by('merge')).toEqual(['merge X2 into X1'])
+    expect(by('link')).toEqual(['link P to Y'])
+    // Turned down, the reader has said y5 is X1's: they count for X1 and Y, and for P and X1.
+    const declined = curationState(evidence, binning, {}, [move?.key ?? ''])
+    const likely = (kind: string): string[] => declined.suggestions.filter((s) => s.kind === kind && s.confidence >= 0.5).map((s) => s.words)
+    expect(likely('merge')).toEqual(['merge X2 into X1', 'merge X1 into Y'])
+    expect(likely('link')).toEqual(['link P to Y', 'link P to X1'])
+  })
+
   it('give every MAG miComplete’s numbers from its markers', () => {
     const x1 = state.quality[binning.indexOfId('X1') ?? -1]
     expect(x1?.completeness).toBe(0.5)

@@ -39,7 +39,7 @@ export async function openCurationStage(options: OpenCurationStage): Promise<Cur
     base,
     requests: {
       network: (onProgress) => reader.cancellable<'curationNetwork'>({ kind: 'curationNetwork' }, onProgress),
-      state: (curation, weights) => reader.cancellable<'curationState'>({ kind: 'curationState', curation, weights }),
+      state: (curation, weights, declined) => reader.cancellable<'curationState'>({ kind: 'curationState', curation, weights, declined: declined === undefined ? undefined : [...declined] }),
       focus: (contigs) => reader.cancellable<'curationFocus'>({ kind: 'curationFocus', contigs }),
     },
     parts: options.parts,

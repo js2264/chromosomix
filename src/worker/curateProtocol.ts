@@ -99,7 +99,8 @@ export interface CurationFocusResult extends FocusContacts {
 export type CurationRequest =
   | { id: number; kind: 'curationBase' }
   | { id: number; kind: 'curationNetwork'; background?: boolean }
-  | { id: number; kind: 'curationState'; curation: Curation | null; weights?: KindWeights }
+  /** `declined`: the suggestions' keys the reader turned down — a move turned down explains no contact (§33.5). */
+  | { id: number; kind: 'curationState'; curation: Curation | null; weights?: KindWeights; declined?: string[] }
   | { id: number; kind: 'curationFocus'; contigs: Int32Array }
 
 /** The results, as `ResultMap` members. */

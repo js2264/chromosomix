@@ -25,7 +25,7 @@ import { sharedPrefix, shortName } from '../names'
 import { questionNumber } from '../questions'
 import { newlyDuplicated, priceLines, priceOf, priceVerdict } from '../price'
 import type { Suggestion } from '../suggest'
-import { AUTO_THRESHOLD, LIKELY } from '../method'
+import { AUTO_THRESHOLD, LIKELY, OFFER_FLOOR } from '../method'
 import { watchTheme } from '../../ui/analysisPlots'
 import { keyBadge, withKey } from '../../ui/commands'
 import { el } from '../../ui/dom'
@@ -105,7 +105,9 @@ const PANE_TAB: Record<PaneName, string> = { contacts: 'contacts', hosts: 'hosts
 const PANE_KEY: Record<PaneName, string> = { contacts: '1', hosts: '2', scatter: '3' }
 
 /** What a mode button says while there is nothing to answer. */
+/** Review's and auto's title while they are off: why, before the contacts are read and after. */
 const NOTHING_TO_ANSWER = 'Nothing to answer: the suggestions come once the contacts are read.'
+const NOTHING_ON_OFFER = `Nothing on offer: every suggestion is answered, turned down or under ${Math.round(OFFER_FLOOR * 100)}%.`
 
 /** Narrower than this, the centre shows the large picture alone, with tabs. */
 const NARROW = 840
@@ -167,7 +169,7 @@ export class CurateStage {
       markerSets: base.markerSets,
       background: null,
     }
-    this.model = new CurateModel(store, { state: (curation, weights) => props.requests.state(curation, weights) }, props.debounce === undefined ? {} : { debounce: props.debounce })
+    this.model = new CurateModel(store, { state: (curation, weights, declined) => props.requests.state(curation, weights, declined) }, props.debounce === undefined ? {} : { debounce: props.debounce })
     this.ctx = this.context()
 
     // The centre: toolbar, band, status, panes.
@@ -227,7 +229,7 @@ export class CurateStage {
     this.modeTitles = {
       manual: 'The suggestions are drawn and listed, and never apply themselves',
       review: 'Work through the suggestions, merges first: Y takes one, N turns it down, and every answer teaches the ranking',
-      auto: `Take every suggestion at ${Math.round(AUTO_THRESHOLD * 100)}% or more, the surest first, each a step to undo like any other`,
+      auto: `Take every suggestion at ${Math.round(AUTO_THRESHOLD * 100)}% or more in the queue’s order — merges first, then moves, recruits and links —, each a step to undo like any other`,
     }
     this.modes = {
       manual: this.modeButton('manual', this.modeTitles.manual),
@@ -557,7 +559,7 @@ export class CurateStage {
     for (const [mode, button] of Object.entries(this.modes) as Array<['manual' | 'review' | 'auto', HTMLButtonElement]>) {
       button.setAttribute('aria-pressed', String(model.mode === mode))
       button.disabled = mode !== 'manual' && offered === 0 && model.mode !== mode
-      button.title = button.disabled ? NOTHING_TO_ANSWER : this.modeTitles[mode]
+      button.title = !button.disabled ? this.modeTitles[mode] : model.answer?.counted === true ? NOTHING_ON_OFFER : NOTHING_TO_ANSWER
     }
     this.undoButton.disabled = !this.props.store.canUndo
     this.redoButton.disabled = !this.props.store.canRedo
@@ -574,7 +576,9 @@ export class CurateStage {
     this.band.classList.remove('hidden')
     const current = model.current
     if (current === null) {
-      this.band.replaceChildren(el('span', { class: 'curate-band-words', text: model.stale ? 'review · weighing…' : 'review · nothing left to answer' }))
+      // A count that failed leaves the queue of the binning before the step: nothing is asked of it, and the status row counts again.
+      const words = model.stale ? 'review · weighing…' : model.error !== null ? 'review · the count failed: count again' : 'review · nothing left to answer'
+      this.band.replaceChildren(el('span', { class: 'curate-band-words', text: words }))
       return
     }
     const queue = model.queue()
@@ -1057,14 +1061,16 @@ export class CurateStage {
         return true
       case 'm':
       case 'M':
+        if (selection.genomes.length === 0 && selection.contigs.length === 0) return false
+        if (!this.mayStep()) return true
         if (selection.genomes.length >= 2 && selection.contigs.length === 0) {
           if (!model.mergeSelected()) this.flash('Merge MAGs with MAGs and elements with elements.')
         } else if (selection.contigs.length > 0) this.openChooser('move')
-        else if (selection.genomes.length === 1) this.openChooser('merge')
-        else return false
+        else this.openChooser('merge')
         return true
       case 'l':
       case 'L': {
+        if ((selection.genomes.length > 0 || selection.contigs.length > 0) && !this.mayStep()) return true
         if (this.linkSelected()) return true
         // The chooser lists the MAGs for elements, or the elements for one MAG.
         const kinds = selection.genomes.map((id) => model.answer?.genomes.find((genome) => genome.id === id)?.kind)
@@ -1082,16 +1088,19 @@ export class CurateStage {
       case 'e':
       case 'E': {
         const kind = key === 'b' || key === 'B' ? 'mag' : 'element'
+        if (selection.genomes.length === 0 && selection.contigs.length === 0) return false
+        if (!this.mayStep()) return true
         if (selection.contigs.length > 0) {
           const id = model.createFromSelected(kind)
           // Its name open for typing once it is counted and has a row.
           if (id !== null) this.list.startRename(id)
-        } else if (selection.genomes.length > 0) model.retypeSelected(kind)
-        else return false
+        } else model.retypeSelected(kind)
         return true
       }
       case 'Delete':
       case 'Backspace':
+        if (selection.genomes.length === 0 && selection.contigs.length === 0) return false
+        if (!this.mayStep()) return true
         if (selection.contigs.length > 0) return model.moveSelected(null)
         if (this.unlinkSelected()) return true
         if (selection.genomes.length > 0) return model.dissolveSelected()
@@ -1115,6 +1124,19 @@ export class CurateStage {
       default:
         return false
     }
+  }
+
+  /**
+   * Whether a key the selection card prints may make its step now — as the
+   * card's act may (§33.3, *One answer a press*): not while the last step is
+   * counted, nor after a count that failed, when what the stage shows is the
+   * binning before it and a second press would make the step twice. Refused,
+   * the key is taken all the same and the card dims, as for its act.
+   */
+  private mayStep(): boolean {
+    if (this.model.answerable) return true
+    this.cardOf.selection.element.classList.add('is-waiting')
+    return false
   }
 
   private keyUp(event: KeyboardEvent): void {

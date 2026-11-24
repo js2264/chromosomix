@@ -26,13 +26,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **Curate the genomes: a stage that curates a metagenome's binning — a dev feature (§33.3).** The
   palette's *Curate the genomes*, or the heading's word on the genomes, opens a stage on the whole
-  window: the genome list (MAGs, elements and the unbinned pool, each genome's quality recomputed from
+  window: the genome list (MAGs, elements and the unbinned pool, each MAG's quality recomputed from
   its contigs' marker genes as miComplete computes it), one large picture with the other two small
   beside it, and the inspector. Contigs are moved, recruited or unbinned, genomes merged, made,
   dissolved, renamed or retyped, elements linked to the MAGs that host them — by dragging onto a
   genome, a section or the pool, or by keys — each step undone with ⌘Z. The app suggests merges,
   recruits, moves and host links from the contacts and the markers; review asks them as questions, an
-  organism's fragments one question, each with its price — every changed genome's completeness and
+  organism's fragments one question, each with its price — every changed MAG's completeness and
   redundancy before → after, in metaTOR's grades — and auto takes the sure ones, holding back any that
   would lower a grade. What the curation makes leaves as tables for `metacooler reassign` and
   `metacooler annotate`, never as a written map.
@@ -41,7 +41,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   a curation kept for it opens as the map `metacooler reassign` writes from the curation's contig →
   genome table: its contigs regrouped, the pool first and the genomes by name, each genome's contigs
   longest first — every view, table and task reading the curated genomes, and a test holding the
-  map, pixel for pixel, to `reassign`'s own file of it. The genomes table has a `kind` and a
+  map, pixel for pixel, to `reassign`'s own file of it; the export card's `reassign` command asks for
+  that layout, `--layout genome-then-length`, whatever order the file kept. The genomes table has a `kind` and a
   `curation` column and leaves a changed genome's file columns empty; the contigs table names each
   contig's genome; the File card counts MAGs and elements apart and says the binning is curated; the
   Binning QC card sets the file's pool beside the curated one. The heading's word reads `genomes ·

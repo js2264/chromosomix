@@ -23,20 +23,20 @@ let keys = 0
 function setup(options: { hold?: boolean } = {}): {
   model: CurateModel
   store: CurationStore
-  asked: Array<{ curation: Curation | null; weights: KindWeights; resolve: () => void }>
+  asked: Array<{ curation: Curation | null; weights: KindWeights; declined: readonly string[]; resolve: () => void }>
   changes: CurateChange[]
 } {
   const { base, evidence } = community()
   const store = new CurationStore(`curate-model-${++keys}`, base, fileBinning(base), () => 0)
-  const asked: Array<{ curation: Curation | null; weights: KindWeights; resolve: () => void }> = []
+  const asked: Array<{ curation: Curation | null; weights: KindWeights; declined: readonly string[]; resolve: () => void }> = []
   const client: CurateClient = {
-    state(curation, weights) {
-      const answer = stateAnswer(evidence, CuratedBinning.of(base, curation), weights)
+    state(curation, weights, declined = []) {
+      const answer = stateAnswer(evidence, CuratedBinning.of(base, curation), weights, declined)
       let resolve: () => void = () => {}
       const promise = new Promise<CurationStateResult>((done) => {
         resolve = () => done(answer)
       })
-      asked.push({ curation, weights, resolve })
+      asked.push({ curation, weights, declined, resolve })
       if (options.hold !== true) resolve()
       return { promise, cancel: () => {} }
     },
@@ -280,6 +280,13 @@ describe('the controller', () => {
     const before = changes.length
     model.selectGenomes(['Y'], 'add')
     expect(changes.length).toBe(before)
+    // One kind at a time: a contig added lets the genomes go, and a genome added the contigs.
+    model.selectContigs([3], 'add')
+    expect(model.selection).toEqual({ genomes: [], contigs: [3] })
+    model.selectContigs([5], 'toggle')
+    expect(model.selection).toEqual({ genomes: [], contigs: [3, 5] })
+    model.selectGenomes(['Z'], 'toggle')
+    expect(model.selection).toEqual({ genomes: ['Z'], contigs: [] })
     model.hover('Y', 7)
     model.hover('Y', 7)
     expect(changes.filter((c) => c === 'hover').length).toBe(1)
@@ -597,5 +604,26 @@ describe('an element is never graded (§33.5)', () => {
     expect(answer?.counted).toBe(true)
     expect(answer?.genomes.find((genome) => genome.id === 'P')?.quality).toBeNull()
     expect(answer?.genomes.find((genome) => genome.id === 'Z')?.quality).not.toBeNull()
+  })
+})
+
+describe('a suggestion turned down', () => {
+  it('goes to the worker with every count, so a move turned down explains no contact (§33.5)', async () => {
+    const { model, asked } = setup()
+    await model.settled()
+    const move = model.offered().find((s) => s.kind === 'move')
+    expect(move?.words).toBe('move y5 from X1 to Y')
+    // Its move on offer, y5 explains its contacts with Y: X1 and Y are not offered as one organism.
+    expect(model.offered().some((s) => s.key === 'merge:X1+Y')).toBe(false)
+    if (move !== undefined) model.reject(move)
+    await model.settled()
+    expect(asked[asked.length - 1].declined).toContain(move?.key)
+    // Turned down, y5 is X1's, and its contacts with Y count for X1 and Y.
+    expect(model.offered().some((s) => s.key === 'merge:X1+Y')).toBe(true)
+    // Offered again, it explains them again.
+    if (move !== undefined) model.restore(move.key)
+    await model.settled()
+    expect(asked[asked.length - 1].declined).not.toContain(move?.key)
+    expect(model.offered().some((s) => s.key === 'merge:X1+Y')).toBe(false)
   })
 })

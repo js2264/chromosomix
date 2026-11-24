@@ -61,7 +61,7 @@ function card(name: string): CurateCard {
   return { element, update: () => {} }
 }
 
-async function open(options: { failing?: () => boolean; boxed?: boolean } = {}): Promise<{ stage: CurateStage; store: CurationStore; told: string[]; ctx: () => CurateContext }> {
+async function open(options: { failing?: () => boolean; counting?: () => boolean; boxed?: boolean } = {}): Promise<{ stage: CurateStage; store: CurationStore; told: string[]; ctx: () => CurateContext }> {
   const { base, evidence } = community()
   const store = new CurationStore(`curate-stage-${++keys}`, base, fileBinning(base), () => 0)
   const told: string[] = []
@@ -89,7 +89,12 @@ async function open(options: { failing?: () => boolean; boxed?: boolean } = {}):
     requests: {
       network: () => ({ promise: Promise.resolve(summary), cancel: () => {} }),
       state: (curation, weights) => ({
-        promise: options.failing?.() === true ? Promise.reject(new Error('the worker stopped')) : Promise.resolve(stateAnswer(evidence, CuratedBinning.of(base, curation), weights)),
+        promise:
+          options.counting?.() === true
+            ? new Promise(() => {})
+            : options.failing?.() === true
+              ? Promise.reject(new Error('the worker stopped'))
+              : Promise.resolve(stateAnswer(evidence, CuratedBinning.of(base, curation), weights)),
         cancel: () => {},
       }),
       focus: () => ({ promise: new Promise<CurationFocusResult>(() => {}), cancel: () => {} }),
@@ -234,16 +239,70 @@ describe('the curation stage', () => {
   it('says a count that failed, with a press to count again, and drops it once counted', async () => {
     let failing = false
     const { store } = await open({ failing: () => failing })
+    ;(document.querySelector('[data-mode="review"]') as HTMLButtonElement).click()
+    await settle()
     failing = true
     store.apply({ op: 'rename', genome: 'Z', name: 'Zeta' })
     await settle()
     const status = document.querySelector('.curate-status') as HTMLElement
     expect(status.classList.contains('hidden')).toBe(false)
     expect(status.textContent).toMatch(/counting the binning failed: the worker stopped/)
+    // Review asks nothing of the binning before the step, and says why.
+    expect(document.querySelector('.curate-band-words')?.textContent).toBe('review · the count failed: count again')
     failing = false
     ;(status.querySelector('button') as HTMLButtonElement).click()
     await settle()
     expect(status.classList.contains('hidden')).toBe(true)
+    expect(document.querySelector('.curate-band-words')?.textContent).not.toMatch(/failed|nothing left/)
+  })
+
+  it('makes nothing with a key the card prints while a step is counted or after its count failed, as the card’s act', async () => {
+    let failing = false
+    let counting = false
+    const { ctx, store } = await open({ failing: () => failing, counting: () => counting })
+    // P is linked to Z, and the contacts say it should not be: an unlink on offer.
+    const offered = (): boolean => ctx().model.offered().some((s) => s.step.op === 'unlink' && s.step.element === 'P' && s.step.mag === 'Z')
+    expect(offered()).toBe(true)
+    const waiting = (): boolean => document.querySelector('.stand-in-selection')?.classList.contains('is-waiting') === true
+    for (const state of ['failed', 'counted'] as const) {
+      failing = state === 'failed'
+      counting = state === 'counted'
+      store.apply({ op: 'rename', genome: 'Y', name: `Y-${state}` })
+      await settle()
+      expect(ctx().model.answerable).toBe(false)
+      const applied = store.applied
+      ctx().model.selectGenomes(['P', 'Z'])
+      for (const name of ['Delete', 'l', 'm', 'b', 'e']) key(name)
+      ctx().model.selectContigs([3])
+      for (const name of ['Delete', 'm', 'b']) key(name)
+      // Nothing made: neither the unlink on offer nor, as before, P and Z dissolved.
+      expect(store.applied).toBe(applied)
+      expect(waiting()).toBe(true)
+      expect(store.binning.links).toContainEqual(expect.objectContaining({ element: 'P', mag: 'Z' }))
+      document.querySelector('.stand-in-selection')?.classList.remove('is-waiting')
+      counting = false
+      failing = false
+      if (state === 'failed') {
+        ;(document.querySelector('.curate-status button') as HTMLButtonElement).click()
+        await settle()
+      }
+    }
+  })
+
+  it('says on review and auto why they are off: the contacts unread, or nothing left on offer', async () => {
+    const { ctx } = await open()
+    const review = document.querySelector('[data-mode="review"]') as HTMLButtonElement
+    const auto = document.querySelector('[data-mode="auto"]') as HTMLButtonElement
+    expect(review.disabled).toBe(false)
+    expect(auto.title).toMatch(/in the queue’s order — merges first/)
+    // Turned down one by one, till nothing is left — one turned down may bring another on offer.
+    for (let k = 0; k < 20 && ctx().model.offered().length > 0; k++) {
+      ctx().model.reject(ctx().model.offered()[0])
+      await settle()
+    }
+    expect(review.disabled).toBe(true)
+    expect(review.title).toBe('Nothing on offer: every suggestion is answered, turned down or under 15%.')
+    expect(auto.title).toBe(review.title)
   })
 
   it('says why M and L make nothing: two kinds to merge, contigs to link', async () => {

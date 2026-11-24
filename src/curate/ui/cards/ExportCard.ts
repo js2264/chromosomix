@@ -229,8 +229,9 @@ export class ExportCard {
     const map = mapArgument(this.ctx.data.title)
     const commands = [
       {
-        words: ['metacooler', 'reassign', map, '--contigs', contigs, '-o', curated],
-        title: `The curated binning made a map’s: a new file, the contigs regrouped by genome${map === 'MAP' ? '; MAP is the map’s file, which its name here does not say' : ''}`,
+        // Regrouped as the session drew it, whatever order the file kept: `auto` keeps a map's own when it was not grouped by genome.
+        words: ['metacooler', 'reassign', map, '--contigs', contigs, '--layout', 'genome-then-length', '-o', curated],
+        title: `The curated binning made a map’s: a new file, the contigs regrouped by genome, longest first, as the session draws them${map === 'MAP' ? '; MAP is the map’s file, which its name here does not say' : ''}`,
       },
       {
         words: ['metacooler', 'annotate', curated, '--genomes', genomes, '--replace', '--inplace'],

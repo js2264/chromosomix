@@ -156,7 +156,7 @@ export function handleCurationState(mc: MetaCooler, request: Extract<CurationReq
   const binning = CuratedBinning.of(kept.read.base, request.curation)
   // Before the contacts are read: what the markers and the binning say alone.
   if (kept.evidence === null) return bareAnswer(binning, kept.read.base.lengths, kept.read.markers)
-  return stateAnswer(kept.evidence, binning, request.weights ?? {})
+  return stateAnswer(kept.evidence, binning, request.weights ?? {}, request.declined ?? [])
 }
 
 export function handleCurationFocus(mc: MetaCooler, request: Extract<CurationRequest, { kind: 'curationFocus' }>): CurationFocusResult {

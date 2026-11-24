@@ -186,7 +186,7 @@ export interface ContigPlaces {
 }
 
 /** Everything the stage needs from the method, for the binning as it stands. */
-export function curationState(evidence: CurationEvidence, binning: CuratedBinning, weights: KindWeights = {}): CurationState {
+export function curationState(evidence: CurationEvidence, binning: CuratedBinning, weights: KindWeights = {}, declined: readonly string[] = []): CurationState {
   const method = methodBinning(binning)
   const tallied = tally(evidence.network, evidence.visibility, method)
   const d = densities(tallied)
@@ -199,7 +199,8 @@ export function curationState(evidence: CurationEvidence, binning: CuratedBinnin
   // The contigs first: a contig binned in the wrong MAG carries every contact
   // between its MAG and the one it belongs to, and every contact of that one's
   // elements with it — a merge or a link it alone explains is not offered until
-  // its move is answered.
+  // its move is answered: taken, the contig is moved; turned down, the reader
+  // has said it is where it is, and its contacts count where it is.
   const n = evidence.network.contigs
   const places: ContigPlaces = {
     best: new Int32Array(n).fill(-1),
@@ -209,10 +210,10 @@ export function curationState(evidence: CurationEvidence, binning: CuratedBinnin
   }
   for (let c = 0; c < n; c++) places.hits[c] = evidence.visibility[c] + 2 * evidence.network.within[c]
   const contigs = contigSuggestions(evidence, binning, method, tallied, d, perGenome, weights, places)
-  const explained = explainedContacts(evidence, method, contigs)
+  const explained = explainedContacts(evidence, method, contigs, new Set(declined))
   const hosts: HostPair[] = []
   const suggestions = [
-    ...merges(evidence, binning, tallied, d, perGenome, weights, explained),
+    ...merges(evidence, binning, tallied, d, perGenome, weights, explained, quality),
     ...contigs,
     ...links(evidence, binning, tallied, d, weights, explained, hosts),
   ].sort((x, y) => y.confidence - x.confidence || x.key.localeCompare(y.key))
@@ -238,14 +239,15 @@ function genomePairs(tallied: GenomeTally, d: Densities): GenomePairs {
 
 /**
  * The contacts between two genomes that a likely move explains: for every
- * contig whose move away from its MAG is offered at {@link LIKELY} or more, its
- * contacts with every other genome, keyed as the tally keys a pair.
+ * contig whose move away from its MAG is offered at {@link LIKELY} or more, and
+ * not turned down (`declined`), its contacts with every other genome, keyed as
+ * the tally keys a pair.
  */
-function explainedContacts(evidence: CurationEvidence, method: MethodBinning, contigs: readonly Suggestion[]): Map<number, number> {
+function explainedContacts(evidence: CurationEvidence, method: MethodBinning, contigs: readonly Suggestion[], declined: ReadonlySet<string>): Map<number, number> {
   const genomes = method.kinds.length
   const out = new Map<number, number>()
   for (const s of contigs) {
-    if (s.kind !== 'move' || s.confidence < LIKELY) continue
+    if (s.kind !== 'move' || s.confidence < LIKELY || declined.has(s.key)) continue
     const c = s.contigs[0]
     const own = method.genomeOf[c]
     for (let k = evidence.offsets[c]; k < evidence.offsets[c + 1]; k++) {
@@ -284,6 +286,7 @@ function merges(
   perGenome: Int32Array[][],
   weights: KindWeights,
   explained: ReadonlyMap<number, number>,
+  quality: ReadonlyArray<Quality | null>,
 ): Suggestion[] {
   const out: Suggestion[] = []
   const T = tallied.total
@@ -332,8 +335,11 @@ function merges(
     const features = mergeFeatures(lower, o, shared, fewer, p)
     const confidence = confidenceOf(features, weights.merge ?? INITIAL_WEIGHTS.merge)
     if (confidence < OFFER_FLOOR) continue
-    // The longer keeps its name.
-    const [keep, fold] = lengthOf(evidence, A.contigs) >= lengthOf(evidence, B.contigs) ? [A, B] : [B, A]
+    // The more complete keeps its name, the longer on a tie — as a question of
+    // several merges keeps its most complete member's (`questions.ts`).
+    const ca = quality[a]?.weightedCompleteness ?? -1
+    const cb = quality[b]?.weightedCompleteness ?? -1
+    const [keep, fold] = ca > cb || (ca === cb && lengthOf(evidence, A.contigs) >= lengthOf(evidence, B.contigs)) ? [A, B] : [B, A]
     const evidenceChips = [affinityText(aff), `${grouped(o)} contacts`]
     if (before !== '') {
       evidenceChips.push(before, after)
