@@ -270,3 +270,18 @@ describe('the controller', () => {
     expect(displayPercent(0.5)).toBe(50)
   })
 })
+
+describe('a drop through the controller', () => {
+  it('makes its steps and selects what they leave', async () => {
+    const { model, store } = setup()
+    await model.settled()
+    expect(model.drop({ kind: 'genomes', ids: ['X2'] }, { kind: 'genome', id: 'X1' })).toBe(true)
+    expect(model.selection).toEqual({ genomes: ['X1'], contigs: [] })
+    await model.settled()
+    expect(model.drop({ kind: 'contigs', contigs: [18] }, { kind: 'section', section: 'mags' })).toBe(true)
+    expect(model.selection).toEqual({ genomes: ['curated:1'], contigs: [18] })
+    await model.settled()
+    expect(model.drop({ kind: 'genomes', ids: ['Y'] }, { kind: 'genome', id: 'P' })).toBe(false)
+    expect(store.applied).toBe(2)
+  })
+})

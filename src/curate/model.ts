@@ -17,8 +17,10 @@ import { UNBINNED, type Curation, type CurationStep, type GenomeKind } from '../
 import type { CurationLearned, CurationStore, LearnedKind } from '../state/curation'
 import type { CurationStateResult } from '../worker/curateProtocol'
 import { AUTO_THRESHOLD, INITIAL_WEIGHTS, learn, LIKELY, OFFER_FLOOR } from './method'
+import { dropPlan, type DropPlan } from './drop'
 import { chainOrder, elementOrder, keepOrder } from './order'
 import type { KindWeights, Suggestion } from './suggest'
+import type { CurateDragged, CurateDropTarget } from './ui/context'
 
 /** A request that can be called off: the reader's `cancellable`. */
 export interface Cancellable<T> {
@@ -531,13 +533,43 @@ export class CurateModel {
   createFromSelected(kind: GenomeKind, name?: string): string | null {
     const contigs = this.selectionHeld.contigs
     if (contigs.length === 0) return null
-    const id = this.mintId()
-    const n = id.slice(MINTED.length)
-    const wanted = name !== undefined && name.trim() !== '' ? name.trim() : `curated_${kind === 'mag' ? 'MAG' : 'element'}_${n}`
-    this.store.apply({ op: 'create', id, name: wanted, kind, contigs: this.namesOf(contigs) })
-    this.selectionHeld = { genomes: [id], contigs }
+    const minted = this.mint(kind)
+    const wanted = name !== undefined && name.trim() !== '' ? name.trim() : minted.name
+    this.store.apply({ op: 'create', id: minted.id, name: wanted, kind, contigs: this.namesOf(contigs) })
+    this.selectionHeld = { genomes: [minted.id], contigs }
     this.emit('selection')
-    return id
+    return minted.id
+  }
+
+  /** A fresh id for a genome a step would create, and the name it would get. */
+  mint(kind: GenomeKind): { id: string; name: string } {
+    const id = this.mintId()
+    return { id, name: `curated_${kind === 'mag' ? 'MAG' : 'element'}_${id.slice(MINTED.length)}` }
+  }
+
+  /** What dropping `dragged` on `target` would make (`curate/drop.ts`); `null` before the first count. */
+  dropPlan(dragged: CurateDragged, target: CurateDropTarget): DropPlan | null {
+    if (this.answerHeld === null) return null
+    return dropPlan(dragged, target, this.answerHeld, this.store.file.names, (kind) => this.mint(kind))
+  }
+
+  /** Drop `dragged` on `target`: its steps made, the selection on what they leave. */
+  drop(dragged: CurateDragged, target: CurateDropTarget): boolean {
+    const plan = this.dropPlan(dragged, target)
+    if (plan === null || plan.refused !== undefined) return false
+    const steps = plan.steps
+    if (steps.length === 1) this.store.apply(steps[0])
+    else this.store.applyAll(steps.map((step) => ({ step })))
+    const first = steps[0]
+    let next: CurateSelection
+    if (dragged.kind === 'contigs') {
+      const genome = first.op === 'move' ? first.to : first.op === 'create' ? first.id : null
+      next = { genomes: genome === null ? [] : [genome], contigs: [...dragged.contigs] }
+    } else if (first.op === 'merge') next = { genomes: [first.into], contigs: [] }
+    else if (first.op === 'dissolve') next = { genomes: [], contigs: [] }
+    else next = { genomes: [...dragged.ids], contigs: [] }
+    this.select(next)
+    return true
   }
 
   /** Merge the selected genomes into the longest of them, which keeps its name. */
