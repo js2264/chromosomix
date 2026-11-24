@@ -20,6 +20,7 @@ import {
   clampScroll,
   curvePoint,
   fitPitch,
+  footWords,
   hostAnchors,
   hostLayout,
   hostLinks,
@@ -28,9 +29,11 @@ import {
   linkWidth,
   linkWords,
   magRank,
+  offerCounts,
   questionNumber,
   relatedTo,
   roomy,
+  sourcesOf,
   spreadLabels,
   suggestedPairs,
   type HostGenome,
@@ -90,6 +93,34 @@ describe('where each element goes', () => {
     const anchors = hostAnchors(genomes, pairs, [{ element: 'E', mag: 'B' }], magRank(genomes, ['A', 'B']))
     expect(anchors.get('E')).toBe('B')
     expect(anchors.get('F')).toBeNull()
+  })
+
+  it('places an element a step made beside the genome its contigs came from, before the MAG it meets most', () => {
+    const genomes = [...mags('A', 'B', 'C'), ...elements('E', 'N')]
+    // N meets C most; its contigs came from B.
+    const pairs = { a: [0, 2], b: [4, 4], affinity: [0.1, 0.9] }
+    const rank = magRank(genomes, ['A', 'B', 'C'])
+    const kept = new Map<string, string | null>([['E', 'A']])
+    expect(hostAnchors(genomes, pairs, [], rank, { kept, from: new Map([['N', ['B']]]) }).get('N')).toBe('B')
+    // Split from an element: that element's place.
+    expect(hostAnchors(genomes, pairs, [], rank, { kept, from: new Map([['N', ['E']]]) }).get('N')).toBe('A')
+    // From several: the earliest in the order, as the stage's order puts it.
+    expect(hostAnchors(genomes, pairs, [], rank, { kept, from: new Map([['N', ['C', 'B']]]) }).get('N')).toBe('B')
+    // A source that is no place — gone, or not shown around the selection — gives way to what it meets.
+    expect(hostAnchors(genomes, pairs, [], rank, { kept, from: new Map([['N', ['gone']]]) }).get('N')).toBe('C')
+    expect(hostAnchors(genomes, pairs, [], rank, { kept, allowed: new Set(['A', 'C']), from: new Map([['N', ['B']]]) }).get('N')).toBe('C')
+    // A place kept is kept, whatever its contigs' history.
+    expect(hostAnchors(genomes, pairs, [], rank, { kept: new Map([['N', 'A']]), from: new Map([['N', ['B']]]) }).get('N')).toBe('A')
+  })
+
+  it('finds where a new element came from: the genomes its contigs were in, never itself nor the pool', () => {
+    const before = { genomes: [...mags('A', 'B'), ...elements('E')], genomeOf: [0, 0, 1, 2, -1, 1] }
+    // N took contig 1 of A, 3 of E and 4 of the pool; B became the element B, keeping its id.
+    const after = { genomes: [...mags('A'), ...elements('E', 'N', 'B')], genomeOf: [0, 2, 3, 2, 2, 3] }
+    const known = new Set(['E'])
+    expect([...sourcesOf(before, after, known)]).toEqual([['N', ['A', 'E']]])
+    // Nothing new: nothing to look for.
+    expect(sourcesOf(before, after, new Set(['E', 'N', 'B'])).size).toBe(0)
   })
 
   it('breaks a tie by the order', () => {
@@ -199,6 +230,17 @@ describe('the links', () => {
     expect(moved.map((l) => [l.key, l.held, l.offer])).toEqual([[linkKey('P', 'Y'), true, null]])
   })
 
+  it('counts every offer, drawn or not: links for pairs not held, unlinks for pairs held', () => {
+    const held = [{ element: 'E', mag: 'A' }]
+    const offer = (element: string, mag: string, kind: 'link' | 'unlink') => ({ element, mag, suggestion: { kind } })
+    expect(offerCounts(held, [offer('E', 'B', 'link'), offer('F', 'A', 'link'), offer('E', 'A', 'unlink'), offer('E', 'A', 'link'), offer('F', 'B', 'unlink')])).toEqual({
+      offered: 2,
+      unlink: 1,
+    })
+    const a = answer()
+    expect(offerCounts(a.links, offersOf(a))).toEqual({ offered: 1, unlink: 1 })
+  })
+
   it('shows around a MAG its elements and their other hosts, one step out only', () => {
     const kinds = new Map<string, 'mag' | 'element'>([
       ['A', 'mag'],
@@ -295,6 +337,14 @@ describe('words', () => {
     const z = links.find((l) => l.key === linkKey('P', 'Z')) as HostLink
     expect(linkWords(z, 'P', 'Z')).toMatch(/^P ↔ Z · linked, from the file · unlink offered · affinity 0\.0033 \(at least 0\.000\d+\) · 1% of its MAG contacts · 1 contact · host 0%$/)
     expect(linkWords({ ...z, pair: null, offer: null, fromFile: false }, 'P', 'Z')).toBe('P ↔ Z · linked · no contacts')
+    // Before the contacts are read: its numbers to come, not none.
+    expect(linkWords({ ...z, pair: null, offer: null }, 'P', 'Z', false)).toBe('P ↔ Z · linked, from the file · its numbers once the contacts are read')
+  })
+
+  it('says the elements it folds, one or many, before the contacts are read and after', () => {
+    expect(footWords(1, true)).toBe('1 meets no MAG')
+    expect(footWords(1_046, true)).toBe('1,046 meet no MAG')
+    expect(footWords(3, false)).toBe('3 not linked')
   })
 })
 

@@ -162,11 +162,34 @@ describe('the host map', () => {
     expect(at.P[0]).toBeGreaterThan(at.Y[0])
     expect(at.P[1]).toBe(at.Y[1])
     expect(canvas().dataset.rows).toBe('4')
-    expect(pane.element.querySelector('.curate-host-counts')?.textContent).toBe('1 link · 1 offered · 1 to undo')
+    expect(pane.element.querySelector('.curate-host-counts')?.textContent).toBe('1 link · 1 offered · 1 to unlink')
     const z = pane.nodeAt('Z')
     expect(z?.clientX).toBeCloseTo(node('Z').clientX, 1)
     expect(z?.clientY).toBeCloseTo(node('Z').clientY, 1)
     expect(pane.nodeAt('nowhere')).toBeNull()
+  })
+
+  it('counts the links in the head in parts that give way whole, and keys its marks under the map', async () => {
+    const { pane, model } = await mount()
+    const counts = pane.element.querySelector('.curate-host-counts') as HTMLElement
+    // The links held never give way; what is offered does, whole, where the head is narrow.
+    expect([...counts.children].map((part) => [part.textContent, part.classList.contains('curate-host-count-more')])).toEqual([
+      ['1 link', false],
+      [' · 1 offered', true],
+      [' · 1 to unlink', true],
+    ])
+    expect((pane.element.querySelector('.curate-host-view[data-view="around"] .curate-host-view-more') as HTMLElement).textContent).toBe(' the selection')
+    const foot = pane.element.querySelector('.curate-host-foot') as HTMLElement
+    const key = foot.querySelector('.curate-host-key') as HTMLElement
+    expect(foot.classList.contains('hidden')).toBe(false)
+    expect(key.classList.contains('hidden')).toBe(false)
+    expect([...key.querySelectorAll('.curate-host-key-word')].map((word) => word.textContent)).toEqual(['linked', 'offered', 'to unlink'])
+    expect(foot.classList.contains('has-status')).toBe(false)
+    // Around the selection the foot says what is shown, which a narrow foot says before its key.
+    model.selectGenomes(['Y'])
+    ;(pane.element.querySelector('.curate-host-view[data-view="around"]') as HTMLButtonElement).click()
+    await frame()
+    expect(foot.classList.contains('has-status')).toBe(true)
   })
 
   it('says a link held and one offered: from where, what is on offer, and what it rests on', async () => {
@@ -203,6 +226,37 @@ describe('the host map', () => {
     expect(model.selection.genomes).toEqual(['P', 'Z'])
   })
 
+  it('selects nothing on a press on nothing; a drag there, or a key held, keeps the selection', async () => {
+    const { model } = await mount()
+    const [magX, elementX] = (canvas().dataset.columns ?? '').split(' ').map(Number)
+    // Between the columns, above every row and every link.
+    const nothing = { clientX: (magX + elementX) / 2, clientY: 60 }
+    model.selectGenomes(['X1', 'Y'])
+    press(nothing, { metaKey: true })
+    expect(model.selection.genomes).toEqual(['X1', 'Y'])
+    pointer('pointerdown', nothing)
+    pointer('pointermove', { clientX: nothing.clientX, clientY: nothing.clientY + 30 })
+    pointer('pointerup', { clientX: nothing.clientX, clientY: nothing.clientY + 30 })
+    expect(model.selection.genomes).toEqual(['X1', 'Y'])
+    press(nothing)
+    expect(model.selection.genomes).toEqual([])
+  })
+
+  it('lets go of a press with Escape, and of the genome it lit when it is made small', async () => {
+    const { pane, model, said } = await mount()
+    pointer('pointerdown', node('X1'))
+    expect(key(pane, 'Escape')).toBe(true)
+    pointer('pointerup', node('X1'))
+    // Let go of: no click.
+    expect(model.selection.genomes).toEqual([])
+    expect(key(pane, 'Escape')).toBe(false)
+    pointer('pointermove', node('Y'))
+    expect(model.hovered.genome).toBe('Y')
+    pane.setLarge(false)
+    expect(model.hovered.genome).toBeNull()
+    expect(said.at(-1)).toBeNull()
+  })
+
   it('links an element dragged onto a MAG, through the stage’s drop', async () => {
     const { ctx, model, pane } = await mount()
     const from = node('P')
@@ -218,7 +272,7 @@ describe('the host map', () => {
     await frame()
     expect(model.answer?.links.map((link) => `${link.element}>${link.mag}`).sort()).toEqual(['P>Y', 'P>Z'])
     // Held now, and P where it was.
-    expect(document.querySelector('.curate-host-counts')?.textContent).toBe('2 links · 1 to undo')
+    expect(document.querySelector('.curate-host-counts')?.textContent).toBe('2 links · 1 to unlink')
     expect(nodes().P[1]).toBe(nodes().Y[1])
   })
 
@@ -325,7 +379,7 @@ describe('the elements that meet no MAG', () => {
     expect(model.answer?.genomes.map((genome) => genome.id)).toContain('Q')
     const fold = pane.element.querySelector('.curate-host-fold') as HTMLButtonElement
     expect(fold.classList.contains('hidden')).toBe(false)
-    expect(fold.textContent).toBe('1 meet no MAG')
+    expect(fold.textContent).toBe('1 meets no MAG')
     expect(fold.getAttribute('aria-expanded')).toBe('false')
     expect(nodes().Q).toBeUndefined()
     fold.click()
@@ -338,6 +392,16 @@ describe('the elements that meet no MAG', () => {
     fold.click()
     await frame()
     expect(nodes().Q).toBeUndefined()
+  })
+
+  it('opens the foot to show one a part frames', async () => {
+    const { pane, ctx } = await mount({ lonely: true })
+    const fold = pane.element.querySelector('.curate-host-fold') as HTMLButtonElement
+    expect(nodes().Q).toBeUndefined()
+    ctx.frame({ genomes: ['Q'] })
+    await frame()
+    expect(fold.getAttribute('aria-expanded')).toBe('true')
+    expect(nodes().Q).toBeDefined()
   })
 
   it('says of one that it meets no MAG', async () => {
@@ -370,6 +434,33 @@ describe('across steps', () => {
     expect(nodes().P[1]).toBe(nodes().Z[1])
   })
 
+  it('puts an element a step makes beside the genome its contigs came from, previewed and made; tidy, beside the MAG it meets most', async () => {
+    const { model, said } = await mount()
+    // y5 is Y's, binned in X1: an element made of it comes from X1, and meets Y most.
+    const made = model.mint('element')
+    model.preview({ op: 'create', id: made.id, name: made.name, kind: 'element', contigs: ['y5'] }, true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await frame()
+    expect(model.previewing).toBe(true)
+    expect(nodes()[made.id][1]).toBe(nodes().X1[1])
+    model.preview(null)
+    model.selectContigs([3])
+    const id = model.createFromSelected('element') as string
+    await model.settled()
+    await frame()
+    // Where its contigs were, and P where it was: nothing moved under the hand.
+    expect(nodes()[id][1]).toBe(nodes().X1[1])
+    expect(nodes().P[1]).toBe(nodes().Y[1])
+    pointer('pointermove', node(id))
+    expect(said.at(-1)).toMatch(/· meets Y most, affinity [\d.]+$/)
+    model.tidy()
+    await frame()
+    // Y's band holds it and P now, Y's node between them.
+    const half = Number(canvas().dataset.pitch) / 2
+    expect(Math.abs(nodes()[id][1] - nodes().Y[1])).toBeCloseTo(half, 1)
+    expect(Math.abs(nodes().P[1] - nodes().Y[1])).toBeCloseTo(half, 1)
+  })
+
   it('draws a step as it would be while it is previewed: the link offered, held', async () => {
     const { model } = await mount()
     model.preview({ op: 'link', element: 'P', mag: 'Y' }, true)
@@ -381,7 +472,7 @@ describe('across steps', () => {
     expect(document.querySelector('.curate-host-counts')?.textContent).toBe('2 links')
     model.preview(null)
     await frame()
-    expect(document.querySelector('.curate-host-counts')?.textContent).toBe('1 link · 1 offered · 1 to undo')
+    expect(document.querySelector('.curate-host-counts')?.textContent).toBe('1 link · 1 offered · 1 to unlink')
   })
 })
 
@@ -392,7 +483,15 @@ describe('before the contacts are read', () => {
     // P is linked by the file to Z: beside it, until the contacts say otherwise.
     expect(nodes().P[1]).toBe(nodes().Z[1])
     expect(pane.element.querySelector('.curate-host-counts')?.textContent).toBe('1 link')
-    expect(pane.element.querySelector('.curate-host-status')?.textContent).toBe('the file’s links; their contacts come once every contact between contigs is read')
+    expect(pane.element.querySelector('.curate-host-status')?.textContent).toBe('the file’s links, until the contacts are read')
+    // Every link drawn is held until then: no key to read.
+    expect(pane.element.querySelector('.curate-host-key')?.classList.contains('hidden')).toBe(true)
+  })
+
+  it('says of a link that its numbers are to come, not that it has none', async () => {
+    const { said } = await mount({ unread: true })
+    pointer('pointermove', linkMiddle('Z', 'P'))
+    expect(said.at(-1)).toBe('P ↔ Z · linked, from the file · its numbers once the contacts are read')
   })
 })
 

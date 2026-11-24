@@ -8,10 +8,11 @@
  * the right, each beside the MAG it meets most (`hostLayout.ts`), so a link
  * mostly runs level and a MAG that hosts many elements fans out to them;
  * placed when the stage opens and on *tidy*, then kept, so nothing moves under
- * the hand. Elements that meet no MAG fold into the foot (`46 meet no MAG ▸`),
- * open on a press. A node is a bar, as wide as its genome is long on a log
- * scale, in its genome's colour; its name where it has room, and always for
- * what is lit, selected or linked to them.
+ * the hand — an element a step makes goes beside the genome its contigs came
+ * from. Elements that meet no MAG fold into the foot (`46 meet no MAG ▸`),
+ * open on a press or when a part asks to show one. A node is a bar, as wide as
+ * its genome is long on a log scale, in its genome's colour; its name where it
+ * has room, and always for what is lit, selected or linked to them.
  *
  * **The links**, curves from a MAG to an element: a link **held** in ink, as
  * wide as the share of the element's contacts with MAGs it takes; a link
@@ -21,12 +22,15 @@
  * lit, the rest drops back. Never the pool (§7.4).
  *
  * The hand: a press selects a node (⌘ toggles, ⇧ extends along its column); a
- * press on a link selects its two genomes; **an element dragged onto a MAG is
- * linked to it** — the stage's one drop grammar makes the step, so a MAG
- * dropped on a MAG merges them. The wheel scrolls the columns, ⌘ or Ctrl with
- * it changes the rows' height, as `+` and `−` do; a drag on nothing scrolls;
- * `0` fits. Past three hundred genomes a side the map shows only what is
- * around the selection.
+ * press on a link selects its two genomes, one on nothing selects nothing;
+ * **an element dragged onto a MAG is linked to it** — the stage's one drop
+ * grammar makes the step, so a MAG dropped on a MAG merges them. The wheel
+ * scrolls the columns, ⌘ or Ctrl with it changes the rows' height, as `+` and
+ * `−` do; a drag on nothing scrolls; `0` fits. Past three hundred genomes a
+ * side the map shows only what is around the selection.
+ *
+ * The head counts the links, the foot keys their marks — once the contacts
+ * are read, when something can be offered — and says what the map leaves out.
  *
  * Every number the readout prints is the answer's.
  */
@@ -53,6 +57,7 @@ import {
   counted,
   curvePoint,
   fitPitch,
+  footWords,
   hostAnchors,
   hostLayout,
   hostLinks,
@@ -62,9 +67,11 @@ import {
   linkWidth,
   linkWords,
   magRank,
+  offerCounts,
   questionNumber,
   relatedTo,
   roomy,
+  sourcesOf,
   spreadLabels,
   suggestedPairs,
   type HostBand,
@@ -139,13 +146,21 @@ interface Modifiers {
 
 /** A press of the hand, until it is let go. */
 type Press =
-  | { kind: 'pan'; pointer: number; y: number; moved: boolean }
+  /** On nothing: a drag scrolls; let go where it was, with no key held, it selects nothing (`clear`). */
+  | { kind: 'pan'; pointer: number; y: number; moved: boolean; clear: boolean }
   | { kind: 'thumb'; pointer: number; y: number; scroll: number }
   | { kind: 'node'; pointer: number; x: number; y: number; id: string; carry: boolean; mod: Modifiers }
   | { kind: 'link'; pointer: number; x: number; y: number; key: string; mod: Modifiers }
 
 /** What a point of the pane is over. */
 type Hit = { kind: 'mag' | 'element'; id: string } | { kind: 'link'; key: string } | { kind: 'none' }
+
+/** A link or an unlink on offer, by the two genomes' ids. */
+interface Offer {
+  element: string
+  mag: string
+  suggestion: Suggestion
+}
 
 /** The columns' places, in CSS pixels of the plot. */
 interface Columns {
@@ -190,10 +205,12 @@ interface Drawn {
   lengths: { mag: [number, number]; element: [number, number] }
   /** Each element's densest MAG now, and their affinity: what the readout says it meets most. */
   best: Map<string, { mag: string; affinity: number }>
-  /** Links held, links offered, and held links an unlink is offered for. */
+  /** Links held, links offered, and held links an unlink is offered for: every one, drawn or not. */
   held: number
   offered: number
-  undo: number
+  unlink: number
+  /** Whether offers were left undrawn past {@link OFFERS_MOST}: a new selection draws its own. */
+  capped: boolean
 }
 
 /** What is lit, selected and asked, for one frame. */
@@ -258,6 +275,8 @@ export class HostPane implements CuratePane {
   private readonly canvas: HTMLCanvasElement
   private readonly note: HTMLElement
   private readonly footBar: HTMLElement
+  /** What a link drawn so means, under the map as a figure's key: once the contacts are read. */
+  private readonly keyBox: HTMLElement
   private readonly status: HTMLElement
   private readonly fold: HTMLButtonElement
   private large = true
@@ -281,6 +300,15 @@ export class HostPane implements CuratePane {
   private anchors = new Map<string, string | null>()
   private anchoredOn: { answer: CurationStateResult; order: readonly string[]; counted: boolean } | null = null
   private drawn: Drawn | null = null
+  /**
+   * Each genome's colour and short name, asked of the stage once a drawing
+   * rather than once a frame: both are kept by id until the next answer, the
+   * next preview or the next theme, each of which draws again.
+   */
+  private readonly colours = new Map<string, string>()
+  private readonly names = new Map<string, string>()
+  /** Whether the genome lit is this map's: what it lets go of when made small. */
+  private hovering = false
   private chosenView: HostView | null = null
   private footOpen = false
   private shownSuggestion: Suggestion | null = null
@@ -311,24 +339,29 @@ export class HostPane implements CuratePane {
 
   constructor(private readonly ctx: CurateContext) {
     this.counts = el('span', { class: 'curate-host-counts' })
-    const view = (name: HostView, text: string, title: string): HTMLButtonElement =>
-      el('button', {
-        class: 'btn btn-toggle curate-host-view',
-        text,
-        title,
-        attrs: { type: 'button', 'aria-pressed': 'false', 'data-view': name },
-        on: { click: () => this.setView(name) },
-      })
+    // The words after the first give way where the head is narrow: `around`.
+    const view = (name: HostView, words: readonly string[], title: string): HTMLButtonElement =>
+      el(
+        'button',
+        {
+          class: 'btn btn-toggle curate-host-view',
+          title,
+          attrs: { type: 'button', 'aria-pressed': 'false', 'data-view': name },
+          on: { click: () => this.setView(name) },
+        },
+        el('span', { text: words[0] }),
+        words.length > 1 ? el('span', { class: 'curate-host-view-more', text: ` ${words.slice(1).join(' ')}` }) : null,
+      )
     this.views = {
-      all: view('all', 'all', 'Every MAG and every element'),
-      around: view('around', 'around the selection', 'The genomes selected, the genomes linked to them, and their elements’ other hosts'),
+      all: view('all', ['all'], 'Every MAG and every element'),
+      around: view('around', ['around', 'the', 'selection'], 'The genomes selected, the genomes linked to them, and their elements’ other hosts'),
     }
-    const key = el(
+    this.keyBox = el(
       'div',
-      { class: 'curate-host-key' },
+      { class: 'curate-host-key hidden' },
       keyItem('held', 'linked', 'A link held: from the file, taken, or made by hand; as wide as its share of the element’s contacts with MAGs'),
       keyItem('offered', 'offered', 'A link the contacts offer'),
-      keyItem('unlink', 'to undo', 'A link held that the contacts no longer support: an unlink offered'),
+      keyItem('unlink', 'to unlink', 'A link held that the contacts no longer support: an unlink offered'),
     )
     const tools = el(
       'div',
@@ -342,7 +375,6 @@ export class HostPane implements CuratePane {
       { class: 'curate-host-head' },
       this.counts,
       el('div', { class: 'curate-host-views', attrs: { role: 'group', 'aria-label': 'Which genomes the host map shows' } }, this.views.all, this.views.around),
-      key,
       tools,
     )
     this.canvas = el('canvas', {
@@ -360,7 +392,7 @@ export class HostPane implements CuratePane {
       attrs: { type: 'button', 'aria-expanded': 'false' },
       on: { click: () => this.toggleFoot() },
     })
-    this.footBar = el('div', { class: 'curate-host-foot hidden' }, this.status, this.fold)
+    this.footBar = el('div', { class: 'curate-host-foot hidden' }, this.keyBox, this.status, this.fold)
     this.element = el(
       'section',
       { class: 'curate-host', attrs: { 'data-pane': 'hosts', 'data-view': 'all', 'data-zoom': 'fit', 'data-ready': 'false', 'data-large': 'true' } },
@@ -399,8 +431,9 @@ export class HostPane implements CuratePane {
       case 'selection':
       case 'mode':
       case 'current':
-        // Around the selection, what is shown follows it.
-        if (this.drawn?.view === 'around') this.rebuild()
+        // Around the selection, what is shown follows it; past the most offers
+        // drawn, the selection's own are drawn whatever their rank.
+        if (this.drawn?.view === 'around' || (change === 'selection' && this.drawn?.capped === true)) this.rebuild()
         else this.schedule()
         return
       case 'hover':
@@ -455,8 +488,11 @@ export class HostPane implements CuratePane {
         this.zoomBy(1 / ZOOM_STEP)
         return true
       case 'Escape':
+        // A press let go of: no click, no drag, the pointer free again.
         if (this.press === null) return false
+        this.release(this.press.pointer)
         this.press = null
+        if (this.pointer !== null) this.paintCursor(this.pointer.x, this.pointer.y)
         this.schedule()
         return true
       default:
@@ -516,14 +552,18 @@ export class HostPane implements CuratePane {
     // A tidy lays the order out again on the same answer; the read, on its first counted one.
     const fresh = was === null || (answer.counted && !was.counted) || (was.answer === answer && was.order !== order)
     const rank = magRank(answer.genomes, order)
-    this.anchors = hostAnchors(answer.genomes, answer.pairs, answer.links, rank, fresh ? {} : { kept: this.anchors })
+    // Between, kept: an element a step made goes beside the genome its contigs came from.
+    this.anchors = hostAnchors(answer.genomes, answer.pairs, answer.links, rank, fresh || was === null ? {} : { kept: this.anchors, from: sourcesOf(was.answer, answer, this.anchors) })
     this.anchoredOn = { answer, order, counted: answer.counted }
   }
 
   private rebuild(): void {
+    if (this.disposed) return
     const model = this.ctx.model
     const answer = model.answer
     const drawn = this.drawnAnswer()
+    this.colours.clear()
+    this.names.clear()
     if (answer === null || drawn === null) {
       this.drawn = null
       this.element.dataset.ready = 'false'
@@ -533,17 +573,20 @@ export class HostPane implements CuratePane {
     }
     this.refreshAnchors(answer)
     const current = drawn === answer
-    const links = hostLinks(drawn, current && answer.counted ? this.offersOf(answer) : [])
+    const offers = current && answer.counted ? this.offersOf(answer) : null
+    const links = hostLinks(drawn, offers?.drawn ?? [])
     const kind = new Map(drawn.genomes.map((genome) => [genome.id, genome.kind]))
     const mags = drawn.genomes.filter((genome) => genome.kind === 'mag').length
     const view: HostView = this.chosenView ?? (mags > AROUND_PAST || drawn.genomes.length - mags > AROUND_PAST ? 'around' : 'all')
     let visible: Set<string> | null = null
     let anchors = this.anchors
-    if (view === 'around') {
-      visible = aroundSet(this.chosen(drawn), links, (id) => kind.get(id))
-      const allowed = new Set([...visible].filter((id) => kind.get(id) === 'mag'))
-      anchors = hostAnchors(drawn.genomes, drawn.pairs, drawn.links, magRank(drawn.genomes, model.order), { kept: this.anchors, allowed })
-    } else if (!current) anchors = hostAnchors(drawn.genomes, drawn.pairs, drawn.links, magRank(drawn.genomes, model.order), { kept: this.anchors })
+    if (view === 'around' || !current) {
+      if (view === 'around') visible = aroundSet(this.chosen(drawn), links, (id) => kind.get(id))
+      const allowed = visible === null ? undefined : new Set([...visible].filter((id) => kind.get(id) === 'mag'))
+      // A previewed step's new element where the step would leave it: beside the genome its contigs came from.
+      const from = current ? undefined : sourcesOf(answer, drawn, this.anchors)
+      anchors = hostAnchors(drawn.genomes, drawn.pairs, drawn.links, magRank(drawn.genomes, model.order), { kept: this.anchors, allowed, from })
+    }
     const layout = hostLayout(drawn.genomes, model.order, anchors, { visible, footOpen: this.footOpen || view === 'around' })
     const band = new Map(layout.mags.map((b) => [b.id, b]))
     const place = new Map(layout.elements.map((p) => [p.id, p]))
@@ -578,8 +621,9 @@ export class HostPane implements CuratePane {
       lengths,
       best: bestHosts(drawn.genomes, drawn.pairs, magRank(drawn.genomes, model.order)),
       held: drawn.links.length,
-      offered: links.filter((link) => !link.held && link.offer !== null).length,
-      undo: links.filter((link) => link.held && link.offer?.kind === 'unlink').length,
+      offered: offers?.offered ?? 0,
+      unlink: offers?.unlink ?? 0,
+      capped: offers?.capped ?? false,
     }
     this.layouts++
     this.element.dataset.view = view
@@ -591,22 +635,25 @@ export class HostPane implements CuratePane {
     this.schedule()
   }
 
-  /** The link and unlink suggestions on offer, by the genomes' ids: the surest, and every one naming the selection. */
-  private offersOf(answer: CurationStateResult): Array<{ element: string; mag: string; suggestion: Suggestion }> {
+  /**
+   * The link and unlink suggestions on offer, by the genomes' ids: those
+   * drawn — the surest, and every one naming the selection — and every one
+   * counted.
+   */
+  private offersOf(answer: CurationStateResult): { drawn: Offer[]; offered: number; unlink: number; capped: boolean } {
     const selected = new Set(this.ctx.model.selection.genomes)
     const list = this.ctx.model
       .offered()
       .filter((s) => s.kind === 'link' || s.kind === 'unlink')
       .sort((a, b) => b.confidence - a.confidence || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
-    const out: Array<{ element: string; mag: string; suggestion: Suggestion }> = []
+    const all: Offer[] = []
     for (const s of list) {
       const element = answer.genomes[s.genomes[0]]?.id
       const mag = answer.genomes[s.genomes[1]]?.id
-      if (element === undefined || mag === undefined) continue
-      if (out.length >= OFFERS_MOST && !selected.has(element) && !selected.has(mag)) continue
-      out.push({ element, mag, suggestion: s })
+      if (element !== undefined && mag !== undefined) all.push({ element, mag, suggestion: s })
     }
-    return out
+    const drawn = all.length <= OFFERS_MOST ? all : all.filter((offer, k) => k < OFFERS_MOST || selected.has(offer.element) || selected.has(offer.mag))
+    return { drawn, ...offerCounts(answer.links, all), capped: drawn.length < all.length }
   }
 
   /** What around the selection is around: the genomes selected, those holding the contigs selected, and the question shown. */
@@ -627,8 +674,7 @@ export class HostPane implements CuratePane {
   private refreshHover(): void {
     if (this.pointer === null || this.press !== null || this.ctx.dragging !== null || !this.large) return
     // On the rows as they now are.
-    if (this.measureDirty) this.measure()
-    if (this.arrangeDirty) this.arrange()
+    this.layoutNow()
     this.hoverAt(this.pointer.x, this.pointer.y)
   }
 
@@ -653,8 +699,7 @@ export class HostPane implements CuratePane {
     this.rebuild()
     if (!this.footOpen || this.drawn === null) return
     // Shown where they begin, the rows before them just above: scrolled to, where the rows do not fit.
-    if (this.measureDirty) this.measure()
-    if (this.arrangeDirty) this.arrange()
+    this.layoutNow()
     const { layout } = this.drawn
     const from = Math.max(0, layout.rows - 2)
     this.frameRows(layout.rows, layout.total, [from, from + Math.floor((this.cols.bottom - this.cols.top) / Math.max(1, this.rows.pitch))])
@@ -672,8 +717,7 @@ export class HostPane implements CuratePane {
   zoomBy(factor: number, about?: number): void {
     if (!this.large || this.drawn === null) return
     this.pendingFrame = null
-    if (this.measureDirty) this.measure()
-    if (this.arrangeDirty) this.arrange()
+    this.layoutNow()
     const { top, bottom } = this.cols
     const view = bottom - top
     const total = this.drawn.layout.total
@@ -709,8 +753,7 @@ export class HostPane implements CuratePane {
    */
   private frameRows(from: number, to: number, subject?: readonly [number, number]): void {
     if (!this.large || this.drawn === null || !(to > from)) return
-    if (this.measureDirty) this.measure()
-    if (this.arrangeDirty) this.arrange()
+    this.layoutNow()
     const { pitch, offset } = this.rows
     const view = this.cols.bottom - this.cols.top
     const y0 = offset + from * pitch - this.zoom.scroll
@@ -746,18 +789,24 @@ export class HostPane implements CuratePane {
 
   /** What a part asked every part to show. */
   private frameOn(target: CurateFrame): void {
-    const drawn = this.drawn
     if (this.disposed) return
-    if (drawn === null || !this.large || this.measureDirty || this.box.height === 0) {
+    if (this.drawn === null || !this.large || this.measureDirty || this.box.height === 0) {
       this.pendingFrame = target
       this.schedule()
       return
     }
     const ids = new Set(target.genomes ?? [])
     for (const c of target.contigs ?? []) {
-      const g = drawn.answer.genomeOf[c] ?? -1
-      if (g >= 0) ids.add(drawn.answer.genomes[g].id)
+      const g = this.drawn.answer.genomeOf[c] ?? -1
+      if (g >= 0) ids.add(this.drawn.answer.genomes[g].id)
     }
+    // An element folded at the foot, asked for: the foot opened to show it.
+    if (this.drawn.view === 'all' && !this.footOpen && this.drawn.layout.foot.some((id) => ids.has(id))) {
+      this.footOpen = true
+      this.rebuild()
+    }
+    const drawn = this.drawn
+    if (drawn === null) return
     const span = this.rowsOf(ids)
     // The first genome named is what the frame is about: an element's links, a merge's survivor.
     const first = [...ids].find((id) => drawn.band.has(id) || drawn.place.has(id))
@@ -779,6 +828,32 @@ export class HostPane implements CuratePane {
     return weight === '' ? base : `${weight} ${base}`
   }
 
+  /** A genome's colour, as the stage gives it: asked once a drawing. */
+  private colourOf(id: string): string {
+    let css = this.colours.get(id)
+    if (css === undefined) {
+      css = this.ctx.colourOf(id).css
+      this.colours.set(id, css)
+    }
+    return css
+  }
+
+  /** A genome's short name, as the stage prints it: asked once a drawing. */
+  private nameOf(id: string): string {
+    let name = this.names.get(id)
+    if (name === undefined) {
+      name = this.ctx.shortName(id)
+      this.names.set(id, name)
+    }
+    return name
+  }
+
+  /** The box measured and the rows arranged, where something changed them since. */
+  private layoutNow(): void {
+    if (this.measureDirty) this.measure()
+    if (this.arrangeDirty) this.arrange()
+  }
+
   /** The names' room on each side: the widest short name, once an answer. */
   private namesWidth(): { mag: number; element: number } {
     const answer = this.drawn?.answer ?? null
@@ -790,7 +865,7 @@ export class HostPane implements CuratePane {
     if (g !== null && answer !== null) {
       g.font = font
       for (const genome of answer.genomes) {
-        const width = Math.ceil(g.measureText(this.ctx.shortName(genome.id)).width) + 4
+        const width = Math.ceil(g.measureText(this.nameOf(genome.id)).width) + 4
         if (genome.kind === 'mag') mag = Math.max(mag, width)
         else element = Math.max(element, width)
       }
@@ -912,8 +987,7 @@ export class HostPane implements CuratePane {
   private nodePoint(id: string): { x: number; y: number } | null {
     const drawn = this.drawn
     if (drawn === null) return null
-    if (this.measureDirty) this.measure()
-    if (this.arrangeDirty) this.arrange()
+    this.layoutNow()
     const band = drawn.band.get(id)
     if (band !== undefined) return { x: this.cols.magX - this.barOf(id) / 2, y: this.Y(band.at) }
     const place = drawn.place.get(id)
@@ -944,8 +1018,9 @@ export class HostPane implements CuratePane {
 
   private draw(): void {
     if (this.disposed) return
-    if (this.measureDirty) this.measure()
-    if (this.arrangeDirty) this.arrange()
+    // A window moved to a screen of another density keeps its size: crisp again on the next frame.
+    if (window.devicePixelRatio > 0 && window.devicePixelRatio !== this.dpr) this.measureDirty = true
+    this.layoutNow()
     if (this.pendingFrame !== null && this.large && this.box.height > 0 && this.drawn !== null) {
       const target = this.pendingFrame
       this.pendingFrame = null
@@ -1269,7 +1344,7 @@ export class HostPane implements CuratePane {
     g.fillStyle = ink.faint
     g.textAlign = 'right'
     g.textBaseline = 'middle'
-    g.fillText(`${fmt.int(layout.total - layout.rows)} meet no MAG`, this.cols.elementX - 12, y + Math.min(this.rows.pitch / 2, 9) + 0.5)
+    g.fillText(footWords(layout.total - layout.rows, drawn.answer.counted), this.cols.elementX - 12, y + Math.min(this.rows.pitch / 2, 9) + 0.5)
   }
 
   /** The nodes: a bar each, in its genome's colour; the selection outlined, never washed. */
@@ -1278,7 +1353,7 @@ export class HostPane implements CuratePane {
     const pitch = this.rows.pitch
     const height = this.large ? barHeight(pitch) : Math.min(4, Math.max(1, pitch - 1))
     const bar = (id: string, x: number, y: number, width: number): void => {
-      g.fillStyle = this.ctx.colourOf(id).css
+      g.fillStyle = this.colourOf(id)
       g.beginPath()
       const r = Math.min(2, height / 2)
       if (typeof g.roundRect === 'function') g.roundRect(x, y - height / 2, width, height, r)
@@ -1365,14 +1440,14 @@ export class HostPane implements CuratePane {
         g.globalAlpha = dim ? DIM : 1
         g.font = this.font()
         g.fillStyle = ink.text
-        g.fillText(this.fitText(g, this.ctx.shortName(n.id), names), x, n.y + 0.5)
+        g.fillText(this.fitText(g, this.nameOf(n.id), names), x, n.y + 0.5)
       })
       g.globalAlpha = 1
       forced.forEach((n, k) => {
         const y = at[k]
         const bold = strong(n.id) || featuredEnds.has(n.id)
         g.font = this.font(bold ? '600' : '')
-        const text = this.fitText(g, this.ctx.shortName(n.id), names)
+        const text = this.fitText(g, this.nameOf(n.id), names)
         if (Math.abs(y - n.y) > 1.5) {
           // Moved off its row: a leader from the name to the node's bar.
           const width = this.barOf(n.id)
@@ -1413,7 +1488,7 @@ export class HostPane implements CuratePane {
       const link = drawn.linkOf.get(key) ?? { key, element, mag, held: false, fromFile: false, pair: null, offer: null }
       const ends = this.linkEnds(link)
       if (ends === null) continue
-      // A third of the way from the element, above the curve: clear of an unlink's cross at its middle.
+      // Above the curve: a link's at its middle; an unlink's a third of the way from the element, clear of its cross.
       const [mx, my] = curvePoint(ends[0], ends[1], ends[2], ends[3], kind === 'link' ? 0.5 : 0.68)
       at = [mx, my - 13]
       break
@@ -1485,18 +1560,20 @@ export class HostPane implements CuratePane {
     for (const [name, button] of Object.entries(this.views) as Array<[HostView, HTMLButtonElement]>) button.setAttribute('aria-pressed', String(name === view))
     if (drawn === null) this.counts.textContent = ''
     else {
-      const parts = [counted(drawn.held, 'link')]
-      if (drawn.offered > 0) parts.push(`${fmt.int(drawn.offered)} offered`)
-      if (drawn.undo > 0) parts.push(`${fmt.int(drawn.undo)} to undo`)
-      this.counts.textContent = parts.join(' · ')
-      this.counts.title = drawn.answer.counted ? 'Links held between an element and a MAG, and the links the contacts offer' : 'The file’s links: what the contacts offer comes once every contact between contigs is read'
+      // The links held never cut; what is offered gives way, whole, where the head is narrow.
+      const parts = [el('span', { text: counted(drawn.held, 'link') })]
+      if (drawn.offered > 0) parts.push(el('span', { class: 'curate-host-count-more', text: ` · ${fmt.int(drawn.offered)} offered` }))
+      if (drawn.unlink > 0) parts.push(el('span', { class: 'curate-host-count-more', text: ` · ${fmt.int(drawn.unlink)} to unlink` }))
+      this.counts.replaceChildren(...parts)
+      this.counts.title = drawn.answer.counted
+        ? `${this.counts.textContent}: the links held between an element and a MAG, the links the contacts offer, and the links they no longer support`
+        : 'The file’s links: what the contacts offer comes once every contact between contigs is read'
     }
     // The foot: what the map leaves out, and why.
     const foot = drawn === null || drawn.view === 'around' ? 0 : drawn.layout.foot.length
     const counting = drawn?.answer.counted === true
     if (foot > 0 && this.large) {
-      const words = counting ? `${fmt.int(foot)} meet no MAG` : `${fmt.int(foot)} not linked`
-      this.fold.replaceChildren(el('span', { text: words }), icon(this.footOpen ? 'chevron-down' : 'chevron-right', { size: 13 }))
+      this.fold.replaceChildren(el('span', { text: footWords(foot, counting) }), icon(this.footOpen ? 'chevron-down' : 'chevron-right', { size: 13 }))
       this.fold.title = this.footOpen
         ? 'Fold them away'
         : counting
@@ -1508,14 +1585,20 @@ export class HostPane implements CuratePane {
     } else this.fold.classList.add('hidden')
     let status = ''
     if (drawn !== null && this.large) {
-      if (!counting) status = 'the file’s links; their contacts come once every contact between contigs is read'
+      // The stage's bar above says how far the read is.
+      if (!counting) status = 'the file’s links, until the contacts are read'
       else if (drawn.view === 'around' && !drawn.empty) {
         const shown = drawn.layout.mags.length + drawn.layout.elements.length
         status = `around the selection · ${fmt.int(shown)} of ${counted(drawn.answer.genomes.length, 'genome')}`
       }
     }
     this.status.textContent = status
-    this.footBar.classList.toggle('hidden', !this.large || (status === '' && this.fold.classList.contains('hidden')))
+    // The key once something can be offered: before the contacts are read every link drawn is held.
+    const key = drawn !== null && counting && drawn.answer.genomes.some((genome) => genome.kind === 'element')
+    this.keyBox.classList.toggle('hidden', !key)
+    // Where the foot is narrow, what the map shows is said before what its marks mean.
+    this.footBar.classList.toggle('has-status', status !== '')
+    this.footBar.classList.toggle('hidden', !this.large || (status === '' && !key && this.fold.classList.contains('hidden')))
   }
 
   private paintNote(): void {
@@ -1570,6 +1653,8 @@ export class HostPane implements CuratePane {
     const drawn = this.drawn
     const none: Hit = { kind: 'none' }
     if (drawn === null || drawn.layout.total === 0) return none
+    // On the rows as they are now, not as the last frame drew them: a count or a drag may have moved them since.
+    this.layoutNow()
     const c = this.cols
     if (y < c.top - NODE_REACH || y > c.bottom + NODE_REACH) return none
     const { pitch, scroll, offset } = this.rows
@@ -1716,7 +1801,7 @@ export class HostPane implements CuratePane {
       const carry = !mod.meta && !mod.shift && this.ctx.model.selection.genomes.includes(hit.id)
       this.press = { kind: 'node', pointer: event.pointerId, x, y, id: hit.id, carry, mod }
     } else if (hit.kind === 'link') this.press = { kind: 'link', pointer: event.pointerId, x, y, key: hit.key, mod }
-    else this.press = { kind: 'pan', pointer: event.pointerId, y, moved: false }
+    else this.press = { kind: 'pan', pointer: event.pointerId, y, moved: false, clear: event.button === 0 && !this.space && !mod.meta && !mod.shift }
     this.capture(event.pointerId)
     event.preventDefault()
     this.paintCursor(x, y)
@@ -1766,7 +1851,7 @@ export class HostPane implements CuratePane {
       case 'link':
         if (Math.hypot(x - press.x, y - press.y) < DRAG_PX) return
         // A drag from a link scrolls, as one from nothing does.
-        this.press = { kind: 'pan', pointer: press.pointer, y, moved: true }
+        this.press = { kind: 'pan', pointer: press.pointer, y, moved: true, clear: false }
         this.scrollBy(press.y - y)
         return
     }
@@ -1785,6 +1870,8 @@ export class HostPane implements CuratePane {
         this.clickLink(press.key, press.mod)
         break
       case 'pan':
+        if (!press.moved && press.clear) this.ctx.model.clearSelection()
+        break
       case 'thumb':
         break
     }
@@ -1803,18 +1890,21 @@ export class HostPane implements CuratePane {
     }
     if (this.press === null && this.ctx.dragging === null) {
       if (this.hoverLink !== null) this.hoverLink = null
+      this.hovering = false
       this.ctx.model.hover(null)
       this.setSaid(null)
     }
     this.schedule()
   }
 
-  /** Let go of whatever the hand holds: the pane made small. */
+  /** Let go of whatever the hand holds, and of the genome it lit: the pane made small. */
   private letGo(): void {
     if (this.press !== null) this.release(this.press.pointer)
     this.press = null
     this.pointer = null
     this.hoverLink = null
+    if (this.hovering) this.ctx.model.hover(null)
+    this.hovering = false
     this.setSaid(null)
   }
 
@@ -1899,13 +1989,16 @@ export class HostPane implements CuratePane {
       this.schedule()
     }
     if (hit.kind === 'mag' || hit.kind === 'element') {
+      this.hovering = true
       model.hover(hit.id)
       this.setSaid(this.genomeWords(hit.id))
     } else if (link !== null) {
       // A link lights its element: the genome the link is about.
+      this.hovering = true
       model.hover(link.element)
-      this.setSaid(linkWords(link, this.ctx.shortName(link.element), this.ctx.shortName(link.mag)))
+      this.setSaid(linkWords(link, this.nameOf(link.element), this.nameOf(link.mag), this.drawn?.answer.counted !== false))
     } else {
+      this.hovering = false
       model.hover(null)
       this.setSaid(null)
     }
@@ -1944,7 +2037,7 @@ export class HostPane implements CuratePane {
     const g = drawn?.index.get(id)
     if (drawn === null || g === undefined) return null
     const genome = drawn.answer.genomes[g]
-    const short = (other: string): string => this.ctx.shortName(other)
+    const short = (other: string): string => this.nameOf(other)
     const parts = [short(id), fmt.bp(genome.length), counted(genome.contigs, 'contig')]
     const held = drawn.answer.links
     const offered = drawn.links.filter((link) => !link.held && link.offer !== null && (link.element === id || link.mag === id))

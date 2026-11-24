@@ -56,15 +56,14 @@
   white-space: nowrap;
 }
 
-/* The key: what a link drawn so means, each mark drawn as the map draws it. */
+/* The key, in the foot under the map as a figure's: what a link drawn so
+   means, each mark drawn as the map draws it. Never cut: it goes whole when
+   the room goes. */
 .curate-host-key {
   display: inline-flex;
   align-items: center;
   gap: 0.7rem;
-  flex: 0 1 auto;
-  min-width: 0;
-  margin-left: auto;
-  overflow: hidden;
+  flex: 0 0 auto;
   white-space: nowrap;
 }
 .curate-host-key-item {
@@ -100,20 +99,30 @@
   display: inline-flex;
   gap: 0.15rem;
   flex: 0 0 auto;
+  margin-left: auto;
 }
 
-/* Narrow: the key's words go first, then the key, then the view's long word. */
-@container (max-width: 44rem) {
-  .curate-host-key-word {
+/* Narrow: the view's long word goes first (`around`), then what is offered
+   (the links held stay), then the foot's key — first where the foot says what
+   the map shows — each whole, never cut. */
+@container (max-width: 37.5rem) {
+  .curate-host-view-more {
     display: none;
   }
 }
-@container (max-width: 34rem) {
-  .curate-host-key {
+@container (max-width: 32rem) {
+  .curate-host-count-more {
     display: none;
   }
-  .curate-host-tools {
-    margin-left: auto;
+}
+@container (max-width: 40rem) {
+  .curate-host-foot.has-status .curate-host-key {
+    display: none;
+  }
+}
+@container (max-width: 27rem) {
+  .curate-host-key {
+    display: none;
   }
 }
 

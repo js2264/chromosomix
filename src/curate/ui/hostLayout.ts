@@ -13,8 +13,8 @@
  * band of its MAG. Elements that meet no MAG, and are linked to none, fold
  * into the foot. Where an element is placed is **kept across steps**, as the
  * stage's order is: set when the stage opens and on *tidy*, an element keeps
- * its MAG while that MAG lasts, a new one goes beside the MAG it meets most,
- * and one gone leaves no hole.
+ * its MAG while that MAG lasts, a new one goes beside the genome its contigs
+ * came from (else the MAG it meets most), and one gone leaves no hole.
  *
  * Pure: arrays in, arrays out, so the pane's logic is tested without a canvas.
  */
@@ -42,23 +42,27 @@ export interface HostGenome {
  * The MAG each element is placed beside, by id, `null` for none.
  *
  * Kept where `kept` names a MAG still there (and `allowed`, where given);
- * else the MAG it meets most densely by the pairs, as `curate/order.ts`'s
- * `elementOrder` places it (a tie to the MAG earlier in the order); else a MAG
- * it is linked to, though they do not meet, so the link is drawn; else none.
+ * else, for an element a step made, beside the genome its contigs came from
+ * (`from`): that MAG, or that element's place — the one earliest in the order,
+ * as the stage's order puts a new genome after its first source; else the MAG
+ * it meets most densely by the pairs, as `curate/order.ts`'s `elementOrder`
+ * places it (a tie to the MAG earlier in the order); else a MAG it is linked
+ * to, though they do not meet, so the link is drawn; else none.
  *
  * @param rank Each MAG's place in the stage's order: a MAG it does not name is never a place.
  * @param options.kept The places held before a step, by element id.
  * @param options.allowed The MAGs shown, around the selection: no other is a place.
+ * @param options.from The genomes each new element's contigs came from ({@link sourcesOf}).
  */
 export function hostAnchors(
   genomes: readonly HostGenome[],
   pairs: PairList,
   links: ReadonlyArray<{ element: string; mag: string }>,
   rank: ReadonlyMap<string, number>,
-  options: { kept?: ReadonlyMap<string, string | null>; allowed?: ReadonlySet<string> } = {},
+  options: { kept?: ReadonlyMap<string, string | null>; allowed?: ReadonlySet<string>; from?: ReadonlyMap<string, readonly string[]> } = {},
 ): Map<string, string | null> {
-  const { kept, allowed } = options
-  const can = (id: string | undefined): id is string => id !== undefined && rank.has(id) && (allowed === undefined || allowed.has(id))
+  const { kept, allowed, from } = options
+  const can = (id: string | null | undefined): id is string => id !== undefined && id !== null && rank.has(id) && (allowed === undefined || allowed.has(id))
   const best = bestHosts(genomes, pairs, rank, allowed)
   // Each element's linked MAG earliest in the order, one pass over the links.
   const linked = new Map<string, string>()
@@ -67,11 +71,52 @@ export function hostAnchors(
     const held = linked.get(link.element)
     if (held === undefined || (rank.get(link.mag) as number) < (rank.get(held) as number)) linked.set(link.element, link.mag)
   }
+  // A source MAG is a place itself; a source element lends its place.
+  const sourcePlace = (id: string): string | null => {
+    let place: string | null = null
+    for (const source of from?.get(id) ?? []) {
+      const at = can(source) ? source : (kept?.get(source) ?? null)
+      if (!can(at)) continue
+      if (place === null || (rank.get(at) as number) < (rank.get(place) as number)) place = at
+    }
+    return place
+  }
   const out = new Map<string, string | null>()
   for (const genome of genomes) {
     if (genome.kind !== 'element') continue
     const held = kept?.get(genome.id) ?? null
-    out.set(genome.id, held !== null && can(held) ? held : (best.get(genome.id)?.mag ?? linked.get(genome.id) ?? null))
+    out.set(genome.id, can(held) ? held : (sourcePlace(genome.id) ?? best.get(genome.id)?.mag ?? linked.get(genome.id) ?? null))
+  }
+  return out
+}
+
+/**
+ * Where each element new since a binning came from: the genomes of that
+ * binning whose contigs it holds now, by id — the MAG an element was made
+ * from, the element it was split from. A genome retyped keeps its id, and is
+ * not its own source.
+ *
+ * @param known The elements already placed: no other is new.
+ */
+export function sourcesOf(
+  before: { genomes: readonly HostGenome[]; genomeOf: ArrayLike<number> },
+  after: { genomes: readonly HostGenome[]; genomeOf: ArrayLike<number> },
+  known: { has(id: string): boolean },
+): Map<string, string[]> {
+  const out = new Map<string, string[]>()
+  const fresh = after.genomes.map((genome) => genome.kind === 'element' && !known.has(genome.id))
+  if (!fresh.includes(true)) return out
+  const n = Math.min(before.genomeOf.length, after.genomeOf.length)
+  for (let c = 0; c < n; c++) {
+    const g = after.genomeOf[c]
+    if (g < 0 || fresh[g] !== true) continue
+    const was = before.genomeOf[c]
+    const source = was < 0 ? undefined : before.genomes[was]?.id
+    const id = after.genomes[g].id
+    if (source === undefined || source === id) continue
+    const list = out.get(id)
+    if (list === undefined) out.set(id, [source])
+    else if (!list.includes(source)) list.push(source)
   }
   return out
 }
@@ -261,6 +306,26 @@ export function hostLinks(
   return [...out.values()]
 }
 
+/**
+ * What the head counts of the offers, all of them — drawn or not: the links
+ * offered for pairs not held, and the held links an unlink is offered for, as
+ * {@link hostLinks} draws them.
+ */
+export function offerCounts(
+  held: ReadonlyArray<{ element: string; mag: string }>,
+  offers: ReadonlyArray<{ element: string; mag: string; suggestion: Pick<Suggestion, 'kind'> }>,
+): { offered: number; unlink: number } {
+  const keys = new Set(held.map((link) => linkKey(link.element, link.mag)))
+  let offered = 0
+  let unlink = 0
+  for (const { element, mag, suggestion } of offers) {
+    const isHeld = keys.has(linkKey(element, mag))
+    if (suggestion.kind === 'link' && !isHeld) offered++
+    else if (suggestion.kind === 'unlink' && isHeld) unlink++
+  }
+  return { offered, unlink }
+}
+
 /** A link's weight: `1 + 3 × share` CSS pixels, its share of the element's contacts with MAGs. */
 export function linkWidth(link: Pick<HostLink, 'pair'>): number {
   const share = link.pair?.share ?? 0
@@ -433,13 +498,18 @@ export function roomy(ys: readonly number[], room: number): boolean[] {
  * A link as the readout says it: the element and the MAG, whether it is held
  * and where from, what is on offer, the affinity and its lower bound, the
  * share of the element's contacts with MAGs it takes, the contacts, and how
- * sure the method is the MAG hosts it.
+ * sure the method is the MAG hosts it — or, before the contacts are read
+ * (`counted` false), that its numbers are to come: not that it has none.
  */
-export function linkWords(link: HostLink, element: string, mag: string): string {
+export function linkWords(link: HostLink, element: string, mag: string, counted = true): string {
   const parts = [`${element} ↔ ${mag}`]
   if (link.held) parts.push(link.fromFile ? 'linked, from the file' : 'linked')
   if (link.offer?.kind === 'link') parts.push('link offered')
   else if (link.offer?.kind === 'unlink') parts.push('unlink offered')
+  if (!counted) {
+    parts.push('its numbers once the contacts are read')
+    return parts.join(' · ')
+  }
   const pair = link.pair
   if (pair === null || !(pair.contacts > 0)) {
     parts.push('no contacts')
@@ -457,4 +527,13 @@ export function linkWords(link: HostLink, element: string, mag: string): string 
 /** A count of things: `1 element`, `3 elements`. */
 export function counted(n: number, one: string, many = `${one}s`): string {
   return `${fmt.int(n)} ${n === 1 ? one : many}`
+}
+
+/**
+ * The elements the map folds, as its foot says them: those that meet no MAG
+ * (`1 meets no MAG`, `46 meet no MAG`) — before the contacts are read, those
+ * the file links to none.
+ */
+export function footWords(n: number, contactsRead: boolean): string {
+  return contactsRead ? `${fmt.int(n)} ${n === 1 ? 'meets' : 'meet'} no MAG` : `${fmt.int(n)} not linked`
 }
