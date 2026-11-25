@@ -31,6 +31,8 @@ import { bpAt } from '../render/locus'
 import { Scale } from '../render/scale'
 import type { EditStore } from '../state/referenceEdit'
 import { AnnotationLanes, type LaneGeometry } from '../ui/AnnotationLanes'
+import { watchTheme } from '../ui/analysisPlots'
+import { FIGURE_BACKGROUND, figurePaper } from '../ui/canvasPalette'
 import { el } from '../ui/dom'
 import { TAB_WALKS, tabStep } from '../ui/tabWalk'
 import { icon, iconButton } from '../ui/icons'
@@ -260,6 +262,18 @@ const CORNER_PX = 10
 /** The rail's width, beside the map. */
 const RAIL_WIDTH = 150
 /**
+ * The paper under the map, as `ImageData` holds a pixel: the figure's white,
+ * whatever the theme (§27.3). A cell with nothing in it — an empty bin, a gap,
+ * past the axis — is the paper, as it is on the session's map, which stays on
+ * white in the dark theme; left transparent, it was the dialog's ground, and
+ * the dark theme drew every empty bin and every sequence's short last cell as a
+ * black dot or a black line across a map of cream.
+ */
+const PAPER_PIXEL = ((): number => {
+  const value = Number.parseInt(FIGURE_BACKGROUND.slice(1), 16)
+  return ((0xff << 24) | ((value & 0xff) << 16) | (value & 0xff00) | ((value >> 16) & 0xff)) >>> 0
+})()
+/**
  * The narrowest the picture is kept beside the inspector — the rail and a map
  * of three hundred pixels: narrower, the inspector folds by itself, and its
  * toggle opens it over the picture (`StageDialogProps.stageMin`).
@@ -422,6 +436,14 @@ export class EditStage {
   private barPress: { x: number; y: number } | null = null
   private closed = false
   private readonly stopStore: () => void
+  /** The theme's ink read again when the theme changes, for the furniture drawn in it. */
+  private readonly stopTheme: () => void
+  /**
+   * The paper's ink — the light palette, whatever the theme — for what is drawn
+   * over the map: its rules, the selection, the caret, the pointer and the
+   * suggestions' marks. The map is a figure, as the curation's is.
+   */
+  private paper: StageInk | null = null
   private readonly observer: ResizeObserver | null
   private readonly onKey: (event: KeyboardEvent) => void
   private readonly onKeyUp: (event: KeyboardEvent) => void
@@ -588,6 +610,11 @@ export class EditStage {
     window.addEventListener('keyup', this.onKeyUp, true)
     window.addEventListener('blur', this.onBlur)
     this.stopStore = props.store.subscribe(() => this.edited())
+    this.stopTheme = watchTheme(() => {
+      this.ink = null
+      this.railSignature = ''
+      this.schedule()
+    })
 
     this.modal = stageDialog({
       // One genome of a metagenome is edited on its own (§27.10), and says so.
@@ -1274,7 +1301,9 @@ export class EditStage {
     const grid = this.shown
     if (this.size === 0) this.layoutPlot()
     this.ink ??= readInk(this.root)
+    this.paper ??= readInk(figurePaper())
     const ink = this.ink
+    const paper = this.paper
     const size = this.size
     const dpr = this.dpr
     const picture = this.picture
@@ -1300,6 +1329,8 @@ export class EditStage {
           const cols = windowSide(grid, x0, x1, width, held.read.cols, held.read.binsize)
           paintWindow(target, width, rows, cols, held.read, windowScale(picture, held.read.binsize), { low: picture.low, high: picture.high }, this.colours)
         }
+        // The paper under what the map holds, in either theme.
+        for (let k = 0; k < target.length; k++) if (target[k] === 0) target[k] = PAPER_PIXEL
         ctx.putImageData(this.image, 0, 0)
         this.considerWindow()
       }
@@ -1323,13 +1354,14 @@ export class EditStage {
     if (overlay !== null) {
       overlay.setTransform(dpr, 0, 0, dpr, 0, 0)
       const box = this.selection?.kind === 'box' && this.drag === null ? this.boxUnits(grid, this.selection) : this.dragBox()
+      // Over the map, the paper's ink: its rules dark on white, its halos white.
       drawOverlay(overlay, {
         size,
         grid,
         toX,
         toY,
-        ink,
-        under: (ctx) => drawSuggestions(ctx, { size, toX, toY, ink, marks }),
+        ink: paper,
+        under: (ctx) => drawSuggestions(ctx, { size, toX, toY, ink: paper, marks }),
         square: box === null ? lit : null,
         box,
         caret,
@@ -3584,6 +3616,7 @@ export class EditStage {
     window.removeEventListener('blur', this.onBlur)
     this.observer?.disconnect()
     this.stopStore()
+    this.stopTheme()
     this.lanes?.destroy()
     closeMenu()
     // The picture is the stage's alone (§27.9): it goes with it.

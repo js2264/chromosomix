@@ -557,6 +557,13 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The reference editor's map no longer turns black in the dark theme (§27.3).** A cell with
+  nothing in it was left transparent over the dialog's ground: in the dark theme every empty bin was
+  a black dot, every sequence's short last cell a black line across the map, and the rules over it
+  were drawn in the theme's light greys on cream. The map is on the paper's white in either theme, as
+  the session's and the curation's are, with the paper's ink over it; the bars around it take the
+  theme, read again when it changes.
+
 - **The page no longer scrolls sideways by a pixel.** A folded right column's tab, as thick as its
   strip, began inside the strip's border and ended a pixel past the window's edge: the arrow keys and
   a trackpad's sweep moved the whole page, and a scrollbar flashed at its foot — in the reference

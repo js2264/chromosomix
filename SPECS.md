@@ -16604,7 +16604,11 @@ ink: a hairline at every **cut** — a junction between two parts of one of the 
 rule twice as wide at every **join**, where two of the file's sequences meet or a gap stands between
 two pieces (`LensGrid.joins`), and a darker one at every edge between sequences; the pieces bars leave
 a gap of the page between two pieces, twice as wide at a join (*built*). So what was a contig is told
-from where one was cut. *Built*, each mark over a halo of the background so it reads over the darkest contacts: a
+from where one was cut. **The map is a figure on paper in either theme**, as the session's map and
+the curation's are: a cell with nothing in it — an empty bin, a gap, a sequence's short last cell — is
+the paper's white, not the dialog's ground, and the rules, the selection, the caret, the pointer and
+the suggestions' marks over it are in the paper's ink (`figurePaper`); the bars, the rail and the
+lanes around it are in the theme's, read again when the theme changes (*built*). *Built*, each mark over a halo of the background so it reads over the darkest contacts: a
 diamond at every junction a suggestion takes away, with its ticks across both pieces bars; a corner at
 every junction it makes, in both triangles; its number in a disc beside its first mark; and for the one
 lit — on the map, the rail or the list — what it would do: the stretch it turns outlined, dashed, with
