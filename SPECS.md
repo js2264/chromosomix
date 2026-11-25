@@ -17460,8 +17460,13 @@ overlap, and a drop is never a guess.
 weighted and not, the genomes it meets most, each with its merge; several genomes' sum and their
 affinities with one another; contigs' homes — with the acts on it and their keys, each step priced while
 the pointer or the keyboard rests on its act; the **suggestions** — the questions in the queue's order,
-numbered as the band numbers them, filtered by kind, each with *take* and *turn down*, a question's
-members one by one, the turned down with *offer again*, and in auto the run and what it held back; the
+numbered as the band numbers them, filtered by kind, each with *take* and *turn down* and what it
+rests on, a merge priced in the band's words and numbers (`complete 58% + 42% → 100% · redundant
+1.03 + 1.00 → 1.02 · high quality`: each MAG's own weighted numbers, the one kept first, and the
+merged genome's), a question's members one by one, the turned down with *offer again*, each chip on
+one line, the list's foot fading where it cuts a row, and in auto the run — what it would take
+marked in the list, merges first, the rest standing back —, what the last run took (`last run took
+13 questions · 16 steps · held back 0`) and what it held back; the
 **history** — every step with who made it, a row pressed going back to it; the **export** (§33.8); and
 **about the map** — the file, its markers, the contacts' read and what the method measured.
 
@@ -17478,7 +17483,7 @@ contigs moved · links +3 −1`.
 themselves —, **review**, and **auto**. **Review asks questions, not pairs** (`curate/questions.ts`):
 the merges at even odds or more grouped by the genomes they join — one question an organism, merged
 into its most complete member (the longest on a tie, a lone pair's as a group's), at the confidence of
-its **weakest needed pair**, the least sure join
+its **weakest needed pair** (the card's *least sure join*), the least sure join
 of the surest tree that joins them —, the moves by the genome they leave and the one they join, the
 recruits by the genome they join, an element's links and unlinks together; what is less sure stays a
 question of its own. They come likely first, and among those the merges, then the moves, the recruits

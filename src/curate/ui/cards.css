@@ -640,7 +640,7 @@
 .curate-suggestions-list {
   position: relative;
   max-height: min(30rem, 56vh);
-  padding: 0.3rem;
+  padding: 0.3rem 0.3rem 1rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-sunken);
@@ -650,6 +650,19 @@
 /* While a step is counted the questions are the binning's before it, and an
    answer pressed meanwhile answers nothing: dimmed — after a moment, so a
    quick count does not flicker it, and at once when one was pressed. */
+/* Its foot fades where the scroll cuts a row, so a row cut through reads as
+   more below, never as a broken glyph; at the end it fades the padding only. */
+.curate-suggestions-list::after {
+  content: '';
+  position: sticky;
+  bottom: -1rem;
+  display: block;
+  flex: none;
+  height: 1.6rem;
+  margin-top: -1.6rem;
+  background: linear-gradient(to bottom, transparent, var(--bg-sunken));
+  pointer-events: none;
+}
 .curate-suggestions-card.is-weighing .curate-suggestions-list {
   opacity: 0.55;
   transition-delay: 180ms;
@@ -698,17 +711,35 @@
   align-self: start;
   margin-top: 0.12rem;
 }
-/* A chip's corners are half a line round: a pill on one line, and a rounded
-   box, not a stretched stadium, where a long one (`completeness 50% + 30% →
-   79%`) wraps in a narrow side. */
+/* A chip is one line, never a two-line blob: one too long for the side is
+   cut, whole in its title. */
 .curate-suggestions-chip {
-  border-radius: 0.8em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* A worry among the evidence — within the background, markers it has
-   already, markers shared — is to be looked at before the step is trusted. */
+   already, markers shared, a grade lost — is to be looked at before the step
+   is trusted; a MAG made high quality is the good news. */
 .curate-suggestions-chip.is-warn {
   background: var(--warn-soft);
   color: var(--warn);
+}
+.curate-suggestions-chip.is-ok {
+  background: color-mix(in srgb, var(--ok) 14%, var(--bg));
+  color: var(--ok);
+}
+/* In auto, what a run would take wears the accent's rule; the rest stands back. */
+.curate-suggestions-row.is-auto-sure {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.curate-suggestions-row.is-auto-later {
+  opacity: 0.6;
+}
+.curate-suggestions-row.is-auto-later:hover,
+.curate-suggestions-row.is-auto-later:focus-within {
+  opacity: 1;
 }
 .curate-suggestions-acts {
   margin-left: auto;

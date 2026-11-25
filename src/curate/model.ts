@@ -771,6 +771,13 @@ export class CurateModel {
     return this.heldBackList
   }
 
+  /** What the last auto run did: the questions it took, the steps they made, the ones it held back. */
+  get lastRun(): { questions: number; steps: number; held: number } | null {
+    return this.lastRunHeld
+  }
+
+  private lastRunHeld: { questions: number; steps: number; held: number } | null = null
+
   private heldBackList: Array<{ key: string; words: string; why: string }> = []
 
   /**
@@ -791,6 +798,7 @@ export class CurateModel {
     this.emit('mode')
     const asked = new Set<string>()
     let steps = 0
+    const made = this.store.applied
     try {
       while (!run.stopped && steps < most) {
         await this.settled()
@@ -817,6 +825,7 @@ export class CurateModel {
       }
     } finally {
       if (this.autoRun === run) this.autoRun = null
+      this.lastRunHeld = { questions: steps, steps: Math.max(0, this.store.applied - made), held: this.heldBackList.length }
       if (!this.disposed) this.emit('mode')
     }
     return steps

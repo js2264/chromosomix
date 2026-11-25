@@ -330,7 +330,7 @@ describe('the suggestions card', () => {
     expect(m.store.curation.history.map((entry) => [entry.step, entry.by, entry.suggestion])).toEqual([[{ op: 'merge', into: 'X1', genomes: ['X2'] }, 'suggestion', describeSuggestion(merge)]])
     await settle(m)
     expect(wordsOf()).not.toContain('merge X2 into X1')
-    expect(document.querySelector('.curate-suggestions-learned')?.textContent).toBe('ranked by what 1 answer taught it · forget')
+    expect(document.querySelector('.curate-suggestions-learned')?.textContent).toBe('the order learned from 1 answer · forget')
   })
 
   it('turns one down, lists it to offer again, and forgets what the answers taught', async () => {
@@ -385,6 +385,9 @@ describe('the suggestions card', () => {
     await frame()
     const apply = document.querySelector('.curate-suggestions-apply') as HTMLButtonElement
     expect(apply.textContent).toBe('apply 4 at 80% or more')
+    // What the run would take is marked in the list, merges first whatever their confidence; the rest stands back.
+    expect(document.querySelectorAll('.curate-suggestions-row.is-auto-sure').length).toBe(4)
+    expect(document.querySelector('.curate-suggestions-sure')?.textContent).toBe('marked below: the 4 it would take, merges first')
     apply.click()
     expect(m.model.running).toBe(true)
     await frame()
@@ -407,6 +410,8 @@ describe('the suggestions card', () => {
     expect(m.card.element.classList.contains('is-weighing')).toBe(false)
     expect(document.querySelector('.curate-suggestions-running')).toBeNull()
     expect(document.querySelector('.curate-suggestions-apply')?.textContent).toMatch(/^apply \d at 80% or more$/)
+    // What the run did, in so many words.
+    expect(document.querySelector('.curate-suggestions-last')?.textContent).toBe('last run took 1 question · 1 step · held back 0')
   })
 
   it('says what auto held back, and why', async () => {

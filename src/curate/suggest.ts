@@ -47,6 +47,8 @@ import {
   type Weights,
 } from './method'
 import { addCounts, markerCounts, qualityOf, type ContigMarkers, type Quality } from './quality'
+import { priceLines, priceVerdict, type PriceRow } from './price'
+import { grade } from './ui/grade'
 
 /** Recruits at this confidence or more into one MAG are offered as one suggestion. */
 export const SURE = 0.8
@@ -308,8 +310,7 @@ function merges(
     // The markers of the two under the set the merged genome would be judged by.
     let shared = 0
     let fewer = 0
-    let before = ''
-    let after = ''
+    let merged: Quality | null = null
     if (perGenome.length > 0) {
       const union = perGenome.map((sets) => addCounts(sets[a], sets[b]))
       const s = bestSet(evidence, union)
@@ -324,12 +325,7 @@ function merges(
           if (ca[k] > 0 && cb[k] > 0) shared++
         }
         fewer = Math.min(pa, pb)
-        const set = evidence.markers[s].set
-        const qa = qualityOf(set, ca)
-        const qb = qualityOf(set, cb)
-        const qm = qualityOf(set, union[s])
-        before = `completeness ${percent(qa.completeness)} + ${percent(qb.completeness)} → ${percent(qm.completeness)}`
-        after = `redundancy ${Math.max(qa.redundancy, qb.redundancy).toFixed(2)} → ${qm.redundancy.toFixed(2)}`
+        merged = qualityOf(evidence.markers[s].set, union[s])
       }
     }
     const features = mergeFeatures(lower, o, shared, fewer, p)
@@ -341,8 +337,26 @@ function merges(
     const cb = quality[b]?.weightedCompleteness ?? -1
     const [keep, fold] = ca > cb || (ca === cb && lengthOf(evidence, A.contigs) >= lengthOf(evidence, B.contigs)) ? [A, B] : [B, A]
     const evidenceChips = [affinityText(aff), `${grouped(o)} contacts`]
-    if (before !== '') {
-      evidenceChips.push(before, after)
+    if (merged !== null) {
+      // Its price as the review's band prints it (`price.ts`): each MAG's own
+      // weighted numbers, the one kept first, and the merged genome's.
+      const own = (g: number, genome: typeof A): { id: string; name: string; quality: Quality | null; contigs: number } => ({ id: genome.id, name: genome.name, quality: quality[g] ?? null, contigs: genome.contigs.length })
+      const from = keep === A ? [own(a, A), own(b, B)] : [own(b, B), own(a, A)]
+      const first = from[0].quality
+      const row: PriceRow = {
+        id: keep.id,
+        name: keep.name,
+        kind: 'mag',
+        after: merged,
+        from,
+        gradeBefore: first === null ? null : grade(first.weightedCompleteness, first.weightedRedundancy),
+        gradeAfter: grade(merged.weightedCompleteness, merged.weightedRedundancy),
+      }
+      const lines = priceLines(row)
+      if (lines !== null) evidenceChips.push(`complete ${lines.completeness}`, `redundant ${lines.redundancy}`)
+      const verdict = priceVerdict(row)
+      if (verdict === 'promoted') evidenceChips.push('high quality')
+      else if (verdict === 'demoted') evidenceChips.push(row.gradeAfter === 'contaminated' ? 'contaminated' : 'a grade lower')
       if (fewer > 0) evidenceChips.push(shared === 0 ? 'markers complementary' : `${shared} of ${fewer} markers shared`)
     }
     if (p > 1e-3) evidenceChips.push('within the background')

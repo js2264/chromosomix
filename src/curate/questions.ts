@@ -141,7 +141,7 @@ function mergeQuestions(merges: readonly Suggestion[], answer: CurationStateResu
       words: `merge ${others.length === 1 ? answer.genomes[others[0]].name : `${others.length.toLocaleString('en-US')} MAGs`} into ${answer.genomes[into].name}`,
       confidence: weakest.get(r) ?? Math.min(...list.map((s) => s.confidence)),
       features: list[list.length - 1].features,
-      evidence: [`${genomes.length} MAGs, one organism`, `${contacts.toLocaleString('en-US')} contacts`, `weakest needed pair ${Math.round((weakest.get(r) ?? 0) * 100)}%`],
+      evidence: [`${genomes.length} MAGs, one organism`, `${contacts.toLocaleString('en-US')} contacts`, `least sure join ${Math.round((weakest.get(r) ?? 0) * 100)}%`],
       genomes: [into, ...others],
       contigs: [],
       affinity: Math.min(...list.map((s) => s.affinity)),

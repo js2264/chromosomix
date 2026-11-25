@@ -53,7 +53,9 @@ const KINDS: readonly SuggestionKind[] = ['merge', 'move', 'recruit', 'link', 'u
 const KIND_ICON: Record<SuggestionKind, IconName> = { merge: 'merge', move: 'move', recruit: 'plus', link: 'link', unlink: 'unlink' }
 
 /** What a piece of evidence says that a reader should look at before trusting the step. */
-const WORRY = /within the background|it has already|markers? shared/
+const WORRY = /within the background|it has already|markers? shared|^contaminated$|^a grade lower$/
+/** What a price says that a reader is glad to see. */
+const GOOD = /^high quality$/
 
 /** A row drawn, kept by its question's key while the question reads the same. */
 interface RowView {
@@ -66,6 +68,8 @@ interface RowView {
   answers: HTMLButtonElement[]
   members: Array<{ key: string; node: HTMLElement; answers: HTMLButtonElement[] }>
   details: HTMLDetailsElement | null
+  /** Whether an auto run would take it: at the threshold or more. */
+  sure: boolean
 }
 
 /** Where the keyboard is among the rows: its question, the suggestion of it, which button, and the row's place. */
@@ -303,8 +307,13 @@ export class SuggestionsCard {
   private paintAuto(queue: readonly Question[]): void {
     const model = this.ctx.model
     const sure = queue.filter((q) => q.confidence >= AUTO_THRESHOLD).length
+    const last = model.lastRun
     const signature =
-      model.mode !== 'auto' ? '' : model.running ? 'running' : [sure, ...model.heldBack.map((item) => `${item.key}\t${item.words}\t${item.why}\t${queue.some((q) => q.key === item.key)}`)].join('\n')
+      model.mode !== 'auto'
+        ? ''
+        : model.running
+          ? 'running'
+          : [sure, last === null ? '' : `${last.questions}/${last.steps}/${last.held}`, ...model.heldBack.map((item) => `${item.key}\t${item.words}\t${item.why}\t${queue.some((q) => q.key === item.key)}`)].join('\n')
     if (signature === this.drawn.auto) return
     this.drawn.auto = signature
     if (model.mode !== 'auto') {
@@ -333,6 +342,15 @@ export class SuggestionsCard {
         apply.title = `None at ${threshold} or more: review the rest one by one`
       } else apply.classList.add('btn-primary')
       parts.push(el('div', { class: 'edit-acts curate-suggestions-run' }, apply))
+      // What the last run did, in so many words: the history names each step.
+      if (last !== null)
+        parts.push(
+          el('p', {
+            class: 'edit-note curate-suggestions-last',
+            text: `last run took ${fmt.int(last.questions)} ${last.questions === 1 ? 'question' : 'questions'} · ${fmt.int(last.steps)} ${last.steps === 1 ? 'step' : 'steps'} · held back ${fmt.int(last.held)}`,
+          }),
+        )
+      if (sure > 0) parts.push(el('p', { class: 'edit-note curate-suggestions-sure', text: `marked below: the ${sure === 1 ? 'one' : fmt.int(sure)} it would take, merges first` }))
       const held = model.heldBack
       if (held.length > 0) {
         const list = el('ul', { class: 'curate-suggestions-held-list' })
@@ -509,7 +527,7 @@ export class SuggestionsCard {
     const chips = el(
       'div',
       { class: 'edit-suggestion-chips curate-suggestions-chips' },
-      ...q.evidence.map((chip) => el('span', { class: `edit-chip curate-suggestions-chip${WORRY.test(chip) ? ' is-warn' : ''}`, text: this.short(chip), title: chip })),
+      ...q.evidence.map((chip) => el('span', { class: `edit-chip curate-suggestions-chip${WORRY.test(chip) ? ' is-warn' : GOOD.test(chip) ? ' is-ok' : ''}`, text: this.short(chip), title: chip })),
     )
     const many = q.members.length > 1
     const whole = q.steps.length === 1 ? 'one step' : `${fmt.int(q.steps.length)} steps in one gesture`
@@ -538,6 +556,7 @@ export class SuggestionsCard {
       answers: [take, down],
       members: [],
       details: null,
+      sure: q.confidence >= AUTO_THRESHOLD,
     }
     if (many) {
       const details = el('details', { class: 'curate-suggestions-members' })
@@ -681,7 +700,7 @@ export class SuggestionsCard {
       el(
         'p',
         { class: 'edit-note curate-suggestions-learned' },
-        `ranked by what ${fmt.int(answers)} ${answers === 1 ? 'answer' : 'answers'} taught it · `,
+        `the order learned from ${fmt.int(answers)} ${answers === 1 ? 'answer' : 'answers'} · `,
         el('button', { class: 'btn-link', text: 'forget', title: 'Back to the stated weights, with nothing turned down', attrs: { type: 'button' }, on: { click: () => this.ctx.model.forgetLearned() } }),
       ),
     )
@@ -704,9 +723,13 @@ export class SuggestionsCard {
     const member = model.member
     const { genome, contig } = model.hovered
     const pointed = this.hovering
+    // In auto, what a run would take is marked, and the rest stands back.
+    const auto = model.mode === 'auto'
     for (const view of this.rows.values()) {
       const here = view.key === current
       view.node.classList.toggle('is-current', here)
+      view.node.classList.toggle('is-auto-sure', auto && view.sure)
+      view.node.classList.toggle('is-auto-later', auto && !view.sure)
       // The pointer on a row lights that row; on a picture or the list, every question naming what it is on.
       const lit =
         pointed !== null
