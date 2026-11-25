@@ -20,7 +20,7 @@
 
 import { ViewerError, type ErrorCode } from '../errors'
 import type { ReferenceEdit } from '../genome/edit'
-import type { Curation } from '../genome/curation'
+import type { CurationDrawn } from '../curate/layouts'
 import type { FileCorner } from '../edit/corners'
 import type { GridLayout } from '../edit/grid'
 import type { WindowRead } from '../edit/paint'
@@ -445,6 +445,8 @@ export interface OpenResult {
      * Binning QC card sets beside the curated pool's where they differ.
      */
     file?: { genomes: number; unassigned: UnassignedStats | null }
+    /** Genomes drawn as their edits lay them out (§27.10). */
+    laidOut?: number
   }
   sourceKind: SourceKind
 }
@@ -963,8 +965,11 @@ export type WorkerRequest =
        * for the answers kept of it; `held` is the curation itself, which the
        * answers' keys leave out (`answers.ts`), since a history of a thousand
        * steps named in every key would be megabytes of them. Never with `edit`.
+       * `layouts`, each genome's edit of the reference that lays it out
+       * (§27.10), drawn in its place (`curate/layouts.ts`) — with or without a
+       * curation, `held` `null` for none.
        */
-      curation?: { key: string; held: Curation }
+      curation?: CurationDrawn
     }
   // Build the `.mcool` for the pairs import this session was opened from.
   // Separate from `open` because it is a second long job with its own
@@ -1242,6 +1247,12 @@ export type WorkerRequest =
       kind: 'genomeLinks'
       /** The contigs of one genome's edit, by name (§27.10). */
       contigs: string[]
+      /**
+       * The genomes to name the partners by, where the session's curation has
+       * moved on from the map drawn (§33.4): each of the file's contigs, its
+       * genome, an index into `genomes`. Absent, the map's own.
+       */
+      assignment?: { genomes: string[]; genomeOf: Int32Array }
     }
   | CurationRequest
   | { id: number; kind: 'cancel'; target: number }

@@ -21,6 +21,7 @@ import type { Suggestion } from '@/curate/suggest'
 import type { CurateContext } from '@/curate/ui/context'
 import { AboutCard } from '@/curate/ui/cards/AboutCard'
 import { commandText, ExportCard, mapArgument } from '@/curate/ui/cards/ExportCard'
+import type { CurateLayouts } from '@/curate/ui/CurateStage'
 import { HistoryCard } from '@/curate/ui/cards/HistoryCard'
 import { SuggestionsCard } from '@/curate/ui/cards/SuggestionsCard'
 import { CuratedBinning, emptyCuration, fileBinning, withCurationStep } from '@/genome/curation'
@@ -593,6 +594,42 @@ describe('the export card', () => {
     expect(saved['community.contig-genome.tsv'].split('\n').slice(0, 3)).toEqual(['contig_name\tgenome_name', 'x0\tX1', 'x1\tX1'])
     expect(saved['community.contig-genome.tsv']).toContain('u0\t__unbinned__\n')
     expect(status()).toMatch(/^Wrote community\.contig-genome\.tsv \(\d+\u00a0B\) at 14:52\. 19 contigs in 5 genomes, 1 in none\.$/)
+  })
+
+  it('writes the genomes’ sequences where the reference editing is on: the AGP and the table, and the FASTA once there is a sequence to read', async () => {
+    saveDialog()
+    const stage = testContext()
+    let from: string | null = null
+    const layouts: CurateLayouts = {
+      kept: () => new Set(),
+      laidOut: () => new Set(['X1']),
+      open: () => {},
+      agp: () => ({ text: '##agp-version\t2.1\n', sequences: 19, laidOut: 1 }),
+      sequences: () => ({ text: 'sequence\tgenome\n', rows: 19 }),
+      sequenceFrom: () => from,
+      fasta: async () => ({ blob: new Blob(['>x0 genome=X1\nACGT\n']), missing: [] }),
+    }
+    mounted(new ExportCard(stage.ctx, { stem: 'community', store: stage.store, layouts, now: () => new Date(2026, 10, 24, 14, 52) }))
+    await settle(stage)
+    expect(textsOf(document.body, '.curate-export-sequences .curate-export-label')).toEqual(['AGP', 'FASTA', 'sequence → genome'])
+    expect(exportButton('fasta').disabled).toBe(true)
+    expect(exportButton('fasta').title).toMatch(/^Load the assembly’s FASTA or \.2bit into the session/)
+    await press(exportButton('agp'))
+    expect(saved['community.genomes.agp']).toBe('##agp-version\t2.1\n')
+    expect(status()).toMatch(/^Wrote community\.genomes\.agp \(\d+\u00a0B\) at 14:52\. 19 sequences, 1 genome laid out by its edit\.$/)
+    await press(exportButton('sequence-genome'))
+    expect(saved['community.sequence-genome.tsv']).toBe('sequence\tgenome\n')
+    from = 'MM133.fa'
+    stage.store.apply({ op: 'rename', genome: 'X1', name: 'Xone' })
+    await settle(stage)
+    expect(exportButton('fasta').disabled).toBe(false)
+    await press(exportButton('fasta'))
+    expect(saved['community.genomes.fa']).toBe('>x0 genome=X1\nACGT\n')
+  })
+
+  it('writes no sequences where the reference editing is off', async () => {
+    await exporting()
+    expect(document.querySelector('.curate-export-sequences')).toBeNull()
   })
 
   it('writes the genomes with metaTOR’s mge flag, as the binning stands', async () => {

@@ -22,6 +22,7 @@ import type { CurationStore } from '../../../state/curation'
 import { contigGenomeTable, elementHostTable, elementsTable, genomesTable, linkDeciders, type CurationTable } from '../../exports'
 import type { CurateChange } from '../../model'
 import type { CurateContext } from '../context'
+import type { CurateLayouts } from '../CurateStage'
 import { card } from './card'
 import { releaseFocusOnPointerPress } from './keyboard'
 
@@ -32,7 +33,18 @@ export interface ExportOptions {
   store: CurationStore
   /** When a table is written, for the line that says so; a clock the tests can hold. */
   now?: () => Date
+  /** The genomes' edits of the reference (§27.10): the genomes' sequences are written as the session draws them. */
+  layouts?: CurateLayouts
 }
+
+/** The genomes' sequences, in the order the card offers them (§33.8). */
+type SequenceKind = 'agp' | 'fasta' | 'sequence-genome'
+
+const SEQUENCE_FILES: ReadonlyArray<{ kind: SequenceKind; label: string; suffix: string }> = [
+  { kind: 'agp', label: 'AGP', suffix: 'genomes.agp' },
+  { kind: 'fasta', label: 'FASTA', suffix: 'genomes.fa' },
+  { kind: 'sequence-genome', label: 'sequence → genome', suffix: 'sequence-genome.tsv' },
+]
 
 /** The tables, in the order the card offers them. */
 type TableKind = 'contig-genome' | 'genomes' | 'elements' | 'element-hosts'
@@ -119,6 +131,9 @@ export class ExportCard {
   private readonly stale: HTMLElement
   private readonly recipe: HTMLElement
   private readonly buttons = new Map<TableKind, HTMLButtonElement>()
+  /** The genomes' sequences' buttons, where the reference editing is on. */
+  private readonly sequenceButtons = new Map<SequenceKind, HTMLButtonElement>()
+  private readonly layouts: CurateLayouts | null
   private readonly store: CurationStore
   private readonly stem: string
   private readonly now: () => Date
@@ -138,6 +153,7 @@ export class ExportCard {
     this.store = options.store
     this.stem = options.stem
     this.now = options.now ?? (() => new Date())
+    this.layouts = options.layouts ?? null
     const built = card('export')
     this.element = built.element
     this.element.classList.add('curate-export-card')
@@ -160,9 +176,34 @@ export class ExportCard {
     this.recipe = el('ol', { class: 'curate-export-recipe', attrs: { 'aria-label': 'The tables into a map' } })
     // A table pressed keeps no keyboard: review's Space would open the dialog again.
     releaseFocusOnPointerPress(this.element)
+    // The genomes' sequences, each laid out as its edit has it (§27.10).
+    const sequences =
+      this.layouts === null
+        ? []
+        : [
+            el('h4', { class: 'edit-card-sub curate-export-sub', text: 'the genomes’ sequences' }),
+            el(
+              'div',
+              { class: 'edit-export-files curate-export-files curate-export-sequences' },
+              ...SEQUENCE_FILES.map((file) => {
+                const button = el(
+                  'button',
+                  {
+                    class: 'btn edit-export-file curate-export-file',
+                    attrs: { type: 'button', 'data-format': file.kind },
+                    on: { click: () => void this.writeSequences(file.kind) },
+                  },
+                  el('span', { class: 'curate-export-label', text: file.label }),
+                )
+                this.sequenceButtons.set(file.kind, button)
+                return button
+              }),
+            ),
+          ]
     built.body.append(
       el('p', { class: 'edit-note', text: 'Written from the curation; no file the session opened is touched.' }),
       this.files,
+      ...sequences,
       this.status,
       this.stale,
       el('h4', { class: 'edit-card-sub curate-export-sub', text: 'then, into a map' }),
@@ -209,7 +250,76 @@ export class ExportCard {
       else if (written === undefined) tick?.remove()
     }
     this.stale.classList.toggle('hidden', ![...this.writtenOf].some(([kind, from]) => from !== now.get(kind)))
+    this.paintSequences()
     this.paintRecipe()
+  }
+
+  /** The genomes' sequences' buttons: what each writes, and the FASTA only where the session holds the sequence. */
+  private paintSequences(): void {
+    const layouts = this.layouts
+    if (layouts === null) return
+    const from = layouts.sequenceFrom()
+    const titles: Record<SequenceKind, string> = {
+      agp: 'Every genome’s sequences as the session draws them, an AGP 2.1: laid out by its edit of the reference where it has one, else its contigs whole; the pool left out',
+      fasta:
+        from === null
+          ? 'Load the assembly’s FASTA or .2bit into the session to write the genomes’ sequences'
+          : `Every genome’s sequences from ${from}, as the AGP lays them out: turned stretches reverse-complemented, gaps as N, each record naming its genome`,
+      'sequence-genome': 'Every sequence of the AGP and the FASTA, the genome it is of, its length and what it is made of',
+    }
+    for (const file of SEQUENCE_FILES) {
+      const button = this.sequenceButtons.get(file.kind)
+      if (button === undefined) continue
+      button.disabled = this.busy || (file.kind === 'fasta' && from === null)
+      button.title = `${titles[file.kind]} (${this.stem}.${file.suffix})`
+    }
+  }
+
+  /** Write the genomes' sequences: the dialog first, from the press; the file made once there is somewhere to put it. */
+  private async writeSequences(kind: SequenceKind): Promise<void> {
+    const layouts = this.layouts
+    if (layouts === null || this.busy) return
+    if (kind === 'fasta' && layouts.sequenceFrom() === null) {
+      this.say('Load the assembly’s FASTA or .2bit into the session to write the genomes’ sequences.')
+      return
+    }
+    const suffix = SEQUENCE_FILES.find((file) => file.kind === kind)?.suffix ?? 'txt'
+    const target = await chooseSaveTarget(`${this.stem}.${suffix}`, kind === 'sequence-genome' ? 'text/tab-separated-values' : 'text/plain')
+    if (target === null || this.disposed) return
+    this.busy = true
+    this.paint()
+    try {
+      let blob: Blob
+      let said = ''
+      if (kind === 'agp') {
+        const agp = layouts.agp()
+        blob = new Blob([agp.text], { type: 'text/plain' })
+        said = `${fmt.int(agp.sequences)} ${agp.sequences === 1 ? 'sequence' : 'sequences'}, ${fmt.int(agp.laidOut)} ${agp.laidOut === 1 ? 'genome' : 'genomes'} laid out by ${agp.laidOut === 1 ? 'its edit' : 'their edits'}.`
+      } else if (kind === 'sequence-genome') {
+        const table = layouts.sequences()
+        blob = new Blob([table.text], { type: 'text/tab-separated-values' })
+        said = `${fmt.int(table.rows)} ${table.rows === 1 ? 'sequence' : 'sequences'}.`
+      } else {
+        const out = await layouts.fasta(
+          (done, total) => this.say(`Writing the FASTA · ${Math.floor((100 * done) / Math.max(1, total))}%`),
+          () => this.disposed,
+        )
+        if (out === null) {
+          this.say('FASTA: not written.')
+          return
+        }
+        blob = out.blob
+        if (out.missing.length > 0) said = `${layouts.sequenceFrom() ?? 'The sequence'} has no ${out.missing.slice(0, 3).join(', ')}${out.missing.length > 3 ? ' and others' : ''}: written as N.`
+      }
+      await target.write(blob)
+      const time = captionStamp(this.now()).slice(11)
+      this.say(`Wrote ${target.name} (${sizeText(blob.size)}) at ${time}. ${said}`.trim())
+    } catch (err) {
+      this.say(`Could not write ${target.name}: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      this.busy = false
+      this.paint()
+    }
   }
 
   /** The file a table is written as, unless the reader named it otherwise. */

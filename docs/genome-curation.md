@@ -45,6 +45,8 @@ Every line below was put to the author as a question on 2026-11-24 and is their 
 | The ~13 Mb of genomes the mock's reference does not have | **Not counted either way**: reported apart in the validation |
 | The host of the *Vibrio* phages 115E34 and 191E37 and the hitchhiker | ***V. cholerae***, the mock's only *Vibrio* |
 | The name | **Curate the genomes** — the palette's *Curate the genomes*, and the heading's word `genomes · as in the file`, then `genomes · curated · 7 steps` |
+| A genome's edit of the reference inside a curation (2026-11-25) | **The curation owns membership.** A genome's edit orders, turns, joins and cuts its contigs; a contig it takes in or lets go whole is a move of the curation as well. A contig every stretch of which is set aside as debris, a contaminant or a haplotig with no genome named leaves for the pool; one set aside unplaced stays; one only part of which is set aside stays, its stretch an aside of the AGP |
+| What a laid-out genome leaves (2026-11-25) | **An AGP, a FASTA and tables** — every genome as the session draws it — and no new `metacooler` command |
 
 ---
 
@@ -147,9 +149,11 @@ plain value: the stage draws it, the lens presents the map through it, the expor
 A fact about the file, kept as the reference edit is (`state/referenceEdit.ts`): per file in
 `UiMemory` under its own scope, carried in a saved workspace and in a shared link's `#session=`
 payload, read back through `readTab`, and **a dev feature's record** (§29.4): left as it was while the
-switch is off. Kept separately from a genome's reference edit (§27.10), which is keyed by the genome's
-name: curating the binning does not touch a genome's scaffolds, and a genome's edit whose contigs the
-curation changed is kept, not applied, by the rule that edit already has.
+switch is off. Kept separately from a genome's reference edit (§27.10), which is keyed by the curated
+genome's id — the file's name for a genome of the file, the `curated:N` a step minted for one it
+created: curating the binning does not rewrite a genome's scaffolds. A genome's edit whose contigs the
+curation has changed since is kept as it was; the session draws it kept to the genome's contigs now
+(§4), and the editor opens on that drawing, one step, until the reader makes a step there.
 
 ---
 
@@ -178,9 +182,17 @@ and is tested against that map (SPECS §33.4).
   A link or a bookmark naming a genome the curation renamed or merged is carried to where it went, and
   one naming a genome that no longer exists falls back to the genomes table, as a place an edit set
   aside does (§27.7).
-- **The heading says so**: the word on the genomes reads `genomes · curated · 7 steps`, lit; a press
-  opens the stage; the arrow beside it puts the file's binning back, every step undone and kept to be
-  redone.
+- **A genome laid out by its edit** (§27.10) is drawn in its place as the edit lays it out, kept to
+  the contigs the curation gives it (`curate/layouts.ts`): a scaffold is broken where a contig that
+  left it was — no two stretches are drawn together that the edit did not join —, the layout of a
+  genome merged away follows its contigs into the one they joined, and a contig no layout holds is
+  drawn whole, last, longest first. Its sequences take cooler's bins, placed as an edit's lens places
+  them, so the genome's block is pixel for pixel its own map through its edit (SPECS §33.4). The
+  editor opens on a genome from the curation stage (`S`) over it, and every contig it brings in,
+  sends away or sets aside whole is a move of the curation (SPECS §27.10).
+- **The heading says so**: the word on the genomes reads `genomes · curated · 7 steps`, lit, and
+  `· 2 laid out` where genomes are drawn laid out; a press opens the stage; the arrow beside it puts
+  the file's binning back, every step undone and kept to be redone.
 
 ---
 
@@ -273,6 +285,9 @@ From the stage's export card, each a new file through the save dialog (§26.6), 
 | `<map>.genomes.tsv` | every curated genome with metaTOR's `mge` (`True`/`False`) and a MAG's elements (`n_mges`, `mges`), for `metacooler annotate --genomes --replace` after the reassignment — without it a renamed or new element is not an element when the map is opened again, since `reassign` carries the file's columns by name and metaTOR's rounds as they were |
 | `<map>.elements.tsv` | one row per element: its name, its contigs, its length and its hosts |
 | `<map>.element-hosts.tsv` | one row per element and MAG in contact or linked: the contacts, the affinity, the share, the confidence, whether a link holds (`yes`/`no`) and who decided it — the file, a suggestion, auto mode or the reader |
+| `<map>.genomes.agp` | every genome's sequences as the session draws them — a genome its edit of the reference lays out as the edit has them, any other as its contigs — each genome after a `# genome` comment, the pool left out (SPECS §33.8) |
+| `<map>.genomes.fa` | the same sequences from the assembly's FASTA or `.2bit` loaded in the session, each record naming its genome (`>NODE_12_e1 genome=…`) |
+| `<map>.sequence-genome.tsv` | every sequence of the two, its genome, kind, length, whether it is laid out and what it is made of |
 
 ---
 

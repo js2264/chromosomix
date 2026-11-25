@@ -54,6 +54,8 @@ export interface CurateFrame {
 export interface CurateContext {
   readonly model: CurateModel
   readonly data: CurateData
+  /** Whether a genome is laid out by its edit of the reference (§27.10): the list marks it. */
+  laidOut(id: string): boolean
   /** A genome's colour, by id: kept by its slot, so a merge or a sort changes none. */
   colourOf(id: string): GenomeColour
   /**

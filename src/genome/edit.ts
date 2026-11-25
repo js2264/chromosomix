@@ -732,7 +732,7 @@ function laidOut(step: LayoutStep, original: OriginalAssembly, ids: IdSource): F
 }
 
 /** The original name an edited sequence descends from, for naming what splits off it. */
-function baseName(name: string): string {
+export function baseName(name: string): string {
   return name.replace(/_e\d+$/, '')
 }
 

@@ -23,7 +23,7 @@
  * one organism`, `98% its host`, under `belong here` `79% sure`), never a bare
  * percent beside a price; and a row's act is the card's acts' size.
  *
- * Its acts are the stage's keys printed (F2, M, L, B, E, ⌫, ⏎); hovering one
+ * Its acts are the stage's keys printed (F2, M, L, B, E, S, ⌫, ⏎); hovering one
  * prices its step (`model.preview(step, false)`), so its outcome is read before
  * it is made. An act that makes a step answers nothing while the last step is
  * counted, as the review does — the card still shows the binning before it,
@@ -62,6 +62,8 @@ export interface SelectionHooks {
   closeUp(): void
   /** Open the chooser of this kind for the selection; `anchor` is the act pressed, to open it under. */
   choose(kind: 'move' | 'merge' | 'link', anchor?: HTMLElement): void
+  /** Open one genome's edit of the reference over the stage (§27.10); absent while the reference editing is off. */
+  layOut?(id: string): void
 }
 
 /** The keys the card prints on its acts; the stage binds them (`⌫` is Backspace or Delete, `⏎` Enter). */
@@ -77,6 +79,8 @@ export const SELECTION_KEYS = {
   /** `dissolve`, `unbin`, `unlink`. */
   remove: '⌫',
   closeUp: '⏎',
+  /** `lay out`: a genome's edit of the reference (§27.10). */
+  layOut: 's',
 } as const
 
 /** How long the pointer rests on an act before its step is priced, in ms. */
@@ -494,6 +498,7 @@ export class SelectionCard {
         this.act('rename', 'pencil', `Rename ${this.short(genome.id)}, in the list`, () => this.hooks.rename(genome.id), SELECTION_KEYS.rename),
         merge,
         this.act('close-up', 'zoom-in', 'Its contigs, and the ones that may belong in it, on the contact map', () => this.hooks.closeUp(), SELECTION_KEYS.closeUp),
+        this.layOutAct(genome.id),
         // A retype moves no contig: there is no price to show for it.
         this.stepAct('make it an element', 'arrow-left-right', 'Declare it a mobile element: a plasmid or a phage, never graded; its links go', () => model.retypeSelected('element'), SELECTION_KEYS.newElement),
         this.priced(this.stepAct('dissolve', 'trash-2', 'Send its contigs to the pool: the genome is gone', () => model.dissolveSelected(), SELECTION_KEYS.remove), () => ({ op: 'dissolve', genome: genome.id })),
@@ -798,6 +803,7 @@ export class SelectionCard {
         this.chooseAct('link', 'link to…', 'link', `Link ${this.short(genome.id)} to the MAG that hosts it`),
         this.chooseAct('merge', 'merge into…', 'merge', `Merge ${this.short(genome.id)} into another element, which keeps its name`),
         this.act('rename', 'pencil', `Rename ${this.short(genome.id)}, in the list`, () => this.hooks.rename(genome.id), SELECTION_KEYS.rename),
+        this.layOutAct(genome.id),
         // An element is never graded: neither act has a price to show.
         this.stepAct('make it a MAG', 'arrow-left-right', 'Declare it a MAG, graded by its markers; its links go', () => model.retypeSelected('mag'), SELECTION_KEYS.newMag),
         this.stepAct('dissolve', 'trash-2', 'Send its contigs to the pool: the element is gone', () => model.dissolveSelected(), SELECTION_KEYS.remove),
@@ -1320,6 +1326,25 @@ export class SelectionCard {
     const row = acts(...buttons)
     row.classList.add('curate-selection-acts')
     return row
+  }
+
+  /**
+   * `lay out`: the genome's edit of the reference opened over the stage
+   * (§27.10) — its contigs ordered, turned, joined and cut there, every contig
+   * it takes in or lets go a step of this curation. None while the reference
+   * editing is off.
+   */
+  private layOutAct(id: string): HTMLButtonElement | null {
+    const layOut = this.hooks.layOut
+    if (layOut === undefined) return null
+    const laid = this.ctx.laidOut(id)
+    return this.act(
+      laid ? 'laid out…' : 'lay out',
+      'rows-3',
+      `${laid ? 'Its layout, in the reference editor' : 'Order, turn and join its contigs in the reference editor'}: what it sends away or brings in moves a contig here too, a step of this curation`,
+      () => layOut(id),
+      SELECTION_KEYS.layOut,
+    )
   }
 
   /** An act, named for the keyboard to find it again when the card is drawn anew. */

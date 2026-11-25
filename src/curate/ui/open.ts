@@ -9,7 +9,7 @@
 import type { CurationStore } from '../../state/curation'
 import { REMOTE_SCAN_BYTE_LIMIT } from '../../ui/Overview'
 import type { ReaderClient } from '../../worker/client'
-import { CurateStage, type CurateParts } from './CurateStage'
+import { CurateStage, type CurateLayouts, type CurateParts } from './CurateStage'
 
 export interface OpenCurationStage {
   /** The map's label, and the stem its exports are named from. */
@@ -23,6 +23,8 @@ export interface OpenCurationStage {
   parts: CurateParts
   memoryKey(): string
   onClose(): void
+  /** The genomes' edits of the reference, where the reference editing is on (§27.10). */
+  layouts?: CurateLayouts
 }
 
 /** Open the stage; `null` where the session went away meanwhile. */
@@ -46,5 +48,6 @@ export async function openCurationStage(options: OpenCurationStage): Promise<Cur
     memoryKey: options.memoryKey,
     gate,
     onClose: options.onClose,
+    ...(options.layouts === undefined ? {} : { layouts: options.layouts }),
   })
 }

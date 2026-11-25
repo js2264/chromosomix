@@ -87,11 +87,14 @@ import {
   curatedHandle,
   curationLayout,
   followingStore,
+  laidOutContigs,
+  laidOutRows,
   narrowTable,
   type CuratedMap,
 } from './curationLens'
 import { CuratedBinning, curationMismatch, type Curation } from '../genome/curation'
 import { readFileBinning, type FileBinningRead } from '../curate/base'
+import { curatedMapKey, drawnLayouts } from '../curate/layouts'
 import { CoarseGrid } from './coarsen'
 import { CoarseStore, coarsenedHandle } from './coarseMap'
 import type { ReferenceEdit } from '../genome/edit'
@@ -1519,20 +1522,31 @@ export class MetaCooler {
    * This map through a curation of its binning (§33.4): the map `metacooler
    * reassign --layout genome-then-length` writes from the curation's contig →
    * genome table — its contigs regrouped whole, its genome layer replaced —
-   * presented over the file as it is. See `metacooler/curationLens.ts`.
+   * presented over the file as it is. See `metacooler/curationLens.ts`. And,
+   * where genomes' edits of the reference lay them out (§27.10), each of those
+   * drawn as its edit lays it out, kept to the contigs the curation gives it —
+   * see `curate/layouts.ts` — with no curation at all as with one.
    *
    * A new map over the same handle and the same store, as {@link withLens}
    * makes one: closing it closes the file. Resampled beneath its lens — a
    * total drawn to is the file's draw, carried whole. The map as it was where
-   * the curation applies no step, and a refusal, with the map as it was, where
-   * it cannot be drawn: a map with no genome layer, a single-cell file, a map
-   * storing both triangles (which `reassign` will not re-group), a map already
-   * drawn through an edit, and a curation made on another binning.
+   * the curation applies no step and no edit lays a genome out, and a refusal,
+   * with the map as it was, where it cannot be drawn: a map with no genome
+   * layer, a single-cell file, a map storing both triangles (which `reassign`
+   * will not re-group), a map already drawn through an edit, and a curation
+   * made on another binning.
    *
    * @param read The file's binning as `readFileBinning` reads it, where the
    *   caller holds it already; read here otherwise.
+   * @param edits Each genome's edit of the reference, by the curated genome id
+   *   it is kept under.
    */
-  static withCuration(mc: MetaCooler, curation: Curation, read?: FileBinningRead): { map: MetaCooler; refusal: string | null } {
+  static withCuration(
+    mc: MetaCooler,
+    curation: Curation | null,
+    read?: FileBinningRead,
+    edits?: ReadonlyMap<string, ReferenceEdit>,
+  ): { map: MetaCooler; refusal: string | null } {
     if (!mc.hasGenomes) return { map: mc, refusal: 'A curation is drawn on a map with genomes, and this one has none.' }
     if (mc.layout.kind === 'scool') return { map: mc, refusal: 'A curation is not drawn on a single-cell file.' }
     if (mc.unlensed !== null) return { map: mc, refusal: 'A curation is not drawn over an edit of the reference.' }
@@ -1547,42 +1561,74 @@ export class MetaCooler {
     // the file cannot be opened (§29.4).
     try {
       const file = read ?? readFileBinning(mc)
-      const wrong = curationMismatch(curation, file.file)
-      if (wrong !== null) return { map: mc, refusal: `The curation was made on another binning: ${wrong}.` }
+      if (curation !== null) {
+        const wrong = curationMismatch(curation, file.file)
+        if (wrong !== null) return { map: mc, refusal: `The curation was made on another binning: ${wrong}.` }
+      }
       const binning = CuratedBinning.of(file.base, curation)
-      if (binning.isIdentity) return { map: mc, refusal: null }
+      const drawn = edits === undefined || edits.size === 0 ? [] : drawnLayouts({ binning, names: mc.chromnames, lengths: mc.contigLengths, edits })
+      if (binning.isIdentity && drawn.length === 0) return { map: mc, refusal: null }
+      const key = curatedMapKey(binning, drawn)
       const layout = curationLayout(mc.chromnames, mc.contigLengths, binning)
-      const bins = curatedBins(layout.order, mc.chromOffset)
-      const names = Array.from(layout.order, (c) => mc.chromnames[c])
-      const lengths = Float64Array.from(layout.order, (c) => mc.contigLengths[c])
-      const lens = BinLens.permutation({ names, lengths, chromOffset: bins.chromOffset, toOriginal: bins.toOriginal, originalBins: mc.nBins })
       const binsOf = new Float64Array(mc.nContigs)
       for (let c = 0; c < mc.nContigs; c++) binsOf[c] = mc.chromOffset[c + 1] - mc.chromOffset[c]
-      const genomes = curatedGenomes({
-        layout,
-        binning,
-        base: file.base,
-        file: mc.fullGenomes() ?? makeTable(0, [], {}),
-        fileGenomeOf: mc.contigGenomeIds,
-        lengths: mc.contigLengths,
-        bins: binsOf,
-        markers: file.markers,
-      })
-      const attrs: Record<string, AttrValue> = { ...mc.rawHandle.attrs(), ngenomes: layout.genomes.length }
+      const genomesOf = (rows?: Parameters<typeof curatedGenomes>[0]['rows']): ReturnType<typeof curatedGenomes> =>
+        curatedGenomes({
+          layout,
+          binning,
+          base: file.base,
+          file: mc.fullGenomes() ?? makeTable(0, [], {}),
+          fileGenomeOf: mc.contigGenomeIds,
+          lengths: mc.contigLengths,
+          bins: binsOf,
+          markers: file.markers,
+          ...(rows === undefined ? {} : { rows }),
+        })
+      if (drawn.length === 0) {
+        const bins = curatedBins(layout.order, mc.chromOffset)
+        const names = Array.from(layout.order, (c) => mc.chromnames[c])
+        const lengths = Float64Array.from(layout.order, (c) => mc.contigLengths[c])
+        const lens = BinLens.permutation({ names, lengths, chromOffset: bins.chromOffset, toOriginal: bins.toOriginal, originalBins: mc.nBins })
+        const genomes = genomesOf()
+        const attrs: Record<string, AttrValue> = { ...mc.rawHandle.attrs(), ngenomes: layout.genomes.length }
+        const map = new MetaCooler({
+          uri: mc.uri,
+          handle: curatedHandle(mc.rawHandle, { lens, layout, attrs, genomes: genomes.table, contigs: () => curatedContigs(mc.fullContigs(), layout) }),
+          layout: mc.layout,
+          attrs,
+          genomes: narrowTable(genomes.table, READER_GENOME_COLUMNS),
+          genomeOffset: layout.genomeOffset,
+          contigs: curatedContigs(mc.contigs, layout),
+          chromOffset: bins.chromOffset,
+          store: new LensStore(followingStore(() => mc.store), lens, true),
+          stored: new LensStore(mc.storedPixels, lens, true),
+          unlensed: mc,
+          beneath: mc,
+          curation: { key, steps: binning.applied, genomeOfContig: layout.genomeOfContig, laidOut: 0, owned: genomes.owned, recomputed: genomes.recomputed },
+        })
+        return { map, refusal: null }
+      }
+      // Some genomes laid out by their edits: their sequences in their place,
+      // each with cooler's count of bins, the stored bins it shows placed on
+      // them as an edit's lens places them (`lens.ts`).
+      const rows = laidOutRows(layout, drawn, mc.coords, mc.chromnames)
+      const lens = BinLens.ofBins({ names: rows.names, lengths: rows.lengths, chromOffset: rows.chromOffset, toOriginal: rows.toOriginal, originalBins: mc.nBins })
+      const genomes = genomesOf(rows)
+      const attrs: Record<string, AttrValue> = { ...mc.rawHandle.attrs(), ngenomes: layout.genomes.length, nchroms: rows.names.length, nbins: lens.nBins }
       const map = new MetaCooler({
         uri: mc.uri,
-        handle: curatedHandle(mc.rawHandle, { lens, layout, attrs, genomes: genomes.table, contigs: () => curatedContigs(mc.fullContigs(), layout) }),
+        handle: curatedHandle(mc.rawHandle, { lens, layout, attrs, genomes: genomes.table, contigs: () => laidOutContigs(mc.fullContigs(), rows, true), rows }),
         layout: mc.layout,
         attrs,
         genomes: narrowTable(genomes.table, READER_GENOME_COLUMNS),
-        genomeOffset: layout.genomeOffset,
-        contigs: curatedContigs(mc.contigs, layout),
-        chromOffset: bins.chromOffset,
+        genomeOffset: rows.genomeOffset,
+        contigs: laidOutContigs(mc.contigs, rows, false),
+        chromOffset: rows.chromOffset,
         store: new LensStore(followingStore(() => mc.store), lens, true),
         stored: new LensStore(mc.storedPixels, lens, true),
         unlensed: mc,
         beneath: mc,
-        curation: { key: binning.fingerprint(), steps: binning.applied, inverse: layout.inverse, owned: genomes.owned, recomputed: genomes.recomputed },
+        curation: { key, steps: binning.applied, genomeOfContig: layout.genomeOfContig, laidOut: drawn.length, owned: genomes.owned, recomputed: genomes.recomputed },
       })
       return { map, refusal: null }
     } catch (error) {

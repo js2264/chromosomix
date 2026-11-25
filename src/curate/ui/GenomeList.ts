@@ -598,6 +598,14 @@ export class GenomeList {
       disclosure,
       swatch,
       name,
+      // Laid out by its edit of the reference (§27.10): its contigs drawn as the edit orders, turns and joins them.
+      this.ctx.laidOut(genome.id)
+        ? el(
+            'span',
+            { class: 'curate-laid-out', title: 'Laid out by its edit of the reference: the session draws its contigs ordered, turned and joined as the edit has them. S opens it.', attrs: { 'aria-label': 'laid out' } },
+            icon('rows-3', { size: 11 }),
+          )
+        : null,
       // How many of its contigs are selected, a lasso's among them: filled by `restyle`.
       el('span', { class: 'edit-chip curate-row-held' }),
       chip === null ? null : el('span', { class: 'edit-chip curate-change', text: chip, title: changeWords(change) }),

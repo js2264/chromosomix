@@ -27,7 +27,7 @@ import { crossResolution } from '../metacooler/coords'
 import { parseMetacoolerRange } from '../metacooler/range'
 import type { ResampleSpec } from '../metacooler/resample'
 import { EditedAssembly, editFingerprint, type ReferenceEdit } from '../genome/edit'
-import type { Curation } from '../genome/curation'
+import { layoutEdits, type CurationDrawn } from '../curate/layouts'
 import type { NameContext, NameMatch } from '../genome/naming'
 import { parseUri } from '../uri'
 import type { ByteSource, DenseMatrix, Extent, SourceStats } from '../types'
@@ -168,7 +168,7 @@ interface Session {
    * later is drawn through it too, or a zoom would show the file's genomes
    * under the curated ones' names.
    */
-  curation: { key: string; held: Curation } | null
+  curation: CurationDrawn | null
   /**
    * The page's answer about the multi-genome containers (§29), as the open
    * that made this session carried it, so a sibling rung is opened under the
@@ -323,7 +323,7 @@ function throughLens(active: Session, rung: MetaCooler): MetaCooler {
  */
 function throughCuration(active: Session, rung: MetaCooler): MetaCooler {
   if (active.curation === null) return rung
-  const { map, refusal } = MetaCooler.withCuration(rung, active.curation.held)
+  const { map, refusal } = MetaCooler.withCuration(rung, active.curation.held, undefined, layoutEdits(active.curation))
   if (refusal === null) return map
   rung.close()
   return active.mc
@@ -745,18 +745,20 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
   let curation: Session['curation'] = null
   let curated: OpenResult['curation']
   if (request.curation !== undefined) {
-    const steps = request.curation.held.cursor
+    const steps = request.curation.held?.cursor ?? 0
     if (both) {
       curated = { refusal: 'A curation of the genomes is not drawn together with an edit of the reference.', steps }
     } else {
       const file = mc
-      const seen = MetaCooler.withCuration(mc, request.curation.held)
+      const seen = MetaCooler.withCuration(mc, request.curation.held, undefined, layoutEdits(request.curation))
       mc = seen.map
       const key = mc.curation?.key
       curated = {
         refusal: seen.refusal,
         steps,
-        ...(key === undefined ? {} : { key, file: { genomes: file.displayGenomes().length, unassigned: file.unassignedStats() } }),
+        ...(key === undefined
+          ? {}
+          : { key, file: { genomes: file.displayGenomes().length, unassigned: file.unassignedStats() }, laidOut: mc.curation?.laidOut ?? 0 }),
       }
       if (key !== undefined) curation = request.curation
     }
@@ -1236,8 +1238,10 @@ async function handleGenomeLinks(request: Extract<WorkerRequest, { kind: 'genome
   // where the map is drawn through one (§33.4), each of the file's contigs
   // through it, rather than the genomes the file stores.
   const curation = open.curation
-  const genomeOf = curation === null ? mc.contigGenomeIds : Int32Array.from(curation.inverse, (contig) => open.contigGenomeIds[contig])
-  const genomes = curation === null ? mc.genomeNames : open.genomeNames
+  // …or by the curation as the session holds it now, where it says (§33.4).
+  const assigned = request.assignment !== undefined && request.assignment.genomeOf.length === n ? request.assignment : null
+  const genomeOf = assigned !== null ? assigned.genomeOf : curation === null ? mc.contigGenomeIds : curation.genomeOfContig
+  const genomes = assigned !== null ? assigned.genomes : curation === null ? mc.genomeNames : open.genomeNames
   const total = new Float64Array(n)
   const own = new Float64Array(n)
   const byGenome = new Map<number, Float64Array>()

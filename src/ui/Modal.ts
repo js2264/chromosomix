@@ -104,6 +104,10 @@ export class Modal {
 
     this.onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        // Only the dialog on top: a stage opened over another — a genome's
+        // edit over the curation (§27.10) — is the one Escape speaks to.
+        const open = document.querySelectorAll('.modal-backdrop')
+        if (open.length > 0 && open[open.length - 1] !== this.root) return
         event.preventDefault()
         if (props.onEscape !== undefined) props.onEscape()
         else close()

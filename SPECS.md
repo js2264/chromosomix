@@ -16535,8 +16535,9 @@ genome). Its picture is those contigs alone (`pictureLayout` over some of a map'
 their rows are read, a contact with a contig outside is left out, and the method weighs the genome as
 it would a genome. Everything the stage writes is that genome's, and says so —
 `MM133.MM133_metator_00001_00002.edited.agp` — the lifted contacts included, a map of that genome
-alone through its edit. The session itself is not drawn through a genome's edit: the metagenome's
-views are the file's.
+alone through its edit. Without the curation of the genomes (§33) the session is not drawn through a
+genome's edit, and the metagenome's views are the file's; with it, every genome is drawn laid out by
+its edit, in its place (*Inside a curation*, below; §33.4).
 
 **Where its contigs belong.** The stage's *genome* card reads every contact of the file once — without
 being asked where the file holds at most 50 million pixels, else at a press — counting, for each contig
@@ -16557,6 +16558,29 @@ the method weighs it with the rest. On the mock community, MM133_metator_00014_0
 contacts, two of its contigs meet MM133_metator_00716_00000 more, and 62 unbinned contigs and one of
 MM133_metator_00713_00000 give it 40% or more of theirs.
 
+**Inside a curation.** Where the curation of the genomes is on (§33, the `curate` dev feature), a
+genome's edit is of the genome as the curation holds it: kept under the curated genome's id — a
+genome of the file its stored name, one a curation created the `curated:N` its step minted, which no
+later genome is given while an edit is kept under it — so a rename leaves it where it was, and made on
+the curated genome's contigs, longest first, as the curated map draws them. **Which contigs a genome
+has is the curation's** (§33.2): a step of the edit that takes a contig in — a bring, a stretch put
+back — or lets one go whole — sent to another genome, every stretch of it set aside as debris, a
+contaminant or a haplotig — is made a move of the curation as well, one gesture there, undone there
+as any step (`curate/genomeEdits.ts`, `curate/layouts.ts`). A contig set aside whole with no genome
+named goes to the pool; one set aside unplaced, or only in part, stays, and the stretch is an aside of
+the genome's AGP; a bring undone sends the contig back to the genome it came from, by its name now,
+to the pool where that genome is gone; a contig the curation has put elsewhere since is the
+curation's. A curation step that moves a genome's contigs after its edit leaves the edit as it was,
+and the drawing follows the curation: the stage then opens on the genome as the map draws it — one
+step, *lay out as in MM133_metator_00014_00000 as the curation holds it*, by the stage, made on the
+genome's contigs now — held and not kept until the reader makes a step there
+(`EditStore.provisional`). The genome card names the partners of its contigs by the curated genomes
+as they stand, not the map drawn (`genomeLinks`' `assignment`), the heading names the genome by its
+name now, and the contig → MAG table is the curation's. The stage opens from the curation stage, over
+it (`S`, §33.3) — Escape speaks to the stage on top, and only to it — and goes back to it on closing;
+from the session, on the curated genome in view or picked, the session drawn again with it laid out
+once it closes (§33.4).
+
 **The contig → MAG table** (`edit/binning.ts`), from any genome's export card: every contig of the file
 with its genome, every genome's kept edit applied — a contig sent away is its new genome's, one brought
 in its new one's, one set aside with nowhere to go, as debris or as a haplotig is no genome's and left
@@ -16565,8 +16589,9 @@ file's own contigs, so it applies to the assembly the reads were mapped to; how 
 ordered, turned and joined is its AGP's. What two genomes' edits both claim is said, and so is a contig
 only part of which was sent.
 
-Not yet: files for every genome at once, a suggestion to send or bring a contig among the method's own,
-and the session drawn through a genome's edit.
+Not yet: a suggestion to send or bring a contig among the method's own, and the session drawn through
+a genome's edit without the curation. Files for every genome at once — one AGP, one FASTA and the
+table of which genome each sequence is of — are the curation's export's (§33.8).
 
 ### 27.11 Validation
 
@@ -17298,7 +17323,9 @@ so far the model of a curation and its store (§33.2), the stage — its frame, 
 pictures, cards and chooser (§33.3) —, the session drawn through the curated binning
 (§33.4), the method — the contig network, affinity, the background, the suggestions and their
 confidence, and miComplete's numbers from the markers (§33.5) —, what the answers teach (§33.6),
-what is kept and carried (§33.7) and the tables (§33.8). It is a **dev feature** (§29), `curate`, throughout. The design it was written from — the
+what is kept and carried (§33.7) and the tables (§33.8) — and the genomes' edits of the reference
+inside it: a genome laid out on §27.10's stage over this one, its moves the curation's, drawn in its
+place in the session and written with the rest (§27.10, §33.4, §33.8). It is a **dev feature** (§29), `curate`, throughout. The design it was written from — the
 decisions and who made them, the method with the numbers it was held to on the mock community — is
 `docs/genome-curation.md`. §13's first rule is untouched: **the app never modifies a file it
 opened.** A curation is a lens over the file, and what it produces is new files.
@@ -17400,7 +17427,8 @@ the hand; *tidy* lays it out again. The stage's order is its own: the session dr
 **The genome list** (`curate/ui/GenomeList.ts`) has three sections, the MAGs, the elements and the
 **unbinned pool**, each a head with its count — the whole, or what the filter and the chips show of
 it, in one form: `3 of 50`, `0 of 12,785 contigs` — that folds and takes a drop. A genome's row: its
-colour (a disc for a MAG, a ring for an element), its short name, what the curation changed (`+30`,
+colour (a disc for a MAG, a ring for an element), its short name, a mark (the rows icon, in the
+accent) where its edit of the reference lays it out (§27.10), what the curation changed (`+30`,
 `−2`, `new`, `renamed`, `was an element`, the change in words in its title), its length — given up
 to the change on a changed row —, its weighted completeness with its bar under it, `--ok` at
 metaTOR's high quality, and its weighted redundancy, `--warn` above 1.10 — a redundancy within half a
@@ -17509,7 +17537,8 @@ it would take them. Nothing is dropped on it: clouds overlap, and a drop is neve
 **The inspector's cards** (`curate/ui/cards/`): the **selection** — a genome's numbers and quality,
 weighted and not, the genomes it meets most, each with its merge; several genomes' sum and their
 affinities with one another; contigs' homes — with the acts on it and their keys, each step priced while
-the pointer or the keyboard rests on its act. Every affinity there is put against the map's background:
+the pointer or the keyboard rests on its act; for one genome, where the reference editing is on,
+*lay out* (`S`), its edit opened over the stage, *laid out…* where its edit lays it out. Every affinity there is put against the map's background:
 `0.39 (at least 16× background)` from the cautious lower bound its contacts allow, `(within the
 background)` where only the bound falls in it, and at or under it `below the background`, its digits
 noise; *at least* is said once, under the first list that leans on it, and a genome met no more than
@@ -17576,7 +17605,9 @@ picture — the keys the digits are printed on, whatever the layout types there 
 genome — MAGs with MAGs and elements with elements, the readout saying so otherwise; `L` link the
 selected element to the selected MAG, or *link to…* for elements or one MAG; `B` and `E` a new MAG or
 element of the selected contigs, or the selected genomes made one; `Delete` unbins contigs,
-dissolves genomes, unlinks a selected element and MAG; `F2`/`R` rename; `Enter` the selected
+dissolves genomes, unlinks a selected element and MAG; `F2`/`R` rename; `S` lays the selected
+genome out — its edit of the reference opened over the stage (§27.10), back here once it closes —
+where the reference editing is on; `Enter` the selected
 genomes' contigs close up, `⇧Enter` back; `/` the list's filter; ⌘Z, ⇧⌘Z undo and redo; `Y N ← → ↓ ↑
 Space` in review; `0 + −` the picture under the pointer; `?` this list, which prints its keys as
 the parts do (`⏎`, `⇧⏎`, `⌫`). Enter presses a focused
@@ -17688,8 +17719,33 @@ file's beside it where the two differ.
 A genome's stage (§27.10) draws the curated genome's contigs from the file as it is, and counts where
 they belong by the curated genomes.
 
+**Genomes laid out by their edits** (§27.10). A genome a kept edit of the reference lays out is
+drawn in its place as the edit lays it out, kept to the contigs the curation gives it
+(`curate/layouts.ts`): a sequence is broken where a contig that left it was, so that no two stretches
+are drawn together that the edit did not put together; the layouts of genomes merged away or emptied
+follow their contigs into the genomes that hold them now, each a block after the genome's own; a
+contig no layout holds is drawn whole, last, longest first; one layout draws a contig, never two. A
+stretch set aside unplaced is a sequence of its own, named as the AGP names it (`IV_unplaced1`); one
+set aside otherwise is drawn nowhere. Every name is the map's own: a contig's for a sequence that is
+that contig whole and forward, the edit's where no other sequence or contig has it, a fresh `_eN`
+otherwise. Drawn with no curation as with one, in the curated map's order of genomes. Each sequence
+has cooler's count of bins, its stretches placed on them as an edit's lens places them (§27.7), so a
+laid-out genome's map is, pixel for pixel, the genome's own map through its edit, and every other
+genome's as without it (`test/unit/curation-laid-out.test.ts`). The contigs table gives a laid-out
+genome's sequences — one that is a contig whole, on either strand, carrying the contig's columns, any
+other none — and a `parts` column says what each is made of (`c0+ N100 c2−`, a stretch `c1:1,001-4,000+`);
+`/bins`' `chrom`, `start` and `end` are the sequences' own; the genomes table counts a laid-out
+genome's sequences and says `laid out` in `curation` (`changed, laid out` where its contigs changed
+too), its file columns kept where its contigs are the file's. The map, the answers kept of it and a
+task's mount are named by the binning's fingerprint and what the layouts draw, so a layout changed is
+another map; redrawn, a place on a sequence the next map does not draw is given up for its genome's
+map (`carryLaidOutView`). Building it places the sequences' bins as well as the contigs': on MM133,
+with a genome of four contigs laid out, 33–65 ms over six builds against 22–34 ms for the curated
+map without it, the file's binning read.
+
 **The heading says so.** The word on the genomes, before the reference's, reads `genomes · as in the
-file`, or `genomes · curated · 7 steps`, lit; a press opens the stage (§33.3), and the arrow beside it
+file`, or `genomes · curated · 7 steps`, lit, and `· 2 laid out` after either where genomes are drawn
+laid out — the File card a `laid out` row; a press opens the stage (§33.3), and the arrow beside it
 puts the file's binning back — every step undone and kept to be redone. The palette has *Curate the
 genomes*. The session is **redrawn through the curation** when the stage closes on another binning
 and when the arrow puts the file's back: the file opened again, as a change of resolution opens it,
@@ -17713,10 +17769,8 @@ overview and a task's pass read every pixel, as without a curation; a balanced r
 column whole, once.
 
 *Built*: all of the above (`metacooler/curationLens.ts`, `curate/places.ts`,
-`curate/CurationChip.ts`). *Not yet*: a genome's edit
-(§27.10) checked against the curated genome's contigs, which is kept and applied by the contigs it
-names; the command line, whose line for a task on a curated map says it measures the file as it is;
-and a deck's companions, drawn as their files are.
+`curate/CurationChip.ts`, `curate/layouts.ts`). *Not yet*: the command line, whose line for a task on
+a curated map says it measures the file as it is; and a deck's companions, drawn as their files are.
 
 ### 33.5 The method
 
@@ -17820,6 +17874,19 @@ tables of a curation of sixteen steps, given to `metacooler reassign` and then `
 map whose binning reads back as the stage's — every contig's genome, every genome's kind and every
 link.
 
+**The genomes' sequences.** Where the reference editing is on, the card writes every genome as the
+session draws it (§33.4), under *the genomes' sequences*: an **AGP** 2.1 (`<map>.genomes.agp`) of
+every genome's sequences — a laid-out genome's as its edit has them, any other's its contigs whole,
+longest first; the genomes by name, the pool left out — each genome after a `# genome` comment naming
+it, its kind and whether it is laid out, its asides as the stage's own AGP writes them (§27.8); a
+**FASTA** (`<map>.genomes.fa`) of the same sequences from the assembly's FASTA or `.2bit` loaded in
+the session — a stretch turned reverse-complemented, a gap as `N`, a stretch of a sequence the file
+lacks as `N` and named — each record naming its genome after its name (`>NODE_12_e1
+genome=MM133_metator_00014_00000`), which every reader of a FASTA name skips, the button saying what to
+load where nothing is; and the **sequence → genome** table (`<map>.sequence-genome.tsv`): `sequence`,
+`genome`, `kind`, `length`, `laid_out` and `parts`, what each is made of (`c0+,N100,c2-`). *Built*
+(`curate/layoutExports.ts`).
+
 ### 33.9 Costs
 
 | Operation | Budget |
@@ -17835,7 +17902,8 @@ link.
 
 Refused: the stage on a map with no genomes, a single-cell file or a curation kept for another
 binning (§33.2), which is held untouched until a new step; writing a `.metacool` — `metacooler
-reassign` writes it from the stage's table. *Not yet built*: a question that weighs an element's held
+reassign` writes it from the stage's table, and no command yet writes a map of laid-out genomes, whose
+sequences the AGP and the FASTA give. *Not yet built*: a FASTA a genome, written at once; a question that weighs an element's held
 hosts against each other (the method suggests an unlink only for a link it gives under 15%); the
 contacts' read on a large remote file in chunks the reader can resume; the command line, which
 measures the file as it is.

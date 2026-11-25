@@ -90,6 +90,12 @@ export interface PictureRequest {
 export interface EditStageProps {
   /** The file's own name, for the heading. */
   title: string
+  /**
+   * What the genome edited is called, where the edit is of one (§27.10) and
+   * that is not the id it is kept under: a genome a curation created or
+   * renamed (§33.4).
+   */
+  genomeName?: string
   memoryKey: () => string
   store: EditStore
   /**
@@ -485,6 +491,7 @@ export class EditStage {
         : { annotations: { store: props.lanes.store, ...(props.lanes.client === undefined ? {} : { client: props.lanes.client }) } }),
       ...(props.liftContacts === undefined ? {} : { liftContacts: props.liftContacts }),
       ...(props.binning === undefined ? {} : { binning: props.binning }),
+      ...(props.genomeName === undefined ? {} : { genomeName: props.genomeName }),
     })
     const mode = (name: Mode, title: string): HTMLButtonElement =>
       el('button', {
@@ -553,7 +560,7 @@ export class EditStage {
 
     this.modal = stageDialog({
       // One genome of a metagenome is edited on its own (§27.10), and says so.
-      title: props.store.edit.original.genome === undefined ? `Edit the reference · ${props.title}` : `Edit ${props.store.edit.original.genome} · ${props.title}`,
+      title: props.store.edit.original.genome === undefined ? `Edit the reference · ${props.title}` : `Edit ${this.genomeLabel()} · ${props.title}`,
       variant: 'modal-edit',
       stage: this.root,
       stageClass: 'edit-stage-body',
@@ -602,9 +609,15 @@ export class EditStage {
     return el('label', { class: 'edit-cells' }, el('span', { text: 'cells a side' }), select)
   }
 
+  /** The genome edited, by the name the reader knows it by; `undefined` for the whole reference. */
+  private genomeLabel(): string | undefined {
+    const genome = this.props.store.edit.original.genome
+    return genome === undefined ? undefined : (this.props.genomeName ?? genome)
+  }
+
   private read(): void {
     this.request?.cancel()
-    const genome = this.props.store.edit.original.genome
+    const genome = this.genomeLabel()
     const reading = genome === undefined ? 'reading the whole map for the stage' : `reading ${genome}’s contigs for the stage`
     this.showStatus(`${reading}…`, 0, true)
     const contigs = this.drawnContigs()
@@ -3155,7 +3168,7 @@ export class EditStage {
    * to bring it in.
    */
   private paintGenome(): void {
-    const genome = this.props.store.edit.original.genome
+    const genome = this.genomeLabel()
     if (genome === undefined) return
     const links = this.links
     const head = el('h3', { class: 'edit-card-head', text: `genome · ${genome}` })
@@ -3221,7 +3234,8 @@ export class EditStage {
                   el('span', { class: 'edit-genome-share', text: `${share(row.own, row.total)} here · ${share(other.contacts, row.total)} ${label(other.genome)}` }),
                   el('button', {
                     class: 'btn edit-genome-act',
-                    text: `send to ${label(other.genome)}`,
+                    // Where to is the share's, beside it: a genome's name on the button left none for the contig's.
+                    text: 'send there',
                     title: `Take ${row.contig} out of ${genome}, as a contig of ${label(other.genome)}: a step to undo like any other`,
                     attrs: { type: 'button' },
                     on: { click: () => this.send(row.contig, other.genome) },
@@ -3271,7 +3285,7 @@ export class EditStage {
 
   /** What the picture is of: the whole map, or one genome's contigs of a metagenome (§27.10). */
   private pictureOf(): string {
-    const genome = this.props.store.edit.original.genome
+    const genome = this.genomeLabel()
     return genome === undefined ? 'The whole map' : `${genome}’s contigs alone, the rest of the metagenome left out,`
   }
 

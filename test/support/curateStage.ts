@@ -39,6 +39,7 @@ export function testContext(): TestStage {
   let dragging: CurateDragged | null = null
   const ctx: CurateContext = {
     model,
+    laidOut: () => false,
     data: {
       title: 'community.metacool',
       file: base,

@@ -109,3 +109,20 @@ export function carryGenomeView(state: ViewState, before: CuratedBinning, after:
     }
   }
 }
+
+/**
+ * A view carried to a map whose genomes are laid out otherwise (§27.10): a
+ * place named on a sequence the next map does not draw — a contig since made
+ * a stretch of a laid-out sequence, a sequence of a layout since changed — is
+ * given up for its genome's map, or for the genomes table where it named no
+ * genome.
+ *
+ * @param draws Whether the next map draws a sequence of this name.
+ */
+export function carryLaidOutView(state: ViewState, draws: (name: string) => boolean): ViewState {
+  const named = [state.region, state.region2, state.focus].flatMap((place) => (place === undefined ? [] : [place.split(':')[0]]))
+  const ticked = (state.regions ?? '').split(',').map((name) => name.trim()).filter((name) => name !== '')
+  if ([...named, ...ticked].every(draws)) return state
+  if (state.genome === undefined) return genomesTable(state)
+  return { ...state, view: 'genome', genome2: undefined, genomes: undefined, region: undefined, region2: undefined, regions: undefined, focus: undefined }
+}

@@ -638,6 +638,10 @@ All through the save dialog (§26.6), each a new file, none touching the one ope
 - **Lifted tracks** — a signal as bigWig or bedGraph, features as BED (strands flipped, features
   across a cut split in two), pairs as BEDPE, marks as the Manual card writes them.
 - **A metagenome's**: the contig → MAG table `metacooler create` takes, and a FASTA and AGP per MAG.
+  Inside a curation of the genomes (SPECS §33), a genome's edit is the curated genome's: every contig
+  it takes in or lets go whole is a move of the curation as well, the session draws the genome laid
+  out in its place, and the curation's export writes every genome as drawn — one AGP, one FASTA and a
+  sequence → genome table (SPECS §27.10, §33.4, §33.8).
 
 ---
 

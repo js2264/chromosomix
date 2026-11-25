@@ -46,7 +46,10 @@ import { makeTable } from '../h5/readTable'
 import type { Column, Extent, PixelChunk, Table } from '../types'
 import type { ReadPlan, SpanScanOptions } from './matrix'
 import type { PixelStore, ScanAllOptions } from './store'
-import type { BinLens } from './lens'
+import { BinsOut, placeParts, type BinLens } from './lens'
+import type { Coords } from './coords'
+import type { DrawnLayout, DrawnSequence } from '../curate/layouts'
+import { isGap } from '../genome/edit'
 
 /** What a curated map knows of its curation, for the reader's own requests. */
 export interface CuratedMap {
@@ -54,8 +57,14 @@ export interface CuratedMap {
   key: string
   /** Steps applied. */
   steps: number
-  /** Each of the file's contigs, as a contig of the curated map. */
-  inverse: Int32Array
+  /**
+   * Each of the file's contigs, its genome in the curated map: an index into
+   * its genomes, the pool's included. By contig, since a contig of a genome its
+   * edit lays out is a stretch of a sequence, or two, rather than a row.
+   */
+  genomeOfContig: Int32Array
+  /** Genomes drawn as their edits lay them out (§27.10). */
+  laidOut: number
   /** The `/genomes` columns the curation writes: `kind`, `curation`, and metaTOR's where the file has them. */
   owned: string[]
   /** The `/genomes` columns recomputed from the contigs' markers. */
@@ -82,6 +91,8 @@ export interface CurationLayout {
   genomeOffset: Float64Array
   /** Each contig of the curated map, its genome: an index into {@link genomes}. */
   genomeOf: Int32Array
+  /** Each of the file's contigs, its genome: an index into {@link genomes}. */
+  genomeOfContig: Int32Array
 }
 
 /** The miComplete numbers metaTOR writes per bin, by column. */
@@ -93,8 +104,12 @@ const METATOR_COLUMNS = ['mge', 'n_mges', 'mges'] as const
 /** The columns a genome's own contigs give, counted. */
 const CORE_COLUMNS = ['name', 'length', 'n_contigs', 'n_bins'] as const
 
-/** The words of the `curation` column. */
-export const CURATION_STATES = { kept: 'as in the file', changed: 'changed', created: 'new' } as const
+/**
+ * The words of the `curation` column: what the curation did to a genome's
+ * contigs, and, where its edit lays it out (§27.10), that it is laid out —
+ * `laid out` alone for a genome whose contigs are the file's.
+ */
+export const CURATION_STATES = { kept: 'as in the file', changed: 'changed', created: 'new', laidOut: 'laid out' } as const
 
 /**
  * Two texts in code-point order — Python's `sorted`, and numpy's on the `<U`
@@ -158,7 +173,7 @@ export function curationLayout(names: readonly string[], lengths: ArrayLike<numb
     genomeOffset[genomeOf[l] + 1]++
   }
   for (let g = 0; g < genomes.length; g++) genomeOffset[g + 1] += genomeOffset[g]
-  return { order, inverse, genomes, genomeOffset, genomeOf }
+  return { order, inverse, genomes, genomeOffset, genomeOf, genomeOfContig: genomeOfFile }
 }
 
 /**
@@ -224,6 +239,152 @@ export function curatedContigs(table: Table, layout: CurationLayout): Table {
   return makeTable(layout.order.length, columns, data)
 }
 
+/**
+ * The curated map's rows where some of its genomes are laid out by their edits
+ * (§27.10): a genome's sequences as its layout draws them, every other genome's
+ * contigs as they are. Each sequence has cooler's `ceil(length / binsize)` bins,
+ * its parts placed on them as an edit's lens places them (`lens.ts`).
+ */
+export interface LaidOutRows {
+  /** Each row's name, and length in base pairs. */
+  names: string[]
+  lengths: Float64Array
+  /** The file's contig a row is, whole and on either strand — whose `/contigs` columns it carries — or `-1`. */
+  contig: Int32Array
+  /** What a row of a laid-out genome is made of, in words; empty for a contig of any other. */
+  parts: string[]
+  /** Each row's genome: an index into the layout's genomes. */
+  genomeOf: Int32Array
+  /** The first row of each genome, and one past the last. */
+  genomeOffset: Float64Array
+  /** The first bin of each row, and one past the last. */
+  chromOffset: Float64Array
+  /** The stored bin each bin shows; `-1` in a gap. */
+  toOriginal: Int32Array
+  /** Each genome of the layout: `1` where its edit lays it out. */
+  laidOut: Uint8Array
+  binsize: number
+}
+
+/**
+ * The rows of the curated map with its genomes laid out.
+ *
+ * @param coords The file's own, as the file stores its contigs.
+ * @param names The file's contigs, in its order.
+ */
+export function laidOutRows(layout: CurationLayout, drawn: readonly DrawnLayout[], coords: Coords, names: readonly string[]): LaidOutRows {
+  const byCurated = new Map(drawn.map((item) => [item.genome, item]))
+  const index = new Map(names.map((name, c) => [name, c]))
+  const lengthOf = (c: number): number => coords.contigLengths[c]
+  const out = new BinsOut(coords.nBins)
+  const rowNames: string[] = []
+  const rowLengths: number[] = []
+  const contig: number[] = []
+  const parts: string[] = []
+  const genomeOf: number[] = []
+  const offsets: number[] = [0]
+  const genomes = layout.genomes.length
+  const genomeOffset = new Float64Array(genomes + 1)
+  const laidOut = new Uint8Array(genomes)
+  for (let g = 0; g < genomes; g++) {
+    genomeOffset[g] = rowNames.length
+    const curated = layout.genomes[g].curated
+    const laid = curated >= 0 ? byCurated.get(curated) : undefined
+    if (laid === undefined) {
+      for (let l = layout.genomeOffset[g]; l < layout.genomeOffset[g + 1]; l++) {
+        const c = layout.order[l]
+        const [lo, hi] = coords.contigBinExtent(c)
+        for (let b = lo; b < hi; b++) out.push(b)
+        rowNames.push(names[c])
+        rowLengths.push(lengthOf(c))
+        contig.push(c)
+        parts.push('')
+        genomeOf.push(g)
+        offsets.push(out.length)
+      }
+      continue
+    }
+    laidOut[g] = 1
+    for (const sequence of laid.sequences) {
+      placeParts(coords, index, sequence.parts, sequence.length, out)
+      rowNames.push(sequence.name)
+      rowLengths.push(sequence.length)
+      contig.push(wholeOnEitherStrand(sequence, index, lengthOf))
+      parts.push(partsWords(sequence, index, lengthOf))
+      genomeOf.push(g)
+      offsets.push(out.length)
+    }
+  }
+  genomeOffset[genomes] = rowNames.length
+  return {
+    names: rowNames,
+    lengths: Float64Array.from(rowLengths),
+    contig: Int32Array.from(contig),
+    parts,
+    genomeOf: Int32Array.from(genomeOf),
+    genomeOffset,
+    chromOffset: Float64Array.from(offsets),
+    toOriginal: out.done(),
+    laidOut,
+    binsize: coords.binsize,
+  }
+}
+
+/** The contig a sequence is, one piece of it whole on either strand, or `-1`. */
+function wholeOnEitherStrand(sequence: DrawnSequence, index: ReadonlyMap<string, number>, lengthOf: (c: number) => number): number {
+  if (sequence.parts.length !== 1) return -1
+  const part = sequence.parts[0]
+  if (isGap(part)) return -1
+  const c = index.get(part.sequence)
+  return c !== undefined && part.start === 0 && part.end === lengthOf(c) ? c : -1
+}
+
+/**
+ * A laid-out sequence's parts in words, as a locus box reads a stretch: a
+ * contig whole `c1+`, a stretch of one `c1:1,001-4,000−` (1-based, both ends
+ * in), a run of `N` `N100`; a stretch set aside unplaced says so.
+ */
+function partsWords(sequence: DrawnSequence, index: ReadonlyMap<string, number>, lengthOf: (c: number) => number): string {
+  const words = sequence.parts.map((part) => {
+    if (isGap(part)) return `N${part.gap.toLocaleString('en-US')}`
+    const c = index.get(part.sequence)
+    const whole = c !== undefined && part.start === 0 && part.end === lengthOf(c)
+    const strand = part.strand === 1 ? '+' : '\u2212'
+    return whole ? `${part.sequence}${strand}` : `${part.sequence}:${(part.start + 1).toLocaleString('en-US')}-${part.end.toLocaleString('en-US')}${strand}`
+  })
+  return sequence.unplaced === true ? `${words.join(' ')} (unplaced)` : words.join(' ')
+}
+
+/**
+ * The file's `/contigs` as the laid-out map's rows: a row that is a contig
+ * whole carries its columns, any other leaves them empty; `name`, `length`
+ * and `genome_id` the row's own; and, where `parts` is asked for, what each
+ * row of a laid-out genome is made of.
+ */
+export function laidOutContigs(table: Table, rows: LaidOutRows, withParts: boolean): Table {
+  const n = rows.names.length
+  const data: Record<string, Column> = {}
+  for (const name of table.columns) {
+    if (name === 'name') data[name] = rows.names
+    else if (name === 'length') data[name] = rows.lengths
+    else if (name === 'genome_id') data[name] = Float64Array.from(rows.genomeOf)
+    else data[name] = gatherColumn(table.data[name], rows.contig)
+  }
+  const columns = [...table.columns]
+  if (data['genome_id'] === undefined) {
+    columns.push('genome_id')
+    data['genome_id'] = Float64Array.from(rows.genomeOf)
+  }
+  if (withParts) {
+    // Beside the length, where a laid-out sequence is read: what it is made of.
+    const label = columns.includes('parts') ? 'parts (layout)' : 'parts'
+    const at = columns.indexOf('length')
+    columns.splice(at < 0 ? columns.length : at + 1, 0, label)
+    data[label] = rows.parts
+  }
+  return makeTable(n, columns, data)
+}
+
 /** Everything the curated `/genomes` is made from. */
 export interface CuratedGenomesInput {
   layout: CurationLayout
@@ -239,6 +400,12 @@ export interface CuratedGenomesInput {
   bins: ArrayLike<number>
   /** The contigs' markers, one table per set, where the map holds them. */
   markers: readonly ContigMarkers[]
+  /**
+   * The rows drawn, where some genomes are laid out by their edits: each
+   * genome's `length`, `n_contigs` and `n_bins` are then its rows', and a laid-out
+   * genome says so in `curation`.
+   */
+  rows?: LaidOutRows
 }
 
 /**
@@ -289,7 +456,24 @@ export function curatedGenomes(input: CuratedGenomesInput): { table: Table; owne
         ? CURATION_STATES.kept
         : CURATION_STATES.changed,
   )
+  // A layout changes no contig of a genome: what was measured of its contigs
+  // still describes it, and its columns are carried as they are.
   const kept = (g: number): number => (state[g] === CURATION_STATES.kept ? row[g] : -1)
+  const rows = input.rows
+  if (rows !== undefined) {
+    length.fill(0)
+    contigs.fill(0)
+    binCount.fill(0)
+    for (let r = 0; r < rows.names.length; r++) {
+      const g = rows.genomeOf[r]
+      length[g] += rows.lengths[r]
+      contigs[g]++
+      binCount[g] += rows.chromOffset[r + 1] - rows.chromOffset[r]
+    }
+  }
+  const said = state.map((word, g) =>
+    rows === undefined || rows.laidOut[g] !== 1 ? word : word === CURATION_STATES.kept ? CURATION_STATES.laidOut : `${word}, ${CURATION_STATES.laidOut}`,
+  )
 
   const columns: string[] = [...CORE_COLUMNS, 'kind', 'curation']
   const data: Record<string, Column> = {
@@ -298,7 +482,7 @@ export function curatedGenomes(input: CuratedGenomesInput): { table: Table; owne
     n_contigs: contigs,
     n_bins: binCount,
     kind: layout.genomes.map((genome) => (genome.kind === null ? '' : genome.kind === 'mag' ? 'MAG' : 'element')),
-    curation: state,
+    curation: said,
   }
   const owned = ['kind', 'curation']
   const recomputed: string[] = []
@@ -410,6 +594,11 @@ export interface CuratedHandleInit {
   genomes: Table
   /** The file's `/contigs`, every column, as the curated map lays them out: read once, when first asked. */
   contigs: () => Table
+  /**
+   * The rows, where some genomes are laid out by their edits: a bin's `chrom`,
+   * `start` and `end` are then its row's, counted rather than carried.
+   */
+  rows?: LaidOutRows
 }
 
 /**
@@ -444,6 +633,15 @@ export function curatedHandle(handle: Hdf5Handle, init: CuratedHandleInit): Hdf5
   }
   /** A `/bins` column in the curated map's order, read whole once: `chrom` renumbered as the contigs are. */
   const binNumbers = (column: string, lo?: number, hi?: number): Float64Array => {
+    const rows = init.rows
+    if (rows !== undefined && (column === 'chrom' || column === 'start' || column === 'end')) {
+      let counted = numeric.get(`\u0000${column}`)
+      if (counted === undefined) {
+        counted = rowBins(rows, column)
+        numeric.set(`\u0000${column}`, counted)
+      }
+      return counted.slice(lo ?? 0, hi ?? counted.length)
+    }
     let all = numeric.get(column)
     if (all === undefined) {
       all = handle.readNumeric(`bins/${column}`)
@@ -475,7 +673,10 @@ export function curatedHandle(handle: Hdf5Handle, init: CuratedHandleInit): Hdf5
   /** The numbers at a path, where the curated map answers for it; `null` where the file does. */
   const curatedNumbers = (at: string, lo?: number, hi?: number): Float64Array | null => {
     if (at === 'indexes/chrom_offset') return lens.chromOffset.slice(lo ?? 0, hi ?? lens.chromOffset.length)
-    if (at === 'indexes/genome_offset') return layout.genomeOffset.slice(lo ?? 0, hi ?? layout.genomeOffset.length)
+    if (at === 'indexes/genome_offset') {
+      const offsets = init.rows?.genomeOffset ?? layout.genomeOffset
+      return offsets.slice(lo ?? 0, hi ?? offsets.length)
+    }
     const genome = columnOf(at, 'genomes')
     if (genome !== null) return numbers(genomes, genome, at, lo, hi)
     const contig = contigColumn(at)
@@ -575,6 +776,20 @@ export function curatedHandle(handle: Hdf5Handle, init: CuratedHandleInit): Hdf5
       }
     },
   })
+}
+
+/** A laid-out map's `/bins` column of each bin's row, or its start or end in it, in base pairs. */
+function rowBins(rows: LaidOutRows, column: 'chrom' | 'start' | 'end'): Float64Array {
+  const total = rows.chromOffset[rows.chromOffset.length - 1]
+  const out = new Float64Array(total)
+  for (let r = 0; r < rows.names.length; r++) {
+    const first = rows.chromOffset[r]
+    for (let e = first; e < rows.chromOffset[r + 1]; e++) {
+      const start = (e - first) * rows.binsize
+      out[e] = column === 'chrom' ? r : column === 'start' ? start : Math.min(start + rows.binsize, rows.lengths[r])
+    }
+  }
+  return out
 }
 
 /**

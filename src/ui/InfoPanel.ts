@@ -459,7 +459,15 @@ export class InfoPanel {
       ...(info.curation?.refusal === null && info.curation.file !== undefined
         ? ((): Array<[string, string, string]> => {
             const steps = `${fmt.int(info.curation.steps)} ${info.curation.steps === 1 ? 'step' : 'steps'}`
-            return [['curation', steps, `The genomes are drawn through a curation of ${steps} made on the file’s binning.`]]
+            const laid = info.curation.laidOut ?? 0
+            // Genomes laid out by their edits of the reference (§27.10): a row of their own, short as this one.
+            return [
+              // Laid out with no step of the curation, the binning is the file's: only the layouts are said.
+              ...(info.curation.steps === 0 && laid > 0 ? [] : ([['curation', steps, `The genomes are drawn through a curation of ${steps} made on the file’s binning.`]] as Array<[string, string, string]>)),
+              ...(laid === 0
+                ? []
+                : ([['laid out', `${fmt.int(laid)} ${laid === 1 ? 'genome' : 'genomes'}`, `${fmt.int(laid)} ${laid === 1 ? 'genome is' : 'genomes are'} drawn as ${laid === 1 ? 'its edit' : 'their edits'} of the reference lay them out: their contigs ordered, turned and joined.`]] as Array<[string, string, string]>)),
+            ]
           })()
         : []),
       [info.hasGenomes ? 'contigs' : 'chromosomes', fmt.int(info.nContigs)],

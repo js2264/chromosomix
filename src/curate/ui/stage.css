@@ -61,6 +61,13 @@
   border-right: 1px solid var(--border);
 }
 
+/* A genome laid out by its edit of the reference (§27.10) wears a mark beside
+   its name: the column takes the mark's width too, so the numbers and the
+   disc keep theirs. */
+.curate-list-column.has-laid-out {
+  width: max(300px, calc(23.7 * var(--step--1) * var(--text-scale, 1)));
+}
+
 /* The two dividers alike: the column's hairline, and over it a grip six
    pixels wide that takes no room and shows only under the pointer or the
    keyboard — the list's here, the inspector's below. */

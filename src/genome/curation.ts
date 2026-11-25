@@ -244,6 +244,16 @@ export class CuratedBinning {
     return this.live.get(id)
   }
 
+  /**
+   * The id of the live genome called `name`, emptied or not; `undefined` for a
+   * name no live genome has. What a step names a genome by, from the name a
+   * table or a stage showed (§33.2).
+   */
+  idOfName(name: string): string | undefined {
+    for (const [id, held] of this.live) if (held === name) return id
+    return undefined
+  }
+
   /** The file's binning through a curation, or as it is with none. */
   static of(base: BaseBinning, curation: Curation | null): CuratedBinning {
     const slots: Slot[] = base.genomes.map((genome, g) => ({ id: genome.name, name: genome.name, kind: genome.kind, file: g, gone: false }))

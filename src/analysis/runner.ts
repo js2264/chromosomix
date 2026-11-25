@@ -37,7 +37,7 @@
 
 import type { AnnotationPayload, FeatureSet, PairSet } from '../annotations/types'
 import { editFingerprint, type ReferenceEdit } from '../genome/edit'
-import type { Curation } from '../genome/curation'
+import type { CurationDrawn } from '../curate/layouts'
 import { isCancellation, type Cancellable } from '../worker/client'
 import type { OrientationSummary, PairsBinning, SourceSpec } from '../worker/protocol'
 import type { PairStats } from '../pairs/stats'
@@ -126,8 +126,8 @@ export interface RunnerHost {
     resample?: ResampleTarget
     /** The edit of the reference the map is drawn through, where it is drawn through one (§27.7). */
     edit?: ReferenceEdit
-    /** The curation of the binning the map is drawn through, where it is drawn through one (§33.4). */
-    curation?: { key: string; held: Curation }
+    /** The curation of the binning the map is drawn through, and its genomes' layouts, where it is drawn through one (§33.4). */
+    curation?: CurationDrawn
     /** What the reader calls this map (§16.10), which its results are named by. */
     label?: string
   } | null
@@ -461,9 +461,9 @@ export interface RunTarget {
   /**
    * The curation of the binning this map is drawn through (§33.4), for
    * {@link edit}'s reason: every task reads the curated genomes, as the view
-   * draws them.
+   * draws them, laid out as it lays them out (§27.10).
    */
-  curation?: { key: string; held: Curation }
+  curation?: CurationDrawn
   /**
    * The resolution this map is summed to, in base pairs, where it is read at the
    * deck's (§16.2) from a rung of its own that divides it rather than one that

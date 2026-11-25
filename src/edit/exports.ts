@@ -144,25 +144,34 @@ export function agpOf(assembly: EditedAssembly, context: ExportContext): string 
     // Sent to another genome of the metagenome, which one (§27.10).
     lines.push(`# aside\t${item.why}\t${sequence}:${start + 1}-${end}${item.genome === undefined ? '' : `\t${item.genome}`}`)
   }
-  for (const object of objects) {
-    let at = 1
-    let number = 1
-    for (const part of object.parts) {
-      if (isGap(part)) {
-        // A join's hundred `N` is a gap of unknown size, `U`; any other a
-        // length the map measured, `N`.
-        const type = part.gap === UNKNOWN_GAP ? 'U' : 'N'
-        lines.push([object.name, at, at + part.gap - 1, number, type, part.gap, ...GAP_COLUMNS].join('\t'))
-        at += part.gap
-      } else {
-        const length = part.end - part.start
-        lines.push([object.name, at, at + length - 1, number, 'W', part.sequence, part.start + 1, part.end, part.strand === 1 ? '+' : '-'].join('\t'))
-        at += length
-      }
-      number += 1
-    }
-  }
+  for (const object of objects) lines.push(...agpObjectLines(object.name, object.parts))
   return `${lines.join('\n')}\n`
+}
+
+/**
+ * One object's lines of an AGP 2.1: its components, 1-based and inclusive,
+ * reversed pieces `-`, each run of `N` a gap line typed `scaffold` with
+ * `proximity_ligation` as its evidence — `U`, of unknown size, for a join's
+ * hundred bases, `N` for a length the map measured. The curated genomes'
+ * AGP writes its objects with it too (§33.8).
+ */
+export function agpObjectLines(name: string, parts: readonly Part[]): string[] {
+  const lines: string[] = []
+  let at = 1
+  let number = 1
+  for (const part of parts) {
+    if (isGap(part)) {
+      const type = part.gap === UNKNOWN_GAP ? 'U' : 'N'
+      lines.push([name, at, at + part.gap - 1, number, type, part.gap, ...GAP_COLUMNS].join('\t'))
+      at += part.gap
+    } else {
+      const length = part.end - part.start
+      lines.push([name, at, at + length - 1, number, 'W', part.sequence, part.start + 1, part.end, part.strand === 1 ? '+' : '-'].join('\t'))
+      at += length
+    }
+    number += 1
+  }
+  return lines
 }
 
 /** A file read back, or why it could not be. */

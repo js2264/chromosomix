@@ -28,7 +28,7 @@
  * because a stretch set aside lands nowhere and one duplicated lands twice.
  */
 
-import { EditedAssembly, isGap, mismatch, type ReferenceEdit } from '../genome/edit'
+import { EditedAssembly, isGap, mismatch, type Part, type ReferenceEdit } from '../genome/edit'
 import type { AttrValue, Hdf5Handle } from '../h5/api'
 import { makeTable } from '../h5/readTable'
 import type { Extent, PixelChunk, Table } from '../types'
@@ -110,51 +110,35 @@ export class BinLens {
   }
 
   /**
+   * A lens of any bins: the stored bin each shows, `-1` in a gap. What the
+   * curated map is drawn through where some of its genomes are laid out by
+   * their edits (`curationLens.ts`, §33.4) — whole contigs and edited
+   * sequences side by side, each placed as {@link placeParts} places it.
+   */
+  static ofBins(fields: {
+    names: string[]
+    lengths: Float64Array
+    chromOffset: Float64Array
+    toOriginal: Int32Array
+    originalBins: number
+  }): BinLens {
+    return new BinLens(fields)
+  }
+
+  /**
    * The lens an edited assembly makes over one resolution of the file.
    *
    * @param names The original sequences, in file order, as `coords` indexes them.
    */
   static of(coords: Coords, names: readonly string[], assembly: EditedAssembly): BinLens {
-    const size = coords.binsize
     const index = new Map(names.map((name, i) => [name, i]))
-    const out: number[] = []
+    const out = new BinsOut(coords.nBins)
     const edited: string[] = []
     const lengths: number[] = []
     const offsets: number[] = [0]
     for (const sequence of assembly.sequences) {
       const length = assembly.lengthOf(sequence.name) ?? 0
-      const bins = Math.ceil(length / size)
-      let offset = 0
-      sequence.parts.forEach((part, i) => {
-        const partLength = isGap(part) ? part.gap : part.end - part.start
-        const from = Math.min(bins, Math.round(offset / size))
-        offset += partLength
-        // The last part runs to the sequence's own last bin, so the parts'
-        // roundings can never leave the count off cooler's.
-        const to = i === sequence.parts.length - 1 ? bins : Math.min(bins, Math.round(offset / size))
-        const count = Math.max(0, to - from)
-        const c = isGap(part) ? undefined : index.get(part.sequence)
-        if (isGap(part) || c === undefined) {
-          for (let k = 0; k < count; k++) out.push(-1)
-          return
-        }
-        const [first, last] = coords.contigBinExtent(c)
-        const cells = last - first
-        const originalLength = coords.contigLengths[c]
-        const edge = (bp: number): number => (bp >= originalLength ? cells : Math.max(0, Math.min(cells, Math.round(bp / size))))
-        let low = edge(part.start)
-        let high = edge(part.end)
-        if (high <= low) {
-          // Shorter than half a bin: the bin its middle is in.
-          low = Math.max(0, Math.min(cells - 1, Math.floor((part.start + part.end) / 2 / size)))
-          high = low + 1
-        }
-        const held = high - low
-        for (let k = 0; k < count; k++) {
-          const j = Math.min(held - 1, Math.floor(((k + 0.5) * held) / count))
-          out.push(first + (part.strand === 1 ? low + j : high - 1 - j))
-        }
-      })
+      placeParts(coords, index, sequence.parts, length, out)
       edited.push(sequence.name)
       lengths.push(length)
       offsets.push(out.length)
@@ -163,7 +147,7 @@ export class BinLens {
       names: edited,
       lengths: Float64Array.from(lengths),
       chromOffset: Float64Array.from(offsets),
-      toOriginal: Int32Array.from(out),
+      toOriginal: out.done(),
       originalBins: coords.nBins,
     })
   }
@@ -341,6 +325,74 @@ export class BinLens {
     }
     return out
   }
+}
+
+/** The stored bins a lens shows, grown as sequences are placed. */
+export class BinsOut {
+  private bins: Int32Array
+  length = 0
+
+  constructor(capacity: number) {
+    this.bins = new Int32Array(Math.max(16, capacity))
+  }
+
+  push(bin: number): void {
+    if (this.length === this.bins.length) {
+      const grown = new Int32Array(this.bins.length * 2)
+      grown.set(this.bins)
+      this.bins = grown
+    }
+    this.bins[this.length++] = bin
+  }
+
+  /** The bins placed, exactly as many. */
+  done(): Int32Array {
+    return this.bins.slice(0, this.length)
+  }
+}
+
+/**
+ * The stored bin each bin of an edited sequence shows (the module's rule):
+ * `ceil(length / binsize)` bins, cooler's own count, each part placed on them
+ * by rounding its edited offset to the nearest bin edge, a piece showing the
+ * stored bins its own ends round to, read forward or backwards, a gap `-1`.
+ *
+ * @param index Every original sequence, by name, as `coords` indexes them.
+ */
+export function placeParts(coords: Coords, index: ReadonlyMap<string, number>, parts: readonly Part[], length: number, out: BinsOut): void {
+  const size = coords.binsize
+  const bins = Math.ceil(length / size)
+  let offset = 0
+  parts.forEach((part, i) => {
+    const partLength = isGap(part) ? part.gap : part.end - part.start
+    const from = Math.min(bins, Math.round(offset / size))
+    offset += partLength
+    // The last part runs to the sequence's own last bin, so the parts'
+    // roundings can never leave the count off cooler's.
+    const to = i === parts.length - 1 ? bins : Math.min(bins, Math.round(offset / size))
+    const count = Math.max(0, to - from)
+    const c = isGap(part) ? undefined : index.get(part.sequence)
+    if (isGap(part) || c === undefined) {
+      for (let k = 0; k < count; k++) out.push(-1)
+      return
+    }
+    const [first, last] = coords.contigBinExtent(c)
+    const cells = last - first
+    const originalLength = coords.contigLengths[c]
+    const edge = (bp: number): number => (bp >= originalLength ? cells : Math.max(0, Math.min(cells, Math.round(bp / size))))
+    let low = edge(part.start)
+    let high = edge(part.end)
+    if (high <= low) {
+      // Shorter than half a bin: the bin its middle is in.
+      low = Math.max(0, Math.min(cells - 1, Math.floor((part.start + part.end) / 2 / size)))
+      high = low + 1
+    }
+    const held = high - low
+    for (let k = 0; k < count; k++) {
+      const j = Math.min(held - 1, Math.floor(((k + 0.5) * held) / count))
+      out.push(first + (part.strand === 1 ? low + j : high - 1 - j))
+    }
+  })
 }
 
 /** A growable chunk, reused from one translation to the next. */

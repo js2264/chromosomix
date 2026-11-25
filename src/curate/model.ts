@@ -62,6 +62,12 @@ const MINTED_ID = /curated:(\d+)/g
 export interface CurateModelOptions {
   /** How long after a step the count is asked, in ms: steps in a burst are counted once. */
   debounce?: number
+  /**
+   * Ids a new genome may not take though no step names them: those a genome's
+   * edit of the reference is kept under (§27.10), which would lay out a new
+   * genome of that id as the old one was.
+   */
+  reservedIds?: () => Iterable<string>
   /** A timer, for tests: returns its own cancel. */
   schedule?: (run: () => void, ms: number) => () => void
 }
@@ -83,6 +89,8 @@ export interface CurateTally {
 }
 
 export class CurateModel {
+  /** Ids no new genome takes ({@link CurateModelOptions.reservedIds}). */
+  private readonly reservedIds: () => Iterable<string>
   private answerHeld: CurationStateResult | null = null
   private ticket = 0
   private pending: Cancellable<CurationStateResult> | null = null
@@ -136,6 +144,7 @@ export class CurateModel {
     options: CurateModelOptions = {},
   ) {
     this.debounce = options.debounce ?? 30
+    this.reservedIds = options.reservedIds ?? (() => [])
     this.schedule =
       options.schedule ??
       ((run, ms) => {
@@ -1029,7 +1038,7 @@ export class CurateModel {
    * old genome must not hold for a new one — and no genome's name of the file.
    */
   private mintId(): string {
-    const taken = new Set(this.store.file.genomes.map((genome) => genome.name))
+    const taken = new Set([...this.store.file.genomes.map((genome) => genome.name), ...this.reservedIds()])
     this.noteMinted()
     for (let n = this.mintedMost + 1; ; n++) if (!taken.has(`${MINTED}${n}`)) return `${MINTED}${n}`
   }

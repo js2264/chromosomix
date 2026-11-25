@@ -2,7 +2,8 @@
  * The heading's word on the genomes (SPECS §33.4): `genomes · as in the file`,
  * or `genomes · curated · 7 steps` — lit, because the whole session is then
  * drawn through a curated binning and that is a state of the tab, not of one
- * picture.
+ * picture — and `· 2 laid out` after either where the map draws genomes laid
+ * out by their edits of the reference (§27.10).
  *
  * A press opens the curation stage; the arrow beside a curated one puts the
  * file's binning back, which is every step undone and kept to be redone — so
@@ -17,6 +18,8 @@ import { icon, iconButton, setPressed } from '../ui/icons'
 export interface CurationChipProps {
   /** Steps applied. */
   steps(): number
+  /** Genomes the map draws laid out by their edits of the reference (§27.10). */
+  laidOut?(): number
   /** Open the stage. */
   onOpen(): void
   /** Every step undone. */
@@ -54,8 +57,11 @@ export class CurationChip {
 
   sync(): void {
     const steps = this.props.steps()
-    this.text.textContent = steps === 0 ? 'as in the file' : `curated · ${steps} ${steps === 1 ? 'step' : 'steps'}`
-    setPressed(this.button, steps > 0)
+    const laid = this.props.laidOut?.() ?? 0
+    const curated = steps === 0 ? 'as in the file' : `curated · ${steps} ${steps === 1 ? 'step' : 'steps'}`
+    // The genomes laid out by their edits are said after the binning: the map draws them so either way.
+    this.text.textContent = laid === 0 ? curated : `${curated} · ${laid} laid out`
+    setPressed(this.button, steps > 0 || laid > 0)
     this.revert.classList.toggle('hidden', steps === 0)
   }
 }

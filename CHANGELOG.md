@@ -37,6 +37,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   would lower a grade. What the curation makes leaves as tables for `metacooler reassign` and
   `metacooler annotate`, never as a written map.
 
+- **A genome's edit of the reference inside the curation — a dev feature (§27.10, §33.4, §33.8).**
+  On the curation stage, *lay out* (or `S`) on one genome opens the reference editor on it, over the
+  stage: its contigs ordered, turned, joined and cut there, and every contig it sends away, sets aside
+  whole or brings in moved in the curation too, as one step to undo there. Back on the curation stage
+  the genome is marked as laid out, and the session draws it in its place as its edit lays it out —
+  pixel for pixel the genome's own map through its edit — beside every other genome, with or without
+  a curation. A curation that moves a genome's contigs later leaves its edit as it was: the drawing
+  follows the curation, breaking a scaffold where a contig left. The export card writes every genome
+  as drawn, as one AGP, one FASTA (from the assembly's sequence loaded in the session) and a sequence
+  → genome table. Escape now closes only the dialog on top.
+
 - **The session drawn through a curation of the genomes — a dev feature (§33.4).** A metagenome with
   a curation kept for it opens as the map `metacooler reassign` writes from the curation's contig →
   genome table: its contigs regrouped, the pool first and the genomes by name, each genome's contigs

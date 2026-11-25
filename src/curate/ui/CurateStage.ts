@@ -62,10 +62,13 @@ export interface CurateParts {
   contacts(ctx: CurateContext): CuratePane & { closeUp?(): void; back?(): void }
   hosts(ctx: CurateContext): CuratePane
   scatter(ctx: CurateContext): CuratePane
-  selection(ctx: CurateContext, hooks: { rename(id: string): void; closeUp(): void; choose(kind: 'move' | 'merge' | 'link', anchor?: HTMLElement): void }): CurateCard
+  selection(
+    ctx: CurateContext,
+    hooks: { rename(id: string): void; closeUp(): void; choose(kind: 'move' | 'merge' | 'link', anchor?: HTMLElement): void; layOut?(id: string): void },
+  ): CurateCard
   suggestions(ctx: CurateContext, hooks: { frame(s: Suggestion): void }): CurateCard
   history(ctx: CurateContext, options: { store: CurationStore }): CurateCard
-  exporting(ctx: CurateContext, options: { stem: string; store: CurationStore }): CurateCard
+  exporting(ctx: CurateContext, options: { stem: string; store: CurationStore; layouts?: CurateLayouts }): CurateCard
   about(ctx: CurateContext, options: { network: () => CurationNetworkResult | null }): CurateCard
   chooser(ctx: CurateContext, kind: 'move' | 'merge' | 'link', anchor: HTMLElement | { x: number; y: number }, onChoose: (target: CurateDropTarget) => void): CurateChooser
 }
@@ -75,6 +78,30 @@ export interface CurateRequests {
   network(onProgress: (done: number, total: number, note?: string) => void): Cancellable<CurationNetworkResult>
   state: CurateClient['state']
   focus(contigs: Int32Array): Cancellable<CurationFocusResult>
+}
+
+/**
+ * The genomes' edits of the reference, inside the curation (§27.10, §33.4):
+ * which genomes they lay out, a genome's opened over the stage, and what the
+ * export card writes of them.
+ */
+export interface CurateLayouts {
+  /** Every id a genome's edit is kept under: no genome a step creates takes one. */
+  kept(): ReadonlySet<string>
+  /** The genomes their edits lay out, by id, as the binning stands. */
+  laidOut(): ReadonlySet<string>
+  /** Open a genome's edit over the stage; `onClosed` once it closes. */
+  open(id: string, onClosed: () => void): void
+  /**
+   * Every genome as the session draws it, its edit applied (§33.8): the AGP of
+   * its sequences, and the table of which genome each is of.
+   */
+  agp(): { text: string; sequences: number; laidOut: number }
+  sequences(): { text: string; rows: number }
+  /** What the FASTA is read from — the assembly's sequence the session holds — or `null` for none. */
+  sequenceFrom(): string | null
+  /** The FASTA of every genome as the session draws it, read from {@link sequenceFrom}; `null` where cancelled or there is none. */
+  fasta(onProgress: (done: number, total: number) => void, cancelled: () => boolean): Promise<{ blob: Blob; missing: string[] } | null>
 }
 
 export interface CurateStageProps {
@@ -96,6 +123,8 @@ export interface CurateStageProps {
   onClose(): void
   /** How long after a step the count is asked, in ms; tests ask at once. */
   debounce?: number
+  /** The genomes' edits of the reference, where the reference editing is on (§27.10). */
+  layouts?: CurateLayouts
 }
 
 /** The three pictures, in the order their keys say them. */
@@ -184,7 +213,15 @@ export class CurateStage {
       markerSets: base.markerSets,
       background: null,
     }
-    this.model = new CurateModel(store, { state: (curation, weights, declined) => props.requests.state(curation, weights, declined) }, props.debounce === undefined ? {} : { debounce: props.debounce })
+    this.model = new CurateModel(
+      store,
+      { state: (curation, weights, declined) => props.requests.state(curation, weights, declined) },
+      {
+        ...(props.debounce === undefined ? {} : { debounce: props.debounce }),
+        ...(props.layouts === undefined ? {} : { reservedIds: () => props.layouts?.kept() ?? [] }),
+      },
+    )
+    this.laidOut = props.layouts?.laidOut() ?? new Set()
     this.ctx = this.context()
 
     // The centre: toolbar, band, status, panes.
@@ -222,6 +259,8 @@ export class CurateStage {
     // The list, and its grip.
     this.list = new GenomeList(this.ctx)
     const listColumn = el('div', { class: 'curate-list-column' }, this.list.element)
+    this.listColumn = listColumn
+    listColumn.classList.toggle('has-laid-out', this.laidOut.size > 0)
     const width = recall<number>(props.memoryKey(), 'curate:list')
     if (typeof width === 'number' && Number.isFinite(width)) listColumn.style.width = `${Math.max(220, Math.min(480, width))}px`
     const grip = el('div', { class: 'curate-list-grip', attrs: { role: 'separator', 'aria-orientation': 'vertical', 'aria-label': 'Resize the genome list', tabindex: '0' } })
@@ -261,10 +300,11 @@ export class CurateStage {
         rename: (id) => this.list.startRename(id),
         closeUp: () => this.closeUp(),
         choose: (kind, anchor) => this.openChooser(kind, anchor),
+        ...(props.layouts === undefined ? {} : { layOut: (id: string) => this.layOut(id) }),
       }),
       suggestions: props.parts.suggestions(this.ctx, { frame: (s) => this.frameSuggestion(s) }),
       history: props.parts.history(this.ctx, { store }),
-      export: props.parts.exporting(this.ctx, { stem: props.stem, store }),
+      export: props.parts.exporting(this.ctx, { stem: props.stem, store, ...(props.layouts === undefined ? {} : { layouts: props.layouts }) }),
       about: props.parts.about(this.ctx, { network: () => this.networkSummary }),
     }
     this.cards.push(...Object.values(this.cardOf))
@@ -343,6 +383,7 @@ export class CurateStage {
         return stage.model
       },
       data: this.data,
+      laidOut: (id: string) => stage.laidOut.has(id),
       colourOf(id: string): GenomeColour {
         const isDark = dark()
         if (coloursDark !== isDark) {
@@ -1333,6 +1374,11 @@ export class CurateStage {
         if (selection.genomes.length !== 1) return false
         this.list.startRename(selection.genomes[0])
         return true
+      case 's':
+      case 'S':
+        if (this.props.layouts === undefined || selection.genomes.length !== 1 || selection.contigs.length > 0) return false
+        this.layOut(selection.genomes[0])
+        return true
       case 'Enter':
         if (event.shiftKey) this.panes.contacts.back?.()
         else this.closeUp()
@@ -1478,6 +1524,30 @@ export class CurateStage {
   }
 
   /** The keys, in a popover. */
+  /**
+   * Open one genome's edit of the reference over the stage (§27.10): its
+   * contigs ordered, turned, joined and cut, its strays sent on, others
+   * brought in — every move a step of this curation's. Back here once it
+   * closes, with what it laid out marked.
+   */
+  private layOut(id: string): void {
+    const layouts = this.props.layouts
+    if (layouts === undefined || this.closed) return
+    this.chooser?.close()
+    layouts.open(id, () => {
+      if (this.closed) return
+      this.laidOut = layouts.laidOut()
+      this.listColumn.classList.toggle('has-laid-out', this.laidOut.size > 0)
+      this.changed('state')
+    })
+  }
+
+  /** The list's column: wider by a mark where a genome is laid out. */
+  private readonly listColumn: HTMLElement
+
+  /** The genomes their edits lay out, by id: the list's mark, read again when an edit closes. */
+  private laidOut: ReadonlySet<string>
+
   private showKeys(): void {
     const existing = this.root.querySelector('.curate-keys')
     if (existing !== null) {
@@ -1495,6 +1565,7 @@ export class CurateStage {
       [['b', 'e'], 'a new MAG, a new element, of the selected contigs'],
       [['⌫'], 'unbin the contigs, dissolve the genome, or unlink (Backspace or Delete)'],
       [['r', 'F2'], 'rename the selected genome'],
+      ...(this.props.layouts === undefined ? [] : [[['s'], 'lay the selected genome out: its contigs ordered, turned and joined, in the reference editor'] as [string[], string]]),
       // Printed as every other part prints them: the contact map's close-up, the selection card, the chooser.
       [['⏎', 'shift+⏎'], 'the contigs of the selected genomes close up, and back'],
       [['/'], 'filter the list'],

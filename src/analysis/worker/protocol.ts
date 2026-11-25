@@ -31,7 +31,7 @@
 
 import type { FeatureSet, PairSet } from '../../annotations/types'
 import type { ReferenceEdit } from '../../genome/edit'
-import type { Curation } from '../../genome/curation'
+import type { CurationDrawn } from '../../curate/layouts'
 import type {
   OrientationSummary,
   PairsBinning,
@@ -302,7 +302,7 @@ export type AnalysisRequest =
        * a task reads the curated genomes, as the view shows them, or is refused
        * by name. Never with {@link edit}.
        */
-      curation?: { key: string; held: Curation }
+      curation?: CurationDrawn
       /**
        * The resolution the reader added that the map is drawn at (§3.4), in
        * base pairs: a whole number of this map's bins, summed — after the edit

@@ -32,15 +32,22 @@ import { AnnotationLoader, leadOf, pairIndexes } from '../annotations/loader'
 import { begin } from '../perf/rendered'
 import { devFeature } from '../state/devFeatures'
 import { EDIT_SCOPE, EditStore, genomeEditKey, readEdit } from '../state/referenceEdit'
+import { curatedMapKey, drawnLayouts, membersInOrder, rebasedEdit, type CurationDrawn, type DrawnLayout } from '../curate/layouts'
+import { curatedAgp, curatedSequences, fastaObjects, sequenceGenomeTable, type CuratedSequences } from '../curate/layoutExports'
+import type { CurateLayouts } from '../curate/ui/CurateStage'
+import { fastaOfObjects } from '../edit/lifted'
+import { PRODUCER } from '../version'
+import { sequenceSets } from '../edit/dotplotLines'
+import { assignmentOf, curatedIdOf, mirrorIntoCuration } from '../curate/genomeEdits'
 import { EditedAssembly, editFingerprint, type ReferenceEdit } from '../genome/edit'
 import { carryRegion, windowInFile } from '../edit/places'
 import { EditStage } from '../edit/EditStage'
 import { pickGenome, type PickableGenome } from '../edit/GenomePicker'
-import { UNBINNED, binningTable, type BinningTable } from '../edit/binning'
+import { UNBINNED, binningTable, curatedBinningTable, type BinningTable } from '../edit/binning'
 import { ReferenceChip } from '../edit/ReferenceChip'
 import { CurationStore, keptCuration } from '../state/curation'
-import { CuratedBinning, curationFingerprint, type Curation } from '../genome/curation'
-import { carryGenomeView } from '../curate/places'
+import { CuratedBinning, curationFingerprint } from '../genome/curation'
+import { carryGenomeView, carryLaidOutView } from '../curate/places'
 import { CurationChip } from '../curate/CurationChip'
 import { exportStem } from '../edit/ExportCard'
 import { DEFAULT_UI_COLORMAP } from '../render/colormaps'
@@ -100,7 +107,7 @@ import {
   type UnitSelection,
 } from '../state/ViewState'
 import { parseRegionString } from '../metacooler/range'
-import { fileMemoryKey, recall, remember } from '../state/UiMemory'
+import { fileMemoryKey, recall, recallBelow, remember } from '../state/UiMemory'
 import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
 import type { PanelLayout } from '../ui/SidePanel'
 import { afterHome, homeParent, hostHolds, removeCard, swapCard } from '../ui/cardLayout'
@@ -2509,7 +2516,9 @@ export class Session {
           source: planned(source, uri, firstWindow),
           ...(binning === undefined ? {} : { binning }),
           ...(edit === undefined ? {} : { edit }),
-          ...(curation === undefined ? {} : { curation }),
+          ...(curation === undefined
+            ? {}
+            : { curation: { key: curation.key, held: curation.held, ...(curation.layouts === undefined ? {} : { layouts: curation.layouts }) } }),
         },
         (done, total, note) => screen.report(done, total, note),
       )
@@ -2520,8 +2529,12 @@ export class Session {
       // What the map is drawn through, by the binning the reader folded: the
       // name the next open of this curation asks under (§33.4).
       const drawnKey = info.curation?.refusal === null ? info.curation.key : undefined
-      this.curationDrawn = curation !== undefined && drawnKey !== undefined ? { key: drawnKey, held: curation.held } : null
-      if (curation !== undefined && drawnKey !== undefined) this.curationKeys.set(curationFingerprint(curation.held), drawnKey)
+      this.curationDrawn =
+        curation !== undefined && drawnKey !== undefined
+          ? { key: drawnKey, held: curation.held, ...(curation.layouts === undefined ? {} : { layouts: curation.layouts }) }
+          : null
+      this.curationAsked = curation === undefined ? null : curation.steps
+      if (curation !== undefined && drawnKey !== undefined) this.curationKeys.set(curation.steps, drawnKey)
       const unCurated = info.curation?.refusal ?? null
       if (unCurated !== null) this.say(`The curation kept for this file is not drawn. ${unCurated}`, uri)
       // A new map in the worker is a map as stored (§6.5): whatever it was told
@@ -5780,7 +5793,13 @@ export class Session {
     const editSame =
       (before === null && (after === null || after.isIdentity)) || (before !== null && after !== null && sameSteps(this.lens?.edit, next))
     const curation = this.curationToOpen(file.uri)
-    const curationSame = (this.curationDrawn?.key ?? null) === (curation?.key ?? null)
+    // The same map where the binning and the layouts drawn are, or the open
+    // asked for these very steps and edits — which it may have found nothing
+    // to draw of.
+    const curationSame =
+      curation === undefined
+        ? this.curationDrawn === null
+        : this.curationDrawn?.key === curation.key || this.curationAsked === curation.steps
     if (editSame && curationSame) return
     const drawn = after === null || after.isIdentity ? null : after
     const carried = this.carryAcrossEntries(file.uri)
@@ -5802,8 +5821,15 @@ export class Session {
           // where the reader chose them, is where to choose them again.
           ...(carried.view === 'selection' && !editSame ? { view: 'contigs' as const, regions: undefined } : {}),
         }
-    await this.open(file.uri, file.source, curationSame ? view : this.carriedThroughCuration(view, curation?.held ?? null))
+    await this.open(file.uri, file.source, curationSame ? view : this.carriedThroughCuration(view, curation ?? null))
   }
+
+  /**
+   * What the last open of the file asked to be drawn through, by its steps and
+   * its genomes' edits (§33.4), whether or not it found anything to draw:
+   * asked again, it is the same map.
+   */
+  private curationAsked: string | null = null
 
   /**
    * A framing of the session's own map with the edit it is drawn through
@@ -5850,30 +5876,49 @@ export class Session {
   /**
    * Open the stage on the file's map (§27.3): one map and its tracks, never a
    * deck. On a metagenome, on one genome of it (§27.10) — `genome`, else the
-   * one in view, else the one the reader picks.
+   * one in view, else the one the reader picks — and, where the curation is on,
+   * on that genome as the curation holds it (§33.4): its edit kept under its
+   * curated id, every contig its edit takes in or lets go a step of the
+   * curation, and the session drawn with the genome laid out once it closes.
    *
-   * @internal SessionCommands opens the stage with it.
+   * @param options.id A curated genome's id, as the curation stage names it.
+   * @param options.onClosed Told once the stage has closed.
+   * @internal SessionCommands and the curation stage open the stage with it.
    */
-  async openEditStage(genome?: string): Promise<void> {
+  async openEditStage(genome?: string, options: { id?: string; onClosed?: () => void } = {}): Promise<void> {
     if (!devFeature('edit') || this.editStage !== null) return
     const file = this.file
     const reader = this.reader
     if (file === null || reader === null) return
     await this.contigs().catch(() => null)
+    const curation = this.isMetacool ? await this.curationStore().catch(() => null) : null
+    if (this.destroyed || this.file !== file || this.editStage !== null) return
     let scope: string | undefined
-    if (this.isMetacool) {
+    let curated: { store: CurationStore; id: string } | null = null
+    if (this.isMetacool && curation !== null) {
+      const id =
+        options.id ??
+        curatedIdOf(curation, genome ?? this.genomeInView()) ??
+        curatedIdOf(curation, (await pickGenome(this.mapLabel(file.uri), this.pickableCuratedGenomes(curation))) ?? undefined)
+      if (id === undefined || curation.binning.indexOfId(id) === undefined) return
+      curated = { store: curation, id }
+      scope = id
+    } else if (this.isMetacool) {
       scope = genome ?? this.genomeInView() ?? (await pickGenome(this.mapLabel(file.uri), this.pickableGenomes())) ?? undefined
       if (scope === undefined) return
     }
-    const store = this.editStore(scope)
+    const store = curated === null ? this.editStore(scope) : this.curatedEditStore(curated.store, curated.id)
     if (store === null || this.destroyed || this.editStage !== null || this.file !== file) return
     const state = this.store.state
     const balance = file.info.hasWeights && state?.balance !== false
     const lanes = this.annotationContext()
     // One genome's contigs, and any brought into it: the picture of them alone.
     const drawn = store.edit.original.genome === undefined ? undefined : [...store.edit.original.names]
+    const stopMirror = curated === null ? null : mirrorIntoCuration(store, curated.store, curated.id)
+    const named = curated === null ? undefined : curated.store.binning.genomes[curated.store.binning.indexOfId(curated.id) ?? -1]?.name
     this.editStage = new EditStage({
       title: this.mapLabel(file.uri),
+      ...(named === undefined || named === scope ? {} : { genomeName: named }),
       memoryKey: () => this.sessionKey() ?? file.uri,
       store,
       // What the method weighs is kept by the reader, where the suggestions
@@ -5892,16 +5937,18 @@ export class Session {
       refine: (request) => reader.cancellable<'refine'>({ kind: 'refine', ...request }),
       // The circles the reader declared, whose origin the stage may set (§27.4).
       circular: () => this.circularStore()?.list() ?? [],
-      // The binning every genome's edit makes, as the edits stand (§27.10).
-      ...(scope === undefined ? {} : { binning: () => this.binning() }),
+      // The binning every genome's edit makes, as the edits stand (§27.10) —
+      // the curation's, where it holds the genomes' contigs (§33.4).
+      ...(scope === undefined ? {} : { binning: () => (curated === null ? this.binning() : curatedBinningTable(curated.store.binning, curated.store.file)) }),
       // Where a genome's contigs and the others belong (§27.10): read without
-      // being asked where the file is a moment's pass.
+      // being asked where the file is a moment's pass — and named by the
+      // genomes as the curation holds them now, which the map drawn may not yet.
       ...(scope === undefined
         ? {}
         : {
             genomeLinks: {
               read: (contigs: string[], onProgress: (done: number, total: number) => void) =>
-                reader.cancellable<'genomeLinks'>({ kind: 'genomeLinks', contigs }, onProgress),
+                reader.cancellable<'genomeLinks'>({ kind: 'genomeLinks', contigs, ...(curated === null ? {} : { assignment: assignmentOf(curated.store) }) }, onProgress),
               auto: (numberOr(file.info.info['nnz']) ?? Number.POSITIVE_INFINITY) <= LINKS_AUTO_PIXELS,
             },
           }),
@@ -5911,14 +5958,58 @@ export class Session {
         ? {}
         : { lanes: { store: lanes.store, ...(lanes.map === undefined ? {} : { map: lanes.map }), manual: lanes.manual, client: lanes.client, groups: lanes.groups } }),
       onClose: () => {
+        stopMirror?.()
         this.editStage = null
         this.referenceChip?.sync()
+        this.curationChip?.sync()
         this.host.sessionChanged(this)
-        // A genome's edit is its own files; the session is not drawn through it.
-        if (scope === undefined) void this.redrawThroughLenses()
+        // The whole reference's edit is drawn through, and a genome's drawn in
+        // its place where the curation holds the genomes (§27.10) — by the
+        // curation stage's own closing, where the stage was opened over it.
+        if (scope === undefined || (curated !== null && this.curateStage === null)) void this.redrawThroughLenses()
+        options.onClosed?.()
       },
     })
     this.host.sessionChanged(this)
+  }
+
+  /**
+   * The edit of one curated genome (§27.10, §33.4): kept under the genome's
+   * id, made on its contigs as the curation holds them — and opened as it is
+   * where it holds exactly those, or else as one step laying them out as the
+   * map draws them, kept only once the reader makes a step there.
+   */
+  private curatedEditStore(curation: CurationStore, id: string): EditStore | null {
+    if (!devFeature('edit')) return null
+    const base = this.sessionKey()
+    const binning = curation.binning
+    const g = binning.indexOfId(id)
+    if (base === null || g === undefined) return null
+    const file = { names: curation.file.names, lengths: curation.file.lengths }
+    const members = membersInOrder(binning, g, file.names, file.lengths)
+    const key = genomeEditKey(base, id)
+    const store = new EditStore(key, { ...members, genome: id }, undefined, file)
+    if (store.refusal === null) {
+      const edits = new Map(Object.entries(this.keptLayouts(base) ?? {}))
+      const drawn = drawnLayouts({ binning, names: file.names, lengths: file.lengths, edits }).find((layout) => layout.id === id) ?? null
+      const rebased = rebasedEdit({ id, name: binning.genomes[g].name, members, kept: store.edit, drawn, when: Date.now() })
+      if (rebased !== null) store.provisional(rebased)
+    }
+    store.subscribe(() => this.referenceChip?.sync())
+    this.editHeld = { key, store }
+    return store
+  }
+
+  /** The curated genomes the stage may edit, as the picker lists them (§27.10, §33.4). */
+  private pickableCuratedGenomes(curation: CurationStore): PickableGenome[] {
+    const base = this.sessionKey()
+    const { lengths } = curation.file
+    return curation.binning.genomes.map((genome) => ({
+      name: genome.name,
+      length: genome.contigs.reduce((sum, c) => sum + lengths[c], 0),
+      contigs: genome.contigs.length,
+      steps: base === null ? 0 : (readEdit(recall<unknown>(genomeEditKey(base, genome.id), EDIT_SCOPE))?.cursor ?? 0),
+    }))
   }
 
   /** Every step undone, and kept to be redone (§27.3). */
@@ -5976,7 +6067,7 @@ export class Session {
    * @internal SessionAnalysis runs a task through the curation the map is
    * drawn through.
    */
-  curationDrawn: { key: string; held: Curation } | null = null
+  curationDrawn: CurationDrawn | null = null
 
   /**
    * The binning each kept history was last drawn as, by the steps it applies —
@@ -5988,36 +6079,65 @@ export class Session {
 
   /**
    * The curation to open a file through: the one kept for it, where the dev
-   * features are on and it has a step applied, named by the binning it folds
-   * into — two histories reaching one binning name one map (§33.4).
+   * features are on and it has a step applied, and every genome's edit of the
+   * reference kept for it that lays the genome out (§27.10) — named by the map
+   * they draw: two histories reaching one binning name one map (§33.4). `steps`
+   * names what was asked, before a reader has folded it.
    */
-  private curationToOpen(uri: string): { key: string; held: Curation } | undefined {
+  private curationToOpen(uri: string): (CurationDrawn & { steps: string }) | undefined {
     if (!devFeature('curate') || !devFeature('metacool')) return undefined
-    const key = this.memoryKey(uri)
-    const held = keptCuration(key)
-    if (held === null) return undefined
-    const steps = curationFingerprint(held)
     // A map that stores both triangles is never drawn through a curation (§33.4):
     // asking would re-open the file only to be told so again.
     if (this.file?.info.info['storage-mode'] === 'square') return undefined
+    const key = this.memoryKey(uri)
     const store = this.curationHeld?.key === key ? this.curationHeld.store : null
-    // The store folds the kept curation over the file's binning: its binning's
-    // fingerprint is the reader's, where the two are the one history — the
-    // reader's own steps too, made after a record the store refused.
-    if (store !== null && curationFingerprint(store.curation) === steps) {
-      return { key: store.binning.fingerprint(), held }
-    }
     // A record the store refused — kept for another binning of the file — is
     // held untouched, never drawn (§33.2).
-    if (store !== null && store.refusal !== null) return undefined
-    // A history the reader has folded before, by the binning it answered; one
-    // it has not, by its steps — another name for the same map, never one map's
+    const kept = keptCuration(key)
+    const held = kept !== null && store !== null && store.refusal !== null ? null : kept
+    const layouts = this.keptLayouts(key)
+    if (held === null && layouts === undefined) return undefined
+    const edits = layouts === undefined ? [] : Object.keys(layouts).sort().map((id) => `${id}=${editFingerprint(layouts[id])}`)
+    const steps = `${held === null ? 'none' : curationFingerprint(held)}${edits.length === 0 ? '' : `+${edits.join(',')}`}`
+    const drawn: CurationDrawn = { key: '', held, ...(layouts === undefined ? {} : { layouts }) }
+    // The store folds the kept curation over the file's binning: its map's name
+    // is the reader's, where the two are the one history — the reader's own
+    // steps too, made after a record the store refused.
+    const same = store !== null && (held === null ? store.curation.cursor === 0 : curationFingerprint(store.curation) === curationFingerprint(held))
+    if (store !== null && same) {
+      const binning = store.binning
+      const laid = drawnLayouts({ binning, names: store.file.names, lengths: store.file.lengths, edits: new Map(Object.entries(layouts ?? {})) })
+      // Nothing to draw: the file's binning, its genomes as they are.
+      if (held === null && laid.length === 0) return undefined
+      return { ...drawn, key: curatedMapKey(binning, laid), steps }
+    }
+    // A history the reader has folded before, by the map it answered; one it
+    // has not, by its steps — another name for the same map, never one map's
     // name for another.
-    return { key: this.curationKeys.get(steps) ?? `steps ${steps}`, held }
+    return { ...drawn, key: this.curationKeys.get(steps) ?? `steps ${steps}`, steps }
   }
 
-  /** A view carried from the binning drawn to the one about to be (§33.4). */
-  private carriedThroughCuration(view: ViewState, next: Curation | null): ViewState {
+  /**
+   * Every genome's edit of the reference kept for a file with a step applied
+   * (§27.10), by the curated genome id it is kept under: what the map lays
+   * each genome out by. None while the reference editing is off.
+   */
+  private keptLayouts(fileKey: string): Record<string, ReferenceEdit> | undefined {
+    if (!devFeature('edit')) return undefined
+    const out: Record<string, ReferenceEdit> = {}
+    for (const { rest: id } of recallBelow<unknown>(genomeEditKey(fileKey, ''), EDIT_SCOPE)) {
+      if (id === '' || out[id] !== undefined) continue
+      const edit = readEdit(recall<unknown>(genomeEditKey(fileKey, id), EDIT_SCOPE))
+      if (edit !== null && edit.cursor > 0) out[id] = edit
+    }
+    return Object.keys(out).length > 0 ? out : undefined
+  }
+
+  /**
+   * A view carried from the binning drawn to the one about to be (§33.4), and
+   * from the genomes' layouts drawn to theirs (§27.10).
+   */
+  private carriedThroughCuration(view: ViewState, next: CurationDrawn | null): ViewState {
     const store = this.curationHeld?.key === this.sessionKey() ? (this.curationHeld?.store ?? null) : null
     if (store === null) {
       // The binnings cannot be folded without the file's: a genome named is
@@ -6027,14 +6147,22 @@ export class Session {
         : { ...view, view: 'genomes', genome: undefined, genome2: undefined, genomes: undefined, region: undefined, region2: undefined, regions: undefined, focus: undefined }
     }
     const before = CuratedBinning.of(store.file, this.curationDrawn?.held ?? null)
-    const after = CuratedBinning.of(store.file, next)
-    return carryGenomeView(view, before, after, store.file.names)
+    const after = CuratedBinning.of(store.file, next?.held ?? null)
+    const carried = carryGenomeView(view, before, after, store.file.names)
+    // The sequences the next map draws: every contig no layout takes apart,
+    // and every sequence of a layout.
+    const laid = drawnLayouts({ binning: after, names: store.file.names, lengths: store.file.lengths, edits: new Map(Object.entries(next?.layouts ?? {})) })
+    if (laid.length === 0 && (this.curationDrawn?.layouts === undefined || Object.keys(this.curationDrawn.layouts).length === 0)) return carried
+    const inLayouts = new Set(laid.flatMap((layout) => after.genomes[layout.genome].contigs.map((c) => store.file.names[c])))
+    const rows = new Set(laid.flatMap((layout) => layout.sequences.map((sequence) => sequence.name)))
+    const contigs = new Set(store.file.names)
+    return carryLaidOutView(carried, (name) => rows.has(name) || (contigs.has(name) && !inLayouts.has(name)))
   }
 
   /** Steps applied to the binning — the store's, else what the map is drawn through. */
   private curationSteps(): number {
     if (this.curationHeld !== null && this.curationHeld.key === this.sessionKey()) return this.curationHeld.store.applied
-    return this.curationDrawn?.held.cursor ?? 0
+    return this.curationDrawn?.held?.cursor ?? 0
   }
 
   /** The heading's word on the genomes, with its questions answered by this session. */
@@ -6043,6 +6171,7 @@ export class Session {
   private curationChipFor(): CurationChip {
     this.curationChip = new CurationChip({
       steps: () => this.curationSteps(),
+      laidOut: () => (this.curationDrawn === null ? 0 : (this.file?.info.curation?.laidOut ?? 0)),
       onOpen: () => void this.openCurateStage(),
       onRevert: () => void this.revertCuration(),
     })
@@ -6097,6 +6226,7 @@ export class Session {
         sourceBytes: file.info.sourceBytes ?? null,
         parts: curateParts,
         memoryKey: () => this.sessionKey() ?? file.uri,
+        ...(devFeature('edit') ? { layouts: this.curateLayouts(store, file.uri) } : {}),
         onClose: () => {
           this.curateStage = null
           this.curationChip?.sync()
@@ -6120,6 +6250,57 @@ export class Session {
       return
     }
     this.host.sessionChanged(this)
+  }
+
+  /**
+   * The genomes' edits of the reference inside the curation stage (§27.10,
+   * §33.4): the ids they are kept under, the genomes they lay out as the
+   * binning stands, a genome's opened over the stage, and every genome's
+   * sequences written as the session draws them (§33.8).
+   */
+  private curateLayouts(curation: CurationStore, uri: string): CurateLayouts {
+    const fileKey = (): string => this.sessionKey() ?? this.memoryKey(uri)
+    const drawn = (): DrawnLayout[] =>
+      drawnLayouts({
+        binning: curation.binning,
+        names: curation.file.names,
+        lengths: curation.file.lengths,
+        edits: new Map(Object.entries(this.keptLayouts(fileKey()) ?? {})),
+      })
+    const written = (): CuratedSequences => curatedSequences(curation.binning, curation.file, drawn())
+    const sequence = (): { entry: AnnotationEntry; client: AnnotationClient } | null => {
+      const held = this.annotations
+      const own = held === null ? null : sequenceSets(held.store.entries).own
+      return held === null || own === null ? null : { entry: own, client: held.client }
+    }
+    return {
+      kept: () => new Set(recallBelow<unknown>(genomeEditKey(fileKey(), ''), EDIT_SCOPE).map(({ rest }) => rest).filter((id) => id !== '')),
+      laidOut: () => new Set(drawn().map((layout) => layout.id)),
+      open: (id, onClosed) => void this.openEditStage(undefined, { id, onClosed }),
+      agp: () => {
+        const out = written()
+        return {
+          text: curatedAgp(out, { file: this.mapLabel(uri), by: PRODUCER, created: new Date().toISOString(), steps: curation.applied }),
+          sequences: out.sequences.length,
+          laidOut: out.genomes.filter((genome) => genome.laidOut).length,
+        }
+      },
+      sequences: () => sequenceGenomeTable(written(), curation.file),
+      sequenceFrom: () => sequence()?.entry.label ?? null,
+      fasta: async (onProgress, cancelled) => {
+        const from = sequence()
+        if (from === null) return null
+        const out = await fastaOfObjects(
+          fastaObjects(written()),
+          async (name, start, end) => {
+            const got = await from.client.request<'bases'>({ kind: 'bases', entry: from.entry.id, regions: [{ contig: name, start, end }] })
+            return got.regions[0]?.bases ?? null
+          },
+          { onProgress, cancelled },
+        )
+        return out === null ? null : { blob: new Blob(out.parts as BlobPart[], { type: 'text/plain' }), missing: out.missing }
+      },
+    }
   }
 
   /** The file's binning back: every step undone, and kept to be redone (§33.4). */

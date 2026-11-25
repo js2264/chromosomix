@@ -268,6 +268,17 @@ describe('the controller', () => {
     expect(model.selection.genomes).toEqual([])
   })
 
+  it('mints no id a genome’s edit of the reference is kept under (§27.10)', async () => {
+    const { base, evidence } = community()
+    const store = new CurationStore(`curate-model-${++keys}`, base, fileBinning(base), () => 0)
+    const client: CurateClient = { state: (curation, weights) => ({ promise: Promise.resolve(stateAnswer(evidence, CuratedBinning.of(base, curation), weights)), cancel: () => {} }) }
+    const model = new CurateModel(store, client, { schedule: (run) => (run(), () => {}), reservedIds: () => ['curated:1', 'curated:2'] })
+    await model.settled()
+    model.selectContigs([18])
+    expect(model.createFromSelected('mag')).toBe('curated:3')
+    model.dispose()
+  })
+
   it('renames, refusing a taken name and the pool’s', async () => {
     const { model } = setup()
     await model.settled()

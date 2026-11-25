@@ -263,6 +263,19 @@ export class EditStore {
     this.set(edit)
   }
 
+  /**
+   * Hold an edit without keeping it (§27.10): what a genome's stage opens on
+   * where the curation has moved the genome's contigs since its edit was kept
+   * (`curate/layouts.ts`). The kept record stays as it was until the reader
+   * makes a step, which keeps this edit with it.
+   */
+  provisional(edit: ReferenceEdit): void {
+    if (edit === this.held) return
+    this.held = edit
+    this.folded = null
+    for (const listener of this.listeners) listener()
+  }
+
   private set(next: ReferenceEdit): void {
     if (next === this.held) return
     this.held = next

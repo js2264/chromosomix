@@ -12,6 +12,7 @@
  */
 
 import { EditedAssembly, isGap, type ReferenceEdit } from '../genome/edit'
+import type { BaseBinning, CuratedBinning } from '../genome/curation'
 
 /** The name the format gives no genome, which the table leaves out. */
 export const UNBINNED = '__unbinned__'
@@ -87,4 +88,26 @@ export function binningTable(contigs: ReadonlyArray<{ name: string; genome: stri
     genomes.add(genome)
   }
   return { text: lines.length === 0 ? '' : `${lines.join('\n')}\n`, contigs: lines.length, genomes: genomes.size, moved, notes }
+}
+
+/**
+ * The contig → MAG table of a curated metagenome (§33.4), in the same two
+ * columns: where a curation holds the genomes' contigs, every genome's edit
+ * has made its own moves a step of it (`curate/layouts.ts`), and the curation's
+ * binning is the one table — each contig in the genome it holds it in, by its
+ * name now.
+ */
+export function curatedBinningTable(binning: CuratedBinning, base: BaseBinning): BinningTable {
+  const lines: string[] = []
+  const genomes = new Set<number>()
+  let moved = 0
+  for (let c = 0; c < base.names.length; c++) {
+    const g = binning.genomeOf[c]
+    const was = base.genomeOf[c]
+    if ((g < 0 ? UNBINNED : binning.genomes[g].id) !== (was < 0 ? UNBINNED : base.genomes[was].name)) moved++
+    if (g < 0) continue
+    lines.push(`${base.names[c]}\t${binning.genomes[g].name}`)
+    genomes.add(g)
+  }
+  return { text: lines.length === 0 ? '' : `${lines.join('\n')}\n`, contigs: lines.length, genomes: genomes.size, moved, notes: [] }
 }

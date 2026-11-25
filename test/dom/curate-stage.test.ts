@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CuratedBinning, fileBinning } from '@/genome/curation'
 import { stateAnswer } from '@/curate/answer'
 import type { CurateContext, CuratePane } from '@/curate/ui/context'
-import { CurateStage, type CurateCard, type CurateParts } from '@/curate/ui/CurateStage'
+import { CurateStage, type CurateCard, type CurateLayouts, type CurateParts } from '@/curate/ui/CurateStage'
 import { CurationStore } from '@/state/curation'
 import type { CurationFocusResult, CurationNetworkResult } from '@/worker/curateProtocol'
 import { setUpDom, textsOf, type DomTeardown } from '../support/dom'
@@ -61,7 +61,9 @@ function card(name: string): CurateCard {
   return { element, update: () => {} }
 }
 
-async function open(options: { failing?: () => boolean; counting?: () => boolean; boxed?: boolean } = {}): Promise<{ stage: CurateStage; store: CurationStore; told: string[]; ctx: () => CurateContext }> {
+async function open(
+  options: { failing?: () => boolean; counting?: () => boolean; boxed?: boolean; layouts?: CurateLayouts } = {},
+): Promise<{ stage: CurateStage; store: CurationStore; told: string[]; ctx: () => CurateContext }> {
   const { base, evidence } = community()
   const store = new CurationStore(`curate-stage-${++keys}`, base, fileBinning(base), () => 0)
   const told: string[] = []
@@ -104,6 +106,7 @@ async function open(options: { failing?: () => boolean; counting?: () => boolean
     gate: null,
     onClose: () => {},
     debounce: 0,
+    ...(options.layouts === undefined ? {} : { layouts: options.layouts }),
   })
   stages.push(stage)
   await settle()
@@ -464,5 +467,48 @@ describe('the curation stage', () => {
     await Promise.resolve()
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
     expect(ctx().model.selection.genomes).toEqual([])
+  })
+
+  it('lays one selected genome out with S, over the stage, and marks it in the list once its edit has closed', async () => {
+    const opened: string[] = []
+    let closed: (() => void) | null = null
+    let laid: ReadonlySet<string> = new Set()
+    const layouts: CurateLayouts = {
+      kept: () => new Set(),
+      laidOut: () => laid,
+      open: (id, onClosed) => {
+        opened.push(id)
+        closed = onClosed
+      },
+      agp: () => ({ text: '', sequences: 0, laidOut: 0 }),
+      sequences: () => ({ text: '', rows: 0 }),
+      sequenceFrom: () => null,
+      fasta: async () => null,
+    }
+    const { ctx } = await open({ layouts })
+    ctx().model.selectGenomes(['X1', 'X2'])
+    key('s')
+    // Two genomes are no one genome to lay out.
+    expect(opened).toEqual([])
+    ctx().model.selectGenomes(['X1'])
+    key('s')
+    expect(opened).toEqual(['X1'])
+    expect(ctx().laidOut('X1')).toBe(false)
+    laid = new Set(['X1'])
+    ;(closed as unknown as () => void)()
+    await settle()
+    expect(ctx().laidOut('X1')).toBe(true)
+    expect(document.querySelector('[data-genome="X1"] .curate-laid-out')).not.toBeNull()
+    expect(document.querySelector('[data-genome="X2"] .curate-laid-out')).toBeNull()
+  })
+
+  it('prints S in the keys sheet only where the reference editing is on, and takes it only then', async () => {
+    const { ctx } = await open()
+    key('?')
+    expect(textsOf(document, '.curate-keys-row').some((row) => row.includes('lay the selected genome out'))).toBe(false)
+    ctx().model.selectGenomes(['X1'])
+    const event = new KeyboardEvent('keydown', { key: 's', bubbles: true, cancelable: true })
+    window.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
   })
 })

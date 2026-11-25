@@ -32,6 +32,7 @@ import { yieldToEventLoop } from '../../async'
 import { LOAD_REPORT_MS, startBusyProbe } from '../../perf/busy'
 import { ViewerError } from '../../errors'
 import { MetaCooler } from '../../metacooler/MetaCooler'
+import { layoutEdits } from '../../curate/layouts'
 import type { ByteSource } from '../../types'
 import { COMMIT, VERSION } from '../../version'
 import { serialiseError } from '../../worker/protocol'
@@ -156,7 +157,7 @@ async function handleOpen(
   // task reads the curated genomes, as the view draws them. Before the total
   // and the resolution, which are drawn beneath it and summed over it.
   if (request.curation !== undefined) {
-    const seen = MetaCooler.withCuration(mc, request.curation.held)
+    const seen = MetaCooler.withCuration(mc, request.curation.held, undefined, layoutEdits(request.curation))
     if (seen.refusal !== null) {
       mc.close()
       throw new ViewerError('unsupported', seen.refusal)

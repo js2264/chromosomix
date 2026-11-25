@@ -49,7 +49,7 @@ interface Mounted extends TestStage {
 }
 
 /** A card over the community, counted once, the hooks it asks kept. */
-async function mount(ctxOf: (stage: TestStage) => CurateContext = (stage) => stage.ctx): Promise<Mounted> {
+async function mount(ctxOf: (stage: TestStage) => CurateContext = (stage) => stage.ctx, options: { layOut?: boolean } = {}): Promise<Mounted> {
   const stage = testContext()
   const asked: string[] = []
   const anchors: Array<HTMLElement | undefined> = []
@@ -60,6 +60,7 @@ async function mount(ctxOf: (stage: TestStage) => CurateContext = (stage) => sta
       asked.push(`choose ${kind}`)
       anchors.push(anchor)
     },
+    ...(options.layOut === true ? { layOut: (id: string) => asked.push(`lay out ${id}`) } : {}),
   }
   const card = new SelectionCard(ctxOf(stage), hooks)
   cards.push(card)
@@ -156,6 +157,18 @@ describe('the selection card, by what is selected', () => {
     // What `at least` means, once, under the first list that leans on it.
     expect(textsOf(document.body, '.curate-selection-key')).toEqual(['at least: the cautious lower bound the contacts allow · the background 0.0062'])
     expect(document.querySelector('.curate-selection-key')?.previousElementSibling?.textContent).toBe('meets most')
+  })
+
+  it('offers to lay one genome out where the reference editing is on, and says when it is laid out', async () => {
+    const m = await mount((stage) => ({ ...stage.ctx, laidOut: (id: string) => id === 'P' }), { layOut: true })
+    await select(m, { genomes: ['X1'] })
+    expect(actLabels()).toEqual(['rename', 'merge into…', 'close-up', 'lay out', 'make it an element', 'dissolve'])
+    expect(actKeys()).toEqual(['F2', 'M', '⏎', 'S', 'E', '⌫'])
+    ;(document.querySelector('[data-focus="act:lay out"]') as HTMLButtonElement).click()
+    expect(m.asked).toEqual(['lay out X1'])
+    // An element too; one laid out says so.
+    await select(m, { genomes: ['P'] })
+    expect(actLabels()).toContain('laid out…')
   })
 
   it('shows an element: its hosts held and offered', async () => {
