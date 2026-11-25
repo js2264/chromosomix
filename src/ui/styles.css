@@ -5786,6 +5786,53 @@ p {
   color: var(--text);
 }
 
+/* A head that carries controls (`ModalProps.head`): the caller's tools before
+   the ✕, a hairline between them, and — with a centre — three columns, the
+   centre in the middle of the bar while the title's column holds its first
+   words, the end never cut; narrower (`is-stacked`, measured by the modal), the
+   centre on a line of its own under the title and the end. */
+.modal-head-end {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 0.5rem;
+}
+.modal-head-end > :not(.btn-close) {
+  padding-right: 0.5rem;
+  border-right: 1px solid var(--border);
+}
+.modal-head.has-centre {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
+}
+.modal-head.has-centre > .modal-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.modal-head-centre {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+.modal-head.has-centre.is-stacked {
+  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-areas:
+    'title end'
+    'centre centre';
+  row-gap: 0.4rem;
+}
+.modal-head.is-stacked > .modal-title {
+  grid-area: title;
+}
+.modal-head.is-stacked > .modal-head-centre {
+  grid-area: centre;
+}
+.modal-head.is-stacked > .modal-head-end {
+  grid-area: end;
+}
+
 /* Where the file's own columns end and what its creator joined in begins. One
    rule down the left of the first joined column, header and cells alike, which
    is the table's form of the record card's `.kv-divider`: without it a CheckM

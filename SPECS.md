@@ -18023,9 +18023,13 @@ which starts a curation of its own in its place, drawn as any other.
 
 *Curate the genomes* — the palette's, or a press on the heading's word on the genomes (§33.4) —
 opens a stage on the whole window (`stageDialog`, §27.3's shell), titled `Curate the genomes ·
-<map>`, its controls in the scale of its words — the title, every button, chip, tab and key cap, the
-inspector's and the chooser's too, at the app's steps times the reader's text scale — and *tidy*
-bordered as the tools beside it. **Escape never closes it**: it cancels the innermost thing — the keys' sheet, a chooser, a
+<map>`. Its **title bar carries its controls**, so the pictures keep the height a row of them would
+take: the pictures' tabs in the middle of the bar, and *tidy*, undo, redo, the keys' sheet and the
+inspector's toggle before its `×`, a hairline between (`ModalProps.head`); where the bar cannot hold
+the title's first words — twelve of its ems, the rest cut short and whole under the pointer — beside
+them, the tabs go on a line of their own under the title. Its controls are in the scale of its
+words — the title, every button, chip, tab and key cap, the inspector's and the chooser's too, at
+the app's steps times the reader's text scale — and *tidy* bordered as the tools beside it. **Escape never closes it**: it cancels the innermost thing — the keys' sheet, a chooser, a
 drag, a picture's own press or lasso in flight, a rename, a field's text (and then the field: the
 keyboard goes back to the list), an auto
 run, the selection — and `×` alone closes it, which loses nothing: every step is kept with the file
@@ -18041,7 +18045,7 @@ one, still lit with it; narrower than 440 px the large one shows alone and tabs 
 right is the reference stage's sunken column of cards (§27.3), in the mode's order: *apply
 suggestions* (manual, review or auto), then the selection, the history, the suggestions, the export
 and *about the map* — the suggestions first in review and in auto —; its toggle, *Hide the
-inspector*, stands at the toolbar's end, over no card. Every column keeps its width per file, and its
+inspector*, stands among the title bar's tools, over no card. Every column keeps its width per file, and its
 two dividers are alike: the column's hairline, its grip shown under the pointer or the keyboard.
 
 **One selection, one hover**, in every part: whole genomes, or contigs, one kind at a time; a press
@@ -18204,7 +18208,7 @@ genome's, a contig's (it would hide the contig in every box that finds a place),
 non-ASCII character, a comma (metaTOR lists genomes with them) or a colon, and any case of the words
 a table means no genome by — `__unbinned__`, `NA`, `nan`, `n/a`, `ND`, `n/d`, `-1`.
 
-**The readout**, on its own line under the toolbar — two in a narrow centre, its height held so a hover never moves the pictures — says what is under the
+**The readout**, on its own line at the head of the pictures — two in a narrow centre, its height held so a hover never moves the pictures — says what is under the
 pointer; idle, the curation's tally: `MAGs 50 → 45 · 127 elements · 12,412 unbinned · 6 steps · 400
 contigs moved · links +3 −1`. While the pictures draw a preview (*As it would be*, below) it says so
 first, *as it would be*, and its tally is the binning's as it would be against the binning as it is
@@ -18220,7 +18224,7 @@ of the surest tree that joins them —, the moves by the genome they leave and t
 recruits by the genome they join, an element's links and unlinks together; what is less sure stays a
 question of its own. They come likely first, and among those the merges, then the moves, the recruits
 and the host links, since a merge changes every affinity of the genome it makes (on MM133 one merge
-answers eighteen moves between three fragments). The **band** under the toolbar is three lines
+answers eighteen moves between three fragments). The **band** under the readout is three lines
 whatever is asked, so nothing under it moves from one question to the next: where the question
 stands — `3 of 41 likely · 138 less likely after`, the tail only where it fits whole — with its keys
 at the right, the same five on every question (`↓ ↑` dimmed for a question of one member, *hold

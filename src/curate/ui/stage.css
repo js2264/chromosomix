@@ -123,14 +123,15 @@
   min-height: 0;
 }
 
-/* The toolbar: which picture is large, the readout, the tools. */
-.curate-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-height: 2.5rem;
-  padding: 0.3rem 0.6rem;
-  border-bottom: 1px solid var(--border);
+/* The title bar carries the stage's controls (`ModalProps.head`): which
+   picture is large in its middle, the tools before its ✕ — no row of their
+   own under it, which the pictures' height paid for. Drawn as tight as the
+   controls allow, so the bar is no taller than the title alone was. */
+.modal-curate .modal-head {
+  padding-block: 0.3rem;
+}
+.modal-curate .modal-head-centre,
+.modal-curate .modal-head-end {
   font-size: calc(var(--step--1) * var(--text-scale, 1));
 }
 .curate-tabs {
@@ -143,8 +144,8 @@
   align-items: center;
   white-space: nowrap;
 }
-/* The readout: its own line under the toolbar — two in a narrow centre —, its
-   height held, so a hover that says more never moves the pictures. */
+/* The readout: its own line at the head of the pictures — two in a narrow
+   centre —, its height held, so a hover that says more never moves them. */
 .curate-readout {
   flex: 0 0 auto;
   box-sizing: border-box;
@@ -176,27 +177,11 @@
   align-items: center;
   gap: 0.2rem;
   flex: 0 0 auto;
-  margin-left: auto;
 }
 /* The inspector's toggle, docked here from the shell's corner (`dockSideToggle`). */
 .curate-tools .stage-side-toggle {
   position: static;
   margin-left: 0.2rem;
-}
-/* A narrow centre draws its tabs and tools closer, so the toolbar keeps its
-   one line at the stage's type; a tight one lets the tools go under the tabs
-   rather than run under the inspector. */
-.curate-centre.is-narrow .curate-toolbar {
-  gap: 0.4rem;
-}
-.curate-centre.is-narrow .curate-tab {
-  padding-inline: 0.45rem;
-}
-.curate-centre.is-narrow .curate-tab > .kbd-inline {
-  margin-left: 0.25rem;
-}
-.curate-centre.is-tight .curate-toolbar {
-  flex-wrap: wrap;
 }
 
 /* While the pictures draw the binning as it would be: the readout says so
@@ -554,7 +539,7 @@
 
 /* The inspector's column: a little narrower than the reference stage's, the
    pictures being three; no room kept at its foot for the toggle, which is the
-   toolbar's here. */
+   title bar's here. */
 .stage-side.curate-side {
   flex-basis: 23rem;
   padding-bottom: 0.8rem;

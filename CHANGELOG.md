@@ -125,13 +125,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   palette's *Curate the genomes*, or the heading's word on the genomes, opens a stage on the whole
   window: the genome list (MAGs, elements and the unbinned pool, each MAG's quality recomputed from
   its contigs' marker genes as miComplete computes it), one large picture with the other two small
-  beside it, and the inspector. Contigs are moved, recruited or unbinned, genomes merged, made,
-  dissolved, renamed or retyped, elements linked to the MAGs that host them — by dragging onto a
-  genome, a section or the pool, or by keys — each step undone with ⌘Z. The app suggests merges,
-  recruits, moves and host links from the contacts and the markers; review asks them as questions, an
-  organism's fragments one question, each with its price — every changed MAG's completeness and
-  redundancy before → after, in metaTOR's grades — and auto takes the sure ones, holding back any that
-  would lower a grade. What the curation makes leaves as tables for `metacooler reassign` and
+  beside it, and the inspector, under a title bar that carries the stage's controls — the pictures'
+  tabs in its middle, *tidy*, undo, redo, the keys and the inspector's toggle beside its `×`.
+  Contigs are moved, recruited or unbinned, genomes merged, made, dissolved, renamed or retyped,
+  elements linked to the MAGs that host them — by dragging onto a genome, a section or the pool, or
+  by keys — each step undone with ⌘Z. The app suggests merges, recruits, moves and host links from
+  the contacts and the markers; review asks them as questions, an organism's fragments one question,
+  each with its price — every changed MAG's completeness and redundancy before → after, in metaTOR's
+  grades — and auto takes the sure ones, holding back any that would lower a grade. What the curation makes leaves as tables for `metacooler reassign` and
   `metacooler annotate`, never as a written map.
 
 - **A genome's edit of the reference inside the curation — a dev feature (§27.10, §33.4, §33.8).**

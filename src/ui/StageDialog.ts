@@ -20,7 +20,7 @@
 
 import { el } from './dom'
 import { icon, iconButton } from './icons'
-import { Modal } from './Modal'
+import { Modal, type ModalProps } from './Modal'
 import { recall, remember } from '../state/UiMemory'
 
 /** Narrower than this the controls wrap; wider and the picture is the loser. */
@@ -42,6 +42,8 @@ export interface StageDialogProps {
   /** Extra classes on the stage and the sidebar, for a caller's own rules. */
   stageClass?: string
   sideClass?: string
+  /** Controls in the dialog's head, beside its title (`ModalProps.head`). */
+  head?: ModalProps['head']
   /** Where the sidebar's width is remembered: the file's key and a scope. */
   memoryKey: () => string
   scope: string
@@ -60,6 +62,7 @@ export function stageDialog(props: StageDialogProps): Modal {
     title: props.title,
     // Always a name: a figure's own title or the structure row's label.
     titleIsName: true,
+    ...(props.head === undefined ? {} : { head: props.head }),
     variant: `modal-stage${props.variant === undefined ? '' : ` ${props.variant}`}`,
     body: () => {
       const stage = el(

@@ -422,9 +422,39 @@ describe('the curation stage', () => {
     expect(readout.textContent).toBe('4 MAGs · 1 element · 1 unbinned · as in the file')
   })
 
-  it('docks the inspector’s toggle in the toolbar, named for the inspector, and words the modes by what they apply', async () => {
+  it('keeps its controls in the title bar: the tabs in its middle, the tools before its ✕, no row of their own', async () => {
     await open()
-    const toggle = document.querySelector('.curate-tools .stage-side-toggle') as HTMLButtonElement
+    const head = document.querySelector('.modal-curate .modal-head') as HTMLElement
+    expect(head.classList.contains('has-centre')).toBe(true)
+    expect([...head.children].map((node) => node.className)).toEqual(['modal-title is-name', 'modal-head-centre', 'modal-head-end'])
+    // Whole under the pointer, where a narrow bar cuts it short.
+    expect(head.querySelector('.modal-title')?.getAttribute('title')).toBe('Curate the genomes · community.metacool')
+    expect(textsOf(head.querySelector('.modal-head-centre') as HTMLElement, '[data-pane-tab] > span')).toEqual(['contacts', 'hosts', 'scatter'])
+    const end = head.querySelector('.modal-head-end') as HTMLElement
+    expect([...end.children].map((node) => node.className)).toEqual(['curate-tools', 'btn-close'])
+    // Tidy, undo, redo, the keys, then the inspector's toggle.
+    const tools = [...(end.querySelector('.curate-tools') as HTMLElement).children] as HTMLElement[]
+    // Each named by its word, or an icon by its label without the key it is bound to.
+    expect(tools.map((node) => (node.textContent === '' ? (node.getAttribute('aria-label') ?? '').replace(/ \(.*\)$/, '') : node.textContent))).toEqual([
+      'tidy',
+      'Undo the last step',
+      'Redo it',
+      'Keys on this stage',
+      'Hide the inspector',
+    ])
+    // The centre starts with the readout: nothing of a toolbar is left in it.
+    expect((document.querySelector('.curate-centre') as HTMLElement).firstElementChild?.classList.contains('curate-readout')).toBe(true)
+    expect(document.querySelector('.curate-toolbar')).toBeNull()
+    // A tab in the bar still chooses the large picture.
+    ;(head.querySelector('[data-pane-tab="scatter"]') as HTMLButtonElement).click()
+    expect(document.querySelector('.curate-slot.is-large')?.getAttribute('data-slot')).toBe('scatter')
+    expect(head.querySelector('[data-pane-tab="scatter"]')?.getAttribute('aria-pressed')).toBe('true')
+    ;(head.querySelector('[data-pane-tab="contacts"]') as HTMLButtonElement).click()
+  })
+
+  it('docks the inspector’s toggle in the title bar, named for the inspector, and words the modes by what they apply', async () => {
+    await open()
+    const toggle = document.querySelector('.modal-head-end .curate-tools .stage-side-toggle') as HTMLButtonElement
     expect(toggle).not.toBeNull()
     // Not floating over the inspector's cards any more.
     expect(document.querySelector('.stage-modal > .stage-side-toggle')).toBeNull()

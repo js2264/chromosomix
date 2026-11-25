@@ -224,7 +224,8 @@ await sleep(300)
 await page.evaluate(() => {
   window.showSaveFilePicker = undefined
 })
-for (const button of await page.$$('.curate-export-file')) {
+// A file the session cannot write yet — the FASTA, with no assembly's sequence loaded — is left alone.
+for (const button of await page.$$('.curate-export-file:not([disabled])')) {
   const [download] = await Promise.all([page.waitForEvent('download', { timeout: 10_000 }).catch(() => null), button.click()])
   if (download !== null) {
     const name = download.suggestedFilename()

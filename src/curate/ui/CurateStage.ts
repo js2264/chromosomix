@@ -2,12 +2,13 @@
  * The curation stage (SPECS §33.3): the whole window, given to one task — the
  * metagenome's binning, curated by hand and by suggestion.
  *
- * Three columns: the **genome list** on the left, which never leaves the
- * screen, so anything held can be dropped on it; the **pictures** in the middle
- * — one large and the other two small beside it, lit together, the large one
- * following the review — under a toolbar whose readout says what is under the
- * pointer, or the curation's running tally; and the **inspector** on the
- * right, its cards in the order the mode wants them.
+ * Three columns under a title bar that carries the stage's controls — the
+ * pictures' tabs in its middle, the tools before its ✕: the **genome list** on
+ * the left, which never leaves the screen, so anything held can be dropped on
+ * it; the **pictures** in the middle — one large and the other two small beside
+ * it, lit together, the large one following the review — under a readout that
+ * says what is under the pointer, or the curation's running tally; and the
+ * **inspector** on the right, its cards in the order the mode wants them.
  *
  * The stage owns what joins the parts: the controller (`curate/model.ts`), the
  * keys (`ui/stageKeys.ts`), the one drag in flight, the readout, the theme, the
@@ -131,7 +132,7 @@ export interface CurateStageProps {
 const PANES = ['contacts', 'hosts', 'scatter'] as const
 type PaneName = (typeof PANES)[number]
 const PANE_WORD: Record<PaneName, string> = { contacts: 'contacts', hosts: 'hosts', scatter: 'GC × coverage' }
-/** A picture's tab: one short word, so the readout beside the tabs keeps its room. */
+/** A picture's tab: one short word, so the title bar keeps the title, the tabs and the tools on one line. */
 const PANE_TAB: Record<PaneName, string> = { contacts: 'contacts', hosts: 'hosts', scatter: 'scatter' }
 const PANE_KEY: Record<PaneName, string> = { contacts: '1', hosts: '2', scatter: '3' }
 
@@ -167,7 +168,7 @@ export class CurateStage {
   private readonly status: HTMLElement
   private readonly paneArea: HTMLElement
   private readonly tabs: HTMLElement
-  /** The toolbar's tools at its right: tidy, undo, redo, the keys, and the inspector's toggle. */
+  /** The title bar's tools before its ✕: tidy, undo, redo, the keys, and the inspector's toggle. */
   private readonly tools: HTMLElement
   private readonly list: GenomeList
   private readonly panes: Record<PaneName, CuratePane & { closeUp?(): void; back?(): void }>
@@ -224,7 +225,8 @@ export class CurateStage {
     this.laidOut = props.layouts?.laidOut() ?? new Set()
     this.ctx = this.context()
 
-    // The centre: toolbar, band, status, panes.
+    // The title bar's controls — the tabs in its middle, the tools before its ✕
+    // (§33.3) — and the centre under it: readout, band, status, panes.
     this.readout = el('div', { class: 'curate-readout', attrs: { 'aria-live': 'polite' } })
     this.undoButton = iconButton('undo-2', withKey('Undo the last step', 'mod+z'), () => this.model.undo(), { class: 'btn btn-icon', size: 15 })
     this.redoButton = iconButton('redo-2', withKey('Redo it', 'mod+shift+z'), () => this.model.redo(), { class: 'btn btn-icon', size: 15 })
@@ -249,12 +251,11 @@ export class CurateStage {
     })
     const keysButton = iconButton('keyboard', withKey('Keys on this stage', '?'), () => this.showKeys(), { class: 'btn btn-icon', size: 15 })
     this.tools = el('div', { class: 'curate-tools' }, tidy, this.undoButton, this.redoButton, keysButton)
-    const toolbar = el('div', { class: 'curate-toolbar' }, this.tabs, this.tools)
     this.band = el('div', { class: 'curate-band hidden', attrs: { 'aria-live': 'polite' } })
     this.status = el('div', { class: 'curate-status hidden', attrs: { role: 'status' } })
     this.paneArea = el('div', { class: 'curate-panes' })
-    // The readout on its own line under the toolbar, the centre's width wide.
-    this.centre = el('div', { class: 'curate-centre' }, toolbar, this.readout, this.band, this.status, this.paneArea)
+    // The readout on its own line at the head of the pictures, the centre's width wide.
+    this.centre = el('div', { class: 'curate-centre' }, this.readout, this.band, this.status, this.paneArea)
 
     // The list, and its grip.
     this.list = new GenomeList(this.ctx)
@@ -327,6 +328,7 @@ export class CurateStage {
 
     this.modal = stageDialog({
       title: `Curate the genomes · ${props.title}`,
+      head: { centre: this.tabs, end: this.tools },
       stage: this.root,
       side: this.side,
       variant: 'modal-curate',
@@ -1074,8 +1076,8 @@ export class CurateStage {
   }
 
   /**
-   * The inspector's toggle, docked at the toolbar's end beside the keys: the
-   * dialog's shell floats it over the side's foot, where it sat on whatever
+   * The inspector's toggle, docked among the title bar's tools beside the keys:
+   * the dialog's shell floats it over the side's foot, where it sat on whatever
    * card was scrolled under it. Moved, not rebuilt — its press is the shell's —
    * and named, with the shell's grip, for what they move here: the inspector.
    */
