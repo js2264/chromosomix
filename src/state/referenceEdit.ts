@@ -212,6 +212,22 @@ export class EditStore {
   }
 
   /**
+   * Replace the last step with another — or drop it, `null` — where it is the
+   * one the cursor stands after: a gesture that goes on stays one step, as a
+   * stretch nudged along by ← → is (§27.4), however many presses it takes.
+   * With a step undone past the cursor, or none made, this is {@link apply}.
+   */
+  amend(step: EditStep | null, by: StepAuthor = 'reader'): void {
+    const held = this.held
+    if (held.cursor === 0 || held.cursor !== held.history.length) {
+      if (step !== null) this.apply(step, by)
+      return
+    }
+    const before: ReferenceEdit = { ...held, history: held.history.slice(0, held.cursor - 1), cursor: held.cursor - 1 }
+    this.set(step === null ? before : withStep(before, step, by, this.clock()))
+  }
+
+  /**
    * Bring a contig of another genome into this genome's edit (§27.10): it is
    * made one the edit may name, and a step brings it in, whole, after the
    * others — undone as any step is, and the contig stays one the edit knows.

@@ -2069,6 +2069,14 @@ p {
   border-radius: var(--radius) var(--radius) 0 0;
 }
 
+/* A right strip's border is on its left, inside its thickness, and the tab is
+   as thick as the strip: from the border's inner side it ended a pixel past
+   the window's edge, and the page scrolled sideways under ← → and a
+   trackpad's sweep. It starts over the border, its own taking its place. */
+.panel-column-right.collapsed > .panel-tab {
+  left: -1px;
+}
+
 .panel-column.collapsed > .panel-tab:hover {
   color: var(--text);
   background: var(--bg);
@@ -14754,6 +14762,14 @@ span.deck-name {
   cursor: grab;
 }
 .edit-overlay.is-adjusting {
+  cursor: grabbing;
+}
+/* The selected stretch's square, which a press takes hold of to move it, and
+   the hand closed while it moves (§27.4). */
+.edit-overlay.is-on-selection {
+  cursor: grab;
+}
+.edit-overlay.is-moving {
   cursor: grabbing;
 }
 .edit-lane {

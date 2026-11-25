@@ -13,6 +13,7 @@ import {
   dropStep,
   endTargets,
   landed,
+  nudgeStep,
   partStretch,
   sequenceStretch,
   shiftStep,
@@ -273,5 +274,20 @@ describe('a step in words', () => {
     expect(stepText({ op: 'aside', sequence: 'III', from: 0, to: 100, why: 'contaminant' })).toBe(
       'set aside III:1-100 as a contaminant',
     )
+  })
+})
+
+describe('a stretch nudged along its sequence by ← → (§27.4)', () => {
+  it('is one move from where it was, back to nothing where it returns, and never out of its sequence', () => {
+    const assembly = EditedAssembly.of(emptyEdit({ names: ['I', 'II'], lengths: [10_000, 6_000] }))
+    const origin = { sequence: 'I', from: 2000, to: 4000 }
+    const move = (at: number): EditStep => ({ op: 'move', sequence: 'I', from: 2000, to: 4000, into: 'I', at, strand: 1 })
+    expect(nudgeStep(assembly, origin, 1000)).toEqual(move(3000))
+    expect(nudgeStep(assembly, origin, -2000)).toEqual(move(0))
+    expect(nudgeStep(assembly, origin, 6000)).toEqual(move(8000))
+    expect(nudgeStep(assembly, origin, 0)).toBeNull()
+    expect(nudgeStep(assembly, origin, -3000)).toBeUndefined()
+    expect(nudgeStep(assembly, origin, 7000)).toBeUndefined()
+    expect(nudgeStep(assembly, { sequence: 'III', from: 0, to: 10 }, 1000)).toBeUndefined()
   })
 })

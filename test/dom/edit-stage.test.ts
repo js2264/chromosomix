@@ -173,6 +173,30 @@ describe('the stage', () => {
     expect(store.edit.history).toHaveLength(1)
   })
 
+  it('takes ← → whatever is selected, so the page behind never scrolls, and moves no whole sequence along itself', async () => {
+    const { store } = await open()
+    const press = (name: string): boolean => {
+      const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true })
+      window.dispatchEvent(event)
+      return event.defaultPrevented
+    }
+    // Nothing selected: taken all the same.
+    expect(press('ArrowRight')).toBe(true)
+    expect(press('ArrowLeft')).toBe(true)
+    // A whole sequence has nowhere to go along itself: said, and no step made.
+    sequence('II').click()
+    expect(press('ArrowRight')).toBe(true)
+    expect(document.querySelector('.edit-readout')?.textContent).toBe('it is at the end of II already: drag it to take it into another sequence')
+    expect(press('ArrowLeft')).toBe(true)
+    expect(document.querySelector('.edit-readout')?.textContent).toBe('it is at the start of II already: drag it to take it into another sequence')
+    expect(store.applied).toBe(0)
+    // The whole assembly is `0`'s and the button's: the double click is the piece's.
+    expect((document.querySelector('.modal-edit .modal-head-end button') as HTMLButtonElement).title).toBe('Show the whole assembly (0)')
+    // And the empty card says what a click, a double and a triple click select.
+    key('Escape')
+    expect(document.querySelector('.edit-empty')?.textContent).toMatch(/^Click the map for a position, double-click for the piece there, triple-click for its whole sequence/)
+  })
+
   it('answers Escape by letting go of the selection, and never by closing', async () => {
     const { closed } = await open()
     sequence('I').click()

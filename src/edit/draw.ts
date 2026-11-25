@@ -94,6 +94,7 @@ export function drawBar(
   ctx.clearRect(0, 0, edge === 'top' ? length : across, edge === 'top' ? across : length)
 
   // The pieces.
+  const joined = new Set(grid.joins())
   for (const part of grid.parts) {
     if (part.piece === null || part.to <= part.from) continue
     const a0 = Math.max(0, toPixel(part.from))
@@ -101,8 +102,11 @@ export function drawBar(
     if (a1 <= 0 || a0 >= length || a1 - a0 < 0.5) continue
     ctx.fillStyle = originalHue(part.original)
     // A hairline of the background between two pieces, so a junction is seen
-    // on the bar as well as on the map.
-    rect(a0 + (a1 - a0 > 3 ? 0.5 : 0), a1 - (a1 - a0 > 3 ? 0.5 : 0), PIECES_FROM, across - 2)
+    // on the bar as well as on the map — twice as wide where two of the
+    // file's sequences were joined, as the map's rule is.
+    const roomy = a1 - a0 > 3
+    const inset = (unit: number): number => (!roomy ? 0 : joined.has(unit) ? 1 : 0.5)
+    rect(a0 + inset(part.from), a1 - inset(part.to), PIECES_FROM, across - 2)
     const width = a1 - a0
     if (width < 9) continue
     // Chevrons, one every forty pixels or so, pointing the way it reads.
@@ -244,6 +248,8 @@ export interface OverlayFrame {
   square: readonly [number, number] | null
   /** A box off it: rows and columns, in units. */
   box: { rows: readonly [number, number]; cols: readonly [number, number] } | null
+  /** A position selected by a click (§27.4), in units: a rule down its column and across its row. */
+  caret?: number | null
   /** A stretch lit from the corner dot plot (§27.3), on the diagonal, in units. */
   linked?: readonly [number, number] | null
   /** The pointer, snapped: a column and a row, in units, and whether each snapped. */
@@ -260,8 +266,10 @@ const RULE_GAP_PX = 8
  * edit, the selection and the crosshair.
  *
  * A sequence's edge is ink; a junction inside a sequence is a fainter rule, an
- * edit already made (§27.3). The selection and the pointer are the accent, what
- * the reader can act on (§26.5).
+ * edit already made (§27.3) — a hairline where a sequence of the file was cut,
+ * twice as wide where two of them were joined, so what was a contig is told
+ * from where one was cut. The selection, the caret and the pointer are the
+ * accent, what the reader can act on (§26.5).
  */
 export function drawOverlay(ctx: CanvasRenderingContext2D, frame: OverlayFrame): void {
   const { size, grid, toX, toY, ink } = frame
@@ -272,9 +280,11 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, frame: OverlayFrame):
   // is drawn.
   let lastX = Number.NEGATIVE_INFINITY
   let lastY = Number.NEGATIVE_INFINITY
+  // A rule of an odd width sits on a half pixel, an even one on a whole.
+  let half = 0.5
   const rule = (unit: number): void => {
-    const x = Math.round(toX(unit)) + 0.5
-    const y = Math.round(toY(unit)) + 0.5
+    const x = Math.round(toX(unit)) + half
+    const y = Math.round(toY(unit)) + half
     if (x > 0 && x < size && x - lastX >= RULE_GAP_PX) {
       ctx.moveTo(x, 0)
       ctx.lineTo(x, size)
@@ -286,12 +296,25 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, frame: OverlayFrame):
       lastY = y
     }
   }
+  const joins = grid.joins()
+  const joined = new Set(joins)
   ctx.lineWidth = 1
   ctx.strokeStyle = ink.faint
   ctx.globalAlpha = 0.35
   ctx.beginPath()
-  for (const unit of grid.junctions()) rule(unit)
+  for (const unit of grid.junctions()) if (!joined.has(unit)) rule(unit)
   ctx.stroke()
+  // Where two of the file's sequences meet: the same ink, twice as wide.
+  ctx.lineWidth = 2
+  half = 0
+  ctx.globalAlpha = 0.5
+  ctx.beginPath()
+  lastX = Number.NEGATIVE_INFINITY
+  lastY = Number.NEGATIVE_INFINITY
+  for (const unit of joins) rule(unit)
+  ctx.stroke()
+  ctx.lineWidth = 1
+  half = 0.5
   ctx.globalAlpha = 0.7
   ctx.strokeStyle = ink.dim
   ctx.beginPath()
@@ -341,6 +364,33 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, frame: OverlayFrame):
   if (frame.box !== null) {
     const { rows, cols } = frame.box
     outline(toX(cols[0]), toY(rows[0]), toX(cols[1]), toY(rows[1]))
+  }
+  // The caret: a solid rule of the accent down its column and across its row,
+  // over a rule of the page so it stands out of the darkest contacts, and a
+  // dot where the two meet on the diagonal.
+  if (frame.caret !== undefined && frame.caret !== null) {
+    const x = Math.round(toX(frame.caret))
+    const y = Math.round(toY(frame.caret))
+    const line = (width: number): void => {
+      ctx.lineWidth = width
+      ctx.beginPath()
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x, size)
+      ctx.moveTo(0, y)
+      ctx.lineTo(size, y)
+      ctx.stroke()
+    }
+    ctx.strokeStyle = ink.background
+    ctx.globalAlpha = 0.6
+    line(4)
+    ctx.globalAlpha = 1
+    ctx.strokeStyle = ink.accent
+    line(2)
+    ctx.lineWidth = 1
+    ctx.fillStyle = ink.accent
+    ctx.beginPath()
+    ctx.arc(x, y, 4, 0, Math.PI * 2)
+    ctx.fill()
   }
 
   const cross = frame.cross

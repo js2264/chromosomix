@@ -46,6 +46,7 @@ import {
   endTargets,
   isWholeSequence,
   landed,
+  nudgeStep,
   partStretch,
   sequenceStretch,
   shiftStep,
@@ -176,8 +177,15 @@ export interface SuggestRequest {
   evidence?: SequenceEvidence
 }
 
-/** What is selected: a stretch on the diagonal, or a box of two off it. */
-type Selection = { kind: 'stretch'; stretch: Stretch } | { kind: 'box'; rows: Stretch; cols: Stretch }
+/**
+ * What is selected: a stretch on the diagonal, a box of two off it, or a caret
+ * — a position in an edited sequence, in base pairs, where a click put it
+ * (§27.4): what `C`, `S` and `O` act on, and what ← → move.
+ */
+type Selection =
+  | { kind: 'stretch'; stretch: Stretch }
+  | { kind: 'box'; rows: Stretch; cols: Stretch }
+  | { kind: 'caret'; sequence: string; at: number }
 
 /** A drag in progress. */
 type Drag =
@@ -336,6 +344,14 @@ export class EditStage {
   private pictureDirty = true
   private frame = 0
   private selection: Selection | null = null
+  /** Whether the last press on the map travelled: its click is then a drag's, whatever its count. */
+  private pressTravelled = false
+  /**
+   * A stretch being nudged along by ← → (§27.4): where it was before the first
+   * press, how far it has gone, and the edit the last press left — while that
+   * is the edit, the next press amends the one step rather than adding one.
+   */
+  private nudged: { before: EditedAssembly; origin: Stretch; offset: number; stepped: boolean; edit: ReferenceEdit } | null = null
   private hover: { x: Snapped; y: Snapped; px: number; py: number } | null = null
   private drag: Drag | null = null
   private space = false
@@ -458,7 +474,7 @@ export class EditStage {
     this.learned = props.store.learned
 
     this.readoutEl = el('div', { class: 'edit-readout', attrs: { 'aria-live': 'polite' } })
-    const fitButton = iconButton('maximize', 'Show the whole assembly (0, or a double click)', () => this.fit(), {
+    const fitButton = iconButton('maximize', 'Show the whole assembly (0)', () => this.fit(), {
       class: 'btn btn-icon',
       size: 15,
     })
@@ -842,6 +858,10 @@ export class EditStage {
       const length = assembly.lengthOf(stretch.sequence)
       return length !== null && stretch.to <= length && stretch.from < stretch.to
     }
+    if (selection.kind === 'caret') {
+      const length = assembly.lengthOf(selection.sequence)
+      return length !== null && selection.at >= 0 && selection.at <= length
+    }
     return selection.kind === 'stretch' ? fits(selection.stretch) : fits(selection.rows) && fits(selection.cols)
   }
 
@@ -904,8 +924,27 @@ export class EditStage {
     return at > 0 && at < length ? { sequence: place.sequence, at } : null
   }
 
+  /** The caret, as a place a cut, a split or an origin can be made at: inside its sequence, not at an end. */
+  private caretPlace(): { sequence: string; at: number } | null {
+    const caret = this.selection?.kind === 'caret' ? this.selection : null
+    if (caret === null) return null
+    const length = this.props.store.assembly.lengthOf(caret.sequence) ?? 0
+    return caret.at > 0 && caret.at < length ? { sequence: caret.sequence, at: caret.at } : null
+  }
+
+  /** Where `C`, `S` and `O` act: the caret, else the pointer on the map. A caret at an end acts nowhere. */
+  private actPlace(): { sequence: string; at: number } | null {
+    if (this.selection?.kind === 'caret') {
+      const place = this.caretPlace()
+      if (place === null) this.readoutEl.textContent = `the caret is at an end of ${this.selection.sequence}: ← → take it inside to cut, split or start a circle there`
+      return place
+    }
+    return this.pointerPlace()
+  }
+
   private cutHere(): void {
-    const place = this.pointerPlace()
+    const place = this.actPlace()
+    if (this.selection?.kind === 'caret' && place === null) return
     if (place !== null) {
       this.step({ op: 'cut', sequence: place.sequence, at: place.at })
       return
@@ -920,7 +959,8 @@ export class EditStage {
   }
 
   private splitHere(): void {
-    const place = this.pointerPlace()
+    const place = this.actPlace()
+    if (this.selection?.kind === 'caret' && place === null) return
     if (place !== null) {
       this.step({ op: 'split', sequence: place.sequence, at: place.at })
       return
@@ -958,7 +998,7 @@ export class EditStage {
    */
   private originHere(): void {
     const selection = this.selection
-    const place = this.pointerPlace() ?? (selection?.kind === 'stretch' && selection.stretch.from > 0 ? { sequence: selection.stretch.sequence, at: selection.stretch.from } : null)
+    const place = this.actPlace() ?? (selection?.kind === 'stretch' && selection.stretch.from > 0 ? { sequence: selection.stretch.sequence, at: selection.stretch.from } : null)
     if (place === null) return
     if (!this.circularOf(place.sequence)) {
       this.readoutEl.textContent = `O starts a circle elsewhere, and ${place.sequence} is not one: tick it circular on the Chromosomes table first`
@@ -1279,6 +1319,7 @@ export class EditStage {
     // The suggestions are about the edit as it stands: while a drag or a
     // preview shows another, they are not drawn over it.
     const marks = this.preview === null ? this.marks() : []
+    const caret = this.selection?.kind === 'caret' && this.drag === null ? grid.unitOf(this.selection.sequence, this.selection.at) : null
     if (overlay !== null) {
       overlay.setTransform(dpr, 0, 0, dpr, 0, 0)
       const box = this.selection?.kind === 'box' && this.drag === null ? this.boxUnits(grid, this.selection) : this.dragBox()
@@ -1291,6 +1332,7 @@ export class EditStage {
         under: (ctx) => drawSuggestions(ctx, { size, toX, toY, ink, marks }),
         square: box === null ? lit : null,
         box,
+        caret,
         linked,
         cross:
           this.hover === null || (this.drag !== null && this.drag.kind === 'move')
@@ -1312,13 +1354,13 @@ export class EditStage {
     if (top !== null) {
       top.setTransform(dpr, 0, 0, dpr, 0, 0)
       const cols = this.selection?.kind === 'box' ? this.boxUnits(grid, this.selection)?.cols ?? null : lit
-      drawBar(top, 'top', size, grid, toX, ink, this.drag?.kind === 'box' ? (this.dragBox()?.cols ?? null) : cols, this.preview === null ? mark : null, ticks, linked)
+      drawBar(top, 'top', size, grid, toX, ink, this.drag?.kind === 'box' ? (this.dragBox()?.cols ?? null) : cols, this.preview === null ? (mark ?? caret) : null, ticks, linked)
     }
     const left = this.leftBar.getContext('2d')
     if (left !== null) {
       left.setTransform(dpr, 0, 0, dpr, 0, 0)
       const rows = this.selection?.kind === 'box' ? this.boxUnits(grid, this.selection)?.rows ?? null : lit
-      drawBar(left, 'left', size, grid, toY, ink, this.drag?.kind === 'box' ? (this.dragBox()?.rows ?? null) : rows, null, ticks, linked)
+      drawBar(left, 'left', size, grid, toY, ink, this.drag?.kind === 'box' ? (this.dragBox()?.rows ?? null) : rows, caret, ticks, linked)
     }
     this.paintRail(marks, toY, ink)
 
@@ -1574,33 +1616,27 @@ export class EditStage {
       if (drag === null) return
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
       this.drag = null
+      canvas.classList.remove('is-moving')
       const grid = this.grid
       if (grid === null) return
       const { x, y } = local(event)
-      if (drag.kind === 'along') {
+      // Whether this press travelled: a click's count is the click handler's
+      // (a double click the piece, a triple its sequence), never a drag's.
+      this.pressTravelled = drag.kind === 'pan' || drag.moved
+      if ((drag.kind === 'along' || drag.kind === 'box' || drag.kind === 'move') && !drag.moved) {
+        // A click, on the diagonal or off it, inside the selection or not:
+        // the caret, at the position under it in its column (§27.4).
+        this.placeCaret(this.snapX(this.sx.toUnit(x)).unit)
+      } else if (drag.kind === 'along') {
         const unit = this.alongEnd(drag.anchor, x, y)
-        const stretch = drag.moved ? stretchBetween(grid, drag.anchor, unit) : partStretch(grid, (this.sx.toUnit(x) + this.sy.toUnit(y)) / 2)
+        const stretch = stretchBetween(grid, drag.anchor, unit)
         this.selection = stretch === null ? null : { kind: 'stretch', stretch }
       } else if (drag.kind === 'box') {
         const cx = this.snapX(this.sx.toUnit(x)).unit
         const cy = this.snapY(this.sy.toUnit(y)).unit
-        if (drag.moved) {
-          const rows = stretchBetween(grid, drag.ay, cy)
-          const cols = stretchBetween(grid, drag.ax, cx)
-          this.selection = rows !== null && cols !== null ? { kind: 'box', rows, cols } : null
-        } else {
-          // A press on a corner names the stretch between its two ends (§27.4),
-          // where both are in one sequence; two parts boxed where they are not.
-          const same = grid.sequenceAt(cx) !== null && grid.sequenceAt(cx) === grid.sequenceAt(cy)
-          if (same) {
-            const stretch = stretchBetween(grid, Math.min(cx, cy), Math.max(cx, cy))
-            this.selection = stretch === null ? null : { kind: 'stretch', stretch }
-          } else {
-            const rows = partStretch(grid, this.sy.toUnit(y))
-            const cols = partStretch(grid, this.sx.toUnit(x))
-            this.selection = rows !== null && cols !== null ? { kind: 'box', rows, cols } : null
-          }
-        }
+        const rows = stretchBetween(grid, drag.ay, cy)
+        const cols = stretchBetween(grid, drag.ax, cx)
+        this.selection = rows !== null && cols !== null ? { kind: 'box', rows, cols } : null
       } else if (drag.kind === 'adjust') {
         // Kept as the hand left it, to be answered: nothing is made until it is taken.
         this.paintReadout()
@@ -1612,12 +1648,24 @@ export class EditStage {
           this.step(step)
           return
         }
-        if (!drag.moved && drag.again) this.widen((this.sx.toUnit(x) + this.sy.toUnit(y)) / 2)
       }
       this.paintSide()
       this.schedule()
     }
     canvas.addEventListener('pointerup', finish)
+    // A double click selects the piece under it, a triple click its whole
+    // sequence (§27.4) — as a word and a line are in a text — in the column the
+    // caret took; a click that travelled is a drag's, whatever its count.
+    canvas.addEventListener('click', (event) => {
+      const grid = this.grid
+      if (grid === null || event.button !== 0 || event.detail < 2 || this.pressTravelled) return
+      const unit = this.snapX(this.sx.toUnit(local(event).x)).unit
+      const stretch = event.detail === 2 ? partStretch(grid, unit) : sequenceStretch(grid, unit)
+      if (stretch === null) return
+      this.selection = { kind: 'stretch', stretch }
+      this.paintSide()
+      this.schedule()
+    })
     canvas.addEventListener('pointercancel', (event) => {
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
       this.cancelDrag()
@@ -1629,10 +1677,8 @@ export class EditStage {
       this.paintReadout()
       this.schedule()
     })
-    canvas.addEventListener('dblclick', (event) => {
-      event.preventDefault()
-      this.fit()
-    })
+    // The double click is the piece's, not the whole assembly's (`0`, or the fit button).
+    canvas.addEventListener('dblclick', (event) => event.preventDefault())
     canvas.addEventListener(
       'wheel',
       (event) => {
@@ -1797,6 +1843,85 @@ export class EditStage {
     this.readoutEl.textContent = `${here}${origin} · drag to move it, double-click to turn it · its name above, the whole of ${stretch.sequence}`
   }
 
+  /** The caret at a unit of the axis: the position there, in its sequence (§27.4). */
+  private placeCaret(unit: number): void {
+    const grid = this.grid
+    if (grid === null) return
+    const place = grid.place(Math.min(grid.n - 1e-9, Math.max(0, unit)))
+    if (place === null) {
+      this.selection = null
+      return
+    }
+    const length = this.props.store.assembly.lengthOf(place.sequence) ?? 0
+    this.selection = { kind: 'caret', sequence: place.sequence, at: Math.max(0, Math.min(length, Math.round(place.bp))) }
+  }
+
+  /** The picture's cell in base pairs: what ← → move by, as a drag moves by whole cells. */
+  private cell(): number {
+    return Math.max(1, this.layout?.binsize ?? 1)
+  }
+
+  /**
+   * ← or →: the caret a cell along (§27.4), into the next sequence or the one
+   * before past an end, and framed if it leaves the view.
+   */
+  private moveCaret(delta: -1 | 1): void {
+    const caret = this.selection?.kind === 'caret' ? this.selection : null
+    if (caret === null) return
+    const assembly = this.props.store.assembly
+    const sequences = assembly.sequences
+    const index = sequences.findIndex((sequence) => sequence.name === caret.sequence)
+    const length = assembly.lengthOf(caret.sequence) ?? 0
+    let next: { sequence: string; at: number } = { sequence: caret.sequence, at: caret.at + delta * this.cell() }
+    if (next.at < 0) {
+      const before = index > 0 ? sequences[index - 1] : undefined
+      next = caret.at > 0 || before === undefined ? { sequence: caret.sequence, at: 0 } : { sequence: before.name, at: assembly.lengthOf(before.name) ?? 0 }
+    } else if (next.at > length) {
+      const after = sequences[index + 1]
+      next = caret.at < length || after === undefined ? { sequence: caret.sequence, at: length } : { sequence: after.name, at: 0 }
+    }
+    this.selection = { kind: 'caret', ...next }
+    const grid = this.grid
+    const unit = grid?.unitOf(next.sequence, next.at) ?? null
+    if (unit !== null && !this.inView([unit, unit])) this.frameUnits(Math.max(0, unit - 20), unit + 20)
+    this.paintSide()
+    this.paintReadout()
+    this.schedule()
+  }
+
+  /**
+   * ← or →: the selected stretch moved a cell along its sequence, as a drag
+   * along the diagonal moves it (§27.4). Presses one after another are one
+   * step, amended, until something else is done; a stretch at an end of its
+   * sequence goes no further, and the readout says so.
+   */
+  private nudge(delta: -1 | 1): void {
+    const held = this.selection?.kind === 'stretch' ? this.selection.stretch : null
+    if (held === null) return
+    const store = this.props.store
+    const run = this.nudged !== null && this.nudged.edit === store.edit ? this.nudged : null
+    const before = run?.before ?? store.assembly
+    const origin = run?.origin ?? held
+    const offset = (run?.offset ?? 0) + delta * this.cell()
+    const step = nudgeStep(before, origin, offset)
+    if (step === undefined) {
+      this.readoutEl.textContent = `it is at the ${delta < 0 ? 'start' : 'end'} of ${held.sequence} already: drag it to take it into another sequence`
+      return
+    }
+    // The run's own step amended — dropped where it is back where it began —
+    // and a step made only where the run has none yet.
+    if (run?.stepped === true) store.amend(step)
+    else if (step !== null) store.apply(step)
+    const after = store.assembly
+    const landing = step === null ? origin : landed(before, after, step)
+    this.selection = landing === null ? null : { kind: 'stretch', stretch: landing }
+    this.nudged = { before, origin, offset, stepped: step !== null, edit: store.edit }
+    const units = this.grid === null || landing === null ? null : stretchUnits(this.grid, landing)
+    if (units !== null && !this.inView(units)) this.frameUnits(units[0], units[1])
+    this.paintSide()
+    this.schedule()
+  }
+
   /**
    * A press that did not travel, on what was selected already (§27.4): a piece
    * — or any stretch short of its sequence — widens to the whole sequence; the
@@ -1870,11 +1995,28 @@ export class EditStage {
       this.hover = { x: this.snapX(this.sx.toUnit(x)), y: this.snapY(this.sy.toUnit(y)), px: x, py: y }
     }
     if (this.drag === null) this.setLit(within?.key ?? this.hover.x.target?.key ?? this.hover.y.target?.key ?? null)
-    // An end a drag would take hold of says so under the pointer (§27.6).
-    this.overlayCanvas.classList.toggle('is-on-end', this.drag === null && this.endUnder(x, y) !== null)
+    // An end a drag would take hold of says so under the pointer (§27.6); so
+    // does the selected stretch, whose square a press takes hold of to move
+    // it, and the hand closes while it moves (§27.4).
+    const onEnd = this.drag === null && this.endUnder(x, y) !== null
+    this.overlayCanvas.classList.toggle('is-on-end', onEnd)
     this.overlayCanvas.classList.toggle('is-adjusting', this.drag?.kind === 'adjust')
+    this.overlayCanvas.classList.toggle('is-on-selection', this.drag === null && !onEnd && this.onSelection(x, y))
+    this.overlayCanvas.classList.toggle('is-moving', this.drag?.kind === 'move' && this.drag.moved)
     this.paintReadout()
     this.schedule()
+  }
+
+  /** Whether a press at `(x, y)` would take hold of the selected stretch: inside its square. */
+  private onSelection(x: number, y: number): boolean {
+    const grid = this.grid
+    const held = this.selection?.kind === 'stretch' ? this.selection.stretch : null
+    if (grid === null || held === null) return false
+    const lit = stretchUnits(grid, held)
+    if (lit === null) return false
+    const ux = this.sx.toUnit(x)
+    const uy = this.sy.toUnit(y)
+    return ux >= lit[0] && ux <= lit[1] && uy >= lit[0] && uy <= lit[1]
   }
 
   /** Recompute a move's drop and its preview as the pointer travels. */
@@ -1918,6 +2060,7 @@ export class EditStage {
   private cancelDrag(): boolean {
     if (this.drag === null) return false
     this.drag = null
+    this.overlayCanvas.classList.remove('is-moving')
     this.preview = null
     this.pictureDirty = true
     this.paintReadout()
@@ -1990,8 +2133,14 @@ export class EditStage {
       if (suggestion === null) handled = false
       else if (key === 'y' || key === 'Y') this.accept(suggestion)
       else this.reject(suggestion)
-    } else if (this.mode === 'review' && (key === 'ArrowRight' || key === 'ArrowLeft')) {
-      this.moveCurrent(key === 'ArrowRight' ? 1 : -1)
+    } else if (key === 'ArrowRight' || key === 'ArrowLeft') {
+      // Review's ← → go through its suggestions; elsewhere they move the caret
+      // a cell, or the selected stretch, as a drag along the diagonal would
+      // (§27.4) — and are taken either way, so the page behind never scrolls.
+      const delta = key === 'ArrowRight' ? 1 : -1
+      if (this.mode === 'review') this.moveCurrent(delta)
+      else if (this.selection?.kind === 'caret') this.moveCaret(delta)
+      else if (this.selection?.kind === 'stretch') this.nudge(delta)
     } else if (key === 'ArrowUp' || key === 'ArrowDown') {
       // A sequence's grip on the card moves its own sequence; elsewhere, what is selected.
       const grip = target?.closest?.('.edit-sequence-grip') as HTMLElement | null | undefined
@@ -2048,6 +2197,20 @@ export class EditStage {
   private menuItems(clientX: number, clientY: number): MenuItem[] {
     const items: MenuItem[] = []
     const selection = this.selection
+    // Over a box of two stretches: what its card offers (§27.4).
+    const grid = this.grid
+    const box = selection?.kind === 'box' && grid !== null ? this.boxUnits(grid, selection) : null
+    const hover = this.hover
+    if (selection?.kind === 'box' && box !== null && hover !== null) {
+      const inside = hover.x.unit >= box.cols[0] && hover.x.unit <= box.cols[1] && hover.y.unit >= box.rows[0] && hover.y.unit <= box.rows[1]
+      if (inside) {
+        const { rows, cols } = selection
+        items.push({ label: `${formatLocus({ contig: rows.sequence, start: rows.from, end: rows.to })} × ${formatLocus({ contig: cols.sequence, start: cols.from, end: cols.to })}` })
+        for (const one of this.boxActs(rows, cols)) {
+          items.push({ label: one.label, title: one.refused ?? one.title, run: one.run, ...(one.refused === undefined ? {} : { disabled: true }) })
+        }
+      }
+    }
     if (selection?.kind === 'stretch') {
       const stretch = selection.stretch
       items.push(
@@ -2796,7 +2959,28 @@ export class EditStage {
         head,
         el('p', {
           class: 'edit-empty',
-          text: 'Press a piece, on the map or on a bar, and press it again for its whole sequence — or press the sequence’s name on a bar. Drag along the diagonal to select a stretch; drag off it to box two stretches, or press a corner for the stretch between its two ends.',
+          text: 'Click the map for a position, double-click for the piece there, triple-click for its whole sequence — or press a piece, or a sequence’s name, on a bar. Drag along the diagonal to select a stretch; drag off it to box two stretches.',
+        }),
+      )
+      return
+    }
+    if (selection.kind === 'caret') {
+      const place = this.caretPlace()
+      const circular = place !== null && this.circularOf(place.sequence)
+      const cut = this.act('cut here', 'scissors', 'Cut the sequence at the caret: two pieces, one sequence', () => this.cutHere(), 'C')
+      const split = this.act('split here', 'split', 'Split the sequence at the caret into two sequences', () => this.splitHere(), 'S')
+      const origin = this.act('start the circle here', 'rotate-cw', 'Start the circle at the caret, the rest after it round the circle', () => this.originHere(), 'O')
+      for (const button of [cut, split, origin]) button.disabled = place === null
+      if (!circular) origin.disabled = true
+      const where = this.caretWords(selection.sequence, selection.at)
+      card.replaceChildren(
+        head,
+        el('div', { class: 'edit-locus', text: where.here }),
+        ...(where.from === null ? [] : [el('div', { class: 'edit-note', text: `← ${where.from}` })]),
+        el('div', { class: 'edit-acts' }, cut, split, ...(circular ? [origin] : [])),
+        el('p', {
+          class: 'edit-hint',
+          text: '← → move the caret a cell. Double-click for the piece there, triple-click for its whole sequence; drag along the diagonal for a stretch.',
         }),
       )
       return
@@ -2832,36 +3016,70 @@ export class EditStage {
         ),
         el('p', {
           class: 'edit-hint',
-          text: 'Drag its square, or its piece on a bar, to move it: let go between two sequences and it is a sequence of its own there, inside one and it goes in — ⇧ joins it to the end it is let go on, ⌥ copies it, I turns it on the way. Press it again for its whole sequence. A double click on a bar turns a piece.',
+          text: 'Drag its square, or its piece on a bar, to move it — or ← → a cell at a time: let go between two sequences and it is a sequence of its own there, inside one and it goes in — ⇧ joins it to the end it is let go on, ⌥ copies it, I turns it on the way. Triple-click it for its whole sequence. A double click on a bar turns a piece.',
         }),
       )
       return
     }
     const { rows, cols } = selection
-    const same = rows.sequence === cols.sequence && (rows.to <= cols.from || cols.to <= rows.from)
     const rowText = formatLocus({ contig: rows.sequence, start: rows.from, end: rows.to })
     const colText = formatLocus({ contig: cols.sequence, start: cols.from, end: cols.to })
-    const swap = this.act('swap them', 'arrow-left-right', 'Each stretch takes the other’s place', () => this.swap(rows, cols))
-    swap.disabled = !same
-    if (!same) swap.title = 'Two stretches of one sequence that do not overlap swap places'
+    const buttons = this.boxActs(rows, cols).map((one) => {
+      const button = this.act(one.label, one.icon, one.title, one.run)
+      if (one.refused !== undefined) {
+        button.disabled = true
+        button.title = one.refused
+      }
+      return button
+    })
     card.replaceChildren(
       head,
       el('div', { class: 'edit-box-row' }, el('span', { class: 'edit-box-key', text: 'rows' }), el('span', { class: 'edit-locus', text: rowText })),
       el('div', { class: 'edit-box-row' }, el('span', { class: 'edit-box-key', text: 'columns' }), el('span', { class: 'edit-locus', text: colText })),
-      el(
-        'div',
-        { class: 'edit-acts' },
-        this.act('rows before columns', 'move', 'Move the rows’ stretch to just before the columns’', () => {
-          this.step({ op: 'move', sequence: rows.sequence, from: rows.from, to: rows.to, into: cols.sequence, at: rows.sequence === cols.sequence && cols.from > rows.to ? cols.from - (rows.to - rows.from) : cols.from, strand: 1 })
-        }),
-        this.act('columns after rows', 'move', 'Move the columns’ stretch to just after the rows’', () => {
-          this.step({ op: 'move', sequence: cols.sequence, from: cols.from, to: cols.to, into: rows.sequence, at: rows.sequence === cols.sequence && rows.to > cols.to ? rows.to - (cols.to - cols.from) : rows.to, strand: 1 })
-        }),
-        swap,
-        this.act('turn rows', 'flip-vertical', 'Turn the rows’ stretch round', () => this.turn(rows)),
-        this.act('turn columns', 'flip-horizontal', 'Turn the columns’ stretch round', () => this.turn(cols)),
-      ),
+      el('div', { class: 'edit-acts' }, ...buttons),
+      el('p', { class: 'edit-hint', text: 'The same, on a right click over the box.' }),
     )
+  }
+
+  /**
+   * What a box of two stretches can be made into (§27.4) — on its card, and on
+   * the right-click menu over it: the rows' stretch put before the columns', the
+   * columns' after the rows', the two swapped where they are of one sequence
+   * and apart, and either turned round.
+   */
+  private boxActs(rows: Stretch, cols: Stretch): Array<{ label: string; icon: Parameters<typeof icon>[0]; title: string; run: () => void; refused?: string }> {
+    const same = rows.sequence === cols.sequence && (rows.to <= cols.from || cols.to <= rows.from)
+    return [
+      {
+        label: 'rows before columns',
+        icon: 'move',
+        title: 'Move the rows’ stretch to just before the columns’',
+        run: () => this.step({ op: 'move', sequence: rows.sequence, from: rows.from, to: rows.to, into: cols.sequence, at: rows.sequence === cols.sequence && cols.from > rows.to ? cols.from - (rows.to - rows.from) : cols.from, strand: 1 }),
+      },
+      {
+        label: 'columns after rows',
+        icon: 'move',
+        title: 'Move the columns’ stretch to just after the rows’',
+        run: () => this.step({ op: 'move', sequence: cols.sequence, from: cols.from, to: cols.to, into: rows.sequence, at: rows.sequence === cols.sequence && rows.to > cols.to ? rows.to - (cols.to - cols.from) : rows.to, strand: 1 }),
+      },
+      {
+        label: 'swap them',
+        icon: 'arrow-left-right',
+        title: 'Each stretch takes the other’s place',
+        run: () => this.swap(rows, cols),
+        ...(same ? {} : { refused: 'Two stretches of one sequence that do not overlap swap places' }),
+      },
+      { label: 'turn rows', icon: 'flip-vertical', title: 'Turn the rows’ stretch round', run: () => this.turn(rows) },
+      { label: 'turn columns', icon: 'flip-horizontal', title: 'Turn the columns’ stretch round', run: () => this.turn(cols) },
+    ]
+  }
+
+  /** A position in an edited sequence, said as the readout says one, with where it came from. */
+  private caretWords(sequence: string, at: number): { here: string; from: string | null } {
+    const here = formatPosition(sequence, at)
+    const origin = this.props.store.assembly.toOriginal(sequence, at)
+    if (origin === null || (origin.sequence === sequence && origin.bp === at && origin.strand === 1)) return { here, from: null }
+    return { here, from: `${formatPosition(origin.sequence, origin.bp)}${origin.strand === -1 ? ', turned' : ''}` }
   }
 
   private paintHistory(): void {

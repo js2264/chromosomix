@@ -238,6 +238,23 @@ export function shiftStep(assembly: EditedAssembly, stretch: Stretch, delta: -1 
 }
 
 /**
+ * The step ← or → makes of a stretch nudged along its sequence (§27.4): the
+ * move that puts it `offset` base pairs from where it was — a cell a press, as
+ * a drag along the diagonal moves it — named against the assembly before the
+ * first press, so presses one after another are one step. `null` where the
+ * presses have brought it back where it was; `undefined` where it would leave
+ * its sequence, which a nudge never does.
+ */
+export function nudgeStep(assembly: EditedAssembly, origin: Stretch, offset: number): EditStep | null | undefined {
+  const { sequence, from, to } = origin
+  const length = assembly.lengthOf(sequence)
+  if (length === null || !(to > from)) return undefined
+  const at = from + offset
+  if (at < 0 || at + (to - from) > length) return undefined
+  return offset === 0 ? null : { op: 'move', sequence, from, to, into: sequence, at, strand: 1 }
+}
+
+/**
  * Where a stretch is after the step that moved, copied or turned it — so the
  * selection follows the stretch the reader is holding. `null` where the step
  * leaves nothing to follow.

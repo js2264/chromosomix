@@ -290,6 +290,26 @@ export class LensGrid {
     return out
   }
 
+  /**
+   * The junctions where two of the file's sequences meet — a join, or a gap
+   * between two pieces — rather than a cut inside one: drawn heavier than a
+   * cut, so what was a contig is told from where one was cut (§27.3). A
+   * subset of {@link junctions}, ascending and each once.
+   */
+  joins(): number[] {
+    const out: number[] = []
+    for (const sequence of this.sequences) {
+      for (let i = sequence.partFrom + 1; i < sequence.partTo; i++) {
+        const before = this.parts[i - 1]
+        const after = this.parts[i]
+        const at = after.from
+        if (at <= sequence.from || at >= sequence.to || out[out.length - 1] === at) continue
+        if (before.piece === null || after.piece === null || before.piece.sequence !== after.piece.sequence) out.push(at)
+      }
+    }
+    return out
+  }
+
   /** Every edge between two sequences, and the axis's two ends, in units. */
   boundaries(): number[] {
     const out = [0]

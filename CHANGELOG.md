@@ -164,6 +164,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **The reference editor's clicks are a text's — a dev feature (§27.4).** A click on the map puts a
+  caret at the position under it — a rule down its column and across its row, its card offering *cut
+  here*, *split here* and, on a circle, *start the circle here*, which `C`, `S` and `O` act on — and
+  ← → move it a cell; a double click selects the piece there, a triple click its whole sequence (the
+  whole assembly is `0` and the fit button). A click no longer selects a stretch between two ends or a
+  pair of pieces. With a stretch selected, ← → move it a cell along its sequence, as a drag does, the
+  presses one step until something else is done; the pointer over it is a hand. A box off the diagonal
+  keeps its card, and offers the same on a right click inside it. Where two of the file's sequences
+  are joined the map's rule is twice as wide as at a cut, and so is the bars' gap, so what was a
+  contig is told from where one was cut.
+
 - **The reference editor's title bar carries its tools — a dev feature (§27.3).** Its modes in the
   middle (*apply suggestions*: manual, review, auto), the whole assembly, zoom out and in, undo, redo
   and the inspector's toggle before its `×` — the toggle no longer floats over the sidebar's last
@@ -545,6 +556,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the picture.
 
 ### Fixed
+
+- **The page no longer scrolls sideways by a pixel.** A folded right column's tab, as thick as its
+  strip, began inside the strip's border and ended a pixel past the window's edge: the arrow keys and
+  a trackpad's sweep moved the whole page, and a scrollbar flashed at its foot — in the reference
+  editor too, whose ← → did nothing outside review. The tab now starts over the border.
 
 - **An edit of the reference kept with a file is drawn again after a reload, a workspace or a link
   (§27.7).** The stage checked the kept edit against the sequences the reader answered with — which,

@@ -16600,8 +16600,11 @@ What is on it:
 (§26.5): a **diamond** on the diagonal and a **tick** on each axis for a breakpoint; a **corner** — an L
 of two short strokes opening towards its quadrant — for two ends that meet; on hover, a **bracket with a
 turning arrow** for an inversion, an **arrow** to an insertion line for a move. An edit already made is
-ink: a thin rule at every junction between parts, and a stronger one at every edge between sequences
-(*built*). *Built*, each mark over a halo of the background so it reads over the darkest contacts: a
+ink: a hairline at every **cut** — a junction between two parts of one of the file's sequences —, a
+rule twice as wide at every **join**, where two of the file's sequences meet or a gap stands between
+two pieces (`LensGrid.joins`), and a darker one at every edge between sequences; the pieces bars leave
+a gap of the page between two pieces, twice as wide at a join (*built*). So what was a contig is told
+from where one was cut. *Built*, each mark over a halo of the background so it reads over the darkest contacts: a
 diamond at every junction a suggestion takes away, with its ticks across both pieces bars; a corner at
 every junction it makes, in both triangles; its number in a disc beside its first mark; and for the one
 lit — on the map, the rail or the list — what it would do: the stretch it turns outlined, dashed, with
@@ -16649,28 +16652,41 @@ original's own description.
 **On the stage a drag selects**, because selecting is what the stage is for; the map's own drag,
 which pans, is *Space*-drag here, or a middle-button drag, and the wheel zooms as it does on every map.
 
+- **A click is a position; a double click the piece; a triple click the sequence**, as a word and a
+  line are in a text. A click anywhere on the map — on the diagonal or off it, inside the selection or
+  not — puts the **caret** at the position under it in its column, snapped as the pointer is: a rule of
+  the accent down its column and across its row, a dot where they meet on the diagonal and a notch on
+  each bar. Its card names the position, and where it came from in the file, with *cut here* `C`,
+  *split here* `S` and, on a circle, *start the circle here* `O`, which act at the caret while there is
+  one (a caret at an end of its sequence acts nowhere, and the readout says so); **← →** move it a cell
+  (the picture's), into the next sequence or the one before past an end. A double click selects the
+  piece there, a triple click its **whole sequence**, a stitched one whole; the whole assembly is `0`'s
+  and the fit button's, no longer a double click's. *Built.*
 - **Select along the diagonal**: a drag starting within 12 pixels of it, both ends snapped, kept inside
-  the sequence it started in; the stretch lights on the diagonal, the pieces bars and the lanes. A press
-  on the diagonal selects the piece under it. *Built*, and **pressed again** without moving — on the
-  map or on a bar — the selection widens to the piece's **whole sequence**, a stitched one whole, and
-  pressed again narrows back to the piece; a press on a sequence's name on a bar, or its row on the
-  sequences card, selects it whole at once.
+  the sequence it started in; the stretch lights on the diagonal, the pieces bars and the lanes. *Built*;
+  on a bar a press selects the piece under it and **pressed again** without moving widens to the
+  piece's **whole sequence**, pressed again narrowing back; a press on a sequence's name on a bar, or
+  its row on the sequences card, selects it whole at once. The pointer over the selected stretch's
+  square — where a press takes hold of it to move it — is a hand, closed while it moves.
+- **← →** on a selected stretch: it moves **a cell along its sequence**, as a drag along the diagonal
+  moves it, and presses one after another are **one step**, amended (`EditStore.amend`) until something
+  else is done — back where it began, no step at all; at an end of its sequence it goes no further,
+  and the readout says so (a drag takes it into another). In review, ← → go through the suggestions
+  instead (§27.6). Either way the stage takes them, so the page behind never scrolls. *Built.*
 - **↑ ↓**: what is selected one place earlier or later — a whole sequence in the order, a piece among
   its sequence's pieces — one step each, and **nothing is joined** and nothing taken out: at the first
   or the last place the readout says so and nothing is made. *Built*, as the keys, as *earlier* and
   *later* on the selection's card, and on a sequence's grip on the sequences card; the selection moves
   with it, and the view follows it where it would leave the screen.
 - **Select off the diagonal**: a drag in the body of the map draws a box whose sides snap to corners
-  and breakpoints. A box off the diagonal names **two** stretches — its rows and its columns — and a
-  press on one corner names the stretch between its two ends. What is offered is what two stretches
+  and breakpoints. A box off the diagonal names **two** stretches — its rows and its columns. What is offered is what two stretches
   admit: bring the rows' stretch next to the columns', swap them, turn either. This is the gesture the
   off-diagonal signal is for: the corner of a block that stops is where two ends meet, and grabbing it
   is grabbing both breakpoints at once. *Built*, its sides snapping as every point on the stage does —
   to the suggestions' points and corners, and to edit ends: each side of the box is kept inside the
   sequence it started in, the sidebar offers *rows before columns*,
   *columns after rows*, *swap them* (two stretches of one sequence, as two steps) and *turn* either, and
-  a press off the diagonal selects the stretch between its row and its column where the two are one
-  sequence's, and boxes the two pieces under it where they are not.
+  so does a right click inside the box, under the two stretches' names.
 - **Move**: drag the selection, by its square on the diagonal or its band on a pieces bar. A ghost
   follows, an insertion line snaps between parts, and the map rearranges under the hand: while the
   pointer is down the block in hand is regathered on the main thread through the tentative edit, cells
@@ -16687,11 +16703,11 @@ which pans, is *Space*-drag here, or a middle-button drag, and the wheel zooms a
   while the drop would not. At the whole-genome scale the
   picture *is* the settled edit, so there is nothing for the worker to read; the read on the drop comes
   with the zoom past the picture (§27.9).
-- **Invert** `I`; **cut** `C`, at the snapped position or at both ends of a selection; **set aside**
+- **Invert** `I`; **cut** `C`, at the caret, the snapped position or at both ends of a selection; **set aside**
   `⌫`, whose menu asks why; **duplicate** by `⌥`-drag, the platform's own *drag a copy*; **split into a
   new sequence** `S`; **join** by dragging one sequence's end onto another's on a pieces bar; **set the
   origin** `O` on a circular sequence. *Built*: invert, which turns what is selected, cut and split at
-  the pointer (or, with no pointer on the map, at the selection's ends — a stretch made a sequence of
+  the caret, else the pointer (or, with no pointer on the map, at the selection's ends — a stretch made a sequence of
   its own), set aside with its menu of reasons — and **put back** from its row on the sequences card:
   one `restore` step, the piece a sequence of its own, last, read as the file reads it whatever way it
   was set aside, joined to nothing, selected and framed to be moved into place; an original put back

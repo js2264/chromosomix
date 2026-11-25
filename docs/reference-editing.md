@@ -334,14 +334,18 @@ boundary. A snap is a **proposal the hand can refuse** — it never moves anythi
 Direct manipulation, with every act also on the right-click menu and in the sidebar (and so in the
 palette), each printing its key:
 
+- **A click is a position, a double click a piece, a triple click a sequence**, as a word and a line
+  are in a text: a click puts a caret at the position under it, which `C`, `S` and `O` act on and ← →
+  move a cell at a time; a double click selects the piece there, a triple click its whole sequence.
 - **Select along the diagonal**: a drag from one position to another, both ends snapped. The stretch
-  is lit on the diagonal, the axes and the lanes.
+  is lit on the diagonal, the axes and the lanes; the pointer over it is a hand, and ← → move it a cell
+  along its sequence, presses one after another one step.
 - **Select off the diagonal**: a drag in the map's body draws a box whose sides snap to corners and
-  breakpoints. A box off the diagonal names **two** stretches — its rows and its columns — and a press
-  on a single corner names the stretch between its two ends. What is offered is what two stretches
-  admit: move the rows' stretch next to the columns', swap them, invert either. This is the gesture the
-  author asked for: the corner of a discontinuous block is where two ends meet, and grabbing it is
-  grabbing both breakpoints at once.
+  breakpoints. A box off the diagonal names **two** stretches — its rows and its columns. What is
+  offered — on its card, and on a right click inside it — is what two stretches admit: move the rows'
+  stretch next to the columns', swap them, invert either. This is the gesture the author asked for:
+  the corner of a discontinuous block is where two ends meet, and grabbing it is grabbing both
+  breakpoints at once.
 - **Move**: drag the selection — its square on the diagonal, or its band on a pieces bar. A ghost
   follows the pointer, an insertion line snaps between parts, and the map rearranges under the hand
   (§2.4). `I` while dragging flips it on the way; the drop makes the step.

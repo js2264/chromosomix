@@ -28,6 +28,19 @@ function grid(...steps: EditStep[]): LensGrid {
   return LensGrid.of(EditedAssembly.of(edit), LAYOUT)
 }
 
+describe('the junctions: joins and cuts (§27.3)', () => {
+  it('tells where two of the file’s sequences meet from where one was cut', () => {
+    // I turned in its middle: cut twice, joined nowhere.
+    const turned = grid({ op: 'invert', sequence: 'I', from: 3000, to: 6000 })
+    expect(turned.junctions()).toEqual([3, 6])
+    expect(turned.joins()).toEqual([])
+    // II after the turned I's end: one join, where they meet, beside its two cuts.
+    const joined = grid({ op: 'invert', sequence: 'I', from: 3000, to: 6000 }, { op: 'join', a: 'I_e1', aEnd: 'end', b: 'II', bEnd: 'start', gap: 0 })
+    expect(joined.junctions()).toEqual([3, 6, 10])
+    expect(joined.joins()).toEqual([10])
+  })
+})
+
 describe('the identity', () => {
   it('shows every cell of the picture where it is', () => {
     const lens = grid()
