@@ -20,7 +20,7 @@ import { community } from '../support/curateCommunity'
 let keys = 0
 
 /** A store for the community under a fresh key, and a client that counts at once. */
-function setup(options: { hold?: boolean } = {}): {
+function setup(options: { hold?: boolean; amend?: (answer: CurationStateResult, declined: readonly string[]) => CurationStateResult } = {}): {
   model: CurateModel
   store: CurationStore
   asked: Array<{ curation: Curation | null; weights: KindWeights; declined: readonly string[]; resolve: () => void }>
@@ -31,7 +31,8 @@ function setup(options: { hold?: boolean } = {}): {
   const asked: Array<{ curation: Curation | null; weights: KindWeights; declined: readonly string[]; resolve: () => void }> = []
   const client: CurateClient = {
     state(curation, weights, declined = []) {
-      const answer = stateAnswer(evidence, CuratedBinning.of(base, curation), weights, declined)
+      const counted = stateAnswer(evidence, CuratedBinning.of(base, curation), weights, declined)
+      const answer = options.amend === undefined ? counted : options.amend(counted, declined)
       let resolve: () => void = () => {}
       const promise = new Promise<CurationStateResult>((done) => {
         resolve = () => done(answer)
@@ -198,6 +199,30 @@ describe('the controller', () => {
     await model.settled()
     expect(model.queue().some((q) => q.key === turnedDown.key)).toBe(false)
     expect(model.current?.key).not.toBe(turnedDown.key)
+    // The first turned down, the queue as the answer left it: the question now first is next, whatever it ranked before.
+    expect(model.current?.key).toBe(model.queue()[0].key)
+  })
+
+  it('moves on by place once an answer is counted, so a question the answer brings is asked where it ranks', async () => {
+    // Once a suggestion is turned down, the count brings a merge of Y and Z: merges rank first.
+    const amend = (answer: CurationStateResult, declined: readonly string[]): CurationStateResult => {
+      if (declined.length === 0) return answer
+      const y = answer.genomes.findIndex((genome) => genome.id === 'Y')
+      const z = answer.genomes.findIndex((genome) => genome.id === 'Z')
+      const brought: Suggestion = { key: 'merge:Y+Z', kind: 'merge', step: { op: 'merge', into: 'Y', genomes: ['Z'] }, words: 'merge Z into Y', confidence: 0.9, genomes: [y, z], contigs: [], evidence: [] } as unknown as Suggestion
+      return { ...answer, suggestions: [...answer.suggestions, brought] }
+    }
+    const { model } = setup({ amend })
+    await model.settled()
+    model.setMode('review')
+    const first = model.queue()[0]
+    const second = model.queue()[1]
+    model.reject(first)
+    await model.settled()
+    // Not the old second, by its key: the question now at the first's place, the merge the answer brought.
+    expect(model.queue()[0].key).toBe('merge:Y+Z')
+    expect(model.current?.key).toBe('merge:Y+Z')
+    expect(model.current?.key).not.toBe(second.key)
   })
 
   it('auto takes every sure suggestion, one step each, and stops when none is left', async () => {

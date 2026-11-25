@@ -99,6 +99,12 @@ export class CurateModel {
   private modeHeld: CurateMode = 'manual'
   private currentKey: string | null = null
   /**
+   * Where a question answered whole stood in the queue: once the answer is
+   * counted, the question at that place is asked — the queue may rank anew,
+   * and the first question after an answer to the first is the new first.
+   */
+  private resumeAt: number | null = null
+  /**
    * Inside the current question: the member answered alone, by key, or `null`
    * for the whole — by key, so a question regrouped by a count keeps it, and one
    * that left the queue does not hand it to another.
@@ -278,6 +284,11 @@ export class CurateModel {
     this.previousOwner = Array.from(answer.genomeOf, (g) => (g < 0 ? null : answer.genomes[g].id))
     this.previousKind = new Map(answer.genomes.map((genome) => [genome.id, genome.kind]))
     this.pruneSelection(answer)
+    if (this.resumeAt !== null && answer.counted) {
+      const list = this.queue()
+      this.currentKey = list.length === 0 ? null : list[Math.min(this.resumeAt, list.length - 1)].key
+      this.resumeAt = null
+    }
     this.release()
     this.emit('state')
   }
@@ -521,6 +532,7 @@ export class CurateModel {
     if (mode !== 'auto' && this.autoRun !== null) this.autoRun.stopped = true
     this.currentKey = mode === 'review' ? (this.queue()[0]?.key ?? null) : null
     this.memberKey = null
+    this.resumeAt = null
     // The review priced its question with a preview nobody else asked for.
     if (leaving) this.clearPreview()
     this.emit('mode')
@@ -623,6 +635,7 @@ export class CurateModel {
     if (next === this.currentKey && this.memberKey === null) return
     this.currentKey = next
     this.memberKey = null
+    this.resumeAt = null
     this.emit('current')
   }
 
@@ -634,6 +647,7 @@ export class CurateModel {
     const at = Math.max(0, list.indexOf(question))
     this.currentKey = list[(at + by + list.length) % list.length].key
     this.memberKey = null
+    this.resumeAt = null
     this.emit('current')
   }
 
@@ -677,8 +691,11 @@ export class CurateModel {
       this.memberKey = at >= 0 && left.length > 1 ? next.key : null
       return
     }
+    // On by place, not by the next one's key: the answer may rank the queue
+    // anew once counted, and the question then at this place is next.
     const k = list.indexOf(question)
     this.currentKey = list[k + 1]?.key ?? list[k - 1]?.key ?? null
+    this.resumeAt = Math.max(0, k)
     this.memberKey = null
   }
 
