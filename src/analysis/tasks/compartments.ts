@@ -354,6 +354,41 @@ const PARAMS: readonly ParamSpec[] = [
     when: (params) => params.saddle !== false,
     section: 'Saddle',
   },
+  {
+    kind: 'choice',
+    key: 'saddleScope',
+    label: 'saddles',
+    /**
+     * **One by default**, because a drawer of twenty saddles is twenty pictures of
+     * one claim, and the number a reader reports is the genome's: what
+     * `cooltools.saddle` draws over the regions of its view. Each sequence's bins
+     * are still grouped at the quantiles of **its own** E1 (`addToSaddle` says
+     * why), and every pair of groups' cells then pooled, so the one saddle is the
+     * per-sequence saddles added up, cell for cell, rather than a mean of their
+     * pictures.
+     *
+     * Only a question under *cis only* with more than one sequence ticked: the
+     * other two modes decompose one square and draw one saddle of it already.
+     */
+    default: 'pooled',
+    options: [
+      {
+        value: 'pooled',
+        label: 'one over every sequence',
+        hint: 'Each sequence’s bins grouped by its own E1, and every group’s contacts pooled into one square.',
+      },
+      {
+        value: 'each',
+        label: 'one per sequence',
+        hint: 'A saddle for each sequence, over its own contacts.',
+      },
+    ],
+    when: (params) =>
+      params.saddle !== false &&
+      contactsOf(params) === 'cis' &&
+      (tickedNames(params)?.length ?? Number.POSITIVE_INFINITY) > 1,
+    section: 'Saddle',
+  },
   BALANCE_PARAM,
 ]
 
@@ -592,7 +627,10 @@ export const COMPARTMENTS_TASK: AnalysisTask = {
   // pooled in groups at most 3% wide from about the thirty-fifth, as `eigs_cis`
   // pools them — where it divided by each diagonal's mean, and the share of the
   // contacts is measured over that matrix under either method.
-  version: 4,
+  // 5: under cis only, the saddle is one over every ticked sequence by default —
+  // each one's bins grouped by its own E1 and the cells pooled — where it was one
+  // per sequence, which is now *saddles: one per sequence*.
+  version: 5,
   // Absent on a metacool, which is a scientific judgement rather than a
   // technical one: a bacterial MAG has domains and no compartments, and a row
   // offering an eigenvector of a thing that has none is an invitation to

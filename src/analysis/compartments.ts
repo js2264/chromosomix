@@ -718,13 +718,72 @@ export function phaseComponent(
  * eigenvector is what the matrix says, and ranking by anything else would be
  * asking whether the matrix agrees with a track rather than what the matrix
  * itself contains.
+ *
+ * One square's saddle, which is {@link addToSaddle} into empty sums and
+ * {@link saddleOf} of them; a saddle pooled over several squares is the same two
+ * steps with the adding done once a square.
  */
 export function saddle(
   oe: Float64Array,
   m: number,
   component: Float64Array,
   bins: number,
-): { values: Float32Array; edges: Float64Array; strength: { aa: number; bb: number; ab: number } } {
+): { values: Float32Array; edges: Float64Array; strength: SaddleStrength } {
+  const sums = saddleSums(bins)
+  const edges = addToSaddle(sums, oe, m, component)
+  return { ...saddleOf(sums), edges }
+}
+
+/** A saddle's three corners: the means over the extreme fifth of its groups at each end. */
+export interface SaddleStrength {
+  aa: number
+  bb: number
+  ab: number
+}
+
+/**
+ * A saddle before its means are taken: every pair of groups' observed/expected
+ * added up, and how many cells went into each.
+ *
+ * Kept as sums rather than means so that squares can be **pooled** — several
+ * chromosomes' cis contacts in one saddle — and the pooled mean is then the
+ * mean over every cell that went in, as `cooltools.saddle` takes it over the
+ * regions of its view, rather than a mean of means that would weigh chromosome
+ * 19 as much as chromosome 1.
+ */
+export interface SaddleSums {
+  bins: number
+  sum: Float64Array
+  count: Float64Array
+}
+
+/** Empty sums for a saddle of `bins` groups. */
+export function saddleSums(bins: number): SaddleSums {
+  return { bins, sum: new Float64Array(bins * bins), count: new Float64Array(bins * bins) }
+}
+
+/**
+ * Adds one square's cells to `into`, its bins grouped at the quantiles of
+ * **its own** component; returns those groups' edges.
+ *
+ * Its own, and not the quantiles of every square pooled, because a component's
+ * scale is a fact about its square and not about the genome. A correlation's
+ * eigenvector is a unit vector, so a short chromosome's values are larger than a
+ * long one's for the same checkerboard, and quantiles over both would fill the
+ * extreme groups with the short one's bins; under cooltools' scaling a
+ * chromosome whose checkerboard is faint has a small √λ and would be squeezed
+ * into the middle groups. Grouped within each square, a bin's group says where
+ * it stands in its own chromosome, which is the reading a single square's saddle
+ * already gives — so a pooled saddle is exactly the per-chromosome saddles' sums
+ * added up.
+ */
+export function addToSaddle(
+  into: SaddleSums,
+  oe: Float64Array,
+  m: number,
+  component: Float64Array,
+): Float64Array {
+  const { bins, sum, count } = into
   const edges = quantileEdges(component, bins)
   const group = new Int32Array(m).fill(-1)
   for (let i = 0; i < m; i++) {
@@ -737,8 +796,6 @@ export function saddle(
     group[i] = g
   }
 
-  const sum = new Float64Array(bins * bins)
-  const count = new Float64Array(bins * bins)
   for (let r = 0; r < m; r++) {
     const gr = group[r]
     if (gr < 0) continue
@@ -751,6 +808,12 @@ export function saddle(
       count[gr * bins + gc] += 1
     }
   }
+  return edges
+}
+
+/** The saddle the sums describe: each pair of groups' mean, and its corners. */
+export function saddleOf(sums: SaddleSums): { values: Float32Array; strength: SaddleStrength } {
+  const { bins, sum, count } = sums
   const values = new Float32Array(bins * bins)
   for (let i = 0; i < values.length; i++) {
     values[i] = count[i] > 0 ? sum[i] / count[i] : Number.NaN
@@ -775,7 +838,6 @@ export function saddle(
   }
   return {
     values,
-    edges,
     strength: {
       // `bb` is the *low* end of the eigenvector and `aa` the high one, which is
       // only meaningful once the component has been phased — the saddle inherits

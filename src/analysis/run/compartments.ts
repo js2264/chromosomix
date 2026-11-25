@@ -35,6 +35,7 @@ import { DEFAULT_DIVERGING_COLORMAP } from '../../render/colormaps'
 import { armExpected, type ArmFrame } from '../arms'
 import {
   COOLTOOLS_CLIP_PERCENTILE,
+  addToSaddle,
   cisSeparation,
   compartmentSegments,
   contactShares,
@@ -44,9 +45,13 @@ import {
   observedOverExpected,
   phaseComponent,
   saddle,
+  saddleOf,
+  saddleSums,
   usableBins,
   type ExpectedPlan,
   type Phasing,
+  type SaddleStrength,
+  type SaddleSums,
 } from '../compartments'
 import { ExpectedAccumulator } from '../expected'
 import {
@@ -456,8 +461,14 @@ async function runSquare(
     method: 'correlation' | 'cooltools'
     /** One row per component, for the components table. */
     rows: Array<Record<string, string | number>>
+    /**
+     * The saddle, in this many quantile groups; `null` where none is drawn. With
+     * `pool`, this square's cells are added to it rather than drawn as a saddle
+     * of their own.
+     */
+    saddle: { quantiles: number; pool: SaddleSums | null } | null
   },
-): Promise<{ saddle: MatrixOutput | null } | null> {
+): Promise<{ saddle: MatrixOutput | null; phased: Phasing | null } | null> {
   const { label } = options
   const balance = boolParam(job.params, 'balance', true)
   const value = job.framing.value === '' ? DEFAULT_COUNT_COLUMN : job.framing.value
@@ -635,39 +646,55 @@ async function runSquare(
 
   addCompartmentSegments(job, options.segments, selection, index, pairs[0].vector)
 
-  if (!boolParam(job.params, 'saddle', true)) return { saddle: null }
-  const bins = Math.max(5, Math.min(100, Math.round(numParam(job.params, 'quantiles', 50))))
-  const result = saddle(oe, index.length, pairs[0].vector, bins)
+  if (options.saddle === null) return { saddle: null, phased }
+  if (options.saddle.pool !== null) {
+    addToSaddle(options.saddle.pool, oe, index.length, pairs[0].vector)
+    return { saddle: null, phased }
+  }
+  const result = saddle(oe, index.length, pairs[0].vector, options.saddle.quantiles)
   return {
-    saddle: {
-      kind: 'matrix',
-      id: `compartment-saddle-${label}`,
-      label: `Saddle · ${label}`,
-      nrows: bins,
-      ncols: bins,
-      values: result.values,
-      xLabel: 'E1 quantile',
-      yLabel: 'E1 quantile',
-      xTicks: [],
-      yTicks: [],
-      colormap: DEFAULT_DIVERGING_COLORMAP,
-      centre: 1,
-      stats: [
-        { label: 'AA', value: result.strength.aa, digits: 2 },
-        { label: 'BB', value: result.strength.bb, digits: 2 },
-        { label: 'AB', value: result.strength.ab, digits: 2 },
-        ...(phased === null || phased.confident
-          ? []
-          : [
-              {
-                label: 'phasing r',
-                value: phased.r,
-                digits: 2,
-                hint: 'Too weak to fix the sign, so AA and BB may be the wrong way round.',
-              },
-            ]),
-      ],
-    } satisfies MatrixOutput,
+    saddle: saddleOutput(label, options.saddle.quantiles, result, [
+      ...(phased === null || phased.confident
+        ? []
+        : [
+            {
+              label: 'phasing r',
+              value: phased.r,
+              digits: 2,
+              hint: 'Too weak to fix the sign, so AA and BB may be the wrong way round.',
+            },
+          ]),
+    ]),
+    phased,
+  }
+}
+
+/** A saddle as the drawer draws it: the square, from B to A, and its corners under it. */
+function saddleOutput(
+  label: string,
+  bins: number,
+  result: { values: Float32Array; strength: SaddleStrength },
+  more: NonNullable<MatrixOutput['stats']>,
+): MatrixOutput {
+  return {
+    kind: 'matrix',
+    id: `compartment-saddle-${label}`,
+    label: `Saddle · ${label}`,
+    nrows: bins,
+    ncols: bins,
+    values: result.values,
+    xLabel: 'E1 quantile',
+    yLabel: 'E1 quantile',
+    xTicks: [],
+    yTicks: [],
+    colormap: DEFAULT_DIVERGING_COLORMAP,
+    centre: 1,
+    stats: [
+      { label: 'AA', value: result.strength.aa, digits: 2 },
+      { label: 'BB', value: result.strength.bb, digits: 2 },
+      { label: 'AB', value: result.strength.ab, digits: 2 },
+      ...more,
+    ],
   }
 }
 
@@ -778,6 +805,24 @@ export const runCompartments: TaskRunner = async (job) => {
       : 'The correlation of observed/expected’s rows decomposed, as Lieberman-Aiden et al. (2009) ' +
           'did it.',
   )
+  // Refused rather than read as the default, as the method is: a misspelt scope
+  // in a batch script would otherwise draw the other without a word.
+  const scope = strParam(job.params, 'saddleScope', 'pooled')
+  if (scope !== 'pooled' && scope !== 'each') {
+    throw new Error(`There is no saddle scope “${scope}”. It is pooled (one saddle) or each (one per sequence).`)
+  }
+  const quantiles = Math.max(5, Math.min(100, Math.round(numParam(job.params, 'quantiles', 50))))
+  // **One saddle over every square, or one per square.** A question only where
+  // there are several squares, which is cis only with more than one sequence;
+  // the other modes decompose one square, and draw one saddle of it already.
+  const pool =
+    boolParam(job.params, 'saddle', true) && squares.length > 1 && scope === 'pooled'
+      ? saddleSums(quantiles)
+      : null
+  const saddleWanted = boolParam(job.params, 'saddle', true) ? { quantiles, pool } : null
+  /** The squares added to {@link pool}, and those of them whose E1 no signal signed. */
+  let pooled = 0
+  let unphased = 0
   let ran = 0
 
   for (let s = 0; s < squares.length; s++) {
@@ -809,15 +854,56 @@ export const runCompartments: TaskRunner = async (job) => {
       ...(arms === undefined ? {} : { arms }),
       method,
       rows,
+      saddle: saddleWanted,
     })
     if (done === null) continue
     ran++
     if (done.saddle !== null) outputs.push(done.saddle)
+    if (pool !== null) {
+      pooled++
+      if (done.phased === null || !done.phased.confident) unphased++
+    }
   }
 
   if (ran === 0) {
     job.note('Nothing produced a component. See the notes above.')
     return []
+  }
+
+  if (pool !== null) {
+    job.note(
+      `One saddle over ${pooled.toLocaleString()} ${pooled === 1 ? 'sequence' : 'sequences'}: each one’s ` +
+        `bins in ${quantiles} groups at the quantiles of its own E1, and every pair of groups’ contacts ` +
+        'pooled. Saddles at one per sequence draws each apart.',
+    )
+    if (unphased > 0) {
+      // Pooled, an unsigned E1 is worse than in a saddle of its own: its A is
+      // laid on the other sequences' B, and the corners are averaged towards 1.
+      job.note(
+        unphased === pooled
+          ? 'Nothing fixed the sign of any sequence’s E1, so the saddle pools the A of one with ' +
+              'the B of another. Phase the run, or draw a saddle per sequence.'
+          : `${unphased.toLocaleString()} of the ${pooled.toLocaleString()} sequences ` +
+              `${unphased === 1 ? 'was' : 'were'} phased too weakly to fix E1’s sign, so ` +
+              `${unphased === 1 ? 'its' : 'their'} A and B may lie the wrong way round in the saddle.`,
+      )
+    }
+    outputs.push(
+      saddleOutput(describe(job, whole), quantiles, saddleOf(pool), [
+        ...(unphased === 0
+          ? []
+          : [
+              {
+                label: 'unphased',
+                value: unphased,
+                digits: 0,
+                hint:
+                  `${unphased.toLocaleString()} of the ${pooled.toLocaleString()} sequences pooled ` +
+                  `${unphased === 1 ? 'has' : 'have'} no sign fixed by the phasing, so AA and BB mix A with B.`,
+              },
+            ]),
+      ]),
+    )
   }
 
   // The tracks first, then the calls, then the pictures: a reader scanning the

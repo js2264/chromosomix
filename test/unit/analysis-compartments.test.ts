@@ -24,7 +24,10 @@ import {
   observedOverExpected,
   singleGroupPlan,
   phaseComponent,
+  addToSaddle,
   saddle,
+  saddleOf,
+  saddleSums,
   usableBins,
 } from '@/analysis/compartments'
 import { ExpectedAccumulator, type ExpectedCurve } from '@/analysis/expected'
@@ -585,6 +588,75 @@ describe('saddle', () => {
     expect(result.strength.aa).toBeCloseTo(2, 6)
     expect(result.strength.bb).toBeCloseTo(2, 6)
     expect(result.strength.ab).toBeCloseTo(0.5, 6)
+  })
+})
+
+/**
+ * One saddle over several squares: each square's bins grouped by its own
+ * component, and the cells pooled — the per-square saddles' sums added up.
+ */
+describe('a pooled saddle', () => {
+  /** A square of `m` bins, two compartments, its component scaled by `scale`. */
+  const square = (m: number, scale: number, same: number, other: number) => {
+    const component = new Float64Array(m)
+    for (let i = 0; i < m; i++) component[i] = scale * (i < m / 2 ? -1 - i / m : 1 + i / m)
+    const oe = new Float64Array(m * m)
+    for (let r = 0; r < m; r++) {
+      for (let c = 0; c < m; c++) {
+        oe[r * m + c] = Math.sign(component[r]) === Math.sign(component[c]) ? same : other
+      }
+    }
+    return { m, component, oe }
+  }
+
+  it('is the one square’s saddle where there is one square', () => {
+    const one = square(40, 1, 2, 0.5)
+    const sums = saddleSums(10)
+    addToSaddle(sums, one.oe, one.m, one.component)
+    const alone = saddle(one.oe, one.m, one.component, 10)
+    const pooled = saddleOf(sums)
+    expect(Array.from(pooled.values)).toEqual(Array.from(alone.values))
+    expect(pooled.strength).toEqual(alone.strength)
+  })
+
+  it('groups each square by its own component, whatever its scale', () => {
+    // The same checkerboard on a long chromosome and a short one whose E1 is a
+    // hundred times larger, as a unit vector over fewer bins is. Grouped by the
+    // quantiles of both pooled, the short one's bins would fill the end groups
+    // and the long one's the middle; grouped each by its own, the corners hold
+    // both and read as either does alone.
+    const long = square(60, 1, 2, 0.5)
+    const short = square(20, 100, 2, 0.5)
+    const sums = saddleSums(10)
+    addToSaddle(sums, long.oe, long.m, long.component)
+    addToSaddle(sums, short.oe, short.m, short.component)
+    const { strength } = saddleOf(sums)
+    expect(strength.aa).toBeCloseTo(2, 6)
+    expect(strength.bb).toBeCloseTo(2, 6)
+    expect(strength.ab).toBeCloseTo(0.5, 6)
+  })
+
+  it('takes each cell’s mean over every cell pooled, not the mean of the squares’ means', () => {
+    // Every cell of the first is 2 and of the second 0.5. A mean of the two
+    // saddles would be 1.25 throughout; pooled, each cell weighs its square's
+    // cells, (60² × 2 + 20² × 0.5) / (60² + 20²) on the whole.
+    const big = square(60, 1, 2, 2)
+    const small = square(20, 1, 0.5, 0.5)
+    const sums = saddleSums(10)
+    addToSaddle(sums, big.oe, big.m, big.component)
+    addToSaddle(sums, small.oe, small.m, small.component)
+    let total = 0
+    let count = 0
+    for (let i = 0; i < sums.sum.length; i++) {
+      total += sums.sum[i]
+      count += sums.count[i]
+    }
+    expect(count).toBe(60 * 60 + 20 * 20)
+    expect(total / count).toBeCloseTo((60 * 60 * 2 + 20 * 20 * 0.5) / (60 * 60 + 20 * 20), 12)
+    // Each group of the big square holds 6 bins and of the small one 2, so a
+    // cell is (36 × 2 + 4 × 0.5) / 40 wherever both have one.
+    const { values } = saddleOf(sums)
+    expect(values[0]).toBeCloseTo((36 * 2 + 4 * 0.5) / 40, 6)
   })
 })
 
