@@ -261,5 +261,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 185,
+      "commit": "a840b18",
+      "title": "Support metaTOR's metacools: balance by any weight column, and fix the metagenome tasks, captions and refusals",
+      "branch": "js/confident-lamport-ws4azb",
+      "date": "2026-11-25T15:48:57Z"
+    }
+  ]
 }
