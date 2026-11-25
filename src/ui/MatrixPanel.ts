@@ -184,7 +184,7 @@ import { FIGURE_BACKGROUND, readCanvasPalette, readPageText } from './canvasPale
 import { ClipRange } from './ClipRange'
 import { GroupsCard } from './GroupsCard'
 import { LEAD_MAP, type MapId } from '../annotations/placement'
-import { COUNT_SCORE as DEFAULT_COUNT_COLUMN, type ScoreChoice } from './scores'
+import { COUNT_SCORE as DEFAULT_COUNT_COLUMN, nameScore, type ScoreChoice } from './scores'
 import {
   isArmed,
   locusText,
@@ -2085,7 +2085,9 @@ export class MatrixPanel {
       this.scoreSelect = select
       select.append(...scores.choices.map(scoreOption))
       select.value = scores.current
+      nameScore(select)
       select.addEventListener('change', () => {
+        nameScore(select)
         // Through the list held now rather than the one built with: a circle
         // ticked since offers an entry the first never had ({@link offerScores}).
         const choices = this.options.scores?.choices ?? scores.choices
@@ -3654,7 +3656,8 @@ export class MatrixPanel {
     // machine had stuttered. Pushed once where they agree, both where they do
     // not: `balanced · correlation` says something neither half says alone.
     const score = choice?.label ?? value
-    if (balance && score !== 'balanced') parts.push('balanced')
+    // `balanced · normcc` is a balance named for its column (§6.4), and says it.
+    if (balance && !score.startsWith('balanced')) parts.push('balanced')
     parts.push(score)
     // The total the map was drawn to (§6.5), which every count a task reads is a
     // count *of*: in the drawer's header, the provenance line and the command
@@ -3668,6 +3671,7 @@ export class MatrixPanel {
       binsize,
       binsPerCell,
       balance,
+      ...(balance && choice?.weight !== undefined ? { weight: choice.weight } : {}),
       value,
       normalise,
       level: data.level,
@@ -7584,6 +7588,7 @@ export class MatrixPanel {
     }
     const select = this.scoreSelect
     if (select !== null && select.value !== id) select.value = id
+    if (select !== null) nameScore(select)
   }
 
   /**

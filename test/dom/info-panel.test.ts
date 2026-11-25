@@ -69,6 +69,8 @@ function openResult(over: Partial<OpenResult> = {}): OpenResult {
     cellNnz: null,
     hasGenomes: true,
     hasWeights: true,
+    weightColumns: ['weight'],
+    weightColumn: 'weight',
     scoreColumns: ['count'],
     sourceBytes: 1_234_567,
     contacts: null,

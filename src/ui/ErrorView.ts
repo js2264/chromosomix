@@ -124,15 +124,15 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
     title: 'Contigs are not grouped by genome',
     advice: [
       'The viewer requires contig-ordering = genome-then-length, because that is what makes each genome one contiguous bin range — every view depends on it.',
-      'Re-create the file with the default ordering: metacooler create ... --contig-order genome-then-length.',
-      'Files built from a cooler (cool ordering) or from a FASTA-ordered assembly land here; this is a known and deliberate exclusion.',
+      'Group its contigs by genome without its pairs: metacooler reassign <file> --contigs <table> --contigs-format contig,genome --layout genome-then-length, the table its own (metacooler dump <file> -t contigs -H). Or re-create it with the default ordering: metacooler create ... --contig-order genome-then-length.',
+      'Files built from a cooler (cool ordering), from a FASTA-ordered assembly, or reassigned with --layout keep (custom) land here; this is a known and deliberate exclusion.',
     ],
   },
   'variable-bins': {
     title: 'Variable-bin file',
     advice: [
       'This viewer supports fixed-bin files only. Fragment-level and contig-level metacools have variable bins and are refused.',
-      'Produce a fixed-bin file with metacooler binnify <file> --binsize <bp> and open that.',
+      'Bin a fragment-level metacool coarser with metacooler binnify <file> --binsize <bp>, or a cooler at a fixed size from the pairs it was made from with cooler cload pairs, and open that.',
     ],
   },
   'unbinned-not-displayable': {
@@ -375,6 +375,41 @@ const REFUSED_GUIDANCE: Guidance = {
   ],
 }
 
+/**
+ * A metacool of one bin per contig: the map metaTOR writes from pairs or BAM
+ * files, and the one variable-bin map `metacooler binnify` cannot help with.
+ *
+ * Not a code of its own: it is a `variable-bins` refusal like any other, told
+ * apart by the counts the detector puts in its detail — as many bins as contigs
+ * (`detect.ts`), which only a metacool's carries. Binnify only sums bins, so
+ * from this map it puts every contact of a contig in one bin of it and leaves
+ * the rest empty: a map that opens, and misleads.
+ */
+const PER_CONTIG_GUIDANCE: Guidance = {
+  title: 'One bin per contig',
+  advice: [
+    'This viewer supports fixed-bin files only. This map counts the contacts of each contig as a whole — as metaTOR writes a map from pairs or BAM files — so there is no position along a contig to draw them at.',
+    'metacooler binnify cannot make it finer: it sums bins, and would put every contact of a contig in one bin of it.',
+    'Make a fixed-bin map from the same pairs with metacooler create pairs --pairs <file> --bins <bp>. To keep this map’s genomes, give it its own assignment: --contigs <table> --contigs-format contig,genome, the table from metacooler dump <file> -t contigs -H.',
+  ],
+}
+
+/**
+ * Whether a variable-bin refusal is of a map of one bin per contig (see
+ * {@link PER_CONTIG_GUIDANCE}) — and never with the multi-genome format switched
+ * off, whose refusals do not name it (§29).
+ */
+function perContig(error: ViewerError): boolean {
+  const nbins = error.detail['nbins']
+  return (
+    devFeature('metacool') &&
+    error.code === 'variable-bins' &&
+    typeof nbins === 'number' &&
+    nbins > 0 &&
+    nbins === error.detail['nchroms']
+  )
+}
+
 /** Whether an error is a host's error status, whichever code carried it (see {@link REFUSED_GUIDANCE}). */
 function refusedByHost(error: ViewerError): boolean {
   const status = error.detail['status']
@@ -401,7 +436,9 @@ export class ErrorView {
           ? RESAMPLE_GUIDANCE
           : refusedByHost(viewerError)
             ? REFUSED_GUIDANCE
-            : guidanceFor(viewerError.code)
+            : perContig(viewerError)
+              ? PER_CONTIG_GUIDANCE
+              : guidanceFor(viewerError.code)
 
     const entries = extractEntries(viewerError)
     const actions: HTMLElement[] = []

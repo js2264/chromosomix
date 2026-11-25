@@ -30,6 +30,7 @@ import { entryLabel, fileBaseLabel, fileLabel, splitUri } from '../ui/labels'
 import { pickOnLadder, rungsOf } from '../ui/refine'
 import { resolutionLabel } from '../units'
 import type { MatrixPanel } from '../ui/MatrixPanel'
+import { DEFAULT_WEIGHT_COLUMN } from '../metacooler/matrix'
 import type { OpenResult, OrientationSummary, PairsBinning } from '../worker/protocol'
 import type { PairStats } from '../pairs/stats'
 import type { Session } from './Session'
@@ -102,6 +103,16 @@ function withCircularNames(
  */
 function cellsOfMap(info: OpenResult): { cells?: readonly string[] } {
   return info.cells.length === 0 ? {} : { cells: info.activeCells }
+}
+
+/**
+ * The weight column a map is balanced by, for the analysis worker's own mount
+ * of it, where the reader chose one by name (§6.4) — spread as
+ * {@link cellsOfMap} is, so the file's own `weight` contributes no key at all.
+ */
+function weightOfMap(info: OpenResult): { weight?: string } {
+  const column = info.weightColumn
+  return column === null || column === undefined || column === DEFAULT_WEIGHT_COLUMN ? {} : { weight: column }
 }
 
 /**
@@ -266,6 +277,7 @@ export class SessionAnalysis {
             ...cellsOfMap(starred.info),
             ...binningOfMap(starred.info),
             ...(this.session.deck.grid?.starredPanel?.resampleTarget() ?? {}),
+            ...(this.session.deck.grid?.starredPanel?.weightTarget() ?? {}),
             // What a plain Run names the map it measured (§16.10), as a batch
             // names each of its maps (`readyTargets`).
             label: this.session.mapLabel(starred.uri),
@@ -284,6 +296,7 @@ export class SessionAnalysis {
             uri: at?.uri ?? file.uri,
             source: file.source,
             ...cellsOfMap(file.info),
+            ...weightOfMap(file.info),
             ...binningOfMap(file.info),
             ...this.session.resampleOf(this.session.reader),
             ...(this.session.lens === null ? {} : { edit: this.session.lens.edit }),
@@ -679,6 +692,7 @@ export class SessionAnalysis {
         uri: at?.uri ?? file.uri,
         source: file.source,
         ...cellsOfMap(file.info),
+        ...weightOfMap(file.info),
         ...binningOfMap(file.info),
         ...this.session.resampleOf(this.session.reader),
         ...(this.session.lens === null ? {} : { edit: this.session.lens.edit }),
@@ -706,6 +720,7 @@ export class SessionAnalysis {
         ...cellsOfMap(facts.info),
         ...binningOfMap(facts.info),
         ...panel.resampleTarget(),
+        ...panel.weightTarget(),
         label: this.session.mapLabel(facts.uri),
       })
     }

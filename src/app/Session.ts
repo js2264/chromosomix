@@ -96,13 +96,14 @@ import {
   type MetaScope,
   type UnitSelection,
 } from '../state/ViewState'
+import { DEFAULT_WEIGHT_COLUMN } from '../metacooler/matrix'
 import { parseRegionString } from '../metacooler/range'
 import { fileMemoryKey, recall, remember } from '../state/UiMemory'
 import { getPlotOptions, setPlotOptions } from '../ui/plotOptions'
 import type { PanelLayout } from '../ui/SidePanel'
 import { afterHome, homeParent, hostHolds, removeCard, swapCard } from '../ui/cardLayout'
 import { armAll, resetPick, type Armable, type PickHandlers } from '../ui/mapPick'
-import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, type ScoreChoice } from '../ui/scores'
+import { BALANCED_SCORE, COUNT_SCORE, scoreChoices, scoreFor, weightOfScore, type ScoreChoice } from '../ui/scores'
 import {
   applyConfig,
   buildConfig,
@@ -369,6 +370,12 @@ export interface OpenFile {
    * cells, and on one whose set is still every cell.
    */
   activeCells: string[] | null
+  /**
+   * The weight column the worker balances by, where the reader chose one by
+   * name (§6.4) — the session's copy, so a navigation that keeps the score does
+   * not pay for a swap. `null` while the file's own `weight` is in force.
+   */
+  chosenWeight: string | null
   source: SourceSpec
   genomeNames: string[]
   displayNames: string[]
@@ -611,6 +618,14 @@ let nextSessionId = 1
 /** Reserve the ids a restore is about to hand out, so a new tab cannot reuse one. */
 export function reserveSessionIds(highest: number): void {
   nextSessionId = Math.max(nextSessionId, highest + 1)
+}
+
+/**
+ * A file's weight columns (§6.4): `weight` alone, where it has weights, for an
+ * open result from before they were listed — a stored tab's, a test's.
+ */
+function weightColumnsOf(info: OpenResult): readonly string[] {
+  return info.weightColumns ?? (info.hasWeights ? [DEFAULT_WEIGHT_COLUMN] : [])
 }
 
 export class Session {
@@ -2619,6 +2634,7 @@ export class Session {
         contigs: null,
         cells: null,
         activeCells: info.cells.length > 0 ? info.activeCells : null,
+        chosenWeight: null,
         source,
         genomeNames: names,
         displayNames: Array.from(genomes.display, (index) => names[index]).filter(
@@ -7423,7 +7439,9 @@ export class Session {
    */
   private balancedByDefault(): boolean {
     const info = this.file?.info
-    return info !== undefined && !info.hasGenomes && info.hasWeights
+    // The file's own `weight`, and never a column chosen by name: what a file
+    // opens on does not move because the reader picked another balance.
+    return info !== undefined && !info.hasGenomes && weightColumnsOf(info).includes(DEFAULT_WEIGHT_COLUMN)
   }
 
   /**
@@ -7432,17 +7450,23 @@ export class Session {
    * @internal SessionRouter tells a repaint from a new read by it.
    */
   balanceOf(state: ViewState): boolean {
+    // A score that balances by a column by name is a balance whatever `balance`
+    // says (§6.4) — the score overrides it, as a link's `score` always does.
+    if (this.namedWeightOf(state) !== null) return true
     return state.balance ?? this.balancedByDefault()
   }
 
   /**
-   * Record a balance choice, writing it to the hash only when it *differs* from
-   * the file's default — so a link stays clean, and "off" on a file that
-   * defaults to on survives being shared, which `balance: balance || undefined`
-   * could not express.
+   * The weight column this state's score balances by, where it names one the
+   * file has (§6.4).
+   *
+   * @internal SessionRouter tells a repaint from a new read by it: two balances
+   * by two columns are two reads, though both are balanced.
    */
-  private setBalance(balance: boolean): void {
-    this.store.patch({ balance: balance === this.balancedByDefault() ? undefined : balance })
+  namedWeightOf(state: ViewState): string | null {
+    const named = weightOfScore(state.score)
+    const info = this.file?.info
+    return named !== null && info !== undefined && weightColumnsOf(info).includes(named) ? named : null
   }
 
   /**
@@ -7456,13 +7480,24 @@ export class Session {
    * common cases produce the same hash they did yesterday.
    */
   private setScore(choice: ScoreChoice): void {
-    this.setBalance(choice.balance)
     // Every choice but the two legacy ones writes its id. The test cannot be
     // "does it name a column" any more: a computed normalisation names none and
     // still has to be carried, or picking `VC` would leave the hash saying
     // `counts` and a shared link would show the wrong numbers.
     const legacy = choice.id === COUNT_SCORE || choice.id === BALANCED_SCORE
-    this.store.patch({ score: legacy ? undefined : choice.id })
+    // `balance` goes in the hash only where it *differs* from the file's
+    // default — so a link stays clean, and "off" on a file that defaults to on
+    // survives being shared, which `balance: balance || undefined` could not
+    // express.
+    //
+    // One patch, the two fields together: written one after the other, the
+    // first arrived without the second, and a balance by a column the score
+    // had not named yet was one the router dropped as unservable. A balance by
+    // a column by name writes no `balance` at all — its score says it — so a
+    // build that does not know the column lands on counts rather than on
+    // `weight` under that column's name.
+    const balance = choice.weight !== undefined || choice.balance === this.balancedByDefault() ? undefined : choice.balance
+    this.store.patch({ balance, score: legacy ? undefined : choice.id })
   }
 
   /**
@@ -7600,7 +7635,7 @@ export class Session {
     if (state.view !== 'region' && state.view !== 'whole' && state.view !== 'selection') return undefined
     if (state.uri2 !== undefined || state.maps !== undefined || this.compare.second !== null) return undefined
     if (this.file === null) return undefined
-    const choices = scoreChoices(this.scoreProps(state))
+    const choices = this.lowerChoices(state)
     const choice = this.lowerScoreOf(state)
     const upper = this.scoreOf(state)
     const needsRead = choice.balance !== upper.balance || choice.value !== upper.value
@@ -7687,10 +7722,22 @@ export class Session {
     }
   }
 
+  /**
+   * What the lower reading may be drawn from: every choice of the map, but a
+   * balance only by the weight column the upper reading has in force (§6.4).
+   *
+   * Both readings are read from one open map, which balances by one column at a
+   * time: a lower reading balanced by another would be drawn by the upper's
+   * column under its own name.
+   */
+  private lowerChoices(state: ViewState): ScoreChoice[] {
+    const inForce = this.scoreOf(state).weight ?? null
+    return scoreChoices(this.scoreProps(state)).filter((choice) => !choice.balance || (choice.weight ?? null) === inForce)
+  }
+
   /** The lower reading's score: its own key, else the file's default — the upper's with nothing said. */
   private lowerScoreOf(state: ViewState): ScoreChoice {
-    const props = this.scoreProps(state)
-    return scoreFor(scoreChoices(props), {
+    return scoreFor(this.lowerChoices(state), {
       ...(state.score2 === undefined ? {} : { score: state.score2 }),
       balance: this.balancedByDefault(),
     })
@@ -7896,6 +7943,7 @@ export class Session {
   private scoreProps(state: ViewState): {
     hasWeights: boolean
     scoreColumns: readonly string[]
+    weightColumns: readonly string[]
     circle: boolean
     score?: string
   } {
@@ -7903,6 +7951,7 @@ export class Session {
     return {
       hasWeights: info?.hasWeights === true,
       scoreColumns: info?.scoreColumns ?? ['count'],
+      weightColumns: info === undefined ? [] : weightColumnsOf(info),
       circle: this.onOneCircle(state),
       ...(state.score === undefined ? {} : { score: state.score }),
     }
@@ -8556,6 +8605,66 @@ export class Session {
   }
 
   /**
+   * Put the worker on the weight column this state's score names (§6.4), before
+   * anything reads — `syncCells`'s reason exactly: the column is state on the
+   * open map, so every read after it multiplies by the same weights, and no
+   * request carries a column name.
+   *
+   * A score that names no column — `balanced`, the correlation, counts — puts
+   * the file's own `weight` back in force. One that names a column this file
+   * does not have does too, as an unreadable value in a link always lands on
+   * what the file can serve. A no-op when the column in force is the one wanted,
+   * which is every navigation but a pick of another balance.
+   *
+   * @internal SessionRouter calls it before every mount.
+   */
+  syncWeight(state: ViewState): Promise<void> | null {
+    const file = this.file
+    if (file === null) return null
+    const wanted = this.namedWeightOf(state)
+    // The second file of a comparison is read with the first's questions, its
+    // balance included: by the same column where it has it, by its own `weight`
+    // where it does not — the column a balanced read of it always took.
+    const second = this.compare.second
+    const theirs = second !== null && wanted !== null && weightColumnsOf(second.info).includes(wanted) ? wanted : null
+    const mine = wanted !== (file.chosenWeight ?? null)
+    const others = second !== null && theirs !== (second.chosenWeight ?? null)
+    // Nothing to swap is nothing to wait for: `null`, so a mount that keeps its
+    // score is not a step longer than it was.
+    if (!mine && !others) return null
+    return (async () => {
+      if (mine) {
+        const result = await this.clientOf().request<'selectWeight'>({ kind: 'selectWeight', name: wanted })
+        if (this.destroyed || this.file !== file) return
+        file.chosenWeight = wanted
+        file.info = { ...file.info, hasWeights: result.hasWeights, weightColumn: result.weightColumn }
+        this.infoPanel?.refresh(file.info)
+      }
+      if (second !== null && others) {
+        await second.client.request<'selectWeight'>({ kind: 'selectWeight', name: theirs })
+        if (this.compare.second === second) second.chosenWeight = theirs
+      }
+    })()
+  }
+
+  /**
+   * Whether this state's balance can be served: by the column its score names,
+   * where it names one this file has, else by the file's own `weight`.
+   *
+   * Asked before the column is put in force (`syncWeight`), so it reads the
+   * file's list of weight columns rather than whether weights are in force now.
+   *
+   * @internal SessionRouter drops a balance a link asks for and the file cannot
+   * serve.
+   */
+  servesBalance(state: ViewState): boolean {
+    const info = this.file?.info
+    if (info === undefined) return false
+    const named = weightOfScore(state.score)
+    return weightColumnsOf(info).includes(named ?? DEFAULT_WEIGHT_COLUMN)
+  }
+
+  /**
    * Which of the two whole-file views this file has: the metagenome's scan, or
    * the cooler's single map. Both are called "Whole genome" wherever they are
    * offered, because they answer the same question by the means the file allows.
@@ -8661,7 +8770,7 @@ export class Session {
       // block a whole-file view holds *is* the picture, and a reader stepping
       // from 1 kb to a derived 3 kb would otherwise be handed the cached 1 kb
       // one under a bar that says 3 kb (§3.4).
-      `whole|${state.uri}|${this.compare.key()}|${level}|${String(balance)}|${state.resolution ?? 0}|${state.contacts ?? 0}|${this.lowerReadKey(state)}`,
+      `whole|${state.uri}|${this.compare.key()}|${level}|${String(balance)}|${this.namedWeightOf(state) ?? ''}|${state.resolution ?? 0}|${state.contacts ?? 0}|${this.lowerReadKey(state)}`,
       () => {
         return new WholeView({
           client: this.clientOf(),

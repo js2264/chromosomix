@@ -36,13 +36,30 @@ import { refineEnabled } from './refine'
  */
 export function windowPhrase(windows: readonly LocusWindow[]): string {
   if (windows.length === 0) return ''
-  const span = windows.reduce((total, window) => total + (window.end - window.start), 0)
+  // **A cell of several sequences is all of them.** On a pooled axis the small
+  // sequences share cells, each run labelled with the first, so counting runs
+  // counted one sequence a cell and measured the first alone: a MAG of 59
+  // contigs and 4.91 Mb read *33 sequences · 4.89 Mb*, and a whole metagenome
+  // of 7,781 contigs and 164 Mb *2,169 sequences · 145.78 Mb*. A cell is drawn
+  // whole or not at all, so a window touching one holds every sequence in it.
+  let sequences = 0
+  let span = 0
+  for (const window of windows) {
+    const merged = window.segment.merged
+    if (merged !== undefined && merged.length > 1) {
+      sequences += merged.length
+      for (const member of merged) span += member.unitLength
+    } else {
+      sequences += 1
+      span += window.end - window.start
+    }
+  }
   const where =
-    windows.length === 1
+    sequences === 1
       ? formatLocus(windows[0])
-      : windows.length === 2
+      : sequences === 2 && windows.length === 2
         ? `${formatLocus(windows[0])} + ${formatLocus(windows[1])}`
-        : `${fmt.int(windows.length)} sequences`
+        : `${fmt.int(sequences)} sequences`
   return `${where} · ${fmt.bp(span)}`
 }
 

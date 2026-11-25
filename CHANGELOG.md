@@ -68,6 +68,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   rings, or one ring when it is drawn in one lane. `node scripts/ui-circle.mjs` drives it on the
   mock community, and `node scripts/ui-lines.mjs` the reader's order and the two lines.
 
+- **Every weight column a file carries is a balance, by name (§6.4).** A cooler's bins table may hold
+  more weights than `weight`: the `normcc` and `hiczin` of `metacooler normalize`, the
+  `metator_empirical_hit` metaTOR stores, the `KR` and `VC` hic2cool converts from a `.hic`. Each is
+  offered in the score picker as **balanced · *column*** (`score=balanced:normcc` in a link), and
+  balances every view, a deck's maps, a comparison's second file where it has the column, and the
+  tasks; a column cooler reads as divisive — `KR`, `VC`, `VC_SQRT`, or by its `divisive_weights` attribute
+  — is divided by rather than multiplied by, as cooler does. `weight` stays the default and the only
+  column a file opens balanced by, so a metaTOR map still opens on its counts. The command line takes
+  `--weight <column>`, and writes it in the command line a run made by one shows. A score picker
+  names the score it shows in its tooltip, since a long column's name runs past the box.
+
 - **Every task that reads a map has a *Resolution* row, the first of its form (§18.4).** A list of
   every rung of the map's ladder, stored and added (marked `*`), starting on the one picked in the
   crumb row or, with none picked, the one the file was opened at; every setting after it that counts
@@ -112,6 +123,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A map whose contigs are not grouped by genome is told how to group them without its pairs (a dev
+  feature, §10).** The refusal said to re-create the map from its pairs. It now leads with
+  `metacooler reassign --layout genome-then-length`, given the map's own assignment
+  (`metacooler dump -t contigs`), which groups any ordering with nothing but the map — the `custom`
+  one `reassign --layout keep` writes included — and keeps re-creating it as the other way.
 - **With no map starred, a deck's map tasks run on every map at once (§18.1).** They used to be
   greyed until a map was starred. Now only the plain `run on ★` is greyed, with the reason in its
   tooltip, and *run on all N maps* runs, set up from the first map as the *Map* card is while it sets
@@ -452,6 +468,44 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The line under a pooled map counts every sequence on it (§5.2).** Where a window is too wide to
+  read bin for bin, the contigs too small for a cell share one, labelled with the first of them —
+  and the line under the map counted one sequence a cell, measuring the first alone: a MAG of 59
+  contigs and 4.91 Mb read *33 sequences · 4.89 Mb*, a whole metagenome of 7,781 contigs and 164 Mb
+  *2,169 sequences · 145.78 Mb*. It now counts every sequence of a shared cell, and all of its length.
+- **A genome's map is drawn from the score its picker shows (a dev feature, §5.2, §6.4).** The genome
+  view never asked its reader for the balance or the `/pixels` column, so a genome was drawn from its
+  raw counts whatever the picker said — `balanced` on a metacool with `weight` as much as another
+  column of its pixels — while the caption and the colour key said otherwise. The pair, region and
+  whole views always asked; the genome view now does too.
+- **The inter-MAG network names its genomes, however many the file has (a dev feature, §18.8).** Past
+  forty MAGs every edge was named by its row — `MAG 123` — because the names were taken from the
+  labels of the QC matrix's picture, which leaves them off past forty. A metaTOR map holds a hundred
+  and seventy-seven with its mobile elements, so its MGE–host edges, the ones the table is for, could
+  not be read. Each edge now names its two genomes as the file does, and a QC matrix whose MAGs are not
+  the file's is refused rather than named after other genomes.
+- **The metagenome tables sort a zero as a zero (a dev feature, §18.8).** Split-MAG detection listed a
+  MAG whose contigs fall into two blocks with no contact between them — a cross-block ratio of exactly
+  0, the strongest split there is — last, reading the 0 as the 1 that stood in for no ratio at all.
+  MAG contact QC and MAG purity read a 0 as missing the same way, and mixed a MAG with no contact in
+  with the leakiest and the contigs too poor in contact to judge in with the purest. Each now puts a
+  row with no value after every row with one, as a table's own sort does.
+- **Split-MAG detection flags MAGs in two pieces, not every MAG with a loose contig (a dev feature,
+  §18.8).** It cut each MAG where the plain graph Laplacian put its cheapest cut, which on a MAG that is
+  one organism is the contig it holds least: a block of one or two contigs with next to nothing
+  crossing, flagged. On a mock community's metaTOR map it flagged 47 MAGs of 55. It now takes the
+  normalized cut, which weighs each side by its contact rather than by its contigs: the same map flags
+  4, and two MAGs merged into one are divided exactly where they were joined. A contig with no contact
+  with the rest of its MAG is set aside, on neither side, and counted in a note; a MAG none of whose
+  contigs touches another is listed with no ratio, as before, and now with no sides either.
+- **A map of one bin per contig is told how to get a map this viewer reads (a dev feature, §10).** The
+  map metaTOR writes from pairs or BAM files holds one bin per contig, and its refusal said to run
+  `metacooler binnify`, which only sums bins: from that map it puts every contact of a contig in one
+  bin of it and leaves the rest empty — a map that opens, and misleads. Such a map, told by as many
+  bins as contigs, is now headed *One bin per contig* and told to make a fixed-bin map from the same
+  pairs with `metacooler create pairs --bins`, keeping its genomes with its own assignment. A
+  fragment-level metacool is still told to binnify; a variable-bin cooler is told to bin its pairs
+  with `cooler cload pairs` with the multi-genome format read too, where it was told to binnify.
 - **The maps of a deck stay on one place across the whole genome (§16.3).** Zoomed or panned fast,
   the maps of a deck on the whole genome went on moving together but showed two places: the yeast
   micro-C twice, zoomed fast into the whole genome, showed chrVII:378–632 kb on the first map and

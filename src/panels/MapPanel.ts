@@ -670,6 +670,33 @@ export class MapPanel {
   }
 
   /**
+   * Put this map's reader on the weight column `weight` names, or on its own
+   * `weight` again (`null`), where it is on another (§6.4).
+   *
+   * State on the open map, as the total drawn to is: kept against the open it
+   * was set on, since a new open starts from the file's own `weight`.
+   */
+  private async balanceBy(info: OpenResult, weight: string | null): Promise<void> {
+    const held = this.weightHeld?.info === info ? this.weightHeld.weight : null
+    if (held === weight) return
+    await this.client.request<'selectWeight'>({ kind: 'selectWeight', name: weight })
+    if (this.disposed || this.opened !== info) return
+    this.weightHeld = { info, weight }
+  }
+
+  /** The column {@link balanceBy} put this map's reader on, and the open it did. */
+  private weightHeld: { info: OpenResult; weight: string | null } | null = null
+
+  /**
+   * The weight column this map is balanced by, for a task's own mount of it,
+   * where it is one chosen by name (§6.4) — spread as {@link resampleTarget} is.
+   */
+  weightTarget(): { weight?: string } {
+    const held = this.weightHeld
+    return held === null || held.info !== this.opened || held.weight === null ? {} : { weight: held.weight }
+  }
+
+  /**
    * Tell the worker what to draw this map to, where it was told otherwise.
    * Awaited: a refusal is this panel's to say in its own frame, and the read
    * after it would only say the same thing.
@@ -1768,6 +1795,10 @@ export class MapPanel {
       // is what lets a refusal be said once, in this panel's own frame.
       await this.drawTo(state.contacts ?? null)
       if (this.disposed) return
+      // …and balanced by the column its score names (§6.4), in this map's own
+      // reader, before the read that multiplies by it.
+      await this.balanceBy(info, this.scoreOf(info, state).weight ?? null)
+      if (this.disposed) return
       const key = this.keyFor(state, plan, info)
       if (key === this.read) return
       this.read = key
@@ -1867,6 +1898,7 @@ export class MapPanel {
     return scoreChoices({
       hasWeights: info.hasWeights,
       scoreColumns: info.scoreColumns,
+      weightColumns: info.weightColumns,
       circle: arms !== undefined && arms.refusal === null && arms.frame?.circular === true,
     })
   }

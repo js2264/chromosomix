@@ -44,6 +44,12 @@ interface OpenCompare {
   info: OpenResult
   /** Name and length per chromosome, in file order — what the gate compared. */
   contigs: Array<[string, number]>
+  /**
+   * The weight column its reader balances by, where the first file's score
+   * chose one by name and this file has it too (§6.4); absent while its own
+   * `weight` is in force.
+   */
+  chosenWeight?: string | null
 }
 
 /**

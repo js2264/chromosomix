@@ -186,12 +186,14 @@ export const LINK_KEYS: readonly LinkKey[] = [
   },
   {
     key: 'score',
-    values: `${either(['count', 'balanced', 'vc', 'vcsqrt', 'ice', 'baseline', 'correlation'])}, or a column of the file`,
+    values: `${either(['count', 'balanced', 'vc', 'vcsqrt', 'ice', 'baseline', 'correlation'])}, \`balanced:<column>\`, or a column of the file`,
     meaning:
       'What each cell is drawn from: the raw counts, the balanced counts, a normalisation computed on the fly ' +
       '(VC, square-root VC, ICE), the expected count at that distance, the Pearson correlation of the ' +
-      'observed over expected (on a balanced file), or another column of the file’s pixel table. Overrides ' +
-      '`balance`. A value the file cannot answer falls back to the counts.',
+      'observed over expected (on a balanced file), or another column of the file’s pixel table. ' +
+      '`balanced:<column>` balances by another weight column of the file’s bins than `weight` — ' +
+      '`balanced:normcc`, `balanced:metator_empirical_hit`, `balanced:KR` (read divisive, as cooler reads it). ' +
+      'Overrides `balance`. A value the file cannot answer falls back to the counts.',
   },
   {
     key: 'oe',

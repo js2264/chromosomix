@@ -75,6 +75,8 @@ export interface GenomeViewProps {
   scale: PanelSeed
   balance: boolean
   hasWeights: boolean
+  /** Every weight column of the file, each a balance of the picker's (§6.4). */
+  weightColumns?: readonly string[]
   /**
    * The `/pixels` column the reads take; `count` when absent.
    *
@@ -277,6 +279,19 @@ export class GenomeView {
     this.panel.destroy()
   }
 
+  /**
+   * What every read of this view asks for besides its window: balanced or not,
+   * and which `/pixels` column — the score the picker shows.
+   *
+   * The pair, region and whole views asked for both on every read; this one
+   * asked for neither, so a genome's map was its raw counts whatever its picker
+   * said — `balanced`, a weight column by name (§6.4), another column of the
+   * file — and a reader comparing two balances saw one picture twice.
+   */
+  private reading(): { balance: boolean; value?: string } {
+    return { balance: this.props.balance, ...(this.props.value === undefined ? {} : { value: this.props.value }) }
+  }
+
   private async load(): Promise<void> {
     this.panel.setBusy(true)
     try {
@@ -294,11 +309,13 @@ export class GenomeView {
               kind: 'matrix',
               rows: [lo, hi],
               ...this.firstPlan(hi - lo),
+              ...this.reading(),
             })
           : await this.props.client.request<'aggregate'>({
               kind: 'aggregate',
               rows: [lo, hi],
               level: 'contig',
+              ...this.reading(),
             })
       if (this.disposed) return
       // The reader plans the grid for a genome, because it is the side that
@@ -350,6 +367,7 @@ export class GenomeView {
           ...(binsPerCell === undefined ? {} : { binsPerCell }),
           rows,
           cols,
+          ...this.reading(),
         })
         return { cancel: own.cancel, promise: own.promise.then((block) => ({ result: block })) }
       },

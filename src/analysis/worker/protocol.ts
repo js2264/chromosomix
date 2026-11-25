@@ -107,6 +107,8 @@ export interface PeerMap {
   uri: string
   source: SourceSpec
   cells?: readonly string[]
+  /** The weight column it is balanced by, where the reader chose one by name (§6.4). */
+  weight?: string
   binning?: PairsBinning
   /** The total this map is drawn to, as the reader draws it (§6.5). */
   resample?: ResampleTarget
@@ -275,6 +277,13 @@ export type AnalysisRequest =
        * run over two selected cells would silently measure the pseudo-bulk.
        */
       cells?: readonly string[]
+      /**
+       * The weight column balanced reads multiply by, where the reader chose one
+       * by name (§6.4); absent for the file's own `weight`. Carried for
+       * {@link cells}'s reason: this mount is the worker's own, and a task run
+       * balanced would otherwise be balanced by `weight`, or by nothing.
+       */
+      weight?: string
       /**
        * How to bin a `.pairs`, where this map was imported from one (§3.7).
        *

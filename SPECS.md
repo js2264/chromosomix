@@ -1090,7 +1090,12 @@ the whole genome at the file's own bins. With it on, the default, the first read
 size (§2): a genome of more than about one and a half times as many bins as the plot has pixels is
 read at about a cell a pixel — its bins pooled, or a coarser rung where the file has a ladder — and
 a zoom reads the window at the file's own bins once it can show them; a smaller genome is its own
-bins from the first read and reads nothing more. Level toggle between bin and contig aggregation,
+bins from the first read and reads nothing more. **The line under it counts what is drawn**: on a
+pooled axis the contigs too small for a cell share one, labelled with the first of them, and every
+one of them is counted, with its length, in the line's *N sequences · M Mb* — which counted one
+sequence a cell and measured the first alone, so a MAG of 59 contigs and 4.91 Mb read *33 sequences
+· 4.89 Mb*, and a whole metagenome of 7,781 contigs *2,169 sequences · 145.78 Mb*. The same line
+under every map view says it so. Level toggle between bin and contig aggregation,
 both computed locally from the loaded data —
 in the General column's Contigs card (§5.8), which also lists this genome's contigs.
 
@@ -2520,6 +2525,52 @@ offers `balanced` (§7.5), and a balanced cell is `raw * w[i] * w[j]` — cooler
 filtered row reads as absent rather than as empty. Where there is no weight column the entry is not
 offered, a link naming it lands on counts, and a read asking for weights anyway is refused by name.
 No default weighting is invented.
+
+**Every weight column a file carries is a balance, by name.** A cooler's `/bins` may hold more than
+`weight`: the `normcc` and `hiczin` of `metacooler normalize`, the `metator_empirical_hit` metaTOR
+stores, the `KR`, `VC` and `VC_SQRT` hic2cool converts from a `.hic`. Every floating-point column
+beside `chrom`, `start` and `end` is one — the rule metacooler's own `weight_columns` follows — and
+each is offered in the score picker as **`balanced · <column>`**, right under `balanced`, with the id
+`balanced:<column>` (`score=balanced:normcc` in a link; the column is in the id so that the choice
+is carried wherever a score already is — a link, a workspace, a deck's map, a comparison's second
+file — with no road of its own to forget). A column cooler reads as **divisive** — `KR`, `VC`,
+`VC_SQRT` by name, as cooler's `_4DN_DIVISIVE_WEIGHTS`, or any column whose `divisive_weights`
+attribute says so, as metacooler's `read_weights` reads it — is inverted on the way in, so a
+balanced cell is `raw · w[i] · w[j]` whichever column it came from, and a weight that is not finite
+after that is a dropped bin. A picker is as wide as its card and a column's name as long as its
+writer made it — metaTOR's reads `balanced · met` in the box — so every score picker carries the
+score it shows, whole, as its tooltip.
+
+**`weight` stays the default, and the only column a file opens balanced by.** Plain `balanced` and
+the correlation are `weight`'s; a map whose only weights are another tool's — a metaTOR map's
+`metator_empirical_hit` — opens on its counts exactly as it did, and is balanced by that column only
+when the reader asks for it by name. The score that names a column is the balance: a
+`balanced:<column>` with no `balance` beside it is balanced, as a link's `score` always overrides its
+`balance`, and the picker writes no `balance` with one — so a build that does not know the column
+lands on counts rather than on `weight` under that column's name. The two fields are written in one
+patch: written one after the other, the first arrived without the second and the router dropped a
+balance by a column the score had not named yet.
+
+**The column is state on the open map**, as a cell set is (§3.8): the reader serves it where every
+balanced read already looks, at `bins/weight` (`MetaCooler.selectWeight`, a view of the handle as the
+resample's scaled weights are one), so the dense block, the pooled and aggregated roll-ups, a
+resample's weights, a resolution summed from them and the tasks' own reads all multiply by it, and
+no request carries a column name. The session puts its reader on the column the state's score names
+before every mount (`syncWeight`, beside `syncCells`), and a deck's map puts its own on the column
+its score names before it reads; a comparison's second file is read by the same column where it has
+it and by its own `weight` where it has not, the column a balanced read of it always took. Two
+balances by two columns are two reads: the router re-reads rather than repaints between them, a
+whole-file picture is kept under its column, and the answer cache starts a new name with each choice.
+The lower reading (§5.10) is read from the same open map, so it is offered a balance only by the
+column the upper reading has in force. A task's own mount is balanced by the reader's column too
+(`weight` on its open and on each peer), and its framing records the column, so two runs balanced by
+two columns are two recipes and its command line writes `--weight <column>`, the command line's own
+flag for it.
+
+**A genome's map reads its score.** The pair, region and whole views asked for the balance and the
+`/pixels` column on every read; the genome view (§5.2) asked for neither, so a genome was drawn from
+its raw counts whatever its picker said — `balanced` on a metacool with `weight` as much as a column
+by name.
 
 **A zero the weights cannot change is not visited** (`weighBlock`). Under a row and a column weight
 that are both finite and not negative, `0 · w[i] · w[j]` is the same zero, sign and all, so those cells
@@ -6900,10 +6951,10 @@ tooltip, rather than live and answering with a dialog (§8.5).
 
 | Condition | Message |
 |---|---|
-| `contig-ordering != genome-then-length` | Name the actual ordering; state that the viewer requires genome-grouped layout; point to re-creating the file. **Known cost:** files built from a cooler (`cool` ordering) or a FASTA-ordered assembly are excluded, and those are plausible things for a user to have. |
+| `contig-ordering != genome-then-length` | Name the actual ordering; state that the viewer requires genome-grouped layout; point first to grouping its contigs with `metacooler reassign --layout genome-then-length` and the map's own assignment (`metacooler dump -t contigs`), which needs nothing but the map and groups any ordering — the `custom` one `reassign --layout keep` writes included — then to re-creating the file. **Known cost:** files built from a cooler (`cool` ordering) or a FASTA-ordered assembly are excluded, and those are plausible things for a user to have. |
 | mmetacool opened at root | List available entries and the `::` syntax. The app opens an entry instead of showing it (§3.4) |
 | `.mcool` opened at root | `mcool-root`: list its resolutions and the `::` syntax, the mirror of the row above. The app opens the landing rung instead (§9) |
-| `bin-type == "variable"` or `bin-size` null/missing | State that the viewer supports fixed-bin files only, and name the file's bin type. Fragment-level and contig-level metacools land here, and so does a fragment-level HiC-Pro map, named by its config key (§3.9). Point to `metacooler binnify` as the route to a fixed-bin file — or, with the multi-genome format switched off (§29), to binning the contacts at a fixed size with `cooler cload pairs`. |
+| `bin-type == "variable"` or `bin-size` null/missing | State that the viewer supports fixed-bin files only, and name the file's bin type. Fragment-level and contig-level metacools land here, and so does a fragment-level HiC-Pro map, named by its config key (§3.9). The route to a fixed-bin file depends on the map. A fragment-level metacool is pointed to `metacooler binnify`. A metacool of **one bin per contig** — the map metaTOR writes from pairs or BAM files, told by as many `nbins` as `nchroms`, which the detail carries for a metacool — is told that binnify cannot make it finer, since binnify only sums bins and would put every contact of a contig in one bin of it, and is pointed to a fixed-bin map from the same pairs, `metacooler create pairs --bins`, given its own assignment to keep its genomes; it was told to binnify, which opened as a map that misled. A cooler is pointed to binning its contacts at a fixed size with `cooler cload pairs`, whether or not the multi-genome format is read (§29). |
 | Range or selection names `__unbinned__` | State that unassigned contigs are not a genome and cannot be displayed — distinct from the "unknown label" error, so the user learns the reason rather than doubting the name |
 | `metacooler-format-version != 1` | State both versions |
 | Dense selection too large | Enforce the same limit as Python: `DENSE_MATRIX_BIN_LIMIT = 50_000`, counted as `50_000²` cells rather than per axis, as `_check_dense_size` counts it. Reuse the CLI's own hint wording ("use contig level", "narrow the range"). The browser's own two guards follow it (§9) |
@@ -11189,15 +11240,37 @@ outside its own MAG and which MAG they land in, flagging the contigs that send m
 of it elsewhere — half, by default — a direct read on binning quality, exported as a BED and as a
 per-contig track. *Split-MAG detection*: the contig-level matrix of one MAG, split
 spectrally in two, flagged when the cross-block contacts are too few for it to be one organism.
+The split is the **normalized cut** — the Fiedler vector of `I − D^-½ W D^-½` over the contacts
+between contigs, each side weighed by its contact rather than by how many contigs it holds. The
+plain Laplacian's cheapest cut of a MAG that *is* one organism is the contig it holds least, a block
+of one with next to nothing crossing: on a mock community's metaTOR map it flagged 47 MAGs of 55, a
+contig or two peeled off each. The normalized cut flags 4, and divides two MAGs merged into one
+exactly where they were joined. A contig with no contact with the rest of its MAG is evidence of
+nothing either way, and is set aside, on neither side, its count given in a note; a MAG none of
+whose contigs touches another has no split to make and is listed with no ratio and no sides.
 *Inter-MAG network*: the genome × genome matrix as a ranked edge table, written in the column order
 `metacooler network --level genome` uses so the two are interchangeable downstream, and built from
 *MAG contact QC*'s own matrix — its *inter-MAG matrix*, on by default — which runs first at its
-defaults and is reused where it already has. An edge is ranked by its *edge weight*: by default
+defaults and is reused where it already has. Each edge names its two genomes as the file does,
+however many there are: the names come from the file, read again beside the matrix, and not from
+the labels of the matrix's picture, which leaves them off past forty MAGs and once left every edge
+of a larger file — a metaTOR map, with its mobile elements, holds a hundred and seventy-seven —
+named `MAG 123`. A matrix whose MAGs are not the file's is refused rather than named after other
+genomes. An edge is ranked by its *edge weight*: by default
 *per coverage*, the contacts over the geometric mean of the two MAGs' intra-MAG contacts, so a
 deeply sequenced pair and a shallow one rank on one scale; *per bin pair*, the contacts over the
 product of the two MAGs' bin counts, since a large MAG touches more of everything for no reason but
 its size; or the *raw contacts*. A MAG with nothing to divide by gives its edges no weight rather
 than an infinite one.
+
+Each table opens sorted on its verdict — *MAG contact QC* on the fraction that stays inside, most
+first; *MAG purity* on the fraction that leaves, most first; *split-MAG detection* on the
+cross-block ratio, least first, the MAGs most clearly in two pieces at the top — and a row with no
+value there, a MAG with no contact or a contig with too little to judge, comes after every row
+that has one, whichever way the column runs, as a table's own sort puts what is missing (§18.13).
+The three once sorted on the value or a stand-in for none, which read a real 0 as missing: a MAG
+whose contigs fall into two blocks with no contact between them, a ratio of exactly 0, was listed
+last.
 
 `__unbinned__` appears in none of them as a row, exactly as §7.4 requires — and its contacts are
 dropped from every metagenome accumulation rather than counted as inter-MAG, because counting them

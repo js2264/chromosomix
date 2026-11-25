@@ -138,6 +138,37 @@ describe('a named refusal', () => {
     expect(textsOf(view.el, '.advice li').join(' ')).toContain('metacooler binnify')
   })
 
+  it('tells a map of one bin per contig to bin its pairs again, not to binnify', () => {
+    // As many bins as contigs, as the detector puts it in the detail: the map
+    // metaTOR writes from pairs or BAM files, which binnify cannot make finer.
+    const { view } = build(
+      new ViewerError('variable-bins', 'the reader’s sentence', {
+        'bin-type': 'variable',
+        'bin-size': null,
+        nbins: 2527,
+        nchroms: 2527,
+      }),
+    )
+    expect(title(view)).toBe('One bin per contig')
+    const advice = textsOf(view.el, '.advice li').join(' ')
+    expect(advice).toContain('metacooler binnify cannot make it finer')
+    expect(advice).toContain('metacooler create pairs --pairs <file> --bins <bp>')
+    expect(advice).toContain('--contigs-format contig,genome')
+  })
+
+  it('still tells a map of fragments to binnify', () => {
+    const { view } = build(
+      new ViewerError('variable-bins', 'the reader’s sentence', {
+        'bin-type': 'variable',
+        'bin-size': null,
+        nbins: 48211,
+        nchroms: 2527,
+      }),
+    )
+    expect(title(view)).toBe('Variable-bin file')
+    expect(textsOf(view.el, '.advice li').join(' ')).toContain('metacooler binnify <file> --binsize <bp>')
+  })
+
   it('gives __unbinned__ its own answer rather than “unknown label”', () => {
     const { view } = build(
       new ViewerError('unbinned-not-displayable', '__unbinned__ cannot be displayed', {
@@ -454,6 +485,14 @@ describe('with the multi-genome format switched off (§29)', () => {
   it('still names the fix a plain file has', () => {
     const { view } = build(new ViewerError('variable-bins', 'the reader’s sentence'))
     expect(textsOf(view.el, '.advice li').join(' ')).toContain('cooler cload pairs')
+  })
+
+  it('never says one bin per contig, whatever the counts', () => {
+    const { view } = build(
+      new ViewerError('variable-bins', 'the reader’s sentence', { 'bin-type': 'variable', nbins: 16, nchroms: 16 }),
+    )
+    expect(title(view)).toBe('Variable-bin file')
+    expect(said(view)).not.toMatch(/\.?m?metacool|metacooler|metaTOR|genome|MAG/i)
   })
 })
 

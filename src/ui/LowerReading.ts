@@ -36,7 +36,7 @@ import { ClipRange } from './ClipRange'
 import { el, field, trimNumber } from './dom'
 import { MapDerivation } from './MapDerivation'
 import type { DerivePresentation, MatrixPanelOptions } from './MatrixPanel'
-import type { ScoreChoice } from './scores'
+import { nameScore, type ScoreChoice } from './scores'
 
 /** A colour scale as the link holds it: absent bounds are auto. */
 export interface LowerScale {
@@ -203,6 +203,7 @@ export class LowerReading {
 
     this.scoreSelect = el('select', { class: 'select' })
     this.scoreSelect.addEventListener('change', () => {
+      nameScore(this.scoreSelect)
       const scores = this.host.options.lower?.scores
       const picked = scores?.choices.find((choice) => choice.id === this.scoreSelect.value)
       if (picked !== undefined) scores?.onChange(picked)
@@ -474,6 +475,7 @@ export class LowerReading {
         this.scoreSelect.dataset['ids'] = ids
       }
       this.scoreSelect.value = held.scores.current
+      nameScore(this.scoreSelect)
       this.smoothSelect.value = held.derive.smooth
       const baseline = held.derive.baseline === true
       const oe = !baseline && (held.derive.expected === true || held.derive.correlate === true)

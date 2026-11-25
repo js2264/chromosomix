@@ -33,11 +33,22 @@ export interface AxisRun {
   unitStart?: number
   /** The contig's length in base pairs. */
   unitLength?: number
+  /**
+   * Every sequence of the run where small ones share its cells, the first
+   * included (`AxisGroup.merged`); absent for a run of one sequence.
+   */
+  merged?: ReadonlyArray<{ label: string; unitLength: number }>
 }
 
 /** One contig's stretch of an axis, and how its cells map to base pairs. */
 export interface LocusSegment {
   contig: string
+  /**
+   * Every whole sequence the stretch's cells hold, where small ones share them
+   * on a pooled axis — {@link contig} is the first of them, and the one its
+   * positions are of. Absent for a stretch of one sequence.
+   */
+  merged?: ReadonlyArray<{ label: string; unitLength: number }>
   /** First cell of the stretch, in matrix coordinates. */
   unitStart: number
   /** One past its last cell. */
@@ -436,6 +447,7 @@ export function locusAxisFrom(options: {
         bpStart: 0,
         bpPerUnit: known / (run.end - run.start),
         contigLength: known,
+        ...(run.merged === undefined ? {} : { merged: run.merged }),
       })
       continue
     }
@@ -451,6 +463,7 @@ export function locusAxisFrom(options: {
       bpStart: (blockStart + run.start - firstBin) * binsize,
       bpPerUnit: binsize,
       contigLength: length,
+      ...(run.merged === undefined ? {} : { merged: run.merged }),
     })
   }
 

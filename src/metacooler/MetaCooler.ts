@@ -341,19 +341,22 @@ export class MetaCooler {
    * block, the pooled and aggregated roll-ups, the tasks' own reads — so scaling
    * the one column here is scaling it everywhere, and a subsample balanced with
    * the file's weights cannot read `N/T` times fainter in one place and not in
-   * another. Everything else passes through untouched.
+   * another. Everything else passes through untouched. The weights are the
+   * column in force (§6.4): the file's `weight`, or the one the reader chose by
+   * name, served at `bins/weight` (see {@link selectWeight}).
    */
   get handle(): Hdf5Handle {
+    const base = this.weightView()
     const scale = this.resampled?.weightScale ?? 1
-    if (scale === 1) return this.rawHandle
-    if (this.weighted?.scale !== scale) {
-      this.weighted = { scale, handle: scaledWeights(this.rawHandle, scale) }
+    if (scale === 1) return base
+    if (this.weighted?.scale !== scale || this.weighted.base !== base) {
+      this.weighted = { scale, base, handle: scaledWeights(base, scale) }
     }
     return this.weighted.handle
   }
 
-  /** The weight-scaling view of {@link rawHandle}, for the scale it was made at. */
-  private weighted: { scale: number; handle: Hdf5Handle } | null = null
+  /** The weight-scaling view of the weights in force, for the scale and the view it was made at. */
+  private weighted: { scale: number; base: Hdf5Handle; handle: Hdf5Handle } | null = null
   /**
    * The pixels, behind the one interface both containers implement.
    *
@@ -841,13 +844,98 @@ export class MetaCooler {
   }
 
   /**
-   * `true` when `/bins/weight` exists — the file has been balanced.
+   * `true` when a weight column is in force — `/bins/weight`, or the column
+   * {@link selectWeight} chose — so balanced reads have weights to multiply by.
    *
    * One `has` on a dataset path, no read. The UI offers the balance toggle only
    * when this is true, so "balanced" is never an option that then fails.
    */
   get hasWeights(): boolean {
     return this.handle.has(`bins/${DEFAULT_WEIGHT_COLUMN}`)
+  }
+
+  /**
+   * The `/bins` columns that hold weights (§6.4): every floating-point column
+   * beside the bins' coordinates, whoever wrote it — `weight` from
+   * `cooler balance`, `normcc` and `hiczin` from `metacooler normalize`, the
+   * `metator_empirical_hit` metaTOR stores, the `KR` and `VC` hic2cool converts
+   * from a `.hic` — which is how metacooler's own `weight_columns` names them.
+   *
+   * One group listing and one `dtype` per column, asked once: no value is read
+   * (§3.3). A container whose handle stands in for HDF5 — a `.hic`, a `.pairs`, a
+   * HiC-Pro map — offers the `weight` it serves, where it serves one.
+   */
+  get weightColumns(): readonly string[] {
+    this.weightList ??= listWeightColumns(this.rawHandle)
+    return this.weightList
+  }
+
+  /**
+   * The weight column balanced reads multiply by: the one {@link selectWeight}
+   * chose, else `weight` where the file has it, else none.
+   *
+   * `weight` stays the default, and is the only column a file is *opened*
+   * balanced by: a map carrying another tool's normalization alone — a metaTOR
+   * map's `metator_empirical_hit` — opens on its counts as it always did, and is
+   * balanced by that column only when the reader asks for it by name.
+   */
+  get weightColumn(): string | null {
+    if (this.chosenWeight !== null) return this.chosenWeight
+    return this.rawHandle.has(`bins/${DEFAULT_WEIGHT_COLUMN}`) ? DEFAULT_WEIGHT_COLUMN : null
+  }
+
+  /**
+   * Balance by another of the file's weight columns, or by its default again
+   * (`null`, or `weight` itself).
+   *
+   * The column is served where every balanced read already looks — at
+   * `bins/weight`, through {@link handle} — so the dense block, the pooled and
+   * aggregated roll-ups, a resample's scaled weights and the tasks' own reads all
+   * multiply by it with no code of theirs learning that it was chosen. One read
+   * as divisive by cooler — `KR`, `VC`, `VC_SQRT`, or a column whose
+   * `divisive_weights` attribute says so — is inverted on the way, so that a
+   * balanced cell is `raw · w[i] · w[j]` whichever column it came from.
+   *
+   * @throws ViewerError `unsupported` for a name that is not one of
+   *   {@link weightColumns}, naming the ones there are.
+   */
+  selectWeight(name: string | null): void {
+    if (name === null || name === DEFAULT_WEIGHT_COLUMN) {
+      this.chosenWeight = null
+      return
+    }
+    if (!this.weightColumns.includes(name)) {
+      const available = this.weightColumns
+      throw new ViewerError(
+        'unsupported',
+        `This file has no weight column /bins/${name}; ` +
+          (available.length === 0
+            ? 'it carries no weights at all.'
+            : `its weight columns are ${available.join(', ')}.`),
+        { column: name, available: [...available] },
+      )
+    }
+    this.chosenWeight = name
+  }
+
+  /** What {@link selectWeight} chose; `null` for the file's default. */
+  private chosenWeight: string | null = null
+  /** {@link weightColumns}, listed on first use. */
+  private weightList: string[] | null = null
+  /** The view of {@link rawHandle} that serves the chosen column at `bins/weight`. */
+  private named: { column: string; handle: Hdf5Handle } | null = null
+
+  /**
+   * {@link rawHandle}, with the chosen weight column served at `bins/weight` —
+   * or the file as opened, while the default is in force.
+   */
+  private weightView(): Hdf5Handle {
+    const column = this.chosenWeight
+    if (column === null) return this.rawHandle
+    if (this.named?.column !== column) {
+      this.named = { column, handle: namedWeights(this.rawHandle, column) }
+    }
+    return this.named.handle
   }
 
   /**
@@ -1470,7 +1558,9 @@ export class MetaCooler {
     const attrs = { ...mc.rawHandle.attrs(), nchroms: lens.names.length, nbins: lens.nBins }
     const map = new MetaCooler({
       uri: mc.uri,
-      handle: lensedHandle(mc.rawHandle, lens, table, attrs),
+      // The weights in force with it: a column the reader chose is the one an
+      // edited map is balanced by too.
+      handle: lensedHandle(mc.weightView(), lens, table, attrs),
       layout: mc.layout,
       attrs,
       contigs: table,
@@ -1610,8 +1700,11 @@ export class MetaCooler {
     }
     const from = Math.max(0, Math.min(lo, this.nBins))
     const to = Math.max(from, Math.min(hi, this.nBins))
-    if (column === DEFAULT_WEIGHT_COLUMN && this.tables === this.rawHandle) {
-      // Through the handle, so a resampled map's weights are on its scale.
+    if (column === DEFAULT_WEIGHT_COLUMN && this.chosenWeight === null && this.tables === this.rawHandle) {
+      // Through the handle, so a resampled map's weights are on its scale —
+      // while `weight` is the column in force, which the handle serves at that
+      // path; a chosen column takes the path over, and `weight` is then read
+      // as the file stores it, like any other column.
       return this.handle.readNumeric(path, from, to)
     }
     return columnIsText(this.tables.dtype(path)) === true
@@ -2132,6 +2225,102 @@ export class MetaCooler {
     this.closed = true
     this.rawHandle.close()
   }
+}
+
+/**
+ * The weight columns of a handle's `/bins`, as metacooler's `weight_columns`
+ * names them: every floating-point dataset beside `chrom`, `start` and `end`, in
+ * the group's order — and `weight` wherever the handle serves one it does not
+ * list, as the containers that stand in for HDF5 do.
+ *
+ * A handle that cannot list `/bins` offers none, rather than failing an open
+ * over a column nobody asked for.
+ */
+function listWeightColumns(handle: Hdf5Handle): string[] {
+  const columns: string[] = []
+  try {
+    if (handle.has('bins')) {
+      for (const name of handle.keys('bins')) {
+        if (BIN_COORDINATES.has(name)) continue
+        try {
+          if (dtypeKind(handle.dtype(`bins/${name}`)) === 'f') columns.push(name)
+        } catch {
+          // A compound, an enum, a reference: not a weight.
+        }
+      }
+    }
+  } catch {
+    return handle.has(`bins/${DEFAULT_WEIGHT_COLUMN}`) ? [DEFAULT_WEIGHT_COLUMN] : []
+  }
+  if (!columns.includes(DEFAULT_WEIGHT_COLUMN) && handle.has(`bins/${DEFAULT_WEIGHT_COLUMN}`)) {
+    columns.unshift(DEFAULT_WEIGHT_COLUMN)
+  }
+  return columns
+}
+
+/** The coordinate columns of `/bins`, which are never weights. */
+const BIN_COORDINATES = new Set(['chrom', 'start', 'end'])
+
+/**
+ * The names cooler reads as divisive weights (`normalized = raw / (w_i · w_j)`):
+ * the vectors the 4DN portal and hic2cool store. cooler's `_4DN_DIVISIVE_WEIGHTS`,
+ * which metacooler's `read_weights` honours too, beside a column's own
+ * `divisive_weights` attribute.
+ */
+const DIVISIVE_WEIGHT_NAMES = new Set(['KR', 'VC', 'VC_SQRT'])
+
+/**
+ * `handle` with the weight column `column` served at `bins/weight`, as
+ * multiplicative weights, and nothing else touched.
+ *
+ * The path every balanced read already looks at, so that choosing a column is
+ * one swap of the handle rather than a column name threaded through every read
+ * there is. A divisive column — by its name, or by its `divisive_weights`
+ * attribute, as metacooler's `read_weights` reads it — is inverted on the way,
+ * and a weight that is not finite after that is `NaN`, the bin a balancer left
+ * out. A proxy for the reason {@link scaledWeights} is one.
+ */
+function namedWeights(handle: Hdf5Handle, column: string): Hdf5Handle {
+  const alias = `bins/${DEFAULT_WEIGHT_COLUMN}`
+  const path = `bins/${column}`
+  let divisive = DIVISIVE_WEIGHT_NAMES.has(column)
+  if (!divisive) {
+    try {
+      // A boolean where h5py wrote one; a 1 or a word where another writer did.
+      const flag = handle.attrsAt(path)['divisive_weights']
+      divisive = flag === true || flag === 1 || (typeof flag === 'string' && flag.toLowerCase() === 'true')
+    } catch {
+      divisive = false
+    }
+  }
+  const at = (where: string): string => (where === alias ? path : where)
+  return new Proxy(handle, {
+    get(target, property) {
+      switch (property) {
+        case 'has':
+          return (where: string): boolean => target.has(at(where))
+        case 'dtype':
+          return (where: string): string => target.dtype(at(where))
+        case 'datasetLength':
+          return (where: string): number => target.datasetLength(at(where))
+        case 'attrsAt':
+          return (where: string) => target.attrsAt(at(where))
+        case 'readNumeric':
+          return (where: string, lo?: number, hi?: number): Float64Array => {
+            const values = target.readNumeric(at(where), lo, hi)
+            if (where !== alias || !divisive) return values
+            const out = new Float64Array(values.length)
+            for (let i = 0; i < values.length; i++) {
+              const inverse = 1 / values[i]
+              out[i] = Number.isFinite(inverse) ? inverse : Number.NaN
+            }
+            return out
+          }
+      }
+      const value: unknown = Reflect.get(target, property, target)
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value
+    },
+  })
 }
 
 /**
