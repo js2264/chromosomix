@@ -263,6 +263,13 @@
   ],
   "pulls": [
     {
+      "number": 186,
+      "commit": "35b7730",
+      "title": "Reorder tabs by dragging them along the strip",
+      "branch": "js/great-shannon-p2dq3w",
+      "date": "2026-11-25T17:56:54Z"
+    },
+    {
       "number": 184,
       "commit": "b133de9",
       "title": "Curate the genomes: curate a metagenome's binning, with each genome's layout inside it (dev feature, §33)",
