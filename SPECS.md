@@ -17433,10 +17433,14 @@ offered recruit or move would bring in, a cell a contig pair's contacts over cha
 a figure, on paper, in either theme; the key stands under the map. Along the top and the left, bars in
 each genome's colour with its short name where a block holds one, and a name on a plate where it does
 not, the sections' labels kept clear of it. The selection is outlined, the genome lit in every pane
-dashed, a merge on offer an L at its cell's corner, a link a ring, an unlink a cross; the question shown
-— review's, whole: each pair of an organism's fragments, each link and unlink of a host question — is
-drawn thicker with the number the band gives it, and framed once, as it is first shown; while a step is
-previewed the genome it makes is outlined. A press on the diagonal or a bar selects a genome, off it
+dashed, a merge on offer an L at its cell's corner, a link a ring, an unlink a cross — on a cell under
+6 px only those naming the selection, a mark there painting over the contacts it points at; the
+question shown — review's, whole: each pair of an organism's fragments, each link and unlink of a host
+question — is drawn thicker with the number the band gives it, the other offers standing back in
+review, and framed once, as it is first shown: **zoomed** till its cells are 16 px wide, its genomes
+named on both axes, unless the question needs more of the map, and never further out than the view
+was; the view review found is put back when review is left. While a step is previewed the genome it
+makes is outlined. A press on the diagonal or a bar selects a genome, off it
 the pair; a drag along the diagonal selects the run; a drag from the selection carries it.
 
 **The host map** (`curate/ui/HostPane.ts`): the MAGs on the left in the stage's order, the elements on

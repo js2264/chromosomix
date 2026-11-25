@@ -120,6 +120,14 @@ const RING_PX = 10
 const HELD_PX = 10
 /** The most suggestion marks drawn at once, the surest first, besides those naming the selection. */
 const MARKS_MOST = 64
+/**
+ * A question framed is zoomed to show its cells this many pixels wide at
+ * least — its evidence, the pair's cell against each fragment's own, read at
+ * a glance —, unless the question itself needs more of the map.
+ */
+const FRAME_CELL_PX = 16
+/** An offer's mark is drawn from this wide a cell, but where it names the selection: an L over a 3-px cell paints over the contacts it points at. */
+const MARK_PX = 6
 /** The key's ramp: its size, in CSS pixels; and the key's gap under the map. */
 const KEY_WIDTH = 168
 const KEY_HEIGHT = 30
@@ -315,6 +323,8 @@ export class ContactPane implements CuratePane {
   private shown: Suggestion | null = null
   /** The last one framed: shown again after a count, it is not framed again, so a view moved away stays. */
   private framedKey: string | null = null
+  /** The view before review's first question zoomed it, put back once review is left. */
+  private beforeReview: [number, number] | null = null
   private disposed = false
   private readonly offs: Array<() => void> = []
 
@@ -322,11 +332,11 @@ export class ContactPane implements CuratePane {
     this.crumbs = el('nav', { class: 'curate-crumbs', attrs: { 'aria-label': 'Where the contact map is' } })
     this.act = el('button', {
       class: 'btn btn-quiet curate-contact-act hidden',
-      title: withKey('The contigs of the selected genomes, and those a suggestion would bring into them; a double click on the diagonal opens them too', 'enter'),
+      title: withKey('The contigs of the selected genomes, and those a suggestion would bring into them; a double click on the diagonal opens them too', '⏎'),
       attrs: { type: 'button' },
       on: { click: () => this.closeUp() },
     })
-    this.act.append(el('span', { text: 'close-up' }), keyBadge('enter', { class: 'kbd-inline' }))
+    this.act.append(el('span', { text: 'close-up' }), keyBadge('⏎', { class: 'kbd-inline' }))
     this.keyTitle = el('span', { class: 'curate-key-title', text: 'affinity' })
     this.keyRamp = el('canvas', { class: 'curate-key-ramp', attrs: { role: 'img' } })
     // The key under the map, as a figure's: the head keeps its room for the crumb.
@@ -422,6 +432,19 @@ export class ContactPane implements CuratePane {
     if (suggestion !== null && suggestion.key !== this.framedKey) {
       this.framedKey = suggestion.key
       this.frameSuggestion(suggestion)
+    }
+    // Review left — not a question cleared while the next is counted —: the view it found, back.
+    if (suggestion === null && this.ctx.model.mode !== 'review' && this.beforeReview !== null) {
+      const [from, to] = this.beforeReview
+      this.beforeReview = null
+      this.framedKey = null
+      if (this.level === 'genomes' && this.units > 0) {
+        const view = clampView(from, to, this.units, this.least())
+        this.sx.setDomain(view)
+        this.sy.setDomain(view)
+        this.fitted = view[1] - view[0] >= this.units - 1e-9
+        this.pictureDirty = true
+      }
     }
     this.schedule()
   }
@@ -777,14 +800,21 @@ export class ContactPane implements CuratePane {
     this.schedule()
   }
 
-  /** Bring the run `[from, to)` into view on both axes, centred on the diagonal. */
-  private frameUnits(from: number, to: number): void {
+  /**
+   * Bring the run `[from, to)` into view on both axes, centred on the
+   * diagonal; `zoom`, a question shown, close enough besides that its cells
+   * are {@link FRAME_CELL_PX} wide — never further out than the view is.
+   */
+  private frameUnits(from: number, to: number, zoom = false): void {
     const n = this.units
     if (n <= 0 || !(to > from)) return
     const [x0, x1] = this.sx.domain
     const [y0, y1] = this.sy.domain
-    if (from >= x0 && to <= x1 && from >= y0 && to <= y1) return
-    const view = centredView(x1 - x0, from, to, n, this.least())
+    const span = x1 - x0
+    const readable = Math.max(this.least(), Math.floor(this.map.size / FRAME_CELL_PX))
+    const wanted = zoom && this.map.size > 0 ? Math.min(span, Math.max(readable, (to - from) * 1.3)) : span
+    if (from >= x0 && to <= x1 && from >= y0 && to <= y1 && wanted >= span - 1e-9) return
+    const view = centredView(wanted, from, to, n, this.least())
     this.sx.setDomain(view)
     this.sy.setDomain(view)
     this.fitted = view[1] - view[0] >= n - 1e-9
@@ -792,8 +822,8 @@ export class ContactPane implements CuratePane {
     this.schedule()
   }
 
-  /** What a pane asked every pane to show. */
-  private frameOn(target: CurateFrame): void {
+  /** What a pane asked every pane to show; `zoom`, a question shown (see {@link frameUnits}). */
+  private frameOn(target: CurateFrame, zoom = false): void {
     const answer = this.ctx.model.answer
     if (answer === null || this.disposed) return
     const units: number[] = []
@@ -820,13 +850,15 @@ export class ContactPane implements CuratePane {
       }
     }
     if (units.length === 0) return
-    this.frameUnits(Math.min(...units), Math.max(...units) + 1)
+    this.frameUnits(Math.min(...units), Math.max(...units) + 1, zoom && this.level === 'genomes')
   }
 
   private frameSuggestion(s: Suggestion): void {
     const answer = this.ctx.model.answer
     if (answer === null) return
-    this.frameOn({ genomes: s.genomes.map((g) => answer.genomes[g]?.id).filter((id): id is string => id !== undefined), contigs: s.contigs })
+    // Review's first question: the view it found is kept, to put back when review is left.
+    if (this.ctx.model.mode === 'review' && this.beforeReview === null && this.level === 'genomes') this.beforeReview = [this.sx.domain[0], this.sx.domain[1]]
+    this.frameOn({ genomes: s.genomes.map((g) => answer.genomes[g]?.id).filter((id): id is string => id !== undefined), contigs: s.contigs }, true)
   }
 
   // -------------------------------------------------------------------------
@@ -1261,17 +1293,23 @@ export class ContactPane implements CuratePane {
         this.haloed(g, paper, paper.dim, 1, () => g.arc(cx, cy, half * 1.16 - 0.5, 0, 2 * Math.PI), [], 1.5)
       }
     }
-    // The question shown and its members are drawn once, as the question.
+    // The question shown and its members are drawn once, as the question;
+    // in review the other offers stand back, and on cells too small to carry
+    // a mark only those naming the selection are drawn.
     const asked = new Set(featured === null ? [] : [featured.key, ...membersOf(featured).map((member) => member.key)])
+    const reviewing = featured !== null && this.ctx.model.mode === 'review'
     let marked = 0
+    g.save()
+    if (reviewing) g.globalAlpha = 0.4
     for (const s of this.offered) {
       if (s.kind !== 'merge' && s.kind !== 'link' && s.kind !== 'unlink') continue
       if (asked.has(s.key)) continue
       const names = s.genomes.some((gi) => selected.has(gi))
-      if (marked >= MARKS_MOST && !names) continue
+      if (!names && (marked >= MARKS_MOST || geo.k < MARK_PX)) continue
       marked++
       this.genomeMark(g, geo, paper, s.kind, slot(s.genomes[0]), slot(s.genomes[1]), false)
     }
+    g.restore()
     if (featured === null) return
     const idOf = (gi: number): string => answer.genomes[gi]?.id ?? ''
     for (const pair of markedPairs(featured)) {
@@ -1654,13 +1692,21 @@ export class ContactPane implements CuratePane {
   private genomePlates(g: CanvasRenderingContext2D, geo: Geometry, drawn: GenomesDrawn, marks: { selected: readonly number[]; lit: number; pointer: Hit | null }): Plate[] {
     if (geo.k >= NAME_PX) return []
     const { axis, answer } = drawn
-    const wanted: Array<{ edge: 'top' | 'left'; slot: number; strong: boolean }> = []
+    const wanted: Array<{ edge: 'top' | 'left'; slot: number; strong: boolean; span?: number }> = []
     const pointer = marks.pointer
     if (pointer !== null && pointer.where !== null && this.ctx.dragging === null) {
       wanted.push({ edge: 'top', slot: pointer.col, strong: true }, { edge: 'left', slot: pointer.row, strong: true })
     }
     if (marks.lit >= 0) wanted.push({ edge: 'top', slot: marks.lit, strong: true }, { edge: 'left', slot: marks.lit, strong: true })
-    if (marks.selected.length <= 8) for (const s of marks.selected) wanted.push({ edge: 'top', slot: s, strong: false }, { edge: 'left', slot: s, strong: false })
+    // The selection's runs, one plate a run: three fragments side by side read `00700_00001 +2`, not as one genome.
+    const sorted = [...new Set(marks.selected)].filter((s) => s >= 0).sort((a, b) => a - b)
+    const runs: Array<{ slot: number; span: number }> = []
+    for (const s of sorted) {
+      const last = runs[runs.length - 1]
+      if (last !== undefined && s === last.slot + last.span) last.span++
+      else runs.push({ slot: s, span: 1 })
+    }
+    if (runs.length <= 8) for (const run of runs) wanted.push({ edge: 'top', slot: run.slot, strong: false, span: run.span }, { edge: 'left', slot: run.slot, strong: false, span: run.span })
     return this.placePlates(
       g,
       geo,
@@ -1676,23 +1722,24 @@ export class ContactPane implements CuratePane {
   private placePlates(
     g: CanvasRenderingContext2D,
     geo: Geometry,
-    wanted: ReadonlyArray<{ edge: 'top' | 'left'; slot: number; strong: boolean }>,
+    wanted: ReadonlyArray<{ edge: 'top' | 'left'; slot: number; strong: boolean; span?: number }>,
     nameOf: (slot: number) => { text: string; element: boolean },
   ): Plate[] {
     const plates: Plate[] = []
     const taken: Record<'top' | 'left', Array<[number, number]>> = { top: [], left: [] }
     const seen = new Set<string>()
-    for (const { edge, slot, strong } of wanted) {
+    for (const { edge, slot, strong, span = 1 } of wanted) {
       const key = `${edge}:${slot}`
       if (seen.has(key)) continue
       seen.add(key)
       const P = edge === 'top' ? geo.X : geo.Y
-      const along = (P(slot) + P(slot + 1)) / 2
+      // A run's plate at its middle, named by its first and how many more.
+      const along = (P(slot) + P(slot + span)) / 2
       const start = edge === 'top' ? this.map.x : this.map.y
       if (along < start || along > start + this.map.size) continue
       if (taken[edge].some(([a, b]) => along > a - 8 && along < b + 8)) continue
       const { text, element } = nameOf(slot)
-      const plate = this.plateFor(g, edge, along, text, strong, element)
+      const plate = this.plateFor(g, edge, along, span > 1 ? `${text} +${span - 1}` : text, strong, element)
       if (plate === null) continue
       taken[edge].push([along - 7, along + 7])
       plates.push(plate)
@@ -2096,7 +2143,7 @@ export class ContactPane implements CuratePane {
     const home = el('button', {
       class: 'curate-crumb',
       text: 'genomes',
-      title: at === 'genomes' ? 'Every genome, one cell each' : `Back to every genome (${shifted('enter')})`,
+      title: at === 'genomes' ? 'Every genome, one cell each' : `Back to every genome (${shifted('⏎')})`,
       attrs: { type: 'button', ...(at === 'genomes' ? { 'aria-current': 'page' } : {}) },
       on: { click: () => this.back() },
     })

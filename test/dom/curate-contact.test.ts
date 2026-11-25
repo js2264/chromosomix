@@ -337,6 +337,30 @@ describe('the genome map', () => {
     expect(geometry().domain[0]).toBeLessThanOrEqual(1)
   })
 
+  it('zooms review’s question till its cells read, and puts the view review found back once review is left', async () => {
+    // A small map: five genomes at a cell under 16 px.
+    const { pane, model } = await mount({ side: 140 })
+    expect(geometry().domain.slice(0, 2)).toEqual([0, 5])
+    model.setMode('review')
+    const merge = model.offered().find((s) => s.kind === 'merge')!
+    pane.showSuggestion(merge)
+    await frame()
+    // X1 and X2 framed, closer: cells of 16 px or near it where the map allows.
+    const [from, to] = geometry().domain
+    const units = [order.indexOf('X1'), order.indexOf('X2')]
+    expect(from).toBeLessThanOrEqual(Math.min(...units))
+    expect(to).toBeGreaterThanOrEqual(Math.max(...units) + 1)
+    expect(to - from).toBeLessThan(5)
+    // A question cleared while the next is counted keeps the view; review left puts it back.
+    pane.showSuggestion(null)
+    await frame()
+    expect(geometry().domain[1] - geometry().domain[0]).toBe(to - from)
+    model.setMode('manual')
+    pane.showSuggestion(null)
+    await frame()
+    expect(geometry().domain.slice(0, 2)).toEqual([0, 5])
+  })
+
   it('draws the binning as it would be while a step is previewed, and holds still under a drag', async () => {
     const { pane, model, ctx } = await mount()
     model.preview(model.offered().find((s) => s.kind === 'merge')!.step, true)
