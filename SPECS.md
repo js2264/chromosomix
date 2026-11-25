@@ -1088,7 +1088,12 @@ the whole genome at the file's own bins. With it on, the default, the first read
 size (§2): a genome of more than about one and a half times as many bins as the plot has pixels is
 read at about a cell a pixel — its bins pooled, or a coarser rung where the file has a ladder — and
 a zoom reads the window at the file's own bins once it can show them; a smaller genome is its own
-bins from the first read and reads nothing more. Level toggle between bin and contig aggregation,
+bins from the first read and reads nothing more. **The line under it counts what is drawn**: on a
+pooled axis the contigs too small for a cell share one, labelled with the first of them, and every
+one of them is counted, with its length, in the line's *N sequences · M Mb* — which counted one
+sequence a cell and measured the first alone, so a MAG of 59 contigs and 4.91 Mb read *33 sequences
+· 4.89 Mb*, and a whole metagenome of 7,781 contigs *2,169 sequences · 145.78 Mb*. The same line
+under every map view says it so. Level toggle between bin and contig aggregation,
 both computed locally from the loaded data —
 in the General column's Contigs card (§5.8), which also lists this genome's contigs.
 

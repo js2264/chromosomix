@@ -382,6 +382,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The line under a pooled map counts every sequence on it (§5.2).** Where a window is too wide to
+  read bin for bin, the contigs too small for a cell share one, labelled with the first of them —
+  and the line under the map counted one sequence a cell, measuring the first alone: a MAG of 59
+  contigs and 4.91 Mb read *33 sequences · 4.89 Mb*, a whole metagenome of 7,781 contigs and 164 Mb
+  *2,169 sequences · 145.78 Mb*. It now counts every sequence of a shared cell, and all of its length.
 - **A genome's map is drawn from the score its picker shows (a dev feature, §5.2, §6.4).** The genome
   view never asked its reader for the balance or the `/pixels` column, so a genome was drawn from its
   raw counts whatever the picker said — `balanced` on a metacool with `weight` as much as another

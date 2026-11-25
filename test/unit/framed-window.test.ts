@@ -82,6 +82,39 @@ describe('the window one axis is showing', () => {
   it('says nothing about an axis showing nothing', () => {
     expect(windowPhrase([])).toBe('')
   })
+
+  // A pooled axis of a fragmented assembly: one long contig with cells of its
+  // own, then three short ones sharing a cell, labelled with the first. Runs
+  // counted one sequence a cell and measured the first alone — a MAG of 59
+  // contigs read as 33 of them, and 16 kb short.
+  it('counts every sequence of a cell small ones share, and all of their length', () => {
+    const pooled = locusAxisFrom({
+      runs: [
+        { label: 'long', start: 0, end: 4, unitStart: 0, unitLength: 4_000 },
+        {
+          label: 'a',
+          start: 4,
+          end: 5,
+          unitStart: 4,
+          unitLength: 300,
+          merged: [
+            { label: 'a', unitLength: 300 },
+            { label: 'b', unitLength: 250 },
+            { label: 'c', unitLength: 200 },
+          ],
+        },
+      ],
+      blockStart: 0,
+      level: 'bin',
+      binsize: BIN,
+      contigLength: () => undefined,
+    })
+    expect(windowPhrase(pooled!.windows([0, 5]))).toBe('4 sequences · 4.8 kb')
+    // The long one alone is still named.
+    expect(windowPhrase(pooled!.windows([0, 4]))).toBe('long:1-4,000 · 4.0 kb')
+    // And the shared cell alone is the three it holds, never the first of them.
+    expect(windowPhrase(pooled!.windows([4, 5]))).toBe('3 sequences · 750 bp')
+  })
 })
 
 describe('both axes of what is on screen', () => {
