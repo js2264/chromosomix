@@ -1,6 +1,13 @@
 {
-  "latest": "de4357d",
+  "latest": "fc671ed",
   "versions": [
+    {
+      "commit": "fc671ed",
+      "version": "0.21.0",
+      "date": "2026-11-25T18:27:58+01:00",
+      "subject": "Support metaTOR's metacools: balance by any weight column, and fix the metagenome tasks, captions and refusals (#185)",
+      "tag": ""
+    },
     {
       "commit": "de4357d",
       "version": "0.21.0",
@@ -135,13 +142,6 @@
       "tag": ""
     },
     {
-      "commit": "bd9c344",
-      "version": "0.20.0",
-      "date": "2026-11-05T22:18:54+01:00",
-      "subject": "Read a .hic's genome-wide walk past the browser's HTTP cache (#164)",
-      "tag": ""
-    },
-    {
       "commit": "40ec1ec",
       "version": "0.20.0",
       "date": "2026-11-04T23:19:15+01:00",
@@ -261,13 +261,5 @@
       "tag": ""
     }
   ],
-  "pulls": [
-    {
-      "number": 185,
-      "commit": "a840b18",
-      "title": "Support metaTOR's metacools: balance by any weight column, and fix the metagenome tasks, captions and refusals",
-      "branch": "js/confident-lamport-ws4azb",
-      "date": "2026-11-25T15:48:57Z"
-    }
-  ]
+  "pulls": []
 }
