@@ -261,5 +261,13 @@
       "tag": ""
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 184,
+      "commit": "b133de9",
+      "title": "Curate the genomes: curate a metagenome's binning, with each genome's layout inside it (dev feature, §33)",
+      "branch": "js/beautiful-archimedes-agwyyd",
+      "date": "2026-11-25T17:41:18Z"
+    }
+  ]
 }
