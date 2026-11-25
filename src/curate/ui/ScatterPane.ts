@@ -7,7 +7,12 @@
  * stage's coverage, the contigs' Hi-C contacts per kb, once the contacts are
  * read — GC alone, in a band, until then. A contig without coverage sits in a
  * `none` strip at the foot, never lost; one without a GC content cannot be
- * placed, and is counted in the head.
+ * placed, and is counted in the head. The frame leaves out the 0.5 % of the
+ * contigs at each end of each axis (`FRAME_TAIL`), so a few strays do not
+ * shrink every cloud: a contig beyond it is pinned to its edge, a wedge
+ * pointing the way it lies, counted in the head and said `off the scale`. The
+ * coverage axis reads in one notation from its foot to its top — `10,000`
+ * over `1,000`, or every tick an exponent where one needs it.
  *
  * Three canvases, one over another:
  *
@@ -41,15 +46,19 @@ import { optionKey, shiftKey, wantsSpace, withKey } from '../../ui/commands'
 import { el } from '../../ui/dom'
 import { iconButton } from '../../ui/icons'
 import { scaleFont, subscribeTextScale } from '../../ui/textScale'
-import { axisNumber, fmt } from '../../units'
+import { fmt } from '../../units'
 import type { CurationStateResult } from '../../worker/curateProtocol'
 import { displayPercent, type CurateChange } from '../model'
 import {
   coverageTicks,
+  coverageTickTexts,
   DotGrid,
   dotRadius,
   drawOrder,
+  FRAME_TAIL,
   lassoContigs,
+  pinToFrame,
+  pinVector,
   scatterFrame,
   scatterPlaces,
   type ScatterFrame,
@@ -80,6 +89,9 @@ const TICK = 4
 const TICK_GAP = 3
 /** A thumbnail's dots, as a share of the large picture's. */
 const SMALL_SCALE = 0.55
+/** A contig pinned to the frame's edge: a wedge as large as its dot grown by this, and no smaller than the least. */
+const WEDGE_GROW = 1.4
+const WEDGE_LEAST = 3.5
 /** How opaque a dot is: at rest, faded by a selection elsewhere, in a selected genome; the pool's at rest and faded. */
 const ALPHA_REST = 0.8
 const ALPHA_FADED = 0.15
@@ -125,7 +137,14 @@ interface Placing {
   bareCount: number
   /** Contigs of the file without a GC content. */
   unplaced: number
+  /** The frame: the contigs but the 0.5 % at each end of each axis. */
   frame: ScatterFrame
+  /** Each contig's GC and coverage held inside the frame: where it is drawn. */
+  held: { gc: Float64Array; coverage: Float64Array | null }
+  /** By contig: the frame's edges it is pinned to, `0` for none (`PIN_LEFT` …). */
+  pin: Uint8Array
+  /** The contigs pinned. */
+  pinned: number
 }
 
 /** What the dots layer paints for a binning and a selection: runs of one colour each, and the selected contigs over them. */
@@ -578,6 +597,8 @@ export class ScatterPane implements CuratePane {
       }
     }
     if (contigs.length === 0) return null
+    const frame = scatterFrame(gc, coverage ?? [], contigs, FRAME_TAIL)
+    const pinned = pinToFrame(frame, gc, coverage ?? [], contigs)
     return {
       gc,
       coverage,
@@ -586,7 +607,10 @@ export class ScatterPane implements CuratePane {
       bare,
       bareCount,
       unplaced: gc.length - contigs.length,
-      frame: scatterFrame(gc, coverage ?? [], contigs),
+      frame,
+      held: { gc: pinned.gc, coverage: coverage === null ? null : pinned.coverage },
+      pin: pinned.pin,
+      pinned: pinned.count,
     }
   }
 
@@ -765,13 +789,15 @@ export class ScatterPane implements CuratePane {
     let gc1 = Number.NEGATIVE_INFINITY
     let log0 = Number.POSITIVE_INFINITY
     let log1 = Number.NEGATIVE_INFINITY
+    // Where they are drawn: a contig pinned to the frame's edge, at the edge.
+    const held = placing.held
     for (const c of wanted) {
-      const gc = placing.gc[c]
+      const gc = held.gc[c]
       if (!Number.isFinite(gc)) continue
       gc0 = Math.min(gc0, gc)
       gc1 = Math.max(gc1, gc)
-      if (placing.bare[c] === 0 && placing.coverage !== null) {
-        const log = Math.log10(placing.coverage[c])
+      if (placing.bare[c] === 0 && held.coverage !== null) {
+        const log = Math.log10(held.coverage[c])
         log0 = Math.min(log0, log)
         log1 = Math.max(log1, log)
       }
@@ -808,13 +834,21 @@ export class ScatterPane implements CuratePane {
     return Math.ceil((match === null ? 10 : Number(match[1])) * 1.3)
   }
 
-  /** The room the coverage axis's labels take: its widest. */
+  /** The room the coverage axis's labels take: the widest it can print at any zoom inside the frame, in either notation. */
   private labelRoom(): number {
     const g = this.dots.getContext('2d')
     if (g === null) return 34
     g.font = this.font()
+    const placing = this.placing
+    const texts = ['none']
+    if (placing?.mode === 'gc-coverage') {
+      // Every value a tick can take, as the whole axis spells it and as one alone would.
+      const values = ladder(placing.frame, [1, 2, 3, 4, 5, 6, 7, 8, 9])
+      texts.push(...coverageTickTexts(values))
+      for (const value of values) texts.push(...coverageTickTexts([value]))
+    }
     let widest = 0
-    for (const text of ['5,000', '5e-1', 'none']) widest = Math.max(widest, g.measureText(text).width)
+    for (const text of texts) widest = Math.max(widest, g.measureText(text).width)
     return Math.ceil(widest)
   }
 
@@ -916,15 +950,17 @@ export class ScatterPane implements CuratePane {
       this.ticks = { gc: [], coverage: [] }
       return
     }
-    const places = scatterPlaces(view, placing.gc, placing.coverage ?? [], w, Math.max(h, 1))
+    const places = scatterPlaces(view, placing.held.gc, placing.held.coverage ?? [], w, Math.max(h, 1))
     const inView = new Uint8Array(placing.gc.length)
     const visible: number[] = []
     const strip = this.strip
-    const scale = this.large ? 1 : SMALL_SCALE
     for (let k = 0; k < placing.contigs.length; k++) {
       const c = placing.contigs[k]
-      const r = this.radius[c] * scale
-      const x = places.x[c] + mx
+      const r = this.sizeOf(c)
+      const pin = placing.pin[c]
+      // A contig pinned to the frame's edge: its wedge inside it, its tip on it.
+      const [ux, uy] = pin === 0 ? [0, 0] : pinVector(pin)
+      const x = places.x[c] + mx - ux * r
       let y: number
       let inY: boolean
       if (placing.bare[c] === 1 && strip !== null) {
@@ -932,7 +968,7 @@ export class ScatterPane implements CuratePane {
         y = strip.y + pad + jitter(c) * Math.max(0, strip.h - 2 * pad)
         inY = true
       } else {
-        y = places.y[c] + my
+        y = places.y[c] + my - uy * r
         inY = y + r >= my && y - r <= my + h
       }
       places.x[c] = x
@@ -958,11 +994,10 @@ export class ScatterPane implements CuratePane {
     const { x: mx, y: my, w } = this.main
     if (x < mx - 4 || x > mx + w + 4 || y < my - 4 || y > this.foot() + 4) return -1
     this.grid ??= new DotGrid(places, this.visible, 16, this.box.width + 64)
-    const scale = this.large ? 1 : SMALL_SCALE
     return this.grid.at(
       x,
       y,
-      (c) => this.radius[c] * scale,
+      (c) => this.sizeOf(c),
       (c) => plan.rank[c],
       2,
     )
@@ -1048,6 +1083,34 @@ export class ScatterPane implements CuratePane {
     g.arc(x, y, r, 0, TAU)
   }
 
+  /**
+   * A pinned contig's wedge on the path: a triangle about its place, `r` from
+   * its middle to each corner, its tip out past the edges it is pinned to.
+   */
+  private wedge(g: CanvasRenderingContext2D, x: number, y: number, r: number, pin: number): void {
+    const [ux, uy] = pinVector(pin)
+    const cos = -0.5
+    const sin = Math.sqrt(3) / 2
+    g.moveTo(x + ux * r, y + uy * r)
+    g.lineTo(x + (ux * cos - uy * sin) * r, y + (ux * sin + uy * cos) * r)
+    g.lineTo(x + (ux * cos + uy * sin) * r, y + (-ux * sin + uy * cos) * r)
+    g.closePath()
+  }
+
+  /** A contig's dot's radius, or its wedge's where it is pinned, at the size drawn. */
+  private sizeOf(c: number): number {
+    const scale = this.large ? 1 : SMALL_SCALE
+    const r = this.radius[c] ?? 1
+    return (this.placing?.pin[c] ?? 0) === 0 ? r * scale : Math.max(WEDGE_LEAST, r * WEDGE_GROW) * scale
+  }
+
+  /** A contig's mark on the path, `out` pixels past its edge: its disc, or its wedge where it is pinned — a wedge's sides as far out as a disc's rim. */
+  private shape(g: CanvasRenderingContext2D, c: number, x: number, y: number, out = 0): void {
+    const pin = this.placing?.pin[c] ?? 0
+    if (pin === 0) this.ring(g, x, y, this.sizeOf(c) + out)
+    else this.wedge(g, x, y, this.sizeOf(c) + 2 * out, pin)
+  }
+
   /** Stroke the path held over a halo of the background, so it reads over the densest cloud. */
   private haloStroke(g: CanvasRenderingContext2D, ink: StageInk, colour: string, width: number, halo = 2.5, dash: number[] = []): void {
     g.lineCap = 'round'
@@ -1078,18 +1141,17 @@ export class ScatterPane implements CuratePane {
   private rimmed(g: CanvasRenderingContext2D, ink: StageInk, shown: CurationStateResult, contigs: readonly number[], rim: number, halo: number, rimAlpha = 1): void {
     const places = this.places
     if (places === null || contigs.length === 0) return
-    const scale = this.large ? 1 : SMALL_SCALE
     if (halo > 0) {
       g.globalAlpha = 0.9
       g.fillStyle = ink.background
       g.beginPath()
-      for (const c of contigs) this.ring(g, places.x[c], places.y[c], this.radius[c] * scale + rim + halo)
+      for (const c of contigs) this.shape(g, c, places.x[c], places.y[c], rim + halo)
       g.fill()
     }
     g.globalAlpha = rimAlpha
     g.fillStyle = ink.accent
     g.beginPath()
-    for (const c of contigs) this.ring(g, places.x[c], places.y[c], this.radius[c] * scale + rim)
+    for (const c of contigs) this.shape(g, c, places.x[c], places.y[c], rim)
     g.fill()
     const byColour = new Map<string, number[]>()
     for (const c of contigs) {
@@ -1102,7 +1164,7 @@ export class ScatterPane implements CuratePane {
     for (const [colour, list] of byColour) {
       g.fillStyle = colour
       g.beginPath()
-      for (const c of list) this.ring(g, places.x[c], places.y[c], this.radius[c] * scale)
+      for (const c of list) this.shape(g, c, places.x[c], places.y[c])
       g.fill()
     }
   }
@@ -1111,9 +1173,8 @@ export class ScatterPane implements CuratePane {
   private lifted(g: CanvasRenderingContext2D, ink: StageInk, contigs: readonly number[], colour: string, outline: string, outlineAlpha: number, width: number): void {
     const places = this.places
     if (places === null || contigs.length === 0) return
-    const scale = this.large ? 1 : SMALL_SCALE
     g.beginPath()
-    for (const c of contigs) this.ring(g, places.x[c], places.y[c], this.radius[c] * scale)
+    for (const c of contigs) this.shape(g, c, places.x[c], places.y[c])
     g.globalAlpha = 0.9
     g.strokeStyle = ink.background
     g.lineWidth = 2.5
@@ -1133,6 +1194,8 @@ export class ScatterPane implements CuratePane {
 
   private paintDots(): void {
     this.dotsDirty = false
+    // Written again by the axes, where they are painted.
+    this.dots.dataset.coverageTicks = ''
     const g = this.dots.getContext('2d')
     if (g !== null) {
       g.setTransform(1, 0, 0, 1, 0, 0)
@@ -1142,6 +1205,7 @@ export class ScatterPane implements CuratePane {
     let full = 0
     let faded = 0
     let ringed = 0
+    let wedges = 0
     const places = this.places
     const plan = this.plan
     const view = this.viewFrame()
@@ -1156,6 +1220,7 @@ export class ScatterPane implements CuratePane {
         this.clip(g)
       }
       const inView = this.inView
+      const pin = this.placing?.pin
       for (const run of plan.runs) {
         if (g !== null) {
           g.globalAlpha = run.alpha
@@ -1167,7 +1232,11 @@ export class ScatterPane implements CuratePane {
           const c = plan.order[k]
           if (inView[c] !== 1) continue
           drawn++
-          if (g !== null) this.dot(g, places.x[c], places.y[c], this.radius[c] * scale, squares)
+          const pinned = pin?.[c] ?? 0
+          if (pinned !== 0) wedges++
+          if (g === null) continue
+          if (pinned === 0) this.dot(g, places.x[c], places.y[c], this.radius[c] * scale, squares)
+          else this.wedge(g, places.x[c], places.y[c], this.sizeOf(c), pinned)
         }
         if (run.faded) faded += drawn
         else full += drawn
@@ -1186,6 +1255,7 @@ export class ScatterPane implements CuratePane {
     this.dots.dataset.full = String(full)
     this.dots.dataset.faded = String(faded)
     this.dots.dataset.ringed = String(ringed)
+    this.dots.dataset.wedges = String(wedges)
   }
 
   /** The grid at the ticks, and the strip's band: under the dots. */
@@ -1301,7 +1371,11 @@ export class ScatterPane implements CuratePane {
     for (const [tick, px] of gcAt) g.fillText(gcText(tick), Math.max(x - 6, Math.min(x + w + 6, px)), foot + TICK + TICK_GAP)
     g.textBaseline = 'middle'
     g.textAlign = 'right'
-    for (const [tick, py] of coverageAt) g.fillText(axisNumber(tick, 'log'), x - TICK - TICK_GAP, Math.max(y + 5, Math.min(y + h - 5, py)) + 0.5)
+    // One notation up the whole axis: `10,000` over `1,000`, never `1e4`.
+    const texts = coverageTickTexts(coverageAt.map(([tick]) => tick))
+    coverageAt.forEach(([, py], k) => g.fillText(texts[k], x - TICK - TICK_GAP, Math.max(y + 5, Math.min(y + h - 5, py)) + 0.5))
+    // For scripts: the labels as printed, bottom to top.
+    this.dots.dataset.coverageTicks = texts.join(' ')
     if (strip !== null && placing.mode === 'gc-coverage') g.fillText('none', x - TICK - TICK_GAP, strip.y + strip.h / 2 + 0.5)
     // The titles.
     g.font = this.font('600')
@@ -1349,20 +1423,22 @@ export class ScatterPane implements CuratePane {
     let found: { gc: number; log: number | null } | null = null
     if (placing !== null && members !== null && g >= 0 && g + 1 < members.offsets.length) {
       const lengths = this.ctx.data.file.lengths
+      // Where its dots are drawn: one pinned to the frame's edge counts at the edge.
+      const held = placing.held
       let weight = 0
       let gcSum = 0
       let logWeight = 0
       let logSum = 0
       for (let k = members.offsets[g]; k < members.offsets[g + 1]; k++) {
         const c = members.contigs[k]
-        const gc = placing.gc[c]
+        const gc = held.gc[c]
         if (!Number.isFinite(gc)) continue
         const length = Math.max(1, lengths[c] ?? 1)
         weight += length
         gcSum += length * gc
-        if (placing.bare[c] === 0 && placing.coverage !== null) {
+        if (placing.bare[c] === 0 && held.coverage !== null) {
           logWeight += length
-          logSum += length * Math.log10(placing.coverage[c])
+          logSum += length * Math.log10(held.coverage[c])
         }
       }
       if (weight > 0) found = { gc: gcSum / weight, log: logWeight > 0 ? logSum / logWeight : null }
@@ -1412,7 +1488,6 @@ export class ScatterPane implements CuratePane {
     const members = this.members
     if (places !== null && plan !== null && view !== null && members !== null) {
       const ink = this.ctx.ink()
-      const scale = this.large ? 1 : SMALL_SCALE
       const inView = this.inView
       if (g !== null) {
         g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
@@ -1442,7 +1517,7 @@ export class ScatterPane implements CuratePane {
         for (const c of plan.candidates) {
           if (inView[c] !== 1 || plan.chosenMask[c] === 1) continue
           candidates++
-          if (g !== null) this.ring(g, places.x[c], places.y[c], this.radius[c] * scale + 2.5)
+          if (g !== null) this.shape(g, c, places.x[c], places.y[c], 2.5)
         }
         if (g !== null && candidates > 0) this.haloStroke(g, ink, ink.accent, 1, 2, [2.5, 2])
       }
@@ -1635,10 +1710,9 @@ export class ScatterPane implements CuratePane {
     if (c < 0 || this.inView[c] !== 1) return
     const px = places.x[c]
     const py = places.y[c]
-    const r = this.radius[c]
     g.save()
     g.beginPath()
-    this.ring(g, px, py, r + 3)
+    this.shape(g, c, px, py, 3)
     this.haloStroke(g, ink, ink.text, 1.5, 2.5)
     // Its place on the axes: a short rule across each, in the accent.
     const foot = this.foot()
@@ -1672,6 +1746,12 @@ export class ScatterPane implements CuratePane {
       if (placing.mode === 'gc-coverage' && placing.bareCount > 0) {
         more.push(`${fmt.int(placing.bareCount)} ${this.withoutWords()}`)
         details.push(`${fmt.int(placing.bareCount)} ${this.withoutWords()}, drawn in the strip at the foot`)
+      }
+      if (placing.pinned > 0) {
+        more.push(`${fmt.int(placing.pinned)} off the scale`)
+        details.push(
+          `${fmt.int(placing.pinned)} off the scale — the frame leaves out the ${fmt.pct(FRAME_TAIL, 1)} at either end of each axis, so a few strays do not shrink every cloud — each drawn at its edge, a wedge pointing the way it lies`,
+        )
       }
       if (placing.unplaced > 0) {
         more.push(`${fmt.int(placing.unplaced)} without GC`)
@@ -2066,6 +2146,8 @@ export class ScatterPane implements CuratePane {
     const parts = [file.names[c] ?? `#${c}`, fmt.bp(file.lengths[c] ?? 0)]
     if (gc !== null && Number.isFinite(gc[c])) parts.push(`GC ${fmt.pct(gc[c] / 100, 1)}`)
     if (coverage !== null) parts.push(coverageWords(coverage[c], coverageLabel))
+    // Its own numbers above, where it is drawn here: at the frame's edge.
+    if ((this.placing?.pin[c] ?? 0) !== 0) parts.push('off the scale')
     const shown = this.ctx.model.shown
     if (shown !== null) {
       const g = shown.genomeOf[c] ?? -1

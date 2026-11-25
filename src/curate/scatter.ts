@@ -3,9 +3,12 @@
  * contig a dot, its GC content across, its coverage up (on a log scale), its
  * area its length — so an organism is one cloud, and a contig binned into the
  * wrong one stands out of its genome's colour. The stage draws; this file
- * places, measures, finds what is under the pointer and what a lasso holds,
- * on plain arrays, so every rule is tested without a canvas.
+ * frames, pins what the frame leaves out to its edge, places, measures, finds
+ * what is under the pointer and what a lasso holds, and spells the coverage
+ * axis, on plain arrays, so every rule is tested without a canvas.
  */
+
+import { axisNumber } from '../units'
 
 /** The scatter's frame: the data each axis spans (coverage as `log10`). */
 export interface ScatterFrame {
@@ -22,26 +25,44 @@ export interface ScatterFrame {
 const PAD = 0.04
 
 /**
- * The frame that holds every contig given: GC from the least to the most, the
+ * The share of the contigs a plot's frame leaves out at each end of each axis,
+ * pinned to its edge ({@link pinToFrame}): a few stray contigs — a 300 bp
+ * contig at 3 % GC, a repeat at ten thousand contacts per kb — would otherwise
+ * set the frame, and every cloud would shrink to the middle of it.
+ */
+export const FRAME_TAIL = 0.005
+
+/**
+ * The frame that holds the contigs given: GC from the least to the most, the
  * coverage from the least above nought to the most, each padded a little; a
  * contig without coverage sits at the bottom, at half the least there is.
+ *
+ * With a `tail`, it leaves that share of the contigs out at each end of each
+ * axis instead, by rank — at 0.5 % it starts at the 103rd least GC of 20,566
+ * contigs, and at the least of fewer than 201, so a small map keeps every
+ * contig — and reaches down to the least coverage it holds, not to half of it:
+ * a contig without coverage is drawn in the plot's strip, not at the bottom.
  */
-export function scatterFrame(gc: ArrayLike<number>, coverage: ArrayLike<number>, contigs?: Iterable<number>): ScatterFrame {
+export function scatterFrame(gc: ArrayLike<number>, coverage: ArrayLike<number>, contigs?: Iterable<number>, tail = 0): ScatterFrame {
   let gc0 = Number.POSITIVE_INFINITY
   let gc1 = Number.NEGATIVE_INFINITY
   let least = Number.POSITIVE_INFINITY
   let most = 0
   const each = contigs ?? range(gc.length)
+  const gcs: number[] = []
+  const logs: number[] = []
   for (const c of each) {
     const g = gc[c]
     if (Number.isFinite(g)) {
       if (g < gc0) gc0 = g
       if (g > gc1) gc1 = g
+      if (tail > 0) gcs.push(g)
     }
     const v = coverage[c]
     if (Number.isFinite(v) && v > 0) {
       if (v < least) least = v
       if (v > most) most = v
+      if (tail > 0) logs.push(Math.log10(v))
     }
   }
   if (!Number.isFinite(gc0)) {
@@ -55,6 +76,10 @@ export function scatterFrame(gc: ArrayLike<number>, coverage: ArrayLike<number>,
   const floor = least / 2
   let log0 = Math.log10(floor)
   let log1 = Math.log10(most)
+  if (tail > 0) {
+    if (gcs.length > 0) [gc0, gc1] = ranks(gcs, tail)
+    if (logs.length > 0) [log0, log1] = ranks(logs, tail)
+  }
   if (gc1 - gc0 < 1) {
     gc0 -= 0.5
     gc1 += 0.5
@@ -70,6 +95,80 @@ export function scatterFrame(gc: ArrayLike<number>, coverage: ArrayLike<number>,
 
 function* range(n: number): Generator<number> {
   for (let k = 0; k < n; k++) yield k
+}
+
+/** The values `tail` of the way in from each end, by rank: the `⌊tail × (n − 1)⌋`th from the least and from the most. */
+function ranks(values: number[], tail: number): [number, number] {
+  const sorted = Float64Array.from(values).sort()
+  const k = Math.floor(Math.min(0.5, tail) * (sorted.length - 1))
+  return [sorted[k], sorted[sorted.length - 1 - k]]
+}
+
+/** Which edge of the frame a contig is pinned to, as bits: GC below it, above it; coverage below it, above it. */
+export const PIN_LEFT = 1
+export const PIN_RIGHT = 2
+export const PIN_DOWN = 4
+export const PIN_UP = 8
+
+/** The contigs a frame leaves out, held at its edges. */
+export interface Pinned {
+  /** Each contig's GC, and its coverage, held inside the frame: as given where they are in it. */
+  gc: Float64Array
+  coverage: Float64Array
+  /** By contig: the edges it is pinned to ({@link PIN_LEFT} …), `0` for none. */
+  pin: Uint8Array
+  /** The contigs pinned. */
+  count: number
+}
+
+/**
+ * The contigs given that lie beyond a frame, pinned to its edge: each one's GC
+ * and coverage held at the frame's bounds, and which edges it is held at — so
+ * it is drawn where the plot ends, on the side it lies past, and a lasso along
+ * that edge takes it. A contig without coverage pins on GC alone: the strip at
+ * the plot's foot holds it.
+ */
+export function pinToFrame(frame: ScatterFrame, gc: ArrayLike<number>, coverage: ArrayLike<number>, contigs: Iterable<number>): Pinned {
+  const heldGc = Float64Array.from(gc)
+  const heldCoverage = Float64Array.from(coverage)
+  const pin = new Uint8Array(gc.length)
+  const top = 10 ** frame.log1
+  const bottom = 10 ** frame.log0
+  let count = 0
+  for (const c of contigs) {
+    const g = gc[c]
+    if (!Number.isFinite(g)) continue
+    let bits = 0
+    if (g < frame.gc0) {
+      bits |= PIN_LEFT
+      heldGc[c] = frame.gc0
+    } else if (g > frame.gc1) {
+      bits |= PIN_RIGHT
+      heldGc[c] = frame.gc1
+    }
+    const v = coverage[c]
+    if (Number.isFinite(v) && v > 0) {
+      const log = Math.log10(v)
+      if (log < frame.log0) {
+        bits |= PIN_DOWN
+        heldCoverage[c] = bottom
+      } else if (log > frame.log1) {
+        bits |= PIN_UP
+        heldCoverage[c] = top
+      }
+    }
+    pin[c] = bits
+    if (bits !== 0) count++
+  }
+  return { gc: heldGc, coverage: heldCoverage, pin, count }
+}
+
+/** The way out of the plot past the edges a contig is pinned to, a unit vector in the plot's pixels (`y` down); `[0, 0]` for none. */
+export function pinVector(bits: number): [number, number] {
+  const x = (bits & PIN_RIGHT ? 1 : 0) - (bits & PIN_LEFT ? 1 : 0)
+  const y = (bits & PIN_DOWN ? 1 : 0) - (bits & PIN_UP ? 1 : 0)
+  const length = Math.hypot(x, y)
+  return length === 0 ? [0, 0] : [x / length, y / length]
 }
 
 /** Every contig's place in pixels on a plot `width` × `height`; `NaN` for a contig without a GC content. */
@@ -239,6 +338,26 @@ export function coverageTicks(frame: ScatterFrame): number[] {
     out.sort((a, b) => a - b)
   }
   return out
+}
+
+/**
+ * The coverage axis's labels, every one in one notation: as `axisNumber`
+ * spells a linear axis where every tick reads so without an exponent — `0.5`
+ * to `10,000` —, else every one an exponent (`1e-5` … `1e2`), never a few
+ * plain under a few raised.
+ */
+export function coverageTickTexts(ticks: readonly number[]): string[] {
+  const plain = ticks.map((tick) => axisNumber(tick, 'linear'))
+  if (plain.every((text) => !text.includes('e'))) return plain
+  return ticks.map(exponentText)
+}
+
+/** A positive number as an exponent: `1e4`, `2.5e-3`. */
+function exponentText(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return axisNumber(value, 'linear')
+  const [mantissa, power] = value.toExponential(2).split('e')
+  const trimmed = mantissa.includes('.') ? mantissa.replace(/\.?0+$/, '') : mantissa
+  return `${trimmed}e${Number(power)}`
 }
 
 /** The ticks of the GC axis: every 5 or 10 %, as the span allows. */

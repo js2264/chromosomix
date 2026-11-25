@@ -94,6 +94,13 @@
   stroke-width: 1.75;
   stroke-linecap: round;
 }
+/* Around an element, a MAG it meets that no link joins it to: faint, dotted. */
+.curate-host-key-mark.is-met .curate-host-key-line {
+  stroke: var(--text-faint);
+  stroke-width: 1.5;
+  stroke-dasharray: 1.5 3;
+  stroke-linecap: butt;
+}
 
 .curate-host-tools {
   display: inline-flex;
@@ -102,28 +109,13 @@
   margin-left: auto;
 }
 
-/* Narrow: the view's long word goes first (`around`), then what is offered
-   (the links held stay), then the foot's key — first where the foot says what
-   the map shows — each whole, never cut. */
-@container (max-width: 37.5rem) {
-  .curate-host-view-more {
-    display: none;
-  }
-}
-@container (max-width: 32rem) {
-  .curate-host-count-more {
-    display: none;
-  }
-}
-@container (max-width: 40rem) {
-  .curate-host-foot.has-status .curate-host-key {
-    display: none;
-  }
-}
-@container (max-width: 27rem) {
-  .curate-host-key {
-    display: none;
-  }
+/* Short of room, pieces give way whole, never cut, as the pane measures them —
+   not at set widths, since the reader's text scale grows the words and not the
+   pane: in the head the view's long words (`around`), then what is offered and
+   what is to unlink, the links held staying (`fitHead`); in the foot the
+   status's `around the selection`, then the key (`fitFoot`). */
+.curate-host-key.is-crowded {
+  display: none;
 }
 
 /* ---------------------------------------------------------------------------
@@ -205,6 +197,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Beside the key, what the map shows stands at the foot's far end, apart from
+   the marks' words: `meets` is never read into `20 of 177 genomes`. */
+.curate-host-key:not(.hidden):not(.is-crowded) ~ .curate-host-status {
+  text-align: right;
 }
 .curate-host-fold {
   display: inline-flex;

@@ -12,13 +12,18 @@ import { CuratedBinning } from '../../src/genome/curation'
 import { stateAnswer } from '../../src/curate/answer'
 import { questions, type Question } from '../../src/curate/questions'
 import type { Suggestion } from '../../src/curate/suggest'
+import type { HostPair } from '../../src/curate/suggest'
 import {
+  AROUND_ELEMENTS,
+  AROUND_RIVALS,
   aroundSet,
   barHeight,
   barWidth,
   bestHosts,
   clampScroll,
+  countParts,
   curvePoint,
+  drawnCounts,
   fitPitch,
   footWords,
   hostAnchors,
@@ -29,10 +34,12 @@ import {
   linkWidth,
   linkWords,
   magRank,
+  neighbourhood,
   offerCounts,
   questionNumber,
   relatedTo,
   roomy,
+  shareText,
   sourcesOf,
   spreadLabels,
   suggestedPairs,
@@ -241,23 +248,133 @@ describe('the links', () => {
     expect(offerCounts(a.links, offersOf(a))).toEqual({ offered: 1, unlink: 1 })
   })
 
-  it('shows around a MAG its elements and their other hosts, one step out only', () => {
+  it('shows around a MAG its elements and their other hosts, around an element its hosts and their other elements, one step out only', () => {
     const kinds = new Map<string, 'mag' | 'element'>([
       ['A', 'mag'],
       ['B', 'mag'],
       ['C', 'mag'],
+      ['D', 'mag'],
       ['E', 'element'],
       ['F', 'element'],
+      ['G', 'element'],
     ])
     const links = [
       { element: 'E', mag: 'A' },
       { element: 'E', mag: 'B' },
       { element: 'F', mag: 'B' },
       { element: 'F', mag: 'C' },
+      { element: 'G', mag: 'C' },
+      { element: 'G', mag: 'D' },
     ]
+    // A's element E, and E's other host B — not B's other element F.
     expect([...aroundSet(['A'], links, (id) => kinds.get(id))].sort()).toEqual(['A', 'B', 'E'])
-    expect([...aroundSet(['F'], links, (id) => kinds.get(id))].sort()).toEqual(['B', 'C', 'F'])
+    // F's hosts B and C, and their other elements E and G — not G's other host D.
+    expect([...aroundSet(['F'], links, (id) => kinds.get(id))].sort()).toEqual(['B', 'C', 'E', 'F', 'G'])
     expect([...aroundSet(['gone'], links, (id) => kinds.get(id))]).toEqual([])
+  })
+
+  it('shows around an element the MAGs it meets most that no link joins it to, and the elements it meets most, as the card lists them', () => {
+    // MAGs A, B, C, D, R, S, T; elements E … K. E is linked to A, a link to B is offered, and B holds F.
+    const genomes = [...mags('A', 'B', 'C', 'D', 'R', 'S', 'T'), ...elements('E', 'F', 'G', 'H', 'I', 'J', 'K')]
+    const at = new Map(genomes.map((genome, g) => [genome.id, g]))
+    const g = (id: string): number => at.get(id) as number
+    const host = (mag: string, contacts: number, affinity: number, share: number): HostPair => ({
+      element: g('E'),
+      mag: g(mag),
+      contacts,
+      affinity,
+      share,
+      confidence: 0,
+      linked: mag === 'A',
+    })
+    // The rivals by affinity, then contacts: S, then D and C at one affinity, D with more contacts; T least; R never met.
+    const hosts = [host('A', 400, 0.8, 0.9), host('B', 60, 0.3, 0.07), host('C', 10, 0.05, 0.01), host('D', 30, 0.05, 0.02), host('R', 0, 0, 0), host('S', 5, 0.2, 0.004), host('T', 100, 0.01, 0.006)]
+    // The elements E meets, as the card ranks them: by affinity, a tie to the one earlier; and a MAG pair, which is no element.
+    const meet: Array<[string, string, number]> = [
+      ['E', 'K', 0.1],
+      ['J', 'E', 0.5],
+      ['E', 'I', 1],
+      ['E', 'H', 2],
+      ['G', 'E', 2],
+      ['E', 'F', 3],
+      ['E', 'A', 0.8],
+      ['F', 'G', 9],
+    ]
+    const pairs = { a: meet.map(([a]) => g(a)), b: meet.map(([, b]) => g(b)), affinity: meet.map(([, , affinity]) => affinity) }
+    const answer = { genomes, pairs, hosts }
+    const link = (element: string, mag: string, held: boolean): HostLink => ({
+      key: linkKey(element, mag),
+      element,
+      mag,
+      held,
+      fromFile: false,
+      pair: null,
+      offer: held ? null : ({ kind: 'link' } as Suggestion),
+      met: false,
+    })
+    const links = [link('E', 'A', true), link('E', 'B', false), link('F', 'B', true)]
+    expect([AROUND_ELEMENTS, AROUND_RIVALS]).toEqual([5, 3])
+    const around = neighbourhood(['E'], answer, links)
+    // Its hosts, held and offered, their other element F; the five elements it meets most; the three rivals.
+    expect([...around.genomes].sort()).toEqual(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'S'])
+    expect([...around.meets]).toEqual(['F', 'G', 'H', 'I', 'J'])
+    expect(around.met.map((m) => [m.key, m.held, m.offer, m.met, m.pair?.contacts])).toEqual([
+      [linkKey('E', 'S'), false, null, true, 5],
+      [linkKey('E', 'D'), false, null, true, 30],
+      [linkKey('E', 'C'), false, null, true, 10],
+    ])
+    // As many as asked.
+    const fewer = neighbourhood(['E'], answer, links, { elements: 2, rivals: 1 })
+    expect([...fewer.meets]).toEqual(['F', 'G'])
+    expect(fewer.met.map((m) => m.mag)).toEqual(['S'])
+    // Around a MAG, what is linked alone: no rival, no element met.
+    const mag = neighbourhood(['B'], answer, links)
+    expect([...mag.genomes].sort()).toEqual(['A', 'B', 'E', 'F'])
+    expect([mag.met, [...mag.meets]]).toEqual([[], []])
+    expect([...neighbourhood(['gone'], answer, links).genomes]).toEqual([])
+  })
+
+  it('counts no rival a misplaced contig explains, nor one a link is offered to: the community’s element and X1, which it meets through y5', () => {
+    const a = answer()
+    const around = neighbourhood(['P'], a, hostLinks(a, offersOf(a)))
+    // Its two hosts, Z held and Y offered: y5 is Y's, and carries its contacts with P.
+    expect([...around.genomes].sort()).toEqual(['P', 'Y', 'Z'])
+    expect(around.met).toEqual([])
+    // y5's move turned down, y5 is where it is, and its contacts with P count for X1: a link is offered.
+    const { base, evidence } = community()
+    const declined = stateAnswer(evidence, CuratedBinning.of(base, null), {}, ['move:y5>Y'])
+    const offered = neighbourhood(['P'], declined, hostLinks(declined, offersOf(declined)))
+    expect([...offered.genomes].sort()).toEqual(['P', 'X1', 'Y', 'Z'])
+    expect(offered.met).toEqual([])
+    // That link turned down too, as the stage's offers leave it out: X1 a rival, met and not linked.
+    const rival = neighbourhood(['P'], declined, hostLinks(declined, offersOf(declined).filter((o) => o.suggestion.key !== 'link:P>X1')))
+    expect([...rival.genomes].sort()).toEqual(['P', 'X1', 'Y', 'Z'])
+    expect(rival.met.map((m) => m.key)).toEqual([linkKey('P', 'X1')])
+    const x1 = rival.met[0]
+    expect(x1.pair?.contacts).toBe(24)
+    expect(linkWords(x1, 'P', 'X1')).toMatch(/^P ↔ X1 · not linked · affinity [\d.]+ \(at least [\d.]+\) · [\d.]+% of its MAG contacts · 24 contacts · host \d+%$/)
+  })
+
+  it('counts the links drawn — held, offered, to unlink —, never what an element only meets', () => {
+    const offer = (kind: 'link' | 'unlink') => ({ kind }) as Suggestion
+    expect(
+      drawnCounts([
+        { held: true, offer: null, met: false },
+        { held: true, offer: offer('unlink'), met: false },
+        { held: false, offer: offer('link'), met: false },
+        { held: false, offer: null, met: true },
+      ]),
+    ).toEqual({ held: 2, offered: 1, unlink: 1 })
+  })
+
+  it('says in the head links, not questions: the map’s, or around the selection what is drawn of the map’s', () => {
+    expect(countParts({ held: 96, offered: 17, unlink: 1 }, null)).toEqual(['96 links', '17 links offered', '1 to unlink'])
+    expect(countParts({ held: 1, offered: 1, unlink: 0 }, null)).toEqual(['1 link', '1 link offered'])
+    expect(countParts({ held: 1_204, offered: 0, unlink: 0 }, null)).toEqual(['1,204 links'])
+    const whole = { held: 96, offered: 17, unlink: 1 }
+    expect(countParts({ held: 13, offered: 3, unlink: 0 }, whole)).toEqual(['13 of 96 links', '3 of 17 links offered'])
+    expect(countParts({ held: 0, offered: 0, unlink: 0 }, whole)).toEqual(['0 of 96 links'])
+    expect(countParts({ held: 1, offered: 1, unlink: 1 }, { held: 1, offered: 1, unlink: 1 })).toEqual(['1 of 1 link', '1 of 1 link offered', '1 of 1 to unlink'])
   })
 
   it('lights with a genome the genomes linked to it, and those links', () => {
@@ -334,11 +451,18 @@ describe('words', () => {
     const links = hostLinks(a, offersOf(a))
     const y = links.find((l) => l.key === linkKey('P', 'Y')) as HostLink
     expect(linkWords(y, 'P', 'Y')).toMatch(/^P ↔ Y · link offered · affinity 0\.53 \(at least 0\.4\d\) · 99% of its MAG contacts · 120 contacts · host 99%$/)
+    // One contact in 121: a share under a percent, said to a tenth of one, as the map labels it.
     const z = links.find((l) => l.key === linkKey('P', 'Z')) as HostLink
-    expect(linkWords(z, 'P', 'Z')).toMatch(/^P ↔ Z · linked, from the file · unlink offered · affinity 0\.0033 \(at least 0\.000\d+\) · 1% of its MAG contacts · 1 contact · host 0%$/)
+    expect(linkWords(z, 'P', 'Z')).toMatch(/^P ↔ Z · linked, from the file · unlink offered · affinity 0\.0033 \(at least 0\.000\d+\) · 0\.8% of its MAG contacts · 1 contact · host 0%$/)
     expect(linkWords({ ...z, pair: null, offer: null, fromFile: false }, 'P', 'Z')).toBe('P ↔ Z · linked · no contacts')
     // Before the contacts are read: its numbers to come, not none.
     expect(linkWords({ ...z, pair: null, offer: null }, 'P', 'Z', false)).toBe('P ↔ Z · linked, from the file · its numbers once the contacts are read')
+  })
+
+  it('labels a share of an element’s contacts with MAGs whole from a tenth, to a tenth of a percent below, never a rival’s few as none', () => {
+    expect([0.97, 1, 0.0995, 0.12].map(shareText)).toEqual(['97%', '100%', '10%', '12%'])
+    expect([0.0994, 0.042, 0.003, 0.00095].map(shareText)).toEqual(['9.9%', '4.2%', '0.3%', '0.1%'])
+    expect([0.0004, 0, Number.NaN].map(shareText)).toEqual(['<0.1%', '0%', '0%'])
   })
 
   it('says the elements it folds, one or many, before the contacts are read and after', () => {

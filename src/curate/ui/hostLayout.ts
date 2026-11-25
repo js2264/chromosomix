@@ -2,8 +2,9 @@
  * The host map's arithmetic (SPECS §33.3), apart from its canvas: which MAG
  * each element is placed beside, the rows the two columns take, the links
  * drawn between them and what each rests on, the genomes shown around the
- * selection, a link's curve and how near a point is to it, labels pushed apart
- * where they crowd, and the words the readout prints.
+ * selection — around an element, the MAGs it meets that no link joins it to
+ * and the elements it meets most —, a link's curve and how near a point is to
+ * it, labels pushed apart where they crowd, and the words the readout prints.
  *
  * **Two columns that share their rows.** The MAGs on the left in the stage's
  * order, the elements on the right, each **beside the MAG it meets most** —
@@ -265,6 +266,11 @@ export interface HostLink {
   pair: HostPair | null
   /** The suggestion on offer for the pair: a link to make, or a held one to undo. */
   offer: Suggestion | null
+  /**
+   * Neither held nor offered: a MAG an element chosen meets, drawn faint around
+   * it as what its hosts are judged against ({@link neighbourhood}).
+   */
+  met: boolean
 }
 
 /** One key a pair of an element and a MAG. */
@@ -293,14 +299,14 @@ export function hostLinks(
   const out = new Map<string, HostLink>()
   for (const link of answer.links) {
     const key = linkKey(link.element, link.mag)
-    out.set(key, { key, element: link.element, mag: link.mag, held: true, fromFile: link.fromFile, pair: pairs.get(key) ?? null, offer: null })
+    out.set(key, { key, element: link.element, mag: link.mag, held: true, fromFile: link.fromFile, pair: pairs.get(key) ?? null, offer: null, met: false })
   }
   for (const { element, mag, suggestion } of offers) {
     const key = linkKey(element, mag)
     const held = out.get(key)
     // A link offered for a pair held, or an unlink for one not held: the binning moved on; not drawn.
     if (held === undefined) {
-      if (suggestion.kind === 'link') out.set(key, { key, element, mag, held: false, fromFile: false, pair: pairs.get(key) ?? null, offer: suggestion })
+      if (suggestion.kind === 'link') out.set(key, { key, element, mag, held: false, fromFile: false, pair: pairs.get(key) ?? null, offer: suggestion, met: false })
     } else if (suggestion.kind === 'unlink') held.offer = suggestion
   }
   return [...out.values()]
@@ -326,6 +332,50 @@ export function offerCounts(
   return { offered, unlink }
 }
 
+/** Links held, links offered, and held links an unlink is offered for. */
+export interface LinkCounts {
+  held: number
+  offered: number
+  unlink: number
+}
+
+/**
+ * What the head counts of the links drawn: those held, those offered, and the
+ * held ones an unlink is offered for — around the selection, what is shown,
+ * not the map's. A MAG an element only meets is no link, and is not counted.
+ */
+export function drawnCounts(links: ReadonlyArray<Pick<HostLink, 'held' | 'offer' | 'met'>>): LinkCounts {
+  let held = 0
+  let offered = 0
+  let unlink = 0
+  for (const link of links) {
+    if (link.met) continue
+    if (link.held) {
+      held++
+      if (link.offer?.kind === 'unlink') unlink++
+    } else if (link.offer?.kind === 'link') offered++
+  }
+  return { held, offered, unlink }
+}
+
+/**
+ * The head's counts, in parts: the links held first — the part that never
+ * gives way —, then the links offered and the held ones to unlink where there
+ * are any. Every count is of links, one a pair of an element and a MAG — never
+ * of questions, which take an element's links together (`96 links · 17 links
+ * offered · 1 to unlink`) —; around the selection, each says what is drawn of
+ * the map's (`13 of 96 links · 3 of 17 links offered`).
+ *
+ * @param whole The map's counts, around the selection; `null` where the map draws them all.
+ */
+export function countParts(drawn: LinkCounts, whole: LinkCounts | null): string[] {
+  const of = (n: number, all: number, one: string, many?: string): string => (whole === null ? counted(n, one, many) : `${fmt.int(n)} of ${counted(all, one, many)}`)
+  const parts = [of(drawn.held, whole?.held ?? 0, 'link')]
+  if (drawn.offered > 0) parts.push(`${of(drawn.offered, whole?.offered ?? 0, 'link')} offered`)
+  if (drawn.unlink > 0) parts.push(`${whole === null ? fmt.int(drawn.unlink) : `${fmt.int(drawn.unlink)} of ${fmt.int(whole.unlink)}`} to unlink`)
+  return parts
+}
+
 /** A link's weight: `1 + 3 × share` CSS pixels, its share of the element's contacts with MAGs. */
 export function linkWidth(link: Pick<HostLink, 'pair'>): number {
   const share = link.pair?.share ?? 0
@@ -334,25 +384,99 @@ export function linkWidth(link: Pick<HostLink, 'pair'>): number {
 
 /**
  * The genomes shown around the selection: the genomes chosen, every genome
- * linked to them — held or offered —, and the other MAGs their elements are
- * linked to.
+ * linked to them — held or offered —, the other MAGs a chosen MAG's elements
+ * are linked to, and the other elements a chosen element's MAGs host.
  */
 export function aroundSet(focus: Iterable<string>, links: ReadonlyArray<Pick<HostLink, 'element' | 'mag'>>, kindOf: (id: string) => GenomeKind | undefined): Set<string> {
   const chosen = new Set<string>()
   for (const id of focus) if (kindOf(id) !== undefined) chosen.add(id)
   const out = new Set(chosen)
   // One step out, from the genomes chosen only: never on through what it adds.
-  const theirs = new Set<string>()
+  const theirElements = new Set<string>()
+  const theirHosts = new Set<string>()
   for (const link of links) {
     if (chosen.has(link.mag)) {
       out.add(link.element)
-      theirs.add(link.element)
+      theirElements.add(link.element)
     }
-    if (chosen.has(link.element)) out.add(link.mag)
+    if (chosen.has(link.element)) {
+      out.add(link.mag)
+      theirHosts.add(link.mag)
+    }
   }
-  // The other hosts of a chosen MAG's elements.
-  for (const link of links) if (theirs.has(link.element)) out.add(link.mag)
+  // The other hosts of a chosen MAG's elements; the other elements of a chosen element's hosts.
+  for (const link of links) {
+    if (theirElements.has(link.element)) out.add(link.mag)
+    if (theirHosts.has(link.mag)) out.add(link.element)
+  }
   return out
+}
+
+/** Around an element, the elements it meets most — the selection card's *elements that meet it*, as many. */
+export const AROUND_ELEMENTS = 5
+/** Around an element, the MAGs it meets most that no link joins it to: drawn faint, this many. */
+export const AROUND_RIVALS = 3
+
+/** What {@link neighbourhood} reads of a binning: its genomes, the pairs that meet, and each element's contacts with each MAG. */
+export interface AroundAnswer {
+  genomes: readonly HostGenome[]
+  pairs: PairList
+  hosts: readonly HostPair[]
+}
+
+/**
+ * What around the selection shows ({@link aroundSet}), and around an element
+ * chosen more: the elements it meets most densely — the five the selection
+ * card lists, in its order — and the MAGs it meets most that no link drawn
+ * joins it to, by their affinity, each a link to draw faint (`met`) with the
+ * pair's numbers: the rivals its hosts are judged against.
+ *
+ * @param links The links drawn: held and offered.
+ * @returns `genomes` to show, `met` links to draw, and `meets`, the elements a chosen element meets most.
+ */
+export function neighbourhood(
+  focus: Iterable<string>,
+  answer: AroundAnswer,
+  links: readonly HostLink[],
+  most: { elements?: number; rivals?: number } = {},
+): { genomes: Set<string>; met: HostLink[]; meets: Set<string> } {
+  const index = new Map(answer.genomes.map((genome, g) => [genome.id, g]))
+  const kindOf = (id: string): GenomeKind | undefined => {
+    const g = index.get(id)
+    return g === undefined ? undefined : answer.genomes[g].kind
+  }
+  const focused = [...focus]
+  const genomes = aroundSet(focused, links, kindOf)
+  const met: HostLink[] = []
+  const meets = new Set<string>()
+  const joined = new Set(links.map((link) => link.key))
+  const elementsMost = most.elements ?? AROUND_ELEMENTS
+  const rivalsMost = most.rivals ?? AROUND_RIVALS
+  for (const id of new Set(focused)) {
+    const e = index.get(id)
+    if (e === undefined || answer.genomes[e].kind !== 'element') continue
+    // The elements it meets, densest first, as the card orders them.
+    const others: Array<{ other: number; affinity: number }> = []
+    for (let k = 0; k < answer.pairs.a.length; k++) {
+      const other = answer.pairs.a[k] === e ? answer.pairs.b[k] : answer.pairs.b[k] === e ? answer.pairs.a[k] : -1
+      if (other >= 0 && answer.genomes[other]?.kind === 'element') others.push({ other, affinity: answer.pairs.affinity[k] })
+    }
+    others.sort((x, y) => y.affinity - x.affinity || x.other - y.other)
+    for (const { other } of others.slice(0, elementsMost)) {
+      genomes.add(answer.genomes[other].id)
+      meets.add(answer.genomes[other].id)
+    }
+    // The MAGs it meets that no link drawn joins it to, densest first.
+    const rivals = answer.hosts
+      .filter((pair) => pair.element === e && pair.contacts > 0 && answer.genomes[pair.mag]?.kind === 'mag' && !joined.has(linkKey(id, answer.genomes[pair.mag].id)))
+      .sort((x, y) => y.affinity - x.affinity || y.contacts - x.contacts || x.mag - y.mag)
+    for (const pair of rivals.slice(0, rivalsMost)) {
+      const mag = answer.genomes[pair.mag].id
+      genomes.add(mag)
+      met.push({ key: linkKey(id, mag), element: id, mag, held: false, fromFile: false, pair, offer: null, met: true })
+    }
+  }
+  return { genomes, met, meets }
 }
 
 /** What is lit with a set of genomes: they, the genomes linked to them, and those links. */
@@ -486,14 +610,17 @@ export function roomy(ys: readonly number[], room: number): boolean[] {
 
 /**
  * A link as the readout says it: the element and the MAG, whether it is held
- * and where from, what is on offer, the affinity and its lower bound, the
- * share of the element's contacts with MAGs it takes, the contacts, and how
- * sure the method is the MAG hosts it — or, before the contacts are read
- * (`counted` false), that its numbers are to come: not that it has none.
+ * and where from — or, around an element, that a MAG it meets is not linked —,
+ * what is on offer, the affinity and its lower bound, the share of the
+ * element's contacts with MAGs it takes (as the map labels it, {@link
+ * shareText}), the contacts, and how sure the method is the MAG hosts it — or,
+ * before the contacts are read (`counted` false), that its numbers are to
+ * come: not that it has none.
  */
 export function linkWords(link: HostLink, element: string, mag: string, counted = true): string {
   const parts = [`${element} ↔ ${mag}`]
   if (link.held) parts.push(link.fromFile ? 'linked, from the file' : 'linked')
+  else if (link.met) parts.push('not linked')
   if (link.offer?.kind === 'link') parts.push('link offered')
   else if (link.offer?.kind === 'unlink') parts.push('unlink offered')
   if (!counted) {
@@ -507,11 +634,24 @@ export function linkWords(link: HostLink, element: string, mag: string, counted 
   }
   parts.push(
     `affinity ${affinityText(pair.affinity)} (at least ${affinityText(lowerAffinity(pair.affinity, pair.contacts))})`,
-    `${fmt.pct(pair.share, 0)} of its MAG contacts`,
+    `${shareText(pair.share)} of its MAG contacts`,
     `${fmt.int(pair.contacts)} contact${Math.round(pair.contacts) === 1 ? '' : 's'}`,
     `host ${displayPercent(pair.confidence)}%`,
   )
   return parts.join(' · ')
+}
+
+/**
+ * A share of an element's contacts with MAGs, as its link is labelled around
+ * it and the readout says it: whole from a tenth (`97%`, `12%`), to a tenth of
+ * a percent below (`4.2%`, `0.3%`) — a rival's few contacts are not `0%` —, and
+ * `<0.1%` past that.
+ */
+export function shareText(share: number): string {
+  if (!(share > 0)) return '0%'
+  if (share >= 0.0995) return fmt.pct(share, 0)
+  if (share >= 0.00095) return fmt.pct(share, 1)
+  return '<0.1%'
 }
 
 /** A count of things: `1 element`, `3 elements`. */

@@ -16,7 +16,7 @@ import { CuratedBinning, fileBinning, type BaseBinning } from '@/genome/curation
 import { stateAnswer } from '@/curate/answer'
 import { background, tally, visibility, type ContigNetwork } from '@/curate/method'
 import { CurateModel } from '@/curate/model'
-import { methodBinning, neighbourLists, type CurationEvidence } from '@/curate/suggest'
+import { methodBinning, neighbourLists, type CurationEvidence, type Suggestion } from '@/curate/suggest'
 import { HostPane } from '@/curate/ui/HostPane'
 import type { CurateContext } from '@/curate/ui/context'
 import { CurationStore } from '@/state/curation'
@@ -79,22 +79,23 @@ const frame = (): Promise<void> => new Promise((resolve) => requestAnimationFram
 
 /**
  * The pane over the community — or over the community and Q — in a plot of
- * 800 × 600 pixels, its first count in and drawn.
+ * 800 × 600 pixels, its first count in and drawn. `declines` counts each
+ * binning with the suggestions turned down, as the worker does.
  */
-async function mount(options: { lonely?: boolean; unread?: boolean; height?: number } = {}): Promise<Mounted> {
+async function mount(options: { lonely?: boolean; unread?: boolean; declines?: boolean; height?: number } = {}): Promise<Mounted> {
   const stage = testContext()
-  if (options.lonely === true || options.unread === true) {
+  if (options.lonely === true || options.unread === true || options.declines === true) {
     const { base, evidence } = options.lonely === true ? lonely() : community()
     const store = new CurationStore(`curate-host-dom-${++stores}`, base, fileBinning(base), () => 0)
-    const answer = (curation: Parameters<typeof CuratedBinning.of>[1], weights: Parameters<typeof stateAnswer>[2]): CurationStateResult => {
-      const counted = stateAnswer(evidence, CuratedBinning.of(base, curation), weights)
+    const answer = (curation: Parameters<typeof CuratedBinning.of>[1], weights: Parameters<typeof stateAnswer>[2], declined: readonly string[] = []): CurationStateResult => {
+      const counted = stateAnswer(evidence, CuratedBinning.of(base, curation), weights, declined)
       // Before the contacts are read: the genomes and the links, no pairs, no hosts, no suggestions.
       if (options.unread !== true) return counted
       return { ...counted, counted: false, pairs: { a: new Int32Array(0), b: new Int32Array(0), contacts: new Float64Array(0), affinity: new Float32Array(0) }, hosts: [], suggestions: [] }
     }
     const model = new CurateModel(
       store,
-      { state: (curation, weights) => ({ promise: Promise.resolve(answer(curation, weights)), cancel: () => {} }) },
+      { state: (curation, weights, declined) => ({ promise: Promise.resolve(answer(curation, weights, declined)), cancel: () => {} }) },
       { schedule: (run) => (run(), () => {}) },
     )
     ;(stage.ctx as { model: CurateModel }).model = model
@@ -127,6 +128,9 @@ function node(id: string): { clientX: number; clientY: number } {
   if (at === undefined) throw new Error(`${id} is not drawn`)
   return { clientX: at[0], clientY: at[1] }
 }
+
+/** The key's words for the marks drawn: the item of a mark not drawn is hidden. */
+const keyWords = (): Array<string | null> => [...document.querySelectorAll('.curate-host-key-item:not(.hidden) .curate-host-key-word')].map((word) => word.textContent)
 
 /** The middle of the link from a MAG to an element: halfway across, halfway between their rows. */
 function linkMiddle(mag: string, element: string): { clientX: number; clientY: number } {
@@ -162,7 +166,7 @@ describe('the host map', () => {
     expect(at.P[0]).toBeGreaterThan(at.Y[0])
     expect(at.P[1]).toBe(at.Y[1])
     expect(canvas().dataset.rows).toBe('4')
-    expect(pane.element.querySelector('.curate-host-counts')?.textContent).toBe('1 link · 1 offered · 1 to unlink')
+    expect(pane.element.querySelector('.curate-host-counts')?.textContent).toBe('1 link · 1 link offered · 1 to unlink')
     const z = pane.nodeAt('Z')
     expect(z?.clientX).toBeCloseTo(node('Z').clientX, 1)
     expect(z?.clientY).toBeCloseTo(node('Z').clientY, 1)
@@ -172,18 +176,20 @@ describe('the host map', () => {
   it('counts the links in the head in parts that give way whole, and keys its marks under the map', async () => {
     const { pane, model } = await mount()
     const counts = pane.element.querySelector('.curate-host-counts') as HTMLElement
-    // The links held never give way; what is offered does, whole, where the head is narrow.
+    // The links held never give way; what is offered does, whole, where the head is narrow. Links, never questions.
     expect([...counts.children].map((part) => [part.textContent, part.classList.contains('curate-host-count-more')])).toEqual([
       ['1 link', false],
-      [' · 1 offered', true],
+      [' · 1 link offered', true],
       [' · 1 to unlink', true],
     ])
+    expect(counts.title).toBe('1 link held, 1 link the contacts offer and 1 held link they no longer support — each link an element and a MAG, where the suggestions ask an element’s links as one question')
     expect((pane.element.querySelector('.curate-host-view[data-view="around"] .curate-host-view-more') as HTMLElement).textContent).toBe(' the selection')
     const foot = pane.element.querySelector('.curate-host-foot') as HTMLElement
     const key = foot.querySelector('.curate-host-key') as HTMLElement
     expect(foot.classList.contains('hidden')).toBe(false)
     expect(key.classList.contains('hidden')).toBe(false)
-    expect([...key.querySelectorAll('.curate-host-key-word')].map((word) => word.textContent)).toEqual(['linked', 'offered', 'to unlink'])
+    // Each mark that is drawn: no MAG met without a link here.
+    expect(keyWords()).toEqual(['linked', 'offered', 'to unlink'])
     expect(foot.classList.contains('has-status')).toBe(false)
     // Around the selection the foot says what is shown, which a narrow foot says before its key.
     model.selectGenomes(['Y'])
@@ -192,11 +198,66 @@ describe('the host map', () => {
     expect(foot.classList.contains('has-status')).toBe(true)
   })
 
+  it('gives way in the head and the foot as they are measured, whole pieces, the links held last', async () => {
+    const { pane, model } = await mount()
+    model.selectGenomes(['Y'])
+    ;(pane.element.querySelector('.curate-host-view[data-view="around"]') as HTMLButtonElement).click()
+    await frame()
+    const head = pane.element.querySelector('.curate-host-head') as HTMLElement
+    const counts = pane.element.querySelector('.curate-host-counts') as HTMLElement
+    const foot = pane.element.querySelector('.curate-host-foot') as HTMLElement
+    const status = pane.element.querySelector('.curate-host-status') as HTMLElement
+    const shown = (node: Element): boolean => !node.classList.contains('hidden')
+    const visible = (node: Node): string =>
+      node instanceof Element ? (node.classList.contains('hidden') ? '' : [...node.childNodes].map(visible).join('')) : (node.textContent ?? '')
+    // Each piece's width at the stage's text, laid out with the head's and the foot's gaps.
+    const more = (): HTMLElement[] => [...counts.querySelectorAll<HTMLElement>('.curate-host-count-more')]
+    const viewMore = pane.element.querySelector('.curate-host-view-more') as HTMLElement
+    const headWidth = (): number => 7 * visible(counts).length + (shown(viewMore) ? 120 : 0) + 200
+    const lead = pane.element.querySelector('.curate-host-status-lead') as HTMLElement
+    const keyBox = pane.element.querySelector('.curate-host-key') as HTMLElement
+    const footWidth = (): number => (keyBox.classList.contains('is-crowded') ? 0 : 300) + 7 * visible(status).length + 20
+    let room = 1000
+    for (const [node, width] of [
+      [head, () => headWidth()],
+      [foot, () => footWidth()],
+    ] as const) {
+      Object.defineProperty(node, 'clientWidth', { configurable: true, get: () => room })
+      Object.defineProperty(node, 'scrollWidth', { configurable: true, get: () => Math.max(room, width()) })
+    }
+    for (const node of [counts, status]) {
+      Object.defineProperty(node, 'clientWidth', { configurable: true, get: () => 1 })
+      Object.defineProperty(node, 'scrollWidth', { configurable: true, get: () => 1 })
+    }
+    const state = (): string[] => [shown(viewMore) ? 'view' : '', more().every(shown) ? 'counts' : '', shown(lead) ? 'lead' : '', keyBox.classList.contains('is-crowded') ? '' : 'key'].filter((s) => s !== '')
+    // The head: its counts 364 px whole, 77 the links held alone, the view's words 120, the rest 200.
+    // The foot: the key 300, `around the selection · ` 161, `3 of 5 genomes` 98, the rest 20.
+    const widths: Array<[number, string[]]> = [
+      [1000, ['view', 'counts', 'lead', 'key']],
+      [600, ['counts', 'lead', 'key']],
+      [500, ['key']],
+      [300, []],
+      [1000, ['view', 'counts', 'lead', 'key']],
+    ]
+    expect(visible(counts)).toBe('1 of 1 link · 1 of 1 link offered · 1 of 1 to unlink')
+    for (const [wide, expected] of widths) {
+      room = wide
+      pane.resize()
+      await frame()
+      expect([wide, state()]).toEqual([wide, expected])
+    }
+    // What stays: the links held, whole.
+    room = 300
+    pane.resize()
+    await frame()
+    expect(visible(counts)).toBe('1 of 1 link')
+  })
+
   it('says a link held and one offered: from where, what is on offer, and what it rests on', async () => {
     const { said, model } = await mount()
     // The file links P to Z, on a read pair: an unlink is on offer.
     pointer('pointermove', linkMiddle('Z', 'P'))
-    expect(said.at(-1)).toMatch(/^P ↔ Z · linked, from the file · unlink offered · affinity 0\.0033 \(at least 0\.000\d+\) · 1% of its MAG contacts · 1 contact · host 0%$/)
+    expect(said.at(-1)).toMatch(/^P ↔ Z · linked, from the file · unlink offered · affinity 0\.0033 \(at least 0\.000\d+\) · 0\.8% of its MAG contacts · 1 contact · host 0%$/)
     // The link hovered lights its element.
     expect(model.hovered.genome).toBe('P')
     // Y hosts P: a link on offer.
@@ -345,16 +406,67 @@ describe('the host map', () => {
     expect(pane.view).toBe('around')
     const note = pane.element.querySelector('.curate-host-note') as HTMLElement
     expect(note.classList.contains('hidden')).toBe(false)
-    expect(note.textContent).toBe('Select a genome, in the list or on a map, to see it with its links and its elements’ other hosts.')
+    expect(note.textContent).toBe('Select a genome, in the list or on a map, to see it with its links, its partners’ other links and, for an element, the genomes it meets most.')
+    // Nothing chosen, nothing drawn: none of the map's links.
+    expect(pane.element.querySelector('.curate-host-counts')?.textContent).toBe('0 of 1 link')
     // Y, the element offered to it, and that element's other host.
     model.selectGenomes(['Y'])
     await frame()
     expect(Object.keys(nodes()).sort()).toEqual(['P', 'Y', 'Z'])
     expect(note.classList.contains('hidden')).toBe(true)
     expect(pane.element.querySelector('.curate-host-status')?.textContent).toBe('around the selection · 3 of 5 genomes')
+    // The head counts what is drawn of the map's.
+    const counts = pane.element.querySelector('.curate-host-counts') as HTMLElement
+    expect(counts.textContent).toBe('1 of 1 link · 1 of 1 link offered · 1 of 1 to unlink')
+    expect(counts.title).toBe(
+      'Drawn around the selection: 1 of the map’s 1 link held, 1 of its 1 link offered and 1 of its 1 held link to unlink — each link an element and a MAG, where the suggestions ask an element’s links as one question',
+    )
     ;(pane.element.querySelector('.curate-host-view[data-view="all"]') as HTMLButtonElement).click()
     await frame()
     expect(Object.keys(nodes()).sort()).toEqual(['P', 'X1', 'X2', 'Y', 'Z'])
+    expect(counts.textContent).toBe('1 link · 1 link offered · 1 to unlink')
+  })
+
+  it('shows around an element its hosts, their other elements, and the MAGs it meets that no link joins it to, faint', async () => {
+    const { pane, model, said } = await mount({ declines: true })
+    // y5's move turned down, its contacts with P count for X1, and the link to X1 they offer turned down too: P meets X1, unlinked.
+    expect(model.reject(model.offered().find((s) => s.key === 'move:y5>Y') as Suggestion)).toBe(true)
+    await model.settled()
+    expect(model.reject(model.offered().find((s) => s.key === 'link:P>X1') as Suggestion)).toBe(true)
+    await model.settled()
+    model.selectGenomes(['P'])
+    ;(pane.element.querySelector('.curate-host-view[data-view="around"]') as HTMLButtonElement).click()
+    await frame()
+    // Its hosts Z (held) and Y (offered), and X1, which it meets.
+    expect(Object.keys(nodes()).sort()).toEqual(['P', 'X1', 'Y', 'Z'])
+    expect(pane.element.querySelector('.curate-host-status')?.textContent).toBe('around the selection · 4 of 5 genomes')
+    // What it meets is no link: the head counts the links alone.
+    expect(pane.element.querySelector('.curate-host-counts')?.textContent).toBe('1 of 1 link · 1 of 1 link offered · 1 of 1 to unlink')
+    // The key says what the faint curve is.
+    expect(keyWords()).toEqual(['linked', 'offered', 'to unlink', 'meets'])
+    // The curve said as it is: met, not linked, with its numbers.
+    pointer('pointermove', linkMiddle('X1', 'P'))
+    expect(said.at(-1)).toMatch(/^P ↔ X1 · not linked · affinity [\d.]+ \(at least [\d.]+\) · [\d.]+% of its MAG contacts · 24 contacts · host \d+%$/)
+    expect(model.hovered.genome).toBe('P')
+    // A press on it selects its two ends, as on any link.
+    press(linkMiddle('X1', 'P'))
+    expect(model.selection.genomes).toEqual(['P', 'X1'])
+    // Every genome again: no rival drawn, and no key for one.
+    ;(pane.element.querySelector('.curate-host-view[data-view="all"]') as HTMLButtonElement).click()
+    await frame()
+    expect(keyWords()).toEqual(['linked', 'offered', 'to unlink'])
+  })
+
+  it('shows around an element its hosts’ other elements', async () => {
+    const { pane, model } = await mount({ lonely: true })
+    // Q linked to Z, which P is linked to: around P, Q is drawn with its link — one no contact supports, an unlink offered.
+    expect(model.drop({ kind: 'genomes', ids: ['Q'] }, { kind: 'genome', id: 'Z' })).toBe(true)
+    await model.settled()
+    model.selectGenomes(['P'])
+    ;(pane.element.querySelector('.curate-host-view[data-view="around"]') as HTMLButtonElement).click()
+    await frame()
+    expect(Object.keys(nodes()).sort()).toEqual(['P', 'Q', 'Y', 'Z'])
+    expect(pane.element.querySelector('.curate-host-counts')?.textContent).toBe('2 of 2 links · 1 of 1 link offered · 2 of 2 to unlink')
   })
 
   it('draws small as a thumbnail: no head, no readout, no hand', async () => {
@@ -472,7 +584,7 @@ describe('across steps', () => {
     expect(document.querySelector('.curate-host-counts')?.textContent).toBe('2 links')
     model.preview(null)
     await frame()
-    expect(document.querySelector('.curate-host-counts')?.textContent).toBe('1 link · 1 offered · 1 to unlink')
+    expect(document.querySelector('.curate-host-counts')?.textContent).toBe('1 link · 1 link offered · 1 to unlink')
   })
 })
 

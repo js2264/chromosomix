@@ -9,11 +9,15 @@
  * selected; the selection carried; the genome lit in every pane; the question
  * shown and its number; the wheel, Space held, `0`, Escape; the first count
  * awaited, GC alone before the coverage, a map without GC, the head short of
- * room, the thumbnail, and the binning as a preview would leave it.
+ * room, the thumbnail, and the binning as a preview would leave it; and the
+ * frame — the strays at each end of each axis left out of it and pinned to its
+ * edge, a small map's every contig kept — and the coverage axis spelt in one
+ * notation.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { coverageTickTexts, FRAME_TAIL, PIN_DOWN, PIN_LEFT, PIN_RIGHT, PIN_UP, pinToFrame, pinVector, scatterFrame } from '@/curate/scatter'
 import { ScatterPane } from '@/curate/ui/ScatterPane'
 import type { CuratePane } from '@/curate/ui/context'
 import { optionKey, shiftKey } from '@/ui/commands'
@@ -73,11 +77,12 @@ interface Mounted extends TestStage {
 /** A frame: the pane draws in one. */
 const frame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()))
 
-/** The pane over the community in a 600 × 400 plot, its first count in and drawn. */
-async function mount(options: { gc?: boolean; coverage?: boolean } = {}): Promise<Mounted> {
+/** The pane over the community in a 600 × 400 plot, its first count in and drawn; `coverageOf` sets some contigs' coverage. */
+async function mount(options: { gc?: boolean; coverage?: boolean; coverageOf?: Record<string, number> } = {}): Promise<Mounted> {
   const stage = testContext()
+  const coverage = { ...COVERAGE, ...options.coverageOf }
   stage.ctx.data.gc = options.gc === false ? null : Float64Array.from(NAMES, (name) => GC[name])
-  stage.ctx.data.coverage = options.coverage === false ? null : Float64Array.from(NAMES, (name) => COVERAGE[name])
+  stage.ctx.data.coverage = options.coverage === false ? null : Float64Array.from(NAMES, (name) => coverage[name])
   const pane = new ScatterPane(stage.ctx)
   panes.push(pane)
   // The stage tells its panes what changed; here the test does.
@@ -157,6 +162,8 @@ describe('the GC × coverage scatter', () => {
     expect(document.querySelector('.curate-scatter-counts')?.textContent).toBe('19 contigs\u00a0· 1 without contacts')
     expect(document.querySelector('.curate-scatter-counts')?.getAttribute('title')).toBe('Of the map’s contigs, 1 without contacts, drawn in the strip at the foot.')
     expect(pane.element.classList.contains('is-empty')).toBe(false)
+    // A small map's frame holds every contig: none pinned to its edge.
+    expect(dots().dataset.wedges).toBe('0')
     // Up is more coverage, across more GC.
     expect(at('p0').clientY).toBeLessThan(at('y0').clientY)
     expect(at('y0').clientY).toBeLessThan(at('x0').clientY)
@@ -455,6 +462,18 @@ describe('the GC × coverage scatter', () => {
     expect(left).toEqual(['word:lasso', `key:${shiftKey()}`, 'word:adds', `key:${optionKey()}`, 'word:takes away'])
   })
 
+  it('labels the coverage axis in one notation: ten thousand as 10,000 over 1,000, never 1e4', async () => {
+    const { pane } = await mount()
+    // The decades and their halves, where the decades are fewer than three.
+    expect(dots().dataset.coverageTicks).toBe('10 50 100')
+    pane.dispose()
+    document.body.replaceChildren()
+    // The element's contigs at 12,000 contacts per kb: the axis reaches past ten thousand.
+    await mount({ coverageOf: { p0: 12_000, p1: 12_000 } })
+    expect(dots().dataset.coverageTicks).toBe('10 100 1,000 10,000')
+    expect(dots().dataset.wedges).toBe('0')
+  })
+
   it('draws GC alone in a band until the contacts are read, and says so', async () => {
     const { ctx, pane } = await mount({ coverage: false })
     expect(pane.view).toBe('gc')
@@ -507,5 +526,75 @@ describe('the GC × coverage scatter', () => {
     await frame()
     pointer('pointermove', at('x5'))
     expect(said.at(-1)).toContain(' · in X2 · ')
+  })
+})
+
+describe('the frame', () => {
+  /** `n` values evenly from `lo` to `hi`. */
+  const even = (n: number, lo: number, hi: number): number[] => Array.from({ length: n }, (_, k) => lo + ((hi - lo) * k) / (n - 1))
+
+  it('leaves out of the frame the half percent at each end of each axis, and pins what it leaves out to its edge', () => {
+    // 1,000 contigs at GC 30–70 % and 10–100 contacts per kb; two strays at a few percent GC, one at 95 %, one at 100,000 contacts per kb, one at a hundredth.
+    const gc = [...even(1000, 30, 70), 3, 2, 95, 50, 50]
+    const coverage = [...even(1000, 1, 2).map((log) => 10 ** log), 20, 20, 20, 1e5, 0.01]
+    const all = gc.map((_, c) => c)
+    // Every contig set the frame: the clouds a part of it.
+    const whole = scatterFrame(gc, coverage, all)
+    expect([whole.gc0 < 2, whole.gc1 > 95, whole.log0 < -2, whole.log1 > 5]).toEqual([true, true, true, true])
+    // The strays left out: the clouds, padded.
+    expect(FRAME_TAIL).toBe(0.005)
+    const frame = scatterFrame(gc, coverage, all, FRAME_TAIL)
+    expect(frame.gc0).toBeGreaterThan(28)
+    expect(frame.gc0).toBeLessThan(30)
+    expect(frame.gc1).toBeGreaterThan(70)
+    expect(frame.gc1).toBeLessThan(72)
+    expect(10 ** frame.log0).toBeGreaterThan(9)
+    expect(10 ** frame.log0).toBeLessThan(10)
+    expect(10 ** frame.log1).toBeGreaterThan(100)
+    expect(10 ** frame.log1).toBeLessThan(110)
+    // Each stray held at the edge it lies past, the rest where they are.
+    const pinned = pinToFrame(frame, gc, coverage, all)
+    expect(pinned.count).toBe(5)
+    expect([...pinned.pin.slice(1000)]).toEqual([PIN_LEFT, PIN_LEFT, PIN_RIGHT, PIN_UP, PIN_DOWN])
+    expect([pinned.gc[1000], pinned.gc[1002], pinned.coverage[1000]]).toEqual([frame.gc0, frame.gc1, 20])
+    expect(Math.log10(pinned.coverage[1003])).toBeCloseTo(frame.log1, 9)
+    expect(Math.log10(pinned.coverage[1004])).toBeCloseTo(frame.log0, 9)
+    expect([pinned.pin[0], pinned.pin[999], pinned.gc[500], pinned.coverage[500]]).toEqual([0, 0, gc[500], coverage[500]])
+    // Past two edges at once, a corner; without coverage, on GC alone — the strip at the foot holds it.
+    const corner = pinToFrame(frame, [3, 3], [1e5, 0], [0, 1])
+    expect([...corner.pin]).toEqual([PIN_LEFT | PIN_UP, PIN_LEFT])
+    expect(corner.coverage[1]).toBe(0)
+  })
+
+  it('keeps every contig of a small map: under 201, half a percent is none', () => {
+    const gc = [...even(150, 30, 70), 3]
+    const coverage = [...even(150, 1, 2).map((log) => 10 ** log), 1e5]
+    const all = gc.map((_, c) => c)
+    const frame = scatterFrame(gc, coverage, all, FRAME_TAIL)
+    expect(frame.gc0).toBeLessThan(3)
+    expect(frame.log1).toBeGreaterThan(5)
+    expect(pinToFrame(frame, gc, coverage, all).count).toBe(0)
+  })
+
+  it('points a pinned contig’s wedge out past the edges it lies beyond', () => {
+    expect(pinVector(0)).toEqual([0, 0])
+    expect(pinVector(PIN_LEFT)).toEqual([-1, 0])
+    expect(pinVector(PIN_RIGHT)).toEqual([1, 0])
+    // Up the plot is up the screen: y down.
+    expect(pinVector(PIN_UP)).toEqual([0, -1])
+    expect(pinVector(PIN_DOWN)).toEqual([0, 1])
+    const [x, y] = pinVector(PIN_RIGHT | PIN_DOWN)
+    expect([x, y].map((v) => Number(v.toFixed(6)))).toEqual([0.707107, 0.707107])
+  })
+
+  it('spells the coverage axis in one notation from its foot to its top', () => {
+    expect(coverageTickTexts([1, 10, 100, 1000, 10000])).toEqual(['1', '10', '100', '1,000', '10,000'])
+    expect(coverageTickTexts([0.5, 1, 5])).toEqual(['0.5', '1', '5'])
+    // Where one tick needs an exponent, every one has it.
+    expect(coverageTickTexts([1e-5, 1e-4, 1e-3])).toEqual(['1e-5', '1e-4', '1e-3'])
+    expect(coverageTickTexts([1e-5, 1, 100])).toEqual(['1e-5', '1e0', '1e2'])
+    expect(coverageTickTexts([2.5e-5, 1e-3])).toEqual(['2.5e-5', '1e-3'])
+    expect(coverageTickTexts([1e7, 1e8])).toEqual(['1e7', '1e8'])
+    expect(coverageTickTexts([])).toEqual([])
   })
 })
