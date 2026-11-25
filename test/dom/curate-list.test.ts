@@ -27,9 +27,10 @@ afterEach(() => {
   teardown()
 })
 
-/** A list mounted over the community, its first count in and its rows drawn. */
-async function mount(): Promise<TestStage & { list: GenomeList }> {
+/** A list mounted over the community, its first count in and its rows drawn; `tweak` changes the context first. */
+async function mount(tweak?: (stage: TestStage) => void): Promise<TestStage & { list: GenomeList }> {
   const stage = testContext()
+  tweak?.(stage)
   const list = new GenomeList(stage.ctx)
   lists.push(list)
   document.body.appendChild(list.element)
@@ -247,5 +248,89 @@ describe('the genome list', () => {
     await frame()
     key('ArrowDown')
     expect(model.selection.genomes).toEqual(['Z'])
+  })
+
+  it('closes what a frame opened when the next frame shows other contigs, or the mode changes, but never what the reader opened', async () => {
+    const { ctx, model } = await mount()
+    // Review's question on y5, binned in X1: X1 opens on it.
+    ctx.frame({ genomes: ['X1', 'Y'], contigs: [3] })
+    await frame()
+    expect(names()).toContain('y5')
+    // The next question, on x3 in X2: X1 closes, X2 opens.
+    ctx.frame({ genomes: ['X2', 'X1'], contigs: [4] })
+    await frame()
+    expect(names()).not.toContain('y5')
+    expect(names()).toContain('x3')
+    // A genome the reader opens is theirs: no frame closes it.
+    press(row('g:Z'))
+    key('ArrowRight')
+    await frame()
+    expect(names()).toContain('z0')
+    ctx.frame({ genomes: ['Y'], contigs: [7] })
+    await frame()
+    expect(names()).toContain('z0')
+    expect(names()).not.toContain('x3')
+    expect(names()).toContain('y0')
+    // A change of mode — review left, or auto — closes what its frames opened.
+    model.setMode('auto')
+    await frame()
+    expect(names()).not.toContain('y0')
+    expect(names()).toContain('z0')
+  })
+
+  it('marks the genomes holding selected contigs with how many, and the pool’s head with its own', async () => {
+    const { model } = await mount()
+    // A lasso's catch: two of X1's contigs, one of X2's, the pool's u0.
+    model.selectContigs([0, 1, 4, 18])
+    await frame()
+    expect(row('g:X1').classList.contains('has-held')).toBe(true)
+    expect(row('g:X1').querySelector('.curate-row-held')?.textContent).toBe('2')
+    expect((row('g:X1').querySelector('.curate-row-held') as HTMLElement).title).toBe('2 of its 4 contigs selected')
+    expect(row('g:X2').querySelector('.curate-row-held')?.textContent).toBe('1')
+    expect(row('g:Y').classList.contains('has-held')).toBe(false)
+    expect(row('g:Y').querySelector('.curate-row-held')?.textContent).toBe('')
+    expect(row('s:pool').querySelector('.curate-row-held')?.textContent).toBe('1')
+    expect((row('s:pool').querySelector('.curate-row-held') as HTMLElement).title).toBe('1 contig of the pool selected')
+    // Genomes selected, no contig: no row holds any.
+    model.selectGenomes(['Y'])
+    await frame()
+    expect(document.querySelectorAll('.has-held')).toHaveLength(0)
+  })
+
+  it('says a row’s whole name and numbers on the readout while the pointer is on it, and lets go of them off the list', async () => {
+    const { said, model, store } = await mount()
+    row('g:Z').dispatchEvent(new PointerEvent('pointerenter'))
+    // The unlink of P from Z on offer names Z.
+    expect(said.at(-1)).toBe('Z · 200.0 kb · 4 contigs · 100% complete · 1.00 redundant · high quality · 1 suggestion on offer')
+    expect(model.hovered.genome).toBe('Z')
+    row('g:P').dispatchEvent(new PointerEvent('pointerenter'))
+    expect(said.at(-1)).toMatch(/^P · 100\.0 kb · 2 contigs · an element, hosted by Z · \d+ suggestions? on offer$/)
+    row('c:18').dispatchEvent(new PointerEvent('pointerenter'))
+    expect(said.at(-1)).toMatch(/^u0 · 50\.0 kb · GC \d+% · unbinned · .*recruit into X\d \d+%$/)
+    document.querySelector('.curate-list-scroll')?.dispatchEvent(new PointerEvent('pointerleave'))
+    expect(said.at(-1)).toBeNull()
+    expect(model.hovered.genome).toBeNull()
+    // What the curation changed of a genome, the change chip in words.
+    store.apply({ op: 'merge', into: 'X1', genomes: ['X2'] })
+    await model.settled()
+    await frame()
+    row('g:X1').dispatchEvent(new PointerEvent('pointerenter'))
+    expect(said.at(-1)).toContain(' · merged with X2 · 3 contigs in, 0 out')
+  })
+
+  it('counts every head one way, shown of the whole, and keeps a prefix’s ellipsis outside the part that gives way', async () => {
+    await mount((stage) => {
+      stage.ctx.prefixOf = (kind) => (kind === 'mag' ? 'X' : 'P_')
+    })
+    const counts = (): string[] => textsOf(document.body, '.curate-row-section .curate-section-count')
+    expect(counts()).toEqual(['4', '1', '1 contig · 50.0 kb'])
+    const prefix = document.querySelector('.curate-row-section[data-key="s:elements"] .curate-section-prefix') as HTMLElement
+    expect(prefix.textContent).toBe('P_…')
+    expect(prefix.querySelector('.curate-section-prefix-text')?.textContent).toBe('P_')
+    const box = document.querySelector('.curate-filter') as HTMLInputElement
+    box.value = 'Z'
+    box.dispatchEvent(new Event('input'))
+    await frame()
+    expect(counts()).toEqual(['1 of 4', '0 of 1', '0 of 1 contig'])
   })
 })

@@ -175,9 +175,15 @@ describe('the curation stage', () => {
     await settle()
     const band = document.querySelector('.curate-band') as HTMLElement
     expect(band.classList.contains('hidden')).toBe(false)
-    expect(band.querySelector('.curate-band-where')?.textContent).toMatch(/^review · 1 of \d+( · \d+ less sure after)?$/)
-    expect(band.querySelector('.curate-band-words')?.textContent).toMatch(/^merge X2 into X1 · \d+%$/)
+    expect(band.querySelector('.curate-band-where')?.textContent).toMatch(/^1 of \d+ likely$/)
+    expect(band.querySelector('.curate-band-words')?.textContent).toBe('merge X2 into X1')
+    expect(band.querySelector('.curate-band-confidence')?.textContent).toMatch(/^· \d+%$/)
+    // Each genome it names after its swatch, a MAG's disc.
+    expect([...band.querySelectorAll('.curate-band-name')].map((node) => `${node.textContent}:${node.querySelector('.curate-swatch-mag') === null ? 'ring' : 'disc'}`)).toEqual(['X2:disc', 'X1:disc'])
     expect(textsOf(band, '.curate-band-price-row')[0]).toBe('X1 complete 50% + 50% → 100% · redundant 1.00 + 1.00 → 1.00 · high quality')
+    // Coloured as the cards colour a price: the completeness made it high quality, the redundancy did not move it.
+    expect(textsOf(band, '.curate-band-price-number.is-promoted')).toEqual(['complete 50% + 50% → 100%'])
+    expect(textsOf(band, '.curate-band-price-name.is-promoted, .curate-band-price-verdict.is-promoted')).toEqual(['X1', 'high quality'])
     expect(told).toContain('contacts:merge')
     key('y')
     expect(store.curation.history[0].by).toBe('suggestion')
@@ -247,8 +253,10 @@ describe('the curation stage', () => {
     const status = document.querySelector('.curate-status') as HTMLElement
     expect(status.classList.contains('hidden')).toBe(false)
     expect(status.textContent).toMatch(/counting the binning failed: the worker stopped/)
-    // Review asks nothing of the binning before the step, and says why.
-    expect(document.querySelector('.curate-band-words')?.textContent).toBe('review · the count failed: count again')
+    // Review asks nothing of the binning before the step, and says why, in the band's three lines.
+    expect(document.querySelector('.curate-band-where')?.textContent).toBe('review')
+    expect(document.querySelector('.curate-band-words')?.textContent).toBe('the count failed: count again')
+    expect(document.querySelector('.curate-band')?.childElementCount).toBe(3)
     failing = false
     ;(status.querySelector('button') as HTMLButtonElement).click()
     await settle()
@@ -352,6 +360,93 @@ describe('the curation stage', () => {
     expect(document.querySelector('.curate-slot.is-large')?.getAttribute('data-slot')).toBe('scatter')
     key('&', { code: 'Digit1' })
     expect(document.querySelector('.curate-slot.is-large')?.getAttribute('data-slot')).toBe('contacts')
+  })
+
+  it('keeps the band at three lines and the same five keys from one question to the next, an element named after its ring', async () => {
+    const { ctx } = await open()
+    ;(document.querySelector('[data-mode="review"]') as HTMLButtonElement).click()
+    await settle()
+    const band = document.querySelector('.curate-band') as HTMLElement
+    const seen = new Set<string>()
+    for (let k = 0; k < 12 && !seen.has(ctx().model.current?.key ?? ''); k++) {
+      seen.add(ctx().model.current?.key ?? '')
+      // Where the question stands with the keys; the question; its price — whatever is asked.
+      expect([...band.children].map((line) => line.className)).toEqual(['curate-band-head', 'curate-band-question', 'curate-band-price'])
+      expect(textsOf(band, '.curate-band-key')).toEqual(['Ytake', 'Nturn down', '←→others', '↓↑one by one', 'holdSpacetopreview'])
+      // ↓ ↑ dimmed where there is nothing to answer one by one.
+      const members = ctx().model.currentQuestion?.members.length ?? 0
+      expect(band.querySelectorAll('.curate-band-key')[3].classList.contains('is-off')).toBe(members < 2)
+      const current = ctx().model.current
+      if (current?.kind === 'link' || current?.kind === 'unlink') {
+        // P is an element: its ring before its name, so its name is not read as a MAG's.
+        const element = [...band.querySelectorAll('.curate-band-name')].find((node) => node.textContent === 'P')
+        expect(element?.classList.contains('is-element')).toBe(true)
+        expect(element?.querySelector('.curate-swatch-element')).not.toBeNull()
+        expect(band.querySelector('.curate-band-price')?.textContent).toBe('no genome’s quality changes')
+      }
+      if (current?.kind === 'move' && current.genomes.length === 2) {
+        // y5 moved from X1 to Y: the genome taking it in first, worded; the one it leaves in numbers only, never summed with the first.
+        const rows = textsOf(band, '.curate-band-price-row')
+        expect(rows[0]).toMatch(/^Y complete \d+% → \d+% · redundant \d\.\d+ → \d\.\d+/)
+        expect(rows[1]).toMatch(/^X1 \d+% → \d+% · \d\.\d+ → \d\.\d+/)
+        seen.add('move seen')
+      }
+      key('ArrowRight')
+      await settle()
+    }
+    expect([...seen].some((key) => key.startsWith('host:'))).toBe(true)
+    expect(seen.has('move seen')).toBe(true)
+  })
+
+  it('says while Space is held that the pictures draw the binning as it would be, and its tally then', async () => {
+    const { ctx } = await open()
+    ;(document.querySelector('[data-mode="review"]') as HTMLButtonElement).click()
+    await settle()
+    const readout = document.querySelector('.curate-readout') as HTMLElement
+    expect(readout.querySelector('.curate-readout-pill')).toBeNull()
+    key(' ')
+    await settle()
+    expect(ctx().model.previewing).toBe(true)
+    // The head question merges X2 into X1: one MAG fewer, if taken.
+    expect(readout.querySelector('.curate-readout-pill')?.textContent).toBe('as it would be')
+    expect(readout.textContent).toBe('as it would beMAGs 4 → 3 · 1 element · 1 unbinned · if taken')
+    expect(document.querySelector('.curate-centre')?.classList.contains('is-previewing')).toBe(true)
+    expect(document.querySelectorAll('.curate-band-key')[4].classList.contains('is-held')).toBe(true)
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', bubbles: true }))
+    await settle()
+    expect(readout.querySelector('.curate-readout-pill')).toBeNull()
+    expect(document.querySelector('.curate-centre')?.classList.contains('is-previewing')).toBe(false)
+    expect(readout.textContent).toBe('4 MAGs · 1 element · 1 unbinned · as in the file')
+  })
+
+  it('docks the inspector’s toggle in the toolbar, named for the inspector, and words the modes by what they apply', async () => {
+    await open()
+    const toggle = document.querySelector('.curate-tools .stage-side-toggle') as HTMLButtonElement
+    expect(toggle).not.toBeNull()
+    // Not floating over the inspector's cards any more.
+    expect(document.querySelector('.stage-modal > .stage-side-toggle')).toBeNull()
+    expect(toggle.title).toBe('Hide the inspector')
+    toggle.click()
+    expect(document.querySelector('.stage-side')?.classList.contains('hidden')).toBe(true)
+    expect(toggle.title).toBe('Show the inspector')
+    expect(toggle.getAttribute('aria-label')).toBe('Show the inspector')
+    toggle.click()
+    expect(toggle.title).toBe('Hide the inspector')
+    // The shell's grip named for what it moves here, as the list's is.
+    expect(document.querySelector('.stage-side-grip')?.getAttribute('aria-label')).toBe('Resize the inspector')
+    expect(document.querySelector('.curate-list-grip')?.getAttribute('aria-label')).toBe('Resize the genome list')
+    expect(document.querySelector('.curate-modes-card .edit-card-head')?.textContent).toBe('apply suggestions')
+  })
+
+  it('prints Enter and Delete in the keys sheet as every other part prints them', async () => {
+    await open()
+    key('?')
+    const caps = textsOf(document.querySelector('.curate-keys') as HTMLElement, 'kbd')
+    expect(caps).toContain('⏎')
+    expect(caps.some((cap) => cap === 'Shift+⏎' || cap === '⇧⏎')).toBe(true)
+    expect(caps).toContain('⌫')
+    expect(caps).not.toContain('enter')
+    expect(caps).not.toContain('delete')
   })
 
   it('lets a picture’s Escape be the innermost thing: a press let go of, the selection kept', async () => {

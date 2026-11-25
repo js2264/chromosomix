@@ -21,9 +21,10 @@ import { readInk } from '../../edit/draw'
 import { POOL_COLOUR, POOL_RGBA, genomeColour, slotApart, slotOf, type GenomeColour } from '../colours'
 import { CurateModel, displayPercent, type Cancellable, type CurateChange, type CurateClient } from '../model'
 import { counted } from '../changes'
-import { sharedPrefix, shortName } from '../names'
-import { questionNumber } from '../questions'
-import { newlyDuplicated, priceLines, priceOf, priceVerdict } from '../price'
+import { contigShortName, sharedPrefix, shortName } from '../names'
+import { questionNumber, type Question } from '../questions'
+import { newlyDuplicated, priceOf, priceVerdict, redundancyText, type PriceRow } from '../price'
+import type { Quality } from '../quality'
 import type { Suggestion } from '../suggest'
 import { AUTO_THRESHOLD, LIKELY, OFFER_FLOOR } from '../method'
 import { watchTheme } from '../../ui/analysisPlots'
@@ -38,6 +39,7 @@ import type { CurationStore } from '../../state/curation'
 import { fmt } from '../../units'
 import type { CurationBaseResult, CurationFocusResult, CurationNetworkResult, CurationStateResult } from '../../worker/curateProtocol'
 import type { CurateContext, CurateData, CurateDragged, CurateDropTarget, CurateFrame, CuratePane } from './context'
+import { qualityShift, swatch, type Shift } from './cards/card'
 import { chooseStep } from './Chooser'
 import { GenomeList } from './GenomeList'
 
@@ -118,6 +120,12 @@ const NARROW = 720
 const TIGHT = 440
 /** A held drag rests this long on a target before the pictures draw it made. */
 const DROP_PREVIEW_MS = 300
+/** The MAGs the band's price prints, before it counts the rest; and the genomes a sum names, as the cards' (`cards/card.ts`). */
+const BAND_PRICED = 3
+const BAND_SUMMANDS = 3
+/** The band's price, whole, without its sums, then without its words: the first its line holds. */
+const BAND_FORMS = ['whole', 'unsummed', 'bare'] as const
+type BandForm = (typeof BAND_FORMS)[number]
 
 export class CurateStage {
   private readonly modal: Modal
@@ -130,6 +138,8 @@ export class CurateStage {
   private readonly status: HTMLElement
   private readonly paneArea: HTMLElement
   private readonly tabs: HTMLElement
+  /** The toolbar's tools at its right: tidy, undo, redo, the keys, and the inspector's toggle. */
+  private readonly tools: HTMLElement
   private readonly list: GenomeList
   private readonly panes: Record<PaneName, CuratePane & { closeUp?(): void; back?(): void }>
   private readonly cards: CurateCard[] = []
@@ -192,15 +202,17 @@ export class CurateStage {
       tab.append(el('span', { text: PANE_TAB[name] }), keyBadge(PANE_KEY[name], { class: 'kbd-inline' }))
       this.tabs.appendChild(tab)
     }
+    // Bordered as its neighbours are: a word among icons is a control all the same.
     const tidy = el('button', {
-      class: 'btn btn-quiet curate-tidy',
+      class: 'btn curate-tidy',
       text: 'tidy',
       title: 'Lay the genomes out again, the ones that meet densely side by side',
       attrs: { type: 'button' },
       on: { click: () => this.model.tidy() },
     })
     const keysButton = iconButton('keyboard', withKey('Keys on this stage', '?'), () => this.showKeys(), { class: 'btn btn-icon', size: 15 })
-    const toolbar = el('div', { class: 'curate-toolbar' }, this.tabs, el('div', { class: 'curate-tools' }, tidy, this.undoButton, this.redoButton, keysButton))
+    this.tools = el('div', { class: 'curate-tools' }, tidy, this.undoButton, this.redoButton, keysButton)
+    const toolbar = el('div', { class: 'curate-toolbar' }, this.tabs, this.tools)
     this.band = el('div', { class: 'curate-band hidden', attrs: { 'aria-live': 'polite' } })
     this.status = el('div', { class: 'curate-status hidden', attrs: { role: 'status' } })
     this.paneArea = el('div', { class: 'curate-panes' })
@@ -236,11 +248,13 @@ export class CurateStage {
       review: this.modeButton('review', this.modeTitles.review),
       auto: this.modeButton('auto', this.modeTitles.auto),
     }
+    // What the three modes decide, in the words a newcomer reads it by: who
+    // applies the suggestions — the reader, one question at a time, or auto.
     const modesCard = el(
       'section',
       { class: 'edit-card curate-modes-card' },
-      el('h3', { class: 'edit-card-head', text: 'who presses take' }),
-      el('div', { class: 'edit-modes', attrs: { role: 'group', 'aria-label': 'Who presses take' } }, this.modes.manual, this.modes.review, this.modes.auto),
+      el('h3', { class: 'edit-card-head', text: 'apply suggestions' }),
+      el('div', { class: 'edit-modes', attrs: { role: 'group', 'aria-label': 'Apply suggestions' } }, this.modes.manual, this.modes.review, this.modes.auto),
     )
     this.cardOf = {
       selection: props.parts.selection(this.ctx, {
@@ -284,6 +298,7 @@ export class CurateStage {
       onEscape: () => this.escape(),
       onClose: () => this.teardown(),
     })
+    this.dockSideToggle()
     this.place()
     if (typeof ResizeObserver !== 'undefined') {
       const observer = new ResizeObserver(() => this.resized())
@@ -574,93 +589,241 @@ export class CurateStage {
       return
     }
     this.band.classList.remove('hidden')
+    // Three lines whatever is asked, each one line long (`stage.css`): where
+    // the question stands, with the keys at the right; the question and how
+    // sure; its price. From one question to the next nothing under it moves.
     const current = model.current
+    const question = model.currentQuestion
+    const keys = this.bandKeys(question !== null && question.members.length > 1)
     if (current === null) {
       // A count that failed leaves the queue of the binning before the step: nothing is asked of it, and the status row counts again.
-      const words = model.stale ? 'review · weighing…' : model.error !== null ? 'review · the count failed: count again' : 'review · nothing left to answer'
-      this.band.replaceChildren(el('span', { class: 'curate-band-words', text: words }))
+      const words = model.stale ? 'weighing…' : model.error !== null ? 'the count failed: count again' : 'nothing left to answer'
+      this.band.replaceChildren(
+        el('div', { class: 'curate-band-head' }, el('span', { class: 'curate-band-at' }, el('span', { class: 'curate-band-where', text: 'review' })), keys),
+        el('div', { class: 'curate-band-question' }, el('span', { class: 'curate-band-words', text: words })),
+        el('div', { class: 'curate-band-price' }),
+      )
       return
     }
     const queue = model.queue()
-    const question = model.currentQuestion
     const likely = queue.filter((q) => q.confidence >= LIKELY).length
+    const less = queue.length - likely
     // Numbered as the pictures and the suggestions card number it (`curate/questions.ts`).
     const number = question === null ? 0 : (questionNumber(queue, question.key, LIKELY) ?? 0)
     const isLikely = question !== null && question.confidence >= LIKELY
     const member = model.member
-    const where = isLikely
-      ? `review · ${number} of ${fmt.int(likely)}${queue.length > likely ? ` · ${fmt.int(queue.length - likely)} less sure after` : ''}`
-      : `review · less sure · ${number} of ${fmt.int(queue.length - likely)}`
-    const keys = el(
+    const odds = `${Math.round(LIKELY * 100)}%`
+    // Where it stands, at the left of the keys: what does not fit whole there
+    // — the less likely ones after — goes, never cut (`stage.css`).
+    const at = el(
       'span',
-      { class: 'curate-band-keys' },
-      keyBadge('y', { class: 'kbd-inline' }),
-      ' take ',
-      keyBadge('n', { class: 'kbd-inline' }),
-      ' turn down ',
-      keyBadge('←', { class: 'kbd-inline' }),
-      keyBadge('→', { class: 'kbd-inline' }),
-      ' the others ',
-      ...(question !== null && question.members.length > 1 ? [keyBadge('↓', { class: 'kbd-inline' }), keyBadge('↑', { class: 'kbd-inline' }), ' one by one '] : []),
-      keyBadge(' ', { class: 'kbd-inline' }),
-      ' held: as it would be',
+      { class: 'curate-band-at' },
+      el('span', {
+        class: 'curate-band-where',
+        text: isLikely ? `${fmt.int(number)} of ${fmt.int(likely)} likely` : `${fmt.int(number)} of ${fmt.int(less)} less likely`,
+        title: isLikely
+          ? `Question ${fmt.int(number)} of the ${fmt.int(likely)} likely ones, at ${odds} or more, which come first${less > 0 ? `; ${fmt.int(less)} less likely ones come after them` : ''}.`
+          : `Question ${fmt.int(number)} of the ${fmt.int(less)} less likely ones, under ${odds}, which come after the likely ones.`,
+      }),
+      ...(member === null ? [] : [el('span', { class: 'curate-band-member', text: `· ${member.at + 1} of its ${member.of}`, title: `Member ${member.at + 1} of ${member.of}, answered alone.` })]),
+      ...(isLikely && less > 0 ? [el('span', { class: 'curate-band-after', text: `· ${fmt.int(less)} less likely after` })] : []),
     )
-    const line = el(
-      'div',
-      { class: 'curate-band-line' },
-      el('span', { class: 'curate-band-where', text: `${where}${member === null ? '' : ` · ${member.at + 1} of its ${member.of}`}` }),
-      el('span', { class: 'curate-band-words', text: `${this.shortWords(current)} · ${displayPercent(current.confidence)}%`, title: current.words }),
-      keys,
-    )
-    const price = el('div', { class: 'curate-band-price' })
-    const before = model.answer
-    const after = model.previewed
-    if (before !== null && after !== null && JSON.stringify(model.previewSteps) === JSON.stringify(current.steps)) {
-      const rows = priceOf(before, after).filter((row) => row.kind === 'mag')
-      if (rows.length === 0) price.append(el('span', { class: 'curate-band-price-none', text: current.kind === 'link' || current.kind === 'unlink' ? 'no genome’s quality changes' : 'no marker genes to price it by' }))
-      for (const row of rows.slice(0, 3)) {
-        const lines = priceLines(row)
-        const verdict = priceVerdict(row)
-        if (lines === null) continue
-        const twice = newlyDuplicated(row)
-        price.append(
-          el(
-            'span',
-            { class: `curate-band-price-row${verdict === 'demoted' ? ' is-warn' : verdict === 'promoted' ? ' is-ok' : ''}` },
-            el('span', { class: 'curate-band-price-name', text: this.ctx.shortName(row.id) }),
-            ` complete ${lines.completeness} · redundant ${lines.redundancy}`,
-            verdict === 'demoted' ? ` · ${row.gradeAfter === 'contaminated' ? 'contaminated' : 'a grade lower'}` : verdict === 'promoted' ? ' · high quality' : '',
-          ),
-        )
-        // What a rise in redundancy is made of, named: two organisms, or a
-        // contig the genome has the like of already.
-        if (twice.length > 0)
-          price.append(
-            el('span', {
-              class: 'curate-band-price-row is-warn',
-              text: `${twice.length === 1 ? 'a marker' : `${twice.length} markers`} twice: ${twice.slice(0, 4).join(', ')}${twice.length > 4 ? '…' : ''}`,
-              title: twice.join(', '),
-            }),
-          )
-      }
-      // Rows with no marker gene to price them by say so, rather than nothing.
-      if (price.childElementCount === 0) price.append(el('span', { class: 'curate-band-price-none', text: 'no marker genes to price it by' }))
-    } else price.append(el('span', { class: 'curate-band-price-none', text: 'pricing…' }))
-    this.band.replaceChildren(line, price)
+    const head = el('div', { class: 'curate-band-head' }, at, keys)
+    const ask = el('div', { class: 'curate-band-question' }, this.bandWords(current), el('span', { class: 'curate-band-confidence', text: `· ${displayPercent(current.confidence)}%` }))
+    this.band.replaceChildren(head, ask, this.bandPrice(current, 'whole'))
+    this.fitBandPrice()
   }
 
-  /** A suggestion's words with short names. */
-  private shortWords(s: Suggestion): string {
-    const answer = this.model.answer
-    if (answer === null) return s.words
-    let words = s.words
-    for (const g of s.genomes) {
-      const genome = answer.genomes[g]
-      if (genome === undefined) continue
-      const short = this.ctx.shortName(genome.id)
-      if (short !== genome.name) words = words.split(genome.name).join(short)
+  /**
+   * The price in the first form its line holds whole: every genome's sum and
+   * the words; each genome's own numbers alone (before → after, the summands
+   * in its title); the numbers alone, without their words — then cut short
+   * genome by genome (`stage.css`). Asked again when the centre is resized.
+   */
+  private fitBandPrice(): void {
+    const current = this.model.mode === 'review' ? this.model.current : null
+    let price = this.band.querySelector<HTMLElement>(':scope > .curate-band-price')
+    if (current === null || price === null) return
+    const cut = (node: HTMLElement): boolean => node.scrollWidth > node.clientWidth + 1
+    for (const form of BAND_FORMS) {
+      if (form !== price.dataset.form) {
+        const next = this.bandPrice(current, form)
+        price.replaceWith(next)
+        price = next
+      }
+      // Whole: nothing past the line's end, no genome's numbers cut short.
+      if (!cut(price) && ![...price.querySelectorAll<HTMLElement>('.curate-band-price-numbers')].some(cut)) return
     }
-    return words
+  }
+
+  /**
+   * The band's keys, the same five on every question so the line never moves:
+   * ↓ ↑ dimmed on a question of one member, and Space lit while it is held.
+   */
+  private bandKeys(members: boolean): HTMLElement {
+    // Its caps among its words — `hold ␣ to preview` —; a word `kept` stays
+    // where a narrow band lets the others go (`stage.css`).
+    const key = (title: string, parts: Array<string | { cap: string } | { kept: string }>, state = ''): HTMLElement => {
+      const node = el('span', { class: `curate-band-key${state === '' ? '' : ` ${state}`}`, title })
+      for (const part of parts) {
+        if (typeof part === 'string') node.append(el('span', { class: 'curate-band-key-word', text: part }))
+        else if ('cap' in part) node.append(keyBadge(part.cap, { class: 'kbd-inline' }))
+        else node.append(el('span', { class: 'curate-band-key-word is-kept', text: part.kept }))
+      }
+      return node
+    }
+    const held = this.space && this.model.previewing
+    return el(
+      'span',
+      { class: 'curate-band-keys' },
+      key('Take the question whole, one step to undo', [{ cap: 'y' }, 'take']),
+      key('Turn every member down', [{ cap: 'n' }, 'turn down']),
+      key('The previous or the next question', [{ cap: '←' }, { cap: '→' }, 'others']),
+      key(members ? 'Its members one by one, each answered alone' : 'One member: nothing to answer one by one', [{ cap: '↓' }, { cap: '↑' }, 'one by one'], members ? '' : 'is-off'),
+      key('Hold Space to draw every picture as the question would leave the binning', ['hold', { cap: ' ' }, 'to', { kept: 'preview' }], held ? 'is-held' : ''),
+    )
+  }
+
+  /**
+   * The band's price, one line: every MAG the question changes, before →
+   * after, in the cards' numbers (`cards/card.ts` → `priceList`: a genome's
+   * own, plus those it takes in whole — a move's target is not summed with
+   * the genome the contigs leave), the one taking contigs in first. Each
+   * number that moves the grade wears its colour (`qualityShift`), as the
+   * cards' do, and so do the name and the verdict; a row gives way where the
+   * line is full, the first last, whole in its title. Then one chip counting
+   * the markers it makes present twice, named in its title.
+   */
+  private bandPrice(current: Question, form: BandForm): HTMLElement {
+    const model = this.model
+    const price = el('div', { class: 'curate-band-price', attrs: { 'data-form': form } })
+    const before = model.answer
+    const after = model.previewed
+    if (before === null || after === null || JSON.stringify(model.previewSteps) !== JSON.stringify(current.steps)) {
+      price.append(el('span', { class: 'curate-band-price-none', text: 'pricing…' }))
+      return price
+    }
+    const contigsAfter = new Map(after.genomes.map((genome) => [genome.id, genome.contigs]))
+    const takesIn = (row: PriceRow): boolean => {
+      const self = row.from.find((from) => from.id === row.id)
+      return self === undefined || (contigsAfter.get(row.id) ?? 0) > self.contigs
+    }
+    const rows = priceOf(before, after)
+      .filter((row) => row.kind === 'mag' && row.after !== null)
+      .map((row, at) => ({ row, at, gains: takesIn(row), moved: priceVerdict(row) !== null }))
+      .sort((x, y) => Number(y.gains) - Number(x.gains) || Number(y.moved) - Number(x.moved) || x.at - y.at)
+      .map(({ row }) => row)
+    if (rows.length === 0) {
+      // A link moves no contig; a merge or a move of MAGs without markers has nothing to price it by.
+      price.append(el('span', { class: 'curate-band-price-none', text: current.kind === 'link' || current.kind === 'unlink' ? 'no genome’s quality changes' : 'no marker genes to price it by' }))
+      return price
+    }
+    const present = new Set(after.genomes.map((genome) => genome.id))
+    const twice: Array<{ name: string; markers: string[] }> = []
+    for (const [k, row] of rows.slice(0, BAND_PRICED).entries()) {
+      // The first row says what its numbers are; the next ones, in the same order, are numbers only.
+      price.append(this.bandPriceRow(row, present, form, k === 0))
+      // What a rise in redundancy is made of: two organisms, or a contig the
+      // genome has the like of already.
+      const markers = newlyDuplicated(row)
+      if (markers.length > 0) twice.push({ name: row.name, markers })
+    }
+    const rest = rows.slice(BAND_PRICED)
+    if (rest.length > 0) price.append(el('span', { class: 'curate-band-price-more', text: `+ ${fmt.int(rest.length)} more`, title: rest.map((row) => row.name).join(', ') }))
+    const count = new Set(twice.flatMap((t) => t.markers)).size
+    if (count > 0)
+      price.append(
+        el('span', {
+          class: 'edit-chip curate-band-twice',
+          text: `${count === 1 ? 'a marker' : `${fmt.int(count)} markers`} twice`,
+          title: `Present twice once taken, where they were once: ${twice.map((t) => `${t.name}: ${t.markers.join(', ')}`).join('; ')}`,
+        }),
+      )
+    return price
+  }
+
+  /**
+   * One MAG's price in the band: `00700_00001 complete 84% + 12% → 84% ·
+   * redundant 1.04 + 1.00 → 1.06 · a grade lower`, summed as the cards sum
+   * it — the genome itself, then the genomes it takes in whole that bring a
+   * marker of the set, three at most and how many more; in the `unsummed`
+   * form its own numbers alone, before → after. Not `worded`, or in the
+   * `bare` form, the numbers without their words (`12% → 7% · 1.16 →
+   * 1.00`). The title is always whole. The verdict stands apart from the
+   * numbers, which give way before it does: a row cut short still says what
+   * becomes of the grade.
+   */
+  private bandPriceRow(row: PriceRow, present: ReadonlySet<string>, form: BandForm, worded: boolean): HTMLElement {
+    const q = row.after as Quality
+    const parts = row.from.filter((from) => from.id === row.id || !present.has(from.id))
+    const telling = parts.filter((from, k): from is PriceRow['from'][number] & { quality: Quality } => from.quality !== null && (k === 0 || from.quality.weightedCompleteness > 0)).slice(0, BAND_SUMMANDS)
+    const more = parts.length - telling.length
+    const own = parts[0]?.quality ?? null
+    const summed = (pick: (quality: Quality) => number, print: (x: number) => string): string =>
+      telling.length === 0 ? print(pick(q)) : `${telling.map((from) => print(pick(from.quality))).join(' + ')}${more > 0 ? ` + ${fmt.int(more)} more` : ''} → ${print(pick(q))}`
+    const sum = (pick: (quality: Quality) => number, print: (x: number) => string): string =>
+      form === 'whole' ? summed(pick, print) : own === null ? print(pick(q)) : `${print(pick(own))} → ${print(pick(q))}`
+    const shift = qualityShift(parts[0]?.quality ?? null, q)
+    const verdict = priceVerdict(row)
+    const word = verdict === 'demoted' ? (row.gradeAfter === 'contaminated' ? 'contaminated' : 'a grade lower') : verdict === 'promoted' ? 'high quality' : null
+    const marked = (shifted: Shift): string => (shifted === null ? '' : ` is-${shifted}`)
+    const completeness = sum((x) => x.weightedCompleteness, (x) => fmt.pct(x, 0))
+    const redundancy = sum((x) => x.weightedRedundancy, redundancyText)
+    const named = worded && form !== 'bare'
+    const numbers = el(
+      'span',
+      { class: 'curate-band-price-numbers' },
+      el('span', { class: `curate-band-price-name${marked(verdict)}`, text: this.ctx.shortName(row.id) }),
+      ' ',
+      el('span', { class: `curate-band-price-number${marked(shift.completeness)}`, text: named ? `complete ${completeness}` : completeness }),
+      ' · ',
+      el('span', { class: `curate-band-price-number${marked(shift.redundancy)}`, text: named ? `redundant ${redundancy}` : redundancy }),
+    )
+    const whole = `${row.name}: complete ${summed((x) => x.weightedCompleteness, (x) => fmt.pct(x, 0))} · redundant ${summed((x) => x.weightedRedundancy, redundancyText)}${word === null ? '' : ` · ${word}`}`
+    const node = el('span', { class: 'curate-band-price-row', title: whole }, numbers)
+    if (word !== null) node.append(el('span', { class: 'curate-band-price-grade' }, ' · ', el('span', { class: `curate-band-price-verdict${marked(verdict)}`, text: word })))
+    return node
+  }
+
+  /**
+   * A question's words as the list names what they name: each genome by its
+   * short name after its swatch — a MAG's disc, an element's ring, in its
+   * colour — so an element's bare number (`00002`) is not read as a MAG
+   * family's; a contig by an assembler's name without its length (`NODE_622`
+   * for `NODE_622_len_49741`). The whole words are the title's.
+   */
+  private bandWords(s: Suggestion): HTMLElement {
+    const node = el('span', { class: 'curate-band-words', title: s.words })
+    const answer = this.model.answer
+    const swaps = new Map<string, () => Node>()
+    for (const g of s.genomes) {
+      const genome = answer?.genomes[g]
+      if (genome === undefined || !s.words.includes(genome.name)) continue
+      swaps.set(genome.name, () =>
+        el('span', { class: `curate-band-name is-${genome.kind}` }, swatch(this.ctx.colourOf(genome.id).css, genome.kind), this.ctx.shortName(genome.id)),
+      )
+    }
+    const names = this.props.store.file.names
+    for (const c of s.contigs) {
+      const name = names[c]
+      if (name === undefined || swaps.has(name) || !s.words.includes(name)) continue
+      const short = contigShortName(name)
+      if (short !== name) swaps.set(name, () => document.createTextNode(short))
+    }
+    if (swaps.size === 0) {
+      node.textContent = s.words
+      return node
+    }
+    // Whole names only, the longest first: `NODE_1_len_100` is not the start of `NODE_1_len_1000`.
+    const pattern = [...swaps.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp).join('|')
+    const pieces = s.words.split(new RegExp(`(?<![\\w.])(${pattern})(?![\\w.])`))
+    // Split on a pattern with one group, the names are at the odd places.
+    pieces.forEach((piece, k) => {
+      if (piece === '') return
+      const swap = k % 2 === 1 ? swaps.get(piece) : undefined
+      node.append(swap === undefined ? piece : swap())
+    })
+    return node
   }
 
   /** In review: price the current suggestion, frame it, and put the large picture where its evidence is. */
@@ -690,10 +853,22 @@ export class CurateStage {
   /** The question review framed last. */
   private framedKey: string | null = null
 
-  /** The readout: what a part said, the drag's words, or the curation's tally. */
+  /**
+   * The readout: what a part said, the drag's words, or the curation's tally.
+   * While the pictures draw a preview — Space held in review, a drop or a
+   * suggestion's row resting — it says so first, a pill, and its tally is the
+   * binning's as it would be against the binning as it is (`MAGs 50 → 49 ·
+   * … · if taken`); the pictures stand in a frame of the accent.
+   */
   private paintReadout(): void {
+    const previewing = this.model.previewing
+    this.centre.classList.toggle('is-previewing', previewing)
+    this.readout.classList.toggle('is-previewing', previewing)
+    const pill = previewing
+      ? [el('span', { class: 'curate-readout-pill', text: 'as it would be', title: 'Every picture draws the binning as the question or the drop would leave it; nothing is made until it is taken.' })]
+      : []
     if (this.sayHeld !== null) {
-      this.readout.textContent = this.sayHeld
+      this.readout.replaceChildren(...pill, this.sayHeld)
       this.readout.classList.remove('is-summary')
       return
     }
@@ -703,18 +878,29 @@ export class CurateStage {
       this.readout.textContent = 'weighing…'
       return
     }
-    const mags = answer.genomes.filter((genome) => genome.kind === 'mag')
-    const elements = answer.genomes.length - mags.length
-    let pooled = 0
-    answer.genomeOf.forEach((g) => {
-      if (g < 0) pooled++
-    })
+    const counts = (of: CurationStateResult): { mags: number; elements: number; pooled: number } => {
+      const mags = of.genomes.filter((genome) => genome.kind === 'mag').length
+      let pooled = 0
+      of.genomeOf.forEach((g) => {
+        if (g < 0) pooled++
+      })
+      return { mags, elements: of.genomes.length - mags, pooled }
+    }
+    const now = counts(answer)
+    const was = (to: number, from: number, one: string, many: string): string => (to === from ? counted(to, one, many) : `${many} ${fmt.int(from)} → ${fmt.int(to)}`)
+    const shown = this.model.shown
+    if (previewing && shown !== null) {
+      // As it would be, against the binning as it is.
+      const would = counts(shown)
+      const parts = [was(would.mags, now.mags, 'MAG', 'MAGs'), was(would.elements, now.elements, 'element', 'elements'), was(would.pooled, now.pooled, 'unbinned', 'unbinned'), 'if taken']
+      this.readout.replaceChildren(...pill, parts.join(' · '))
+      return
+    }
     const tally = this.model.tally()
     const file = this.model.fileAnswer
-    const fileMags = file?.genomes.filter((genome) => genome.kind === 'mag').length ?? mags.length
+    const fileMags = file?.genomes.filter((genome) => genome.kind === 'mag').length ?? now.mags
     const fileElements = (file?.genomes.length ?? answer.genomes.length) - fileMags
-    const was = (now: number, then: number, one: string, many: string): string => (now === then ? counted(now, one, many) : `${many} ${fmt.int(then)} → ${fmt.int(now)}`)
-    const parts = [was(mags.length, fileMags, 'MAG', 'MAGs'), was(elements, fileElements, 'element', 'elements'), `${fmt.int(pooled)} unbinned`]
+    const parts = [was(now.mags, fileMags, 'MAG', 'MAGs'), was(now.elements, fileElements, 'element', 'elements'), `${fmt.int(now.pooled)} unbinned`]
     if (tally === null || tally.steps === 0) parts.push('as in the file')
     else {
       parts.push(counted(tally.steps, 'step'))
@@ -777,6 +963,11 @@ export class CurateStage {
     this.centre.classList.toggle('is-narrow', width > 0 && width < NARROW)
     this.centre.classList.toggle('is-tight', width > 0 && width < TIGHT)
     for (const pane of Object.values(this.panes)) pane.resize()
+    // The band's price in the form its new width holds, from the whole again.
+    const price = this.band.querySelector<HTMLElement>(':scope > .curate-band-price')
+    const current = this.model.mode === 'review' ? this.model.current : null
+    if (price !== null && current !== null && price.dataset.form !== 'whole') price.replaceWith(this.bandPrice(current, 'whole'))
+    this.fitBandPrice()
   }
 
   private wireGrip(grip: HTMLElement, column: HTMLElement): void {
@@ -839,6 +1030,35 @@ export class CurateStage {
           ? [c.suggestions, c.selection, c.history, c.export, c.about]
           : [c.suggestions, c.history, c.selection, c.export, c.about]
     for (const card of order) this.side.appendChild(card.element)
+  }
+
+  /**
+   * The inspector's toggle, docked at the toolbar's end beside the keys: the
+   * dialog's shell floats it over the side's foot, where it sat on whatever
+   * card was scrolled under it. Moved, not rebuilt — its press is the shell's —
+   * and named, with the shell's grip, for what they move here: the inspector.
+   */
+  private dockSideToggle(): void {
+    const shell = this.root.closest('.stage-modal')
+    if (shell === null) return
+    const children = [...shell.children] as HTMLElement[]
+    const toggle = children.find((node) => node.classList.contains('stage-side-toggle'))
+    const side = children.find((node) => node.classList.contains('stage-side'))
+    const grip = children.find((node) => node.classList.contains('stage-side-grip'))
+    if (grip !== undefined) {
+      grip.title = 'Drag to make the inspector wider or narrower'
+      grip.setAttribute('aria-label', 'Resize the inspector')
+    }
+    if (toggle === undefined || side === undefined) return
+    this.tools.appendChild(toggle)
+    const name = (): void => {
+      const words = side.classList.contains('hidden') ? 'Show the inspector' : 'Hide the inspector'
+      toggle.title = words
+      toggle.setAttribute('aria-label', words)
+    }
+    name()
+    // After the shell's own listener, which names it for its settings.
+    toggle.addEventListener('click', name)
   }
 
   private frameSuggestion(s: Suggestion): void {
@@ -1269,13 +1489,14 @@ export class CurateStage {
       [['y', 'n'], 'take or turn down the question in review'],
       [['←', '→'], 'the previous or next question, in review'],
       [['↓', '↑'], 'a question’s members one by one, in review'],
-      [[' '], 'held, in review: the binning as it would be'],
+      [[' '], 'hold, in review, to preview: every picture as the question would leave the binning'],
       [['m'], 'merge the selected genomes; move the selected contigs to…'],
       [['l'], 'link the selected element to the selected MAG'],
       [['b', 'e'], 'a new MAG, a new element, of the selected contigs'],
-      [['delete'], 'unbin the contigs, dissolve the genome, or unlink'],
+      [['⌫'], 'unbin the contigs, dissolve the genome, or unlink (Backspace or Delete)'],
       [['r', 'F2'], 'rename the selected genome'],
-      [['enter'], 'the contigs of the selected genomes, close up'],
+      // Printed as every other part prints them: the contact map's close-up, the selection card, the chooser.
+      [['⏎', 'shift+⏎'], 'the contigs of the selected genomes close up, and back'],
       [['/'], 'filter the list'],
       [['mod+z', 'mod+shift+z'], 'undo, redo'],
       [['0', '+', '-'], 'fit and zoom the picture under the pointer'],
@@ -1304,4 +1525,9 @@ export class CurateStage {
     this.model.dispose()
     this.props.onClose()
   }
+}
+
+/** A name as a pattern that finds it literally. */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

@@ -105,42 +105,95 @@
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0 0.55rem 0 0.35rem;
+  /* A margin at the left for the marks a row wears — the selection's rule,
+     the review's rule and disc —, clear of the chevron. */
+  padding: 0 0.55rem 0 0.7rem;
   white-space: nowrap;
   cursor: default;
   user-select: none;
 }
 
 .curate-row:hover {
-  background: var(--bg-sunken);
+  background-color: var(--bg-sunken);
 }
 
 .curate-row.is-lit {
-  background: var(--bg-muted);
+  background-color: var(--bg-muted);
+}
+
+/* What the question in review names, genomes or contigs: a tint, a broken
+   rule down the margin and a disc in it — the selection's are a fuller fill
+   and a whole rule, so one row can say both, and the disc says it whichever
+   wins the fill. */
+.curate-row.is-current {
+  background-color: color-mix(in srgb, var(--accent-soft) 60%, var(--bg));
+}
+.curate-row.is-current:not(.is-selected):is(:hover, .is-lit) {
+  background-color: color-mix(in srgb, var(--accent-soft) 85%, var(--bg-muted));
+}
+.curate-row.is-current::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: repeating-linear-gradient(to bottom, var(--accent) 0 4px, transparent 4px 7px);
+}
+.curate-row.is-current::after {
+  content: '';
+  position: absolute;
+  left: 0.3rem;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 /* A selected row: a fill and a rule, its text as it was (§26.3). */
 .curate-row.is-selected {
-  background: var(--accent-soft);
+  background-color: var(--accent-soft);
   box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* A genome holding selected contigs — a lasso's, a filter's, out of sight
+   in its closed row —: the selection's rule at half its height, and how many
+   in the selection's colours beside its name, in the room its length gives
+   up (the length is in the row's title, as a changed row's is); the pool's
+   head says its own. */
+.curate-row-genome.has-held {
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-size: 3px 50%;
+  background-position: left center;
+  background-repeat: no-repeat;
+}
+.curate-row-genome.has-held .curate-row-length {
+  display: none;
+}
+.curate-row-held {
+  display: none;
+  flex: 0 0 auto;
+  margin-right: auto;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+.curate-row.has-held > .curate-row-held {
+  display: block;
+}
+/* Beside a change chip, the chip keeps the room that pushes the numbers right. */
+.curate-row.has-change > .curate-row-held {
+  margin-right: 0;
 }
 
 .curate-row.is-active {
   outline: 1px dashed var(--accent);
   outline-offset: -2px;
-}
-
-/* What the suggestion in review names: its disc in the margin. */
-.curate-row.is-current::before {
-  content: '';
-  position: absolute;
-  left: 1px;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  margin-top: -3px;
-  border-radius: 50%;
-  background: var(--accent);
 }
 
 .curate-row-section,
@@ -167,17 +220,24 @@
 
 .curate-section-chevron {
   display: inline-flex;
-  width: 1rem;
+  width: 0.85rem;
   justify-content: center;
 }
+/* The prefix gives way from its end, its `…` kept outside the part that
+   shrinks: `MetaTOR_MGE_…`, cut short `MetaTOR_M…`, never `MetaTOR_MGE…`. */
 .curate-section-prefix {
+  display: inline-flex;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   font-weight: 400;
   letter-spacing: 0;
   text-transform: none;
   color: var(--text-faint);
+}
+.curate-section-prefix-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 .curate-section-count {
   margin-left: auto;
@@ -204,7 +264,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1rem;
+  width: 0.85rem;
   height: 1rem;
   padding: 0;
   border: 0;

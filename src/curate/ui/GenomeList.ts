@@ -22,7 +22,8 @@ import { changeChip, changeWords, counted, curationChanges, type CurationChanges
 import { redundancyText } from '../price'
 import { contigShortName } from '../names'
 import { listRows, readFilter, rowKey, type GenomeSort, type ListChip, type ListRow, type ListRows, type ListSection, type PoolSort } from '../listRows'
-import type { CurateChange } from '../model'
+import { affinityText } from '../method'
+import { displayPercent, type CurateChange } from '../model'
 import type { Suggestion } from '../suggest'
 import type { CurationStateResult } from '../../worker/curateProtocol'
 import type { CurateContext, CurateFrame } from './context'
@@ -85,6 +86,13 @@ export class GenomeList {
   private readonly open = new Set<string>()
   /** Genomes the filter opened on their contigs and the reader closed; forgotten with the filter. */
   private readonly closed = new Set<string>()
+  /**
+   * Genomes a frame opened on the contigs it shows — review's question, a
+   * card's suggestion —, closed again by the next frame and by a change of
+   * mode, as the filter's openings close with the filter; the reader's own
+   * once they open or close one themselves.
+   */
+  private readonly framed = new Set<string>()
   private filterText = ''
   private readonly folded = new Set<ListSection>()
   private genomeSort: GenomeSort = 'order'
@@ -180,7 +188,7 @@ export class GenomeList {
             event.stopPropagation()
           }
         },
-        pointerleave: () => this.ctx.model.hover(null),
+        pointerleave: () => this.leave(),
       },
     })
     this.scroller.appendChild(this.spacer)
@@ -259,9 +267,14 @@ export class GenomeList {
 
   update(change: CurateChange): void {
     switch (change) {
+      case 'mode':
+        // Review left, or entered: what its frames opened closes (the next
+        // question's frame opens its own).
+        this.closeFramed()
+        this.recompute()
+        return
       case 'state':
       case 'current':
-      case 'mode':
         this.recompute()
         return
       case 'selection':
@@ -467,6 +480,7 @@ export class GenomeList {
     // A head like the one it stands for: a press folds it, a drop on it lands there, not on the row it covers.
     this.sticky.dataset.dropSection = head.section
     this.stickySection = head.section
+    this.markHeld(this.sticky, head.section === 'pool' ? this.heldCounts().pool : 0, 0)
     this.sticky.classList.remove('hidden')
   }
 
@@ -518,21 +532,31 @@ export class GenomeList {
   private sectionContent(row: Extract<ListRow, { kind: 'section' }>): HTMLElement[] {
     const chevron = icon(row.open ? 'chevron-down' : 'chevron-right', { size: 14, class: 'curate-row-chevron' })
     const word = SECTION_WORD[row.section]
-    const count =
-      row.section === 'pool'
-        ? row.shown !== row.contigs
-          ? `${fmt.int(row.shown)} of ${counted(row.contigs, 'contig')}`
-          : `${counted(row.contigs, 'contig')} · ${fmt.bp(row.length)}`
-        : `${fmt.int(row.genomes)}${row.shown !== row.genomes ? ` · ${fmt.int(row.shown)} shown` : ''}`
+    // One form for every head: the whole, or what is shown of it — `3 of 50`,
+    // `0 of 12,785 contigs` — the pool's in contigs, a genome section's in its own word.
+    const pool = row.section === 'pool'
+    const total = pool ? row.contigs : row.genomes
+    const count = row.shown !== total ? `${fmt.int(row.shown)} of ${pool ? counted(total, 'contig') : fmt.int(total)}` : pool ? `${counted(total, 'contig')} · ${fmt.bp(row.length)}` : fmt.int(total)
     const title = el('span', { class: 'curate-section-title', text: word })
-    const countNode = el('span', { class: 'curate-section-count', text: count })
+    const countNode = el('span', {
+      class: 'curate-section-count',
+      text: count,
+      ...(row.shown !== total ? { title: `${fmt.int(row.shown)} of the ${pool ? counted(total, 'contig') : `${fmt.int(total)} ${word}`} shown: the filter and the chips hide the rest.` } : {}),
+    })
     const holder = el('span', { class: 'curate-section-chevron' })
     holder.appendChild(chevron)
-    // The prefix every name of the section shares, printed once here.
-    const prefix = row.section === 'pool' ? '' : this.ctx.prefixOf(row.section === 'mags' ? 'mag' : 'element')
-    const prefixNode = prefix === '' ? null : el('span', { class: `curate-section-prefix${row.section === 'mags' ? ' is-mags' : ''}`, text: `${prefix}…`, title: `Every name here begins ${prefix}` })
+    // The prefix every name of the section shares, printed once here: the
+    // `…` stands outside the part that gives way, so a prefix cut short
+    // still says it is one and keeps what it shows of its own.
+    const prefix = pool ? '' : this.ctx.prefixOf(row.section === 'mags' ? 'mag' : 'element')
+    const prefixNode =
+      prefix === ''
+        ? null
+        : el('span', { class: `curate-section-prefix${row.section === 'mags' ? ' is-mags' : ''}`, title: `Every name here begins ${prefix}` }, el('span', { class: 'curate-section-prefix-text', text: prefix }), '…')
     if (prefix !== '') title.title = `Every name here begins ${prefix}`
-    if (row.section !== 'mags') return prefixNode === null ? [holder, title, countNode] : [holder, title, prefixNode, countNode]
+    // What a selection of contigs holds of the pool, filled by `restyle`.
+    const held = pool ? el('span', { class: 'edit-chip curate-row-held' }) : null
+    if (row.section !== 'mags') return [holder, title, ...(prefixNode === null ? [] : [prefixNode]), ...(held === null ? [] : [held]), countNode]
     // The MAGs' numbers named, in their order on a row: the count beside the title, the legend at the right.
     countNode.classList.add('is-beside')
     const legend = el('span', {
@@ -573,6 +597,8 @@ export class GenomeList {
       disclosure,
       swatch,
       name,
+      // How many of its contigs are selected, a lasso's among them: filled by `restyle`.
+      el('span', { class: 'edit-chip curate-row-held' }),
       chip === null ? null : el('span', { class: 'edit-chip curate-change', text: chip, title: changeWords(change) }),
       el('span', { class: 'curate-row-length', text: fmt.bp(genome.length) }),
     ]
@@ -667,7 +693,12 @@ export class GenomeList {
     return this.derived?.answer.genomes.some((genome) => genome.id === id) === true ? this.ctx.shortName(id) : id
   }
 
-  /** Selection, hover, the keyboard's row and the review's marks, on the rows drawn: classes only. */
+  /**
+   * Selection, hover, the keyboard's row and the review's marks, on the rows
+   * drawn: classes only, but for the count a genome's row — and the pool's
+   * head — says of the contigs selected in it, where they are many and
+   * mostly out of sight (a lasso of 270 contigs from 33 genomes).
+   */
   private restyle(): void {
     const model = this.ctx.model
     const selection = model.selection
@@ -678,6 +709,7 @@ export class GenomeList {
     const answer = model.answer
     const currentGenomes = new Set(current === null || answer === null ? [] : current.genomes.map((g) => answer.genomes[g]?.id))
     const currentContigs = new Set(current?.contigs ?? [])
+    const held = this.heldCounts()
     for (const [key, node] of this.drawn) {
       const genome = node.dataset.genome
       const contig = node.dataset.contig === undefined ? -1 : Number(node.dataset.contig)
@@ -689,12 +721,57 @@ export class GenomeList {
       node.classList.toggle('is-active', key === this.active)
       if (key === this.active) this.scroller.setAttribute('aria-activedescendant', node.id)
       node.classList.toggle('is-current', (genome !== undefined && currentGenomes.has(genome)) || (contig >= 0 && currentContigs.has(contig)))
+      if (genome !== undefined) {
+        const n = held.genomes.get(genome) ?? 0
+        this.markHeld(node, n, n > 0 ? (answer?.genomes.find((g) => g.id === genome)?.contigs ?? 0) : 0)
+      } else if (key === 's:pool') this.markHeld(node, held.pool, 0)
     }
+    if (this.stickySection === 'pool') this.markHeld(this.sticky, held.pool, 0)
+  }
+
+  /** The selected contigs each genome holds, by id, and the pool's: counted once a selection and an answer. */
+  private held: { contigs: readonly number[]; answer: CurationStateResult | null; genomes: Map<string, number>; pool: number } | null = null
+
+  private heldCounts(): { genomes: Map<string, number>; pool: number } {
+    const contigs = this.ctx.model.selection.contigs
+    const answer = this.ctx.model.answer
+    if (this.held !== null && this.held.contigs === contigs && this.held.answer === answer) return this.held
+    const genomes = new Map<string, number>()
+    let pool = 0
+    if (answer !== null) {
+      for (const c of contigs) {
+        const g = answer.genomeOf[c] ?? -1
+        if (g < 0) pool++
+        else {
+          const id = answer.genomes[g].id
+          genomes.set(id, (genomes.get(id) ?? 0) + 1)
+        }
+      }
+    }
+    this.held = { contigs, answer, genomes, pool }
+    return this.held
+  }
+
+  /**
+   * A row's count of selected contigs and its half rule; nothing where it
+   * holds none. The count alone, in the selection's colours — `12 selected`
+   * would not fit beside a MAG's numbers —, the words in its title.
+   */
+  private markHeld(node: HTMLElement, n: number, of: number): void {
+    node.classList.toggle('has-held', n > 0)
+    const chip = node.querySelector<HTMLElement>(':scope > .curate-row-held')
+    if (chip === null) return
+    const text = n > 0 ? fmt.int(n) : ''
+    if (chip.textContent !== text) chip.textContent = text
+    chip.title = n === 0 ? '' : of > 0 ? `${fmt.int(n)} of its ${counted(of, 'contig')} selected` : `${counted(n, 'contig')} of the pool selected`
   }
 
   // -------------------------------------------------------------------------
   // The hand.
   // -------------------------------------------------------------------------
+
+  /** What the list said on the readout last: a row under the pointer. */
+  private said: string | null = null
 
   private hoverRow(row: ListRow): void {
     if (this.ctx.dragging !== null) return
@@ -704,6 +781,84 @@ export class GenomeList {
       const g = answer?.genomeOf[row.contig] ?? -1
       this.ctx.model.hover(g < 0 || answer === null ? null : answer.genomes[g].id, row.contig)
     } else this.ctx.model.hover(null)
+    // The row's whole name and its numbers on the readout, as a picture's hover says them.
+    this.say(this.rowWords(row))
+  }
+
+  /** The pointer off the list: nothing lit, and what it said let go of — not a drag's words, which are the stage's. */
+  private leave(): void {
+    if (this.ctx.dragging !== null) {
+      this.said = null
+      return
+    }
+    this.ctx.model.hover(null)
+    this.say(null)
+  }
+
+  private say(words: string | null): void {
+    if (words === this.said) return
+    this.said = words
+    this.ctx.say(words)
+  }
+
+  /**
+   * A row in words: a genome's whole name, length, contigs and numbers — or
+   * its hosts —, what the curation changed of it, its selected contigs and
+   * the suggestions on offer naming it; a contig's whole name, length, GC,
+   * genome, how densely it meets its own and the MAG it meets most, and the
+   * suggestion that would move it. `null` for a head.
+   */
+  private rowWords(row: ListRow): string | null {
+    const derived = this.derived
+    if (derived === null || row.kind === 'section') return null
+    const answer = derived.answer
+    if (row.kind === 'genome') {
+      const genome = answer.genomes[row.genome]
+      if (genome === undefined) return null
+      const parts = [genome.name, fmt.bp(genome.length), counted(genome.contigs, 'contig')]
+      if (genome.kind === 'mag') {
+        const q = genome.quality
+        const g = q === null ? null : grade(q.weightedCompleteness, q.weightedRedundancy)
+        if (q === null) parts.push('no marker genes')
+        else parts.push(`${fmt.pct(q.weightedCompleteness, 0)} complete`, `${redundancyText(q.weightedRedundancy)} redundant`, ...(g === null ? [] : [g === 'contaminated' ? 'contaminated' : `${g} quality`]))
+      } else {
+        const hosts = answer.links.filter((link) => link.element === genome.id).map((link) => this.ctx.shortName(link.mag))
+        parts.push(hosts.length === 0 ? 'an element, no host' : `an element, hosted by ${hosts.join(', ')}`)
+      }
+      // What the curation changed of it, the change chip in words.
+      const change = derived.changes.genomes[row.genome]
+      if (change?.created === true) parts.push('made by the curation')
+      else if (change !== undefined) {
+        if (change.absorbed.length > 0) parts.push(`merged with ${change.absorbed.join(', ')}`)
+        if (change.gained > 0 || change.lost > 0) parts.push(`${counted(change.gained, 'contig')} in, ${fmt.int(change.lost)} out`)
+        if (change.renamedFrom !== null) parts.push(`${change.renamedFrom} in the file`)
+        if (change.retypedFrom !== null) parts.push(change.retypedFrom === 'element' ? 'an element in the file' : 'a MAG in the file')
+      }
+      const held = this.heldCounts().genomes.get(genome.id) ?? 0
+      if (held > 0) parts.push(`${fmt.int(held)} of its contigs selected`)
+      const offers = derived.suggested[row.genome]
+      if (offers > 0) parts.push(`${counted(offers, 'suggestion')} on offer`)
+      return parts.join(' · ')
+    }
+    const { file, gc } = this.ctx.data
+    const c = row.contig
+    const parts = [file.names[c] ?? `#${c}`, fmt.bp(file.lengths[c] ?? 0)]
+    if (gc !== null && Number.isFinite(gc[c])) parts.push(`GC ${gc[c].toFixed(0)}%`)
+    const g = answer.genomeOf[c] ?? -1
+    parts.push(g < 0 ? 'unbinned' : `in ${this.ctx.shortName(answer.genomes[g].id)}`)
+    const was = derived.changes.fileGenomeOf[c]
+    const now = g < 0 ? null : answer.genomes[g].id
+    if (was !== now) parts.push(was === null ? 'from the pool' : `from ${this.fileName(was)}`)
+    if (answer.counted) {
+      const own = answer.contigs.ownAffinity[c]
+      if (own !== undefined && Number.isFinite(own)) parts.push(`own affinity ${affinityText(own)}`)
+      const best = answer.contigs.best[c] ?? -1
+      if (best >= 0 && answer.genomes[best] !== undefined) parts.push(`best ${this.ctx.shortName(answer.genomes[best].id)}, affinity ${affinityText(answer.contigs.bestAffinity[c])}`)
+    }
+    const offer = derived.best.get(c)
+    const target = offer === undefined ? undefined : answer.genomes[offer.genomes[0]]
+    if (offer !== undefined && target !== undefined) parts.push(`${offer.kind === 'recruit' ? 'recruit into' : 'move to'} ${this.ctx.shortName(target.id)} ${displayPercent(offer.confidence)}%`)
+    return parts.join(' · ')
   }
 
   private pointerDown(event: PointerEvent, row: ListRow): void {
@@ -801,6 +956,8 @@ export class GenomeList {
   }
 
   private toggleOpen(id: string): void {
+    // Opened or closed by the reader, it is theirs: no frame closes it.
+    this.framed.delete(id)
     const row = this.rows.rows.find((r) => r.kind === 'genome' && r.id === id)
     // A row the filter shows on its hits opens and closes for as long as the
     // filter stands, whatever the reader had open before it.
@@ -919,11 +1076,20 @@ export class GenomeList {
     this.schedule()
   }
 
-  /** Show what a pane asked: open the genomes of contigs asked, and scroll to the first. */
+  /**
+   * Show what a pane asked: open the genomes of contigs asked, and scroll to
+   * the first. What the last frame opened closes first, unless this one shows
+   * it too, so a pass through review leaves the list as the reader had it.
+   */
   private frameOn(target: CurateFrame): void {
     const answer = this.ctx.model.answer
     if (answer === null) return
-    let opened = false
+    const shows = new Set<string>()
+    for (const c of target.contigs ?? []) {
+      const g = answer.genomeOf[c]
+      if (g >= 0) shows.add(answer.genomes[g].id)
+    }
+    let opened = this.closeFramed(shows)
     const unfold = (section: ListSection): void => {
       if (!this.folded.has(section)) return
       this.folded.delete(section)
@@ -936,8 +1102,10 @@ export class GenomeList {
     }
     for (const c of target.contigs ?? []) {
       const g = answer.genomeOf[c]
+      // One the reader has open stays theirs; one this frame opens is the frame's.
       if (g >= 0 && !this.open.has(answer.genomes[g].id)) {
         this.open.add(answer.genomes[g].id)
+        this.framed.add(answer.genomes[g].id)
         opened = true
       }
       unfold(g < 0 ? 'pool' : sectionOf(g))
@@ -949,6 +1117,20 @@ export class GenomeList {
     this.active = rowKey(this.rows.rows[k])
     this.activeAt = k
     this.reveal(k)
+  }
+
+  /**
+   * Close what frames opened, but what `keep` names (the next frame's): `true`
+   * when a genome closed. The rows are the caller's to count again.
+   */
+  private closeFramed(keep: ReadonlySet<string> = new Set()): boolean {
+    let closed = false
+    for (const id of [...this.framed]) {
+      if (keep.has(id)) continue
+      this.framed.delete(id)
+      if (this.open.delete(id)) closed = true
+    }
+    return closed
   }
 
   // -------------------------------------------------------------------------
