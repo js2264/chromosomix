@@ -16,7 +16,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { fiedlerSplit, leadingEigenpairs } from '@/analysis/linalg'
+import { fiedlerSplit, leadingEigenpairs, normalizedFiedlerSplit } from '@/analysis/linalg'
 
 function random(seed: number): () => number {
   let state = seed >>> 0
@@ -146,5 +146,73 @@ describe('fiedlerSplit, through the same solver', () => {
     expect(new Set(side.slice(0, 6)).size).toBe(1)
     expect(new Set(side.slice(6)).size).toBe(1)
     expect(side[0]).not.toBe(side[6])
+  })
+})
+
+/**
+ * `n` vertices along a line, each touching every other by `100 / distance`:
+ * the contigs of one genome read in order, a single block with no thin place.
+ */
+function line(n: number, size = n): Float64Array {
+  const weights = new Float64Array(size * size)
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) if (r !== c) weights[r * size + c] = Math.round(100 / Math.abs(r - c))
+  }
+  return weights
+}
+
+describe('normalizedFiedlerSplit', () => {
+  it('splits two blocks where the contact between them is thin', () => {
+    const n = 11
+    const weights = new Float64Array(n * n)
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) weights[r * n + c] = r === c ? 0 : (r < 6) === (c < 6) ? 10 : 0.1
+    }
+    const split = normalizedFiedlerSplit(weights, n)
+    expect(split).not.toBeNull()
+    const side = Array.from(split!.side)
+    expect(new Set(side.slice(0, 6)).size).toBe(1)
+    expect(new Set(side.slice(6)).size).toBe(1)
+    expect(side[0]).not.toBe(side[6])
+    expect(split!.aside).toBe(0)
+  })
+
+  it('keeps a vertex that barely touches the rest with its neighbour, where the plain cut peels it off', () => {
+    // One block of ten, and an eleventh vertex touching the last of them once:
+    // the least-attached contig of a MAG that is one organism. The plain
+    // Laplacian's cheapest cut is that vertex alone, a block of one with almost
+    // nothing crossing; the normalized cut weighs each side by its contact and
+    // halves the line instead.
+    const n = 11
+    const weights = line(10, n)
+    weights[9 * n + 10] = 1
+    weights[10 * n + 9] = 1
+    const plain = Array.from(fiedlerSplit(weights, n)!.side)
+    expect(plain.filter((value) => value === plain[10])).toHaveLength(1)
+
+    const side = Array.from(normalizedFiedlerSplit(weights, n)!.side)
+    expect(side[10]).toBe(side[9])
+    const ones = side.filter((value) => value === 1).length
+    expect(Math.min(ones, n - ones)).toBeGreaterThanOrEqual(5)
+  })
+
+  it('sets aside a vertex with no contact but its own, on neither side', () => {
+    const n = 6
+    const weights = line(5, n)
+    weights[5 * n + 5] = 40
+    const split = normalizedFiedlerSplit(weights, n)
+    expect(split).not.toBeNull()
+    expect(split!.side[5]).toBe(0)
+    expect(split!.aside).toBe(1)
+    expect(Array.from(split!.side.subarray(0, 5)).every((value) => value !== 0)).toBe(true)
+    expect(new Set(split!.side.subarray(0, 5)).size).toBe(2)
+  })
+
+  it('has no split where fewer than two vertices touch another', () => {
+    const n = 4
+    const weights = new Float64Array(n * n)
+    for (let r = 0; r < n; r++) weights[r * n + r] = 10
+    expect(normalizedFiedlerSplit(weights, n)).toBeNull()
+    expect(normalizedFiedlerSplit(new Float64Array(1), 1)).toBeNull()
   })
 })

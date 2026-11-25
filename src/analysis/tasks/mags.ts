@@ -180,7 +180,8 @@ export const MAG_SPLIT_TASK: AnalysisTask = {
   keywords: ['metagenome', 'chimera', 'binning'],
   group: 'metagenome',
   venue: 'analysis',
-  version: 1,
+  // 2: the normalized cut, where 1 took the plain Laplacian's and flagged most MAGs (§18.8).
+  version: 2,
   availability: metagenomeOnly,
   params: [
     BALANCE_PARAM,

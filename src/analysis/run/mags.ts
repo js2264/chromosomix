@@ -16,7 +16,7 @@
 
 import { FeatureBuilder } from '../../annotations/featureset'
 import { DEFAULT_COUNT_COLUMN } from '../../metacooler/matrix'
-import { fiedlerSplit } from '../linalg'
+import { normalizedFiedlerSplit } from '../linalg'
 import {
   binContigIndex,
   binGenomeMap,
@@ -441,6 +441,12 @@ export const runMagPurity: TaskRunner = async (job) => {
 // Split MAGs
 // ---------------------------------------------------------------------------
 
+/** Whether row `r` of a symmetric contact matrix has contact off its diagonal. */
+function touchesAnother(weights: Float64Array, n: number, r: number): boolean {
+  for (let c = 0; c < n; c++) if (c !== r && weights[r * n + c] > 0) return true
+  return false
+}
+
 export const runMagSplit: TaskRunner = async (job) => {
   const layout = layoutOf(job)
   const balance = boolParam(job.params, 'balance', false)
@@ -456,6 +462,8 @@ export const runMagSplit: TaskRunner = async (job) => {
 
   const rows: Array<Record<string, string | number>> = []
   const flagged = new FeatureBuilder()
+  // Contigs with no contact with the rest of their MAG, which no split can place.
+  let aside = 0
 
   for (let i = 0; i < candidates.length; i++) {
     // Once per candidate MAG: a Fiedler split is a Lanczos search over a dense
@@ -484,15 +492,24 @@ export const runMagSplit: TaskRunner = async (job) => {
         weights[r * n + c] = Number.isFinite(cell) ? cell : 0
       }
     }
-    const split = fiedlerSplit(weights, n)
-    if (split === null) continue
+    // The normalized cut, not the plain one: the plain Laplacian's cheapest cut
+    // of a MAG that is one organism is its least-attached contig, which made a
+    // block of one or two contigs of almost every MAG and flagged it.
+    const split = normalizedFiedlerSplit(weights, n)
+    // None when no two of its contigs touch: then there is nothing to split and
+    // no ratio, and the MAG is listed with none rather than left out.
+    const side = split?.side ?? new Int8Array(n)
+    if (split !== null) aside += split.aside
+    else for (let r = 0; r < n; r++) if (!touchesAnother(weights, n, r)) aside++
 
     let within = 0
     let across = 0
     for (let r = 0; r < n; r++) {
+      if (side[r] === 0) continue
       for (let c = r + 1; c < n; c++) {
+        if (side[c] === 0) continue
         const cell = weights[r * n + c]
-        if (split.side[r] === split.side[c]) within += cell
+        if (side[r] === side[c]) within += cell
         else across += cell
       }
     }
@@ -505,16 +522,16 @@ export const runMagSplit: TaskRunner = async (job) => {
     for (let cid = 0; cid < layout.contigs.length; cid++) {
       if (layout.contigs[cid].genome === genome.id) contigIds.push(cid)
     }
-    const sideA = contigIds.filter((_, k) => split.side[k] === 1).map((cid) => names[cid])
-    const sideB = contigIds.filter((_, k) => split.side[k] === -1).map((cid) => names[cid])
+    const sideA = contigIds.filter((_, k) => side[k] === 1).map((cid) => names[cid])
+    const sideB = contigIds.filter((_, k) => side[k] === -1).map((cid) => names[cid])
 
     const isFlagged = Number.isFinite(ratio) && ratio < flagBelow
     rows.push({
       genome: genome.name,
       contigs: genome.contigs,
       ratio,
-      sideA: sideA.length,
-      sideB: sideB.length,
+      sideA: split === null ? Number.NaN : sideA.length,
+      sideB: split === null ? Number.NaN : sideB.length,
       flagged: isFlagged ? 'yes' : '',
     })
     if (isFlagged) {
@@ -541,6 +558,13 @@ export const runMagSplit: TaskRunner = async (job) => {
     `${count.toLocaleString()} of ${rows.length.toLocaleString()} MAGs split into two blocks with ` +
       `less than ${flagBelow} of their internal contact crossing.`,
   )
+  if (aside > 0) {
+    const one = aside === 1
+    job.note(
+      `${aside.toLocaleString()} ${one ? 'contig has' : 'contigs have'} no contact with the rest of ` +
+        `${one ? 'its' : 'their'} MAG and ${one ? 'was' : 'were'} left out of the split, on neither side.`,
+    )
+  }
 
   const outputs: TaskOutput[] = [
     {

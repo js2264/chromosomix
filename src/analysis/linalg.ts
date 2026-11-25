@@ -349,6 +349,82 @@ function normalise(vector: Float64Array): boolean {
 }
 
 /**
+ * A two-way spectral split by the **normalized cut** (Shi & Malik): the Fiedler
+ * vector of the normalized Laplacian `I − D^-½ W D^-½`, sign-split. (The cut's
+ * own relaxed indicator is that vector times `D^-½`, which has the same signs.)
+ *
+ * {@link fiedlerSplit}'s Laplacian weighs each side of a cut by how many vertices
+ * it holds, so on a matrix that is one block its cheapest split is the vertex
+ * that barely touches the rest — on a MAG's contig matrix, the one short contig
+ * a few contacts tie in. The normalized cut weighs each side by its contact, its
+ * *volume*, so a vertex of little contact is a costly side on its own and the
+ * split falls where contact is genuinely thin: two organisms in one bin. On a
+ * mock community's metaTOR map the plain split peeled a contig or two off 47
+ * MAGs of 55 and called each split; this one calls 4, and divides two MAGs
+ * merged into one exactly where they were joined.
+ *
+ * Only the matrix's off-diagonal is read: a vertex's contact with itself says
+ * nothing about which side it is on. A vertex with no other contact at all has
+ * no volume to normalize by and no evidence either way, and is **set aside** —
+ * side `0`, and counted in `aside`. Computed by deflation, as the plain split
+ * is: `I + D^-½ W D^-½` has its eigenvalues in `[0, 2]`, its largest is the known
+ * `D^½ 1`, and the one after it is the Fiedler vector.
+ */
+export function normalizedFiedlerSplit(
+  weights: Float64Array,
+  n: number,
+): { side: Int8Array; value: number; aside: number } | null {
+  if (n < 2) return null
+  const degree = new Float64Array(n)
+  for (let r = 0; r < n; r++) {
+    let total = 0
+    for (let c = 0; c < n; c++) {
+      if (c === r) continue
+      const value = weights[r * n + c]
+      if (Number.isFinite(value) && value > 0) total += value
+    }
+    degree[r] = total
+  }
+  const kept: number[] = []
+  for (let r = 0; r < n; r++) if (degree[r] > 0) kept.push(r)
+  const m = kept.length
+  if (m < 2) return null
+  const inverse = Float64Array.from(kept, (r) => 1 / Math.sqrt(degree[r]))
+  const matrix = new Float64Array(m * m)
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < m; j++) {
+      if (i === j) {
+        matrix[i * m + j] = 1
+        continue
+      }
+      const w = weights[kept[i] * n + kept[j]]
+      matrix[i * m + j] = Number.isFinite(w) && w > 0 ? w * inverse[i] * inverse[j] : 0
+    }
+  }
+  const top = Float64Array.from(kept, (r) => Math.sqrt(degree[r]))
+  if (!normalise(top)) return null
+  let lambda = 0
+  {
+    const product = new Float64Array(m)
+    multiply(matrix, m, top, product)
+    for (let i = 0; i < m; i++) lambda += top[i] * product[i]
+  }
+  deflate(matrix, m, { value: lambda, vector: top })
+  const pair = dominant(matrix, m, 512, 1e-9, 0)
+  if (pair === null) return null
+  const side = new Int8Array(n)
+  let ones = 0
+  for (let i = 0; i < m; i++) {
+    const s = pair.vector[i] >= 0 ? 1 : -1
+    side[kept[i]] = s
+    if (s === 1) ones++
+  }
+  // A split that puts every vertex it could judge on one side is not a split.
+  if (ones === 0 || ones === m) return null
+  return { side, value: 2 - pair.value, aside: n - m }
+}
+
+/**
  * A two-way spectral split of a symmetric non-negative matrix.
  *
  * The Fiedler vector — the eigenvector of the second-smallest eigenvalue of the

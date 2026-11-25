@@ -404,6 +404,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   MAG contact QC and MAG purity read a 0 as missing the same way, and mixed a MAG with no contact in
   with the leakiest and the contigs too poor in contact to judge in with the purest. Each now puts a
   row with no value after every row with one, as a table's own sort does.
+- **Split-MAG detection flags MAGs in two pieces, not every MAG with a loose contig (a dev feature,
+  §18.8).** It cut each MAG where the plain graph Laplacian put its cheapest cut, which on a MAG that is
+  one organism is the contig it holds least: a block of one or two contigs with next to nothing
+  crossing, flagged. On a mock community's metaTOR map it flagged 47 MAGs of 55. It now takes the
+  normalized cut, which weighs each side by its contact rather than by its contigs: the same map flags
+  4, and two MAGs merged into one are divided exactly where they were joined. A contig with no contact
+  with the rest of its MAG is set aside, on neither side, and counted in a note; a MAG none of whose
+  contigs touches another is listed with no ratio, as before, and now with no sides either.
 - **A map of one bin per contig is told how to get a map this viewer reads (a dev feature, §10).** The
   map metaTOR writes from pairs or BAM files holds one bin per contig, and its refusal said to run
   `metacooler binnify`, which only sums bins: from that map it puts every contact of a contig in one

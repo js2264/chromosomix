@@ -425,10 +425,9 @@ describe('the order of the metagenome tables', () => {
    * - `whole`: two pairs, 100 inside each and 50 across every cross pair — a
    *   split of the pairs crosses 200 for 200 inside, a ratio of 1;
    * - `apart`: the same two pairs with nothing across, a ratio of exactly 0;
-   * - `loose`: three contigs at 100 a pair, the fourth touching one of them
-   *   once, which a split peels off for 1 across and 300 inside;
-   * - `alone`: contacts within each contig and none between, so the split's
-   *   two sides have nothing inside to compare with: no ratio.
+   * - `loose`: the same two pairs touching once, 1 across for 200 inside;
+   * - `alone`: contacts within each contig and none between, so there is no
+   *   split to make and no ratio.
    *
    * `apart` used to be listed after `whole`, with `alone`, its 0 read as the 1
    * that stood in for a missing ratio.
@@ -453,9 +452,8 @@ describe('the order of the metagenome tables', () => {
     [6, 7, 100],
     // loose: bins 8–11
     [8, 9, 100],
-    [8, 10, 100],
-    [9, 10, 100],
-    [10, 11, 1],
+    [10, 11, 100],
+    [9, 10, 1],
     // alone: bins 12–15, only themselves
     [12, 12, 10],
     [13, 13, 10],
@@ -468,10 +466,12 @@ describe('the order of the metagenome tables', () => {
     const rows = tableOf(await runMagSplit(jobOf({}, {}, map())), 'magsplit').rows
     expect(rows.map((row) => row['genome'])).toEqual(['apart', 'loose', 'whole', 'alone'])
     expect(Number(rows[0]['ratio'])).toBe(0)
-    expect(Number(rows[1]['ratio'])).toBeCloseTo(1 / 300, 12)
+    expect(Number(rows[1]['ratio'])).toBeCloseTo(1 / 200, 12)
     expect(Number(rows[2]['ratio'])).toBeCloseTo(1, 12)
     expect(Number.isNaN(Number(rows[3]['ratio']))).toBe(true)
     expect(rows.map((row) => row['flagged'])).toEqual(['yes', 'yes', '', ''])
+    // Listed, with no sides either: none of its contigs touches another.
+    expect([rows[3]['sideA'], rows[3]['sideB']].every((value) => Number.isNaN(Number(value)))).toBe(true)
   })
 
   it('lists a MAG with no contact at all after the leakiest, never among them', async () => {
@@ -532,5 +532,86 @@ describe('the order of the metagenome tables', () => {
     const rows = tableOf(outputs, 'magpurity').rows.filter((row) => row['genome'] === 'mag')
     expect(rows.map((row) => row['contig'])).toEqual(['mixed', 'pure', 'poor'])
     expect(Number.isNaN(Number(rows[2]['outside']))).toBe(true)
+  })
+})
+
+describe('split-MAG detection’s cut (§18.8)', () => {
+  /** Contigs `from`…`to − 1` along a line, each touching every other by `100 / distance`. */
+  function line(from: number, to: number): Array<[number, number, number]> {
+    const pixels: Array<[number, number, number]> = []
+    for (let a = from; a < to; a++) for (let b = a + 1; b < to; b++) pixels.push([a, b, Math.round(100 / (b - a))])
+    return pixels
+  }
+
+  /**
+   * Three MAGs of one-bin contigs, and the unassigned contig last:
+   *
+   * - `organism`: ten contigs along a line, and an eleventh touching the last of
+   *   them once — one organism with a contig it barely holds, which the plain
+   *   cut peeled off as a block of one and flagged;
+   * - `chimera`: two lines of six touching once — two organisms in one bin;
+   * - `stray`: five contigs along a line and a sixth with contact only with
+   *   itself, which no split can place.
+   */
+  const GENOMES = ['organism', 'chimera', 'stray', '__unbinned__']
+  const contigs: FakeContig[] = [
+    ...Array.from({ length: 11 }, (_, k) => ({ name: `organism_${k}`, genome: 0, bins: 1 })),
+    ...Array.from({ length: 12 }, (_, k) => ({ name: `chimera_${k}`, genome: 1, bins: 1 })),
+    ...Array.from({ length: 6 }, (_, k) => ({ name: `stray_${k}`, genome: 2, bins: 1 })),
+    { name: 'unbinned_0', genome: 3, bins: 1 },
+  ]
+  const pixels: Array<[number, number, number]> = [
+    // organism: bins 0–10
+    ...line(0, 10),
+    [9, 10, 1],
+    // chimera: bins 11–22
+    ...line(11, 17),
+    ...line(17, 23),
+    [16, 17, 1],
+    // stray: bins 23–28
+    ...line(23, 28),
+    [28, 28, 40],
+  ]
+
+  async function split() {
+    const notes: string[] = []
+    const job = jobOf({}, {}, fakeMap(contigs, GENOMES, pixels))
+    ;(job as unknown as { note: (text: string) => void }).note = (text) => notes.push(text)
+    const outputs = await runMagSplit(job)
+    const rows = new Map(tableOf(outputs, 'magsplit').rows.map((row) => [String(row['genome']), row]))
+    return { rows, notes, outputs }
+  }
+
+  it('flags two organisms in one bin, cut where they were joined', async () => {
+    const chimera = (await split()).rows.get('chimera')!
+    expect(chimera['flagged']).toBe('yes')
+    expect([chimera['sideA'], chimera['sideB']]).toEqual([6, 6])
+    expect(Number(chimera['ratio'])).toBeLessThan(0.001)
+  })
+
+  it('does not flag one organism for the contig it barely holds', async () => {
+    const organism = (await split()).rows.get('organism')!
+    expect(organism['flagged']).toBe('')
+    expect(Number(organism['ratio'])).toBeGreaterThan(0.1)
+    expect(Math.min(Number(organism['sideA']), Number(organism['sideB']))).toBeGreaterThanOrEqual(5)
+  })
+
+  it('leaves a contig with no contact with its MAG out of the split, and says so', async () => {
+    const { rows, notes } = await split()
+    const stray = rows.get('stray')!
+    expect(Number(stray['sideA']) + Number(stray['sideB'])).toBe(5)
+    expect(stray['flagged']).toBe('')
+    expect(notes).toContain(
+      '1 contig has no contact with the rest of its MAG and was left out of the split, on neither side.',
+    )
+  })
+
+  it('marks only the flagged MAG’s contigs on the map', async () => {
+    const { outputs } = await split()
+    const marked = outputs.find((output) => output.kind === 'intervals')
+    expect(marked).toBeDefined()
+    const data = (marked as unknown as { payload: { data: { name: string[]; contigs: string[] } } }).payload.data
+    expect(new Set(data.name.map((name) => name.split(' · ')[0]))).toEqual(new Set(['chimera']))
+    expect(data.contigs).toHaveLength(12)
   })
 })
