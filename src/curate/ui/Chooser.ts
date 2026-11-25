@@ -2,7 +2,9 @@
  * The chooser of the curation stage (SPECS §33.3): the popover `move to…`,
  * `merge into…` and `link to…` open — every genome the selection could go to,
  * the ones the contacts name first, a filter box, ↑ ↓ Enter Escape, and the
- * step the row under the keyboard would make, priced before it is made.
+ * step the row under the keyboard would make, priced before it is made: the
+ * list in the column of the card it opened from, the price in a pane beside it
+ * where the window has room ({@link chooserFrame}).
  *
  * - **move** (contigs): the genomes the contigs meet most — each contig's own
  *   where it meets that at least as densely as any other MAG, else the MAG it
@@ -452,6 +454,8 @@ export class Chooser {
   private priceTimer: ReturnType<typeof setTimeout> | null = null
   /** The step this chooser previews, by its key. */
   private previewKey: string | null = null
+  /** Whether it was placed with rows to price, or `null` before it is placed: a count that changes it places it again. */
+  private framedFor: boolean | null = null
   private readonly opener: Element | null
   private readonly id = `curate-chooser-${++serial}`
   private readonly unsubscribe: Array<() => void> = []
@@ -604,24 +608,41 @@ export class Chooser {
   }
 
   /**
-   * Under its anchor, or above it where there is more room there than below
-   * and too little below; inside the window. Held by the edge that faces the
-   * anchor and kept to the room on that side, so the rows and the price it
-   * grows by once counted push it away from the anchor, never over it or out
-   * of the window: the list scrolls instead.
+   * Across, as {@link chooserFrame} says: the list in the anchor's card's
+   * column, the price beside it where the window has room. Then under its
+   * anchor, or above it where there is more room there than below and too
+   * little below; inside the window. Held by the edge that faces the anchor
+   * and kept to the room on that side, so the rows and the price it grows by
+   * once counted push it away from the anchor, never over it or out of the
+   * window: the list scrolls instead.
    */
   private place(): void {
     const style = this.element.style
     style.top = ''
     style.bottom = ''
     style.maxHeight = ''
-    const box = this.element.getBoundingClientRect()
-    const width = box.width
-    const height = box.height
+    style.width = ''
+    style.removeProperty('--chooser-price')
+    this.element.classList.remove('is-beside')
     const viewWidth = window.innerWidth
     const viewHeight = window.innerHeight
+    const card = this.anchor instanceof HTMLElement ? this.anchor.closest<HTMLElement>('.edit-card') : null
+    const cardBox = card?.getBoundingClientRect() ?? null
     const x = this.anchor instanceof HTMLElement ? this.anchor.getBoundingClientRect().left : this.anchor.x
-    style.left = `${Math.round(Math.max(MARGIN, Math.min(x, viewWidth - width - MARGIN)))}px`
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+    const em = parseFloat(getComputedStyle(this.element).fontSize) || rem
+    const priced = this.priced()
+    const price = priced ? PRICE_EM * em : 0
+    const own = this.element.getBoundingClientRect().width
+    const frame = chooserFrame(viewWidth, cardBox === null ? null : { left: cardBox.left, width: cardBox.width }, x, { own, least: LIST_REM * rem }, price)
+    this.framedFor = priced
+    this.element.classList.toggle('is-beside', frame.beside)
+    if (frame.beside) style.setProperty('--chooser-price', `${Math.round(price)}px`)
+    if (frame.width !== null) style.width = `${frame.width}px`
+    style.left = `${frame.left}px`
+    // Beside the list the price's pane stays, saying what it is for while no row is under the keyboard.
+    this.paintFoot()
+    const height = this.element.getBoundingClientRect().height
     // An anchor scrolled out of the window: the chooser stands in the window all
     // the same, where the anchor would come in, never off it with the keyboard in it.
     const anchorRect = this.anchor instanceof HTMLElement ? this.anchor.getBoundingClientRect() : null
@@ -648,6 +669,15 @@ export class Chooser {
     const y = Math.max(MARGIN, Math.min(this.anchor.y, viewHeight - height - MARGIN))
     style.top = `${Math.round(y)}px`
     style.maxHeight = roomOf(viewHeight - MARGIN - y)
+  }
+
+  /**
+   * Whether a row's step is priced: there are rows, and they move contigs —
+   * a link moves none and changes no genome's quality, so a link chooser
+   * says its step under the list, with no pane for a price.
+   */
+  private priced(): boolean {
+    return this.plan !== null && this.plan.rows.length > 0 && this.plan.kind !== 'link'
   }
 
   private readonly outside = (event: PointerEvent): void => {
@@ -688,6 +718,8 @@ export class Chooser {
     this.head.textContent = this.plan?.title ?? 'counting the genomes…'
     this.element.setAttribute('aria-label', this.head.textContent)
     this.refilter(false, key)
+    // The first count gives rows to price, or a step leaves none: the price's pane comes or goes.
+    if (this.framedFor !== null && this.framedFor !== this.priced()) this.place()
   }
 
   /** The rows the filter keeps, drawn; the keyboard on `key`, else on the first. */
@@ -823,14 +855,21 @@ export class Chooser {
     this.paintFoot()
   }
 
-  /** The foot: what the row under the keyboard makes, and what it costs. */
+  /**
+   * The foot — beside the list, or under it —: what the row under the
+   * keyboard makes, and what it costs: the genomes it changes most, in a box
+   * that scrolls where the room is short, and under it, always in view, what
+   * the others do (`and 27 more genomes lose contigs`).
+   */
   private paintFoot(): void {
     if (this.closed) return
     const row = this.activeRow
     const plan = this.plan
+    const beside = this.element.classList.contains('is-beside')
     if (row === null || plan === null) {
-      this.foot.replaceChildren()
-      this.foot.classList.add('hidden')
+      // Beside the list the pane stays, saying what it is for; under it, nothing.
+      this.foot.replaceChildren(...(beside ? [el('div', { class: 'curate-chooser-counting', text: 'The row under the keyboard is priced here.' })] : []))
+      this.foot.classList.toggle('hidden', !beside)
       return
     }
     this.foot.classList.remove('hidden')
@@ -848,8 +887,15 @@ export class Chooser {
         const after = model.previewed
         if (after === null) parts.push(el('div', { class: 'curate-chooser-counting', text: 'counting what it makes…' }))
         else {
-          const price = priceList(answer, after, (id, name) => (answer.genomes.some((genome) => genome.id === id) ? this.ctx.shortName(id) : name))
-          if (price !== null) parts.push(price)
+          // Beside the list the pane has the chooser's height: five genomes; under it, three.
+          const price = priceList(answer, after, (id, name) => (answer.genomes.some((genome) => genome.id === id) ? this.ctx.shortName(id) : name), beside ? PRICED_BESIDE : undefined)
+          if (price !== null) {
+            // What the others do stands under the box, never scrolled out of it.
+            const others = price.querySelector(':scope > .curate-card-price-more')
+            others?.remove()
+            parts.push(el('div', { class: 'curate-chooser-price' }, price))
+            if (others !== null) parts.push(el('div', { class: 'curate-chooser-others' }, ...others.childNodes))
+          }
         }
       }
     }
@@ -930,9 +976,57 @@ function groupWords(plan: ChooserPlan, row: ChooserRow, answer: CurationStateRes
 const GAP = 4
 const MARGIN = 8
 
+/** The price's pane beside the list, in the chooser's own type: a name and `redundant 1.07 → 1.051` on a line. */
+const PRICE_EM = 19
+
+/** The genomes the pane beside the list prices before it says what the others do. */
+const PRICED_BESIDE = 5
+
+/** The narrowest the list is, in rem, however narrow the card it stands under. */
+const LIST_REM = 18
+
 /** The most the chooser may be tall on a side with `room` pixels: the stylesheet's own cap, or the room. */
 function roomOf(room: number): string {
-  return `min(32rem, 72vh, ${Math.max(120, Math.floor(room))}px)`
+  return `min(40rem, 80vh, ${Math.max(120, Math.floor(room))}px)`
+}
+
+/** Where a chooser stands across the window. */
+export interface ChooserFrame {
+  left: number
+  /** Its width, or `null` for the stylesheet's own. */
+  width: number | null
+  /** The price in a pane of its own left of the list, rather than under it. */
+  beside: boolean
+}
+
+/**
+ * Where the chooser stands across the window, in CSS pixels: on an anchor in a
+ * card, the list in that card's column, the card's edges its own — never over
+ * the grip beside the inspector — and the price beside it on the left, over
+ * the pictures, where the window has room for it, so the list keeps its rows
+ * whatever the price holds; without that room, the price under the list,
+ * inside the window. At a point (the pictures' corner, the card scrolled
+ * away), from the point, the price beside the list where both fit. Pure, so
+ * the frame is tested without a layout.
+ *
+ * @param view The window's width.
+ * @param card The box of the card the anchor is on, or `null`.
+ * @param x The anchor's left, or the point's.
+ * @param list The list's own width (the stylesheet's), and the narrowest it is under a card.
+ * @param price The price's pane; 0 where there is nothing to price.
+ */
+export function chooserFrame(view: number, card: { left: number; width: number } | null, x: number, list: { own: number; least: number }, price: number): ChooserFrame {
+  const clamp = (left: number, width: number): number => Math.round(Math.max(MARGIN, Math.min(left, view - width - MARGIN)))
+  if (card !== null && card.width > 0) {
+    // A card narrower than the list's least keeps the list's right edge on its own.
+    const width = Math.max(card.width, list.least)
+    const left = card.left + card.width - width
+    if (price > 0 && left - price >= MARGIN) return { left: Math.round(left - price), width: Math.round(price + width), beside: true }
+    return { left: clamp(left, width), width: Math.round(width), beside: false }
+  }
+  const both = price + list.own
+  if (price > 0 && both <= view - 2 * MARGIN) return { left: clamp(x, both), width: Math.round(both), beside: true }
+  return { left: clamp(x, list.own), width: null, beside: false }
 }
 
 /** A press on a row keeps the caret in the filter box, so the keys stay the chooser's. */

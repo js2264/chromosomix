@@ -20,7 +20,7 @@ import { CurateModel, describeSuggestion, type CurateClient } from '@/curate/mod
 import type { Suggestion } from '@/curate/suggest'
 import type { CurateContext } from '@/curate/ui/context'
 import { AboutCard } from '@/curate/ui/cards/AboutCard'
-import { ExportCard, mapArgument } from '@/curate/ui/cards/ExportCard'
+import { commandText, ExportCard, mapArgument } from '@/curate/ui/cards/ExportCard'
 import { HistoryCard } from '@/curate/ui/cards/HistoryCard'
 import { SuggestionsCard } from '@/curate/ui/cards/SuggestionsCard'
 import { CuratedBinning, emptyCuration, fileBinning, withCurationStep } from '@/genome/curation'
@@ -560,26 +560,39 @@ async function press(button: HTMLButtonElement): Promise<void> {
 }
 
 describe('the export card', () => {
-  it('offers the four tables, the note, and the two commands that take them', async () => {
+  it('offers the four tables, the note, and the two commands that take them, each under what it does', async () => {
     await exporting()
     expect(textsOf(document.body, '.curate-export-file')).toEqual(['contig → genome', 'genomes', 'elements', 'element ↔ host'])
     expect(document.querySelector('.curate-export-card .edit-note')?.textContent).toBe('Written from the curation; no file the session opened is touched.')
+    // A line an argument, a flag with its value, ` \` continuing each line but the last: one command to a shell.
     expect(commands()).toEqual([
-      'metacooler reassign community.metacool --contigs community.contig-genome.tsv --layout genome-then-length -o community.curated.metacool',
-      'metacooler annotate community.curated.metacool --genomes community.genomes.tsv --replace --inplace',
+      'metacooler reassign \\\n  community.metacool \\\n  --contigs community.contig-genome.tsv \\\n  --layout genome-then-length \\\n  -o community.curated.metacool',
+      'metacooler annotate \\\n  community.curated.metacool \\\n  --genomes community.genomes.tsv \\\n  --replace \\\n  --inplace',
     ])
+    // Each line its own block, so one too long for the card goes on under itself, never into the next.
+    const lines = [...document.querySelectorAll('.curate-export-command')].map((code) => [...code.querySelectorAll(':scope > .curate-export-line')].map((line) => line.textContent))
+    expect(lines[0]).toEqual(['metacooler reassign \\\n', '  community.metacool \\\n', '  --contigs community.contig-genome.tsv \\\n', '  --layout genome-then-length \\\n', '  -o community.curated.metacool'])
+    // A name moves with the ` \` after it: no line breaks before the continuation.
+    expect(textsOf(document.querySelector('.curate-export-command') as HTMLElement, '.curate-export-word')).toContain('community.contig-genome.tsv \\')
+    expect(textsOf(document.body, '.curate-export-does')).toEqual(['Write the curated map', 'Restore the elements'])
     expect(exportButton('contig-genome').title).toMatch(/metacooler reassign takes \(community\.contig-genome\.tsv\)$/)
-    expect(document.querySelector('.curate-export-keeps')?.textContent).toMatch(/^A reassignment keeps metaTOR’s clustering rounds/)
+    // What a reassignment keeps and drops, and why the annotation, in a reader's words.
+    expect(document.querySelector('.curate-export-keeps')?.textContent).toBe(
+      'A new file. It keeps metaTOR’s clustering rounds and each genome’s own columns as they were, even where its contigs changed, and drops the normalisation weights tied to the old binning.',
+    )
+    expect(document.querySelector('.curate-export-why')?.textContent).toBe(
+      'A renamed or new genome starts without the file’s columns: this gives every genome its mobile-element flag, and every MAG its elements.',
+    )
   })
 
-  it('writes contig → genome through the save dialog, and says what it wrote', async () => {
+  it('writes contig → genome through the save dialog, and says what it wrote, a size never split from its unit', async () => {
     saveDialog()
     await exporting()
     await press(exportButton('contig-genome'))
     expect(asked).toEqual(['community.contig-genome.tsv'])
     expect(saved['community.contig-genome.tsv'].split('\n').slice(0, 3)).toEqual(['contig_name\tgenome_name', 'x0\tX1', 'x1\tX1'])
     expect(saved['community.contig-genome.tsv']).toContain('u0\t__unbinned__\n')
-    expect(status()).toMatch(/^Wrote community\.contig-genome\.tsv \(\d+ B\) at 14:52\. 19 contigs in 5 genomes, 1 in none\.$/)
+    expect(status()).toMatch(/^Wrote community\.contig-genome\.tsv \(\d+\u00a0B\) at 14:52\. 19 contigs in 5 genomes, 1 in none\.$/)
   })
 
   it('writes the genomes with metaTOR’s mge flag, as the binning stands', async () => {
@@ -607,7 +620,9 @@ describe('the export card', () => {
     const m = await exporting()
     await press(exportButton('contig-genome'))
     await frame()
-    expect(commands()[0]).toBe('metacooler reassign community.metacool --contigs my_curation.contig-genome.tsv --layout genome-then-length -o community.curated.metacool')
+    expect(commands()[0]).toBe(
+      'metacooler reassign \\\n  community.metacool \\\n  --contigs my_curation.contig-genome.tsv \\\n  --layout genome-then-length \\\n  -o community.curated.metacool',
+    )
     expect(document.querySelector('.curate-export-stale')?.classList.contains('hidden')).toBe(true)
     m.store.apply({ op: 'dissolve', genome: 'Z' })
     await frame()
@@ -678,7 +693,7 @@ describe('the export card', () => {
     expect(document.activeElement).not.toBe(button)
   })
 
-  it('copies a command, and names the map as metacooler does', async () => {
+  it('copies a command as printed, one a shell runs whole, and names the map as metacooler does', async () => {
     const copied: string[] = []
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (text: string) => void copied.push(text) }, configurable: true })
     await exporting()
@@ -686,7 +701,12 @@ describe('the export card', () => {
     copy.click()
     await wait(0)
     expect(copied).toEqual([commands()[0]])
+    // Every line but the last continued: pasted, the lines are one command.
+    const lines = copied[0].split('\n')
+    expect(lines.slice(0, -1).every((line) => line.endsWith(' \\'))).toBe(true)
+    expect(lines[lines.length - 1].endsWith('\\')).toBe(false)
     expect(copy.classList.contains('is-copied')).toBe(true)
+    expect(commandText([['metacooler', 'reassign'], ['a b.metacool'], ['-o', 'out.metacool']])).toBe("metacooler reassign \\\n  'a b.metacool' \\\n  -o out.metacool")
     expect(mapArgument('MM133.metacool')).toBe('MM133.metacool')
     expect(mapArgument('data/MM133.metacool')).toBe('MM133.metacool')
     expect(mapArgument('MM133.mmetacool::sample1')).toBe('MM133.mmetacool::entries/sample1')
@@ -696,7 +716,7 @@ describe('the export card', () => {
 
   it('quotes a name the shell would split', async () => {
     await exporting(testContext(), 'two words')
-    expect(commands()[1]).toBe("metacooler annotate 'two words.curated.metacool' --genomes 'two words.genomes.tsv' --replace --inplace")
+    expect(commands()[1]).toBe("metacooler annotate \\\n  'two words.curated.metacool' \\\n  --genomes 'two words.genomes.tsv' \\\n  --replace \\\n  --inplace")
   })
 })
 

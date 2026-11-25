@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { bareAnswer } from '@/curate/answer'
 import { CurateModel } from '@/curate/model'
-import { Chooser, chooserPlan, chooserWords, chooseStep, type ChooserKind } from '@/curate/ui/Chooser'
+import { Chooser, chooserFrame, chooserPlan, chooserWords, chooseStep, type ChooserKind } from '@/curate/ui/Chooser'
 import type { CurateDropTarget } from '@/curate/ui/context'
 import { CuratedBinning, fileBinning } from '@/genome/curation'
 import { CurationStore } from '@/state/curation'
@@ -315,6 +315,123 @@ describe('the popover', () => {
     expect(document.querySelector('.curate-chooser-note')?.textContent).toBe('Not ranked until the contacts are read.')
     expect(rowNames()).toEqual(['X2', 'Y', 'Z'])
     model.dispose()
+  })
+})
+
+describe('the price of the row under the keyboard', () => {
+  /** The keyboard on the row a filter finds, its step priced and counted. */
+  async function priced(s: TestStage, name: string): Promise<void> {
+    type(name)
+    expect(active()).toBe(name)
+    await wait(120)
+    await s.model.settled()
+    await wait(0)
+  }
+
+  it('prices a MAG that takes an element in whole by its own numbers, the element counted, not summed', async () => {
+    // y5 out of X1, and both of the element P's contigs: P is emptied into Y.
+    const s = await stage({ contigs: [3, 16, 17] })
+    open(s, 'move')
+    await priced(s, 'Y')
+    expect(document.querySelector('.curate-chooser-words')?.textContent).toBe('move 3 contigs into Y')
+    expect(textsOf(document.body, '.curate-card-price-name')).toEqual(['Y', 'X1'])
+    // Never its length alone: the genome the contigs go to wears its completeness and redundancy.
+    expect(textsOf(document.body, '.curate-card-price-line')).toEqual(['complete 100% + 1 more → 100%', 'redundant 1.00 + 1 more → 1.00', 'complete 50% → 50%', 'redundant 1.00 → 1.00'])
+    // What `+ 1 more` is, by its name.
+    expect(document.querySelector('.curate-card-price-row')?.getAttribute('title')).toBe('Y: complete 100% + 1 more → 100%, redundant 1.00 + 1 more → 1.00; takes in P whole')
+  })
+
+  it('says what the genomes it does not list do under the price, never scrolled away with it', async () => {
+    // Too narrow a window for the price beside the list: under it, three genomes.
+    Object.defineProperty(window, 'innerWidth', { value: 200, configurable: true })
+    try {
+      // One contig each out of X1, X2 and Z, into Y: four genomes changed, each a grade lower.
+      const s = await stage({ contigs: [0, 4, 12] })
+      open(s, 'move')
+      expect(document.querySelector('.curate-chooser')?.classList.contains('is-beside')).toBe(false)
+      await priced(s, 'Y')
+      expect(textsOf(document.body, '.curate-chooser-price .curate-card-price-name')).toEqual(['Y', 'Z', 'X1'])
+      const others = document.querySelector('.curate-chooser-others')
+      expect(others?.textContent).toBe('and 1 more genome loses contigs · 1 falls a grade')
+      expect(others?.querySelector('.is-demoted')?.textContent).toBe('1 falls a grade')
+      // Outside the box that scrolls, under it.
+      expect(others?.closest('.curate-chooser-price')).toBeNull()
+      expect(others?.previousElementSibling?.classList.contains('curate-chooser-price')).toBe(true)
+      expect(document.querySelector('.curate-chooser-price .curate-card-price-more')).toBeNull()
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true })
+    }
+  })
+
+  it('keeps no pane for a link, which moves no contig: its step said under the list', async () => {
+    const s = await stage({ genomes: ['P'] })
+    open(s, 'link')
+    await wait(120)
+    expect(document.querySelector('.curate-chooser')?.classList.contains('is-beside')).toBe(false)
+    expect(document.querySelector('.curate-chooser-words')?.textContent).toBe('link P to Y')
+    expect(document.querySelector('.curate-chooser-price')).toBeNull()
+  })
+
+  it('prices five genomes in the pane beside the list, and says so when nothing is under the keyboard', async () => {
+    const s = await stage({ contigs: [0, 4, 12] })
+    open(s, 'move')
+    expect(document.querySelector('.curate-chooser')?.classList.contains('is-beside')).toBe(true)
+    await priced(s, 'Y')
+    expect(textsOf(document.body, '.curate-chooser-price .curate-card-price-name')).toEqual(['Y', 'Z', 'X1', 'X2'])
+    expect(document.querySelector('.curate-chooser-others')).toBeNull()
+    type('nothing is named so')
+    const foot = document.querySelector('.curate-chooser-foot') as HTMLElement
+    expect(foot.classList.contains('hidden')).toBe(false)
+    expect(foot.textContent).toBe('The row under the keyboard is priced here.')
+  })
+})
+
+describe('where the chooser stands', () => {
+  const box = (left: number, top: number, width: number, height: number): DOMRect =>
+    ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) }) as DOMRect
+
+  it('puts the list in the column of the card it opens from, the price beside it where the window has room', () => {
+    const list = { own: 368, least: 288 }
+    // The inspector's card at 1600 px: the list on the card's edges, the price over the pictures.
+    expect(chooserFrame(1600, { left: 1246, width: 341 }, 1258, list, 320)).toEqual({ left: 926, width: 661, beside: true })
+    // No room left of the card: the price under the list, the list still on the card's edges.
+    expect(chooserFrame(700, { left: 300, width: 341 }, 312, list, 320)).toEqual({ left: 300, width: 341, beside: false })
+    // A card narrower than the list's least: the list keeps the card's right edge.
+    expect(chooserFrame(1600, { left: 1300, width: 200 }, 1312, list, 320)).toEqual({ left: 892, width: 608, beside: true })
+    // Nothing to price: no pane for it.
+    expect(chooserFrame(1600, { left: 1246, width: 341 }, 1258, list, 0)).toEqual({ left: 1246, width: 341, beside: false })
+    // At a point: from the point, both panes where they fit, else the list alone, inside the window.
+    expect(chooserFrame(1600, null, 411, list, 320)).toEqual({ left: 411, width: 688, beside: true })
+    expect(chooserFrame(600, null, 411, list, 320)).toEqual({ left: 224, width: null, beside: false })
+  })
+
+  it('stands beside the card of the act that opened it, its list on the card’s edges', async () => {
+    const s = await stage({ contigs: [3] })
+    const card = document.createElement('section')
+    card.className = 'edit-card'
+    const act = document.createElement('button')
+    card.appendChild(act)
+    document.body.appendChild(card)
+    card.getBoundingClientRect = () => box(660, 100, 340, 400)
+    act.getBoundingClientRect = () => box(672, 150, 120, 30)
+    Chooser.open(s.ctx, 'move', act, () => {})
+    const chooser = document.querySelector('.curate-chooser') as HTMLElement
+    expect(chooser.classList.contains('is-beside')).toBe(true)
+    const left = parseFloat(chooser.style.left)
+    const width = parseFloat(chooser.style.width)
+    // Its right edge the card's, the price's pane all that stands left of the card.
+    expect(left + width).toBe(1000)
+    expect(width - 340).toBe(parseFloat(chooser.style.getPropertyValue('--chooser-price')))
+    // Under the act.
+    expect(chooser.style.top).toBe('184px')
+    Chooser.closeOpen()
+    // A card with no room left of it: the list alone, on the card's edges.
+    card.getBoundingClientRect = () => box(120, 100, 340, 400)
+    act.getBoundingClientRect = () => box(132, 150, 120, 30)
+    Chooser.open(s.ctx, 'move', act, () => {})
+    const alone = document.querySelector('.curate-chooser') as HTMLElement
+    expect(alone.classList.contains('is-beside')).toBe(false)
+    expect([alone.style.left, alone.style.width]).toEqual(['120px', '340px'])
   })
 })
 

@@ -79,8 +79,14 @@
 .curate-card-price-line.is-promoted {
   color: var(--ok);
 }
+/* What the genomes not listed do: `and 27 more genomes lose contigs`, how
+   many of them fall a grade in the warning colour. */
 .curate-card-price-more {
   color: var(--text-faint);
+}
+.curate-card-price-more > .is-demoted {
+  color: var(--warn);
+  white-space: nowrap;
 }
 
 /* ---- The selection card (cards/SelectionCard.ts) ---- */
@@ -443,12 +449,14 @@
 
 /* ---- The chooser (Chooser.ts): the popover move to…, merge into…, link to… open ---- */
 
+/* On an act of a card, the list stands in the card's column, its edges the
+   card's (Chooser.ts → chooserFrame); the width here is a point's. */
 .curate-chooser {
   position: fixed;
   z-index: 110;
   width: 23rem;
   max-width: calc(100vw - 16px);
-  max-height: min(32rem, 72vh);
+  max-height: min(40rem, 80vh);
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border-strong);
@@ -457,7 +465,42 @@
   box-shadow: var(--shadow-2);
   color: var(--text);
   font-size: calc(var(--step--1) * var(--text-scale, 1));
+  line-height: 1.45;
   overflow: hidden;
+}
+
+/* The price beside the list, where the window has room: a pane of its own to
+   the list's left, over the pictures, as tall as the chooser, so the list
+   keeps every row its room holds whatever the price says; the keys under
+   both. The pane's width is set where it is placed (`--chooser-price`). */
+.curate-chooser.is-beside {
+  display: grid;
+  grid-template-columns: var(--chooser-price, 19em) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'price head'
+    'price filter'
+    'price list'
+    'keys keys';
+}
+.curate-chooser.is-beside > .curate-chooser-head {
+  grid-area: head;
+}
+.curate-chooser.is-beside > .curate-chooser-filter {
+  grid-area: filter;
+}
+.curate-chooser.is-beside > .curate-chooser-list {
+  grid-area: list;
+  min-height: 0;
+}
+.curate-chooser.is-beside > .curate-chooser-foot {
+  grid-area: price;
+  padding-top: 0.55rem;
+  border-top: 0;
+  border-right: 1px solid var(--border);
+}
+.curate-chooser.is-beside > .curate-chooser-keys {
+  grid-area: keys;
 }
 .curate-chooser-head {
   display: flex;
@@ -490,13 +533,24 @@
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
+/* The price under the list gives way before it — the list shrinks a
+   thousand times as readily, so the price keeps its height until the list is
+   down to its least —, and the least is four ranked rows and their group's
+   head (a row its name and two lines of what the contacts say), or what the
+   window's height allows; a list of three rows or fewer keeps its own.
+   Beside the price, the list has the chooser's height and no least. */
 .curate-chooser-list {
-  flex: 1 1 auto;
-  /* Three rows at least, whatever the price under them holds. */
+  flex: 1 1000 auto;
   min-height: 7.5rem;
   overflow-y: auto;
   padding: 0 0.3rem 0.35rem;
   border-top: 1px solid var(--border);
+}
+.curate-chooser:not(.is-beside) > .curate-chooser-list:has(> .curate-chooser-row ~ .curate-chooser-row ~ .curate-chooser-row ~ .curate-chooser-row) {
+  min-height: min(
+    calc(4 * (0.65rem + 1.45 * (var(--step--1) + 2 * var(--step--2)) * var(--text-scale, 1)) + 0.6rem + 1.45 * var(--step--2) * var(--text-scale, 1)),
+    36vh
+  );
 }
 .curate-chooser-group {
   padding: 0.45rem 0.4rem 0.15rem;
@@ -583,16 +637,53 @@
   color: var(--text-faint);
   font-size: calc(var(--step--2) * var(--text-scale, 1));
 }
+/* The price of the row under the keyboard: what it makes, the genomes it
+   changes most in a box that scrolls where the room is short (two lines at
+   least: the genome that takes the contigs in), and what the others do,
+   never scrolled out of view. */
 .curate-chooser-foot {
   display: flex;
   flex-direction: column;
-  flex: none;
-  max-height: 11rem;
-  overflow-y: auto;
+  flex: 0 1 auto;
   gap: 0.15rem;
   padding: 0.4rem 0.65rem;
   border-top: 1px solid var(--border);
   background: var(--bg-sunken);
+}
+.curate-chooser.is-beside > .curate-chooser-foot {
+  min-height: 0;
+  overflow: hidden;
+}
+.curate-chooser-price {
+  flex: 0 1 auto;
+  min-height: 2.8em;
+  overflow-y: auto;
+}
+/* In the pane beside the list, a genome's name above its numbers, which have
+   the pane's width: `complete 100% + 9 more → 100%` on a line. */
+.curate-chooser.is-beside .curate-card-price-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+.curate-chooser.is-beside .curate-card-price-row.is-two > .curate-card-price-name {
+  grid-row: auto;
+}
+.curate-chooser.is-beside .curate-card-price-name {
+  max-width: none;
+}
+.curate-chooser.is-beside .curate-card-price-line {
+  grid-column: 1;
+  padding-left: 0.9em;
+}
+.curate-chooser-others {
+  flex: none;
+  padding-top: 0.15rem;
+  color: var(--text-faint);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-variant-numeric: tabular-nums;
+}
+.curate-chooser-others > .is-demoted {
+  color: var(--warn);
+  white-space: nowrap;
 }
 .curate-chooser-words {
   overflow-wrap: anywhere;
@@ -1055,11 +1146,13 @@
   margin-top: 0.3rem;
 }
 
-/* The two commands, numbered, each a block to copy whole. */
+/* The two commands, numbered: what each does on its line with its copy
+   button, the command under them the card's width, then what follows from
+   it. */
 .curate-export-recipe {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.55rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1068,15 +1161,19 @@
 .curate-export-step {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
-  column-gap: 0.4rem;
+  grid-template-areas:
+    'number does copy'
+    'command command command'
+    'then then then';
+  align-items: center;
+  gap: 0.25rem 0.4rem;
   counter-increment: curate-export-step;
 }
 .curate-export-step::before {
+  grid-area: number;
   content: counter(curate-export-step);
   min-width: 1.15rem;
   height: 1.15rem;
-  margin-top: 0.3rem;
   border-radius: 999px;
   background: var(--bg-muted);
   color: var(--text-dim);
@@ -1085,8 +1182,20 @@
   line-height: 1.15rem;
   text-align: center;
 }
+.curate-export-does {
+  grid-area: does;
+  min-width: 0;
+  color: var(--text);
+}
+/* As a shell takes it, the lines as copied: a line an argument, a flag
+   beside its value. A line too long for the card goes on under itself,
+   indented past the arguments' own indent, breaking only between a flag and
+   its value: a name, and the ` \` after it, move whole (a name longer than
+   the line alone breaks inside). */
 .curate-export-command {
+  grid-area: command;
   display: block;
+  min-width: 0;
   padding: 0.35rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1095,24 +1204,31 @@
   font-family: var(--mono);
   font-size: calc(var(--step--2) * var(--text-scale, 1));
   line-height: 1.5;
+  white-space: pre-wrap;
   user-select: all;
 }
-/* A word moves to the next line whole: `--inplace` is never cut at its
-   hyphens, and only a word longer than the line breaks inside. */
+.curate-export-line {
+  display: block;
+  padding-left: 4ch;
+  text-indent: -4ch;
+}
 .curate-export-word {
   display: inline-block;
   max-width: 100%;
-  overflow-wrap: anywhere;
+  text-indent: 0;
+  word-break: break-all;
 }
 .curate-export-copy {
-  margin-top: 0.15rem;
+  grid-area: copy;
   color: var(--text-dim);
 }
 .curate-export-copy.is-copied {
   border-color: var(--ok);
   color: var(--ok);
 }
-.curate-export-keeps {
+.curate-export-then {
+  grid-area: then;
+  margin: 0;
   font-size: calc(var(--step--2) * var(--text-scale, 1));
 }
 

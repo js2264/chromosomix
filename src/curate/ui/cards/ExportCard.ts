@@ -4,8 +4,9 @@
  * metaTOR's `mge` flag, the elements, the element ↔ host pairs — each a new
  * file through the save dialog (§26.6), named after the map, none of them
  * touching a file the session opened; then the two commands that make the
- * curated binning a map's, each with a copy button, and what a reassignment
- * keeps of the file.
+ * curated binning a map's, each under what it does in plain words, a line an
+ * argument as a shell takes it, with a copy button, and over what follows from
+ * it: what a reassignment keeps of the file and drops, and why the annotation.
  *
  * The dialog is asked from the press itself, before anything is made, and what
  * cannot be written is said on the button before it is pressed. What was
@@ -64,6 +65,21 @@ const COUNTS_WAITED = 3
 /** A file name or a map in a command, quoted for a shell where it needs to be. */
 function shellWord(word: string): string {
   return /^[A-Za-z0-9_./:@%+=,-]+$/.test(word) ? word : `'${word.replace(/'/g, `'\\''`)}'`
+}
+
+/**
+ * A command as the card prints it and the copy button copies it: the program
+ * and its verb on the first line, then each argument on a line of its own — a
+ * flag with its value —, indented, ` \` continuing every line but the last,
+ * so a shell runs the lines pasted as one command.
+ */
+export function commandText(lines: ReadonlyArray<readonly string[]>): string {
+  return lines.map((words, k) => `${k === 0 ? '' : '  '}${words.map(shellWord).join(' ')}`).join(' \\\n')
+}
+
+/** A size as the card says it: its number and its unit kept on one line (`56.5 kB`). */
+function sizeText(bytes: number): string {
+  return fmt.bytes(bytes).replace(' ', '\u00a0')
 }
 
 /**
@@ -151,10 +167,6 @@ export class ExportCard {
       this.stale,
       el('h4', { class: 'edit-card-sub curate-export-sub', text: 'then, into a map' }),
       this.recipe,
-      el('p', {
-        class: 'edit-note curate-export-keeps',
-        text: 'A reassignment keeps metaTOR’s clustering rounds and a changed genome’s own columns as they were, keeps no weight that depends on the assignment, and starts a renamed or new genome without the file’s columns: the annotation gives each genome its mge flag and its elements back.',
-      }),
     )
     this.unsubscribe.push(ctx.model.subscribe((change) => this.update(change)))
     this.unsubscribe.push(this.store.subscribe(() => this.schedule()))
@@ -221,7 +233,11 @@ export class ExportCard {
     return null
   }
 
-  /** The two commands, each with its copy button: the names the reader wrote the tables under. */
+  /**
+   * The two commands, each under what it does in plain words and over what
+   * follows from it, with its copy button: the names the reader wrote the
+   * tables under.
+   */
   private paintRecipe(): void {
     const curated = `${this.stem}.curated.metacool`
     const contigs = this.written.get('contig-genome') ?? this.name('contig-genome')
@@ -229,27 +245,49 @@ export class ExportCard {
     const map = mapArgument(this.ctx.data.title)
     const commands = [
       {
+        does: 'Write the curated map',
         // Regrouped as the session drew it, whatever order the file kept: `auto` keeps a map's own when it was not grouped by genome.
-        words: ['metacooler', 'reassign', map, '--contigs', contigs, '--layout', 'genome-then-length', '-o', curated],
+        lines: [['metacooler', 'reassign'], [map], ['--contigs', contigs], ['--layout', 'genome-then-length'], ['-o', curated]],
         title: `The curated binning made a map’s: a new file, the contigs regrouped by genome, longest first, as the session draws them${map === 'MAP' ? '; MAP is the map’s file, which its name here does not say' : ''}`,
+        // What a reassignment keeps of the file, and what it drops (§33.8).
+        then: 'A new file. It keeps metaTOR’s clustering rounds and each genome’s own columns as they were, even where its contigs changed, and drops the normalisation weights tied to the old binning.',
+        note: 'curate-export-keeps',
       },
       {
-        words: ['metacooler', 'annotate', curated, '--genomes', genomes, '--replace', '--inplace'],
+        does: 'Restore the elements',
+        lines: [['metacooler', 'annotate'], [curated], ['--genomes', genomes], ['--replace'], ['--inplace']],
         title: 'Its genomes’ mge flags and elements, from the genomes table',
+        then: 'A renamed or new genome starts without the file’s columns: this gives every genome its mobile-element flag, and every MAG its elements.',
+        note: 'curate-export-why',
       },
-    ].map((command) => ({ ...command, words: command.words.map(shellWord) }))
-    const signature = commands.map((command) => command.words.join(' ')).join('\n')
+    ].map((command) => ({ ...command, text: commandText(command.lines) }))
+    const signature = commands.map((command) => command.text).join('\n\n')
     if (this.recipe.dataset.commands === signature) return
     this.recipe.dataset.commands = signature
     this.recipe.replaceChildren(
       ...commands.map((command) => {
-        // A word at a time: a line breaks between two, never inside `--inplace`.
         const code = el('code', { class: 'curate-export-command', title: command.title })
-        command.words.forEach((word, k) => {
-          if (k > 0) code.append(' ')
-          code.append(el('span', { class: 'curate-export-word', text: word }))
+        command.lines.forEach((words, k) => {
+          // A line an argument, its text the command's own. A line too long for
+          // the card breaks between a flag and its value, the value under the
+          // flag, indented; never inside a name, nor before its ` \`.
+          const last = k === command.lines.length - 1
+          const line = el('span', { class: 'curate-export-line' }, k === 0 ? null : '  ')
+          words.map(shellWord).forEach((word, w) => {
+            if (w > 0) line.append(' ')
+            line.append(el('span', { class: 'curate-export-word', text: w === words.length - 1 && !last ? `${word} \\` : word }))
+          })
+          if (!last) line.append('\n')
+          code.append(line)
         })
-        return el('li', { class: 'curate-export-step' }, code, this.copyButton(command.words.join(' '), code))
+        return el(
+          'li',
+          { class: 'curate-export-step' },
+          el('span', { class: 'curate-export-does', text: command.does }),
+          this.copyButton(command.text, code),
+          code,
+          el('p', { class: `edit-note curate-export-then ${command.note}`, text: command.then }),
+        )
       }),
     )
   }
@@ -317,7 +355,7 @@ export class ExportCard {
       this.written.set(kind, target.name)
       this.writtenOf.set(kind, from)
       const time = captionStamp(this.now()).slice(11)
-      this.say(`Wrote ${target.name} (${fmt.bytes(blob.size)}) at ${time}. ${facts(table.note)}`)
+      this.say(`Wrote ${target.name} (${sizeText(blob.size)}) at ${time}. ${facts(table.note)}`)
     } catch (err) {
       this.say(`Could not write ${target.name}: ${err instanceof Error ? err.message : String(err)}`)
     }
