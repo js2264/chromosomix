@@ -1,0 +1,3631 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/render/karyotype.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/render</a> karyotype.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">77.63% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>493/635</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">87.5% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>189/216</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">90% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>36/40</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">77.63% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>493/635</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line medium'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a>
+<a name='L288'></a><a href='#L288'>288</a>
+<a name='L289'></a><a href='#L289'>289</a>
+<a name='L290'></a><a href='#L290'>290</a>
+<a name='L291'></a><a href='#L291'>291</a>
+<a name='L292'></a><a href='#L292'>292</a>
+<a name='L293'></a><a href='#L293'>293</a>
+<a name='L294'></a><a href='#L294'>294</a>
+<a name='L295'></a><a href='#L295'>295</a>
+<a name='L296'></a><a href='#L296'>296</a>
+<a name='L297'></a><a href='#L297'>297</a>
+<a name='L298'></a><a href='#L298'>298</a>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a>
+<a name='L309'></a><a href='#L309'>309</a>
+<a name='L310'></a><a href='#L310'>310</a>
+<a name='L311'></a><a href='#L311'>311</a>
+<a name='L312'></a><a href='#L312'>312</a>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a>
+<a name='L332'></a><a href='#L332'>332</a>
+<a name='L333'></a><a href='#L333'>333</a>
+<a name='L334'></a><a href='#L334'>334</a>
+<a name='L335'></a><a href='#L335'>335</a>
+<a name='L336'></a><a href='#L336'>336</a>
+<a name='L337'></a><a href='#L337'>337</a>
+<a name='L338'></a><a href='#L338'>338</a>
+<a name='L339'></a><a href='#L339'>339</a>
+<a name='L340'></a><a href='#L340'>340</a>
+<a name='L341'></a><a href='#L341'>341</a>
+<a name='L342'></a><a href='#L342'>342</a>
+<a name='L343'></a><a href='#L343'>343</a>
+<a name='L344'></a><a href='#L344'>344</a>
+<a name='L345'></a><a href='#L345'>345</a>
+<a name='L346'></a><a href='#L346'>346</a>
+<a name='L347'></a><a href='#L347'>347</a>
+<a name='L348'></a><a href='#L348'>348</a>
+<a name='L349'></a><a href='#L349'>349</a>
+<a name='L350'></a><a href='#L350'>350</a>
+<a name='L351'></a><a href='#L351'>351</a>
+<a name='L352'></a><a href='#L352'>352</a>
+<a name='L353'></a><a href='#L353'>353</a>
+<a name='L354'></a><a href='#L354'>354</a>
+<a name='L355'></a><a href='#L355'>355</a>
+<a name='L356'></a><a href='#L356'>356</a>
+<a name='L357'></a><a href='#L357'>357</a>
+<a name='L358'></a><a href='#L358'>358</a>
+<a name='L359'></a><a href='#L359'>359</a>
+<a name='L360'></a><a href='#L360'>360</a>
+<a name='L361'></a><a href='#L361'>361</a>
+<a name='L362'></a><a href='#L362'>362</a>
+<a name='L363'></a><a href='#L363'>363</a>
+<a name='L364'></a><a href='#L364'>364</a>
+<a name='L365'></a><a href='#L365'>365</a>
+<a name='L366'></a><a href='#L366'>366</a>
+<a name='L367'></a><a href='#L367'>367</a>
+<a name='L368'></a><a href='#L368'>368</a>
+<a name='L369'></a><a href='#L369'>369</a>
+<a name='L370'></a><a href='#L370'>370</a>
+<a name='L371'></a><a href='#L371'>371</a>
+<a name='L372'></a><a href='#L372'>372</a>
+<a name='L373'></a><a href='#L373'>373</a>
+<a name='L374'></a><a href='#L374'>374</a>
+<a name='L375'></a><a href='#L375'>375</a>
+<a name='L376'></a><a href='#L376'>376</a>
+<a name='L377'></a><a href='#L377'>377</a>
+<a name='L378'></a><a href='#L378'>378</a>
+<a name='L379'></a><a href='#L379'>379</a>
+<a name='L380'></a><a href='#L380'>380</a>
+<a name='L381'></a><a href='#L381'>381</a>
+<a name='L382'></a><a href='#L382'>382</a>
+<a name='L383'></a><a href='#L383'>383</a>
+<a name='L384'></a><a href='#L384'>384</a>
+<a name='L385'></a><a href='#L385'>385</a>
+<a name='L386'></a><a href='#L386'>386</a>
+<a name='L387'></a><a href='#L387'>387</a>
+<a name='L388'></a><a href='#L388'>388</a>
+<a name='L389'></a><a href='#L389'>389</a>
+<a name='L390'></a><a href='#L390'>390</a>
+<a name='L391'></a><a href='#L391'>391</a>
+<a name='L392'></a><a href='#L392'>392</a>
+<a name='L393'></a><a href='#L393'>393</a>
+<a name='L394'></a><a href='#L394'>394</a>
+<a name='L395'></a><a href='#L395'>395</a>
+<a name='L396'></a><a href='#L396'>396</a>
+<a name='L397'></a><a href='#L397'>397</a>
+<a name='L398'></a><a href='#L398'>398</a>
+<a name='L399'></a><a href='#L399'>399</a>
+<a name='L400'></a><a href='#L400'>400</a>
+<a name='L401'></a><a href='#L401'>401</a>
+<a name='L402'></a><a href='#L402'>402</a>
+<a name='L403'></a><a href='#L403'>403</a>
+<a name='L404'></a><a href='#L404'>404</a>
+<a name='L405'></a><a href='#L405'>405</a>
+<a name='L406'></a><a href='#L406'>406</a>
+<a name='L407'></a><a href='#L407'>407</a>
+<a name='L408'></a><a href='#L408'>408</a>
+<a name='L409'></a><a href='#L409'>409</a>
+<a name='L410'></a><a href='#L410'>410</a>
+<a name='L411'></a><a href='#L411'>411</a>
+<a name='L412'></a><a href='#L412'>412</a>
+<a name='L413'></a><a href='#L413'>413</a>
+<a name='L414'></a><a href='#L414'>414</a>
+<a name='L415'></a><a href='#L415'>415</a>
+<a name='L416'></a><a href='#L416'>416</a>
+<a name='L417'></a><a href='#L417'>417</a>
+<a name='L418'></a><a href='#L418'>418</a>
+<a name='L419'></a><a href='#L419'>419</a>
+<a name='L420'></a><a href='#L420'>420</a>
+<a name='L421'></a><a href='#L421'>421</a>
+<a name='L422'></a><a href='#L422'>422</a>
+<a name='L423'></a><a href='#L423'>423</a>
+<a name='L424'></a><a href='#L424'>424</a>
+<a name='L425'></a><a href='#L425'>425</a>
+<a name='L426'></a><a href='#L426'>426</a>
+<a name='L427'></a><a href='#L427'>427</a>
+<a name='L428'></a><a href='#L428'>428</a>
+<a name='L429'></a><a href='#L429'>429</a>
+<a name='L430'></a><a href='#L430'>430</a>
+<a name='L431'></a><a href='#L431'>431</a>
+<a name='L432'></a><a href='#L432'>432</a>
+<a name='L433'></a><a href='#L433'>433</a>
+<a name='L434'></a><a href='#L434'>434</a>
+<a name='L435'></a><a href='#L435'>435</a>
+<a name='L436'></a><a href='#L436'>436</a>
+<a name='L437'></a><a href='#L437'>437</a>
+<a name='L438'></a><a href='#L438'>438</a>
+<a name='L439'></a><a href='#L439'>439</a>
+<a name='L440'></a><a href='#L440'>440</a>
+<a name='L441'></a><a href='#L441'>441</a>
+<a name='L442'></a><a href='#L442'>442</a>
+<a name='L443'></a><a href='#L443'>443</a>
+<a name='L444'></a><a href='#L444'>444</a>
+<a name='L445'></a><a href='#L445'>445</a>
+<a name='L446'></a><a href='#L446'>446</a>
+<a name='L447'></a><a href='#L447'>447</a>
+<a name='L448'></a><a href='#L448'>448</a>
+<a name='L449'></a><a href='#L449'>449</a>
+<a name='L450'></a><a href='#L450'>450</a>
+<a name='L451'></a><a href='#L451'>451</a>
+<a name='L452'></a><a href='#L452'>452</a>
+<a name='L453'></a><a href='#L453'>453</a>
+<a name='L454'></a><a href='#L454'>454</a>
+<a name='L455'></a><a href='#L455'>455</a>
+<a name='L456'></a><a href='#L456'>456</a>
+<a name='L457'></a><a href='#L457'>457</a>
+<a name='L458'></a><a href='#L458'>458</a>
+<a name='L459'></a><a href='#L459'>459</a>
+<a name='L460'></a><a href='#L460'>460</a>
+<a name='L461'></a><a href='#L461'>461</a>
+<a name='L462'></a><a href='#L462'>462</a>
+<a name='L463'></a><a href='#L463'>463</a>
+<a name='L464'></a><a href='#L464'>464</a>
+<a name='L465'></a><a href='#L465'>465</a>
+<a name='L466'></a><a href='#L466'>466</a>
+<a name='L467'></a><a href='#L467'>467</a>
+<a name='L468'></a><a href='#L468'>468</a>
+<a name='L469'></a><a href='#L469'>469</a>
+<a name='L470'></a><a href='#L470'>470</a>
+<a name='L471'></a><a href='#L471'>471</a>
+<a name='L472'></a><a href='#L472'>472</a>
+<a name='L473'></a><a href='#L473'>473</a>
+<a name='L474'></a><a href='#L474'>474</a>
+<a name='L475'></a><a href='#L475'>475</a>
+<a name='L476'></a><a href='#L476'>476</a>
+<a name='L477'></a><a href='#L477'>477</a>
+<a name='L478'></a><a href='#L478'>478</a>
+<a name='L479'></a><a href='#L479'>479</a>
+<a name='L480'></a><a href='#L480'>480</a>
+<a name='L481'></a><a href='#L481'>481</a>
+<a name='L482'></a><a href='#L482'>482</a>
+<a name='L483'></a><a href='#L483'>483</a>
+<a name='L484'></a><a href='#L484'>484</a>
+<a name='L485'></a><a href='#L485'>485</a>
+<a name='L486'></a><a href='#L486'>486</a>
+<a name='L487'></a><a href='#L487'>487</a>
+<a name='L488'></a><a href='#L488'>488</a>
+<a name='L489'></a><a href='#L489'>489</a>
+<a name='L490'></a><a href='#L490'>490</a>
+<a name='L491'></a><a href='#L491'>491</a>
+<a name='L492'></a><a href='#L492'>492</a>
+<a name='L493'></a><a href='#L493'>493</a>
+<a name='L494'></a><a href='#L494'>494</a>
+<a name='L495'></a><a href='#L495'>495</a>
+<a name='L496'></a><a href='#L496'>496</a>
+<a name='L497'></a><a href='#L497'>497</a>
+<a name='L498'></a><a href='#L498'>498</a>
+<a name='L499'></a><a href='#L499'>499</a>
+<a name='L500'></a><a href='#L500'>500</a>
+<a name='L501'></a><a href='#L501'>501</a>
+<a name='L502'></a><a href='#L502'>502</a>
+<a name='L503'></a><a href='#L503'>503</a>
+<a name='L504'></a><a href='#L504'>504</a>
+<a name='L505'></a><a href='#L505'>505</a>
+<a name='L506'></a><a href='#L506'>506</a>
+<a name='L507'></a><a href='#L507'>507</a>
+<a name='L508'></a><a href='#L508'>508</a>
+<a name='L509'></a><a href='#L509'>509</a>
+<a name='L510'></a><a href='#L510'>510</a>
+<a name='L511'></a><a href='#L511'>511</a>
+<a name='L512'></a><a href='#L512'>512</a>
+<a name='L513'></a><a href='#L513'>513</a>
+<a name='L514'></a><a href='#L514'>514</a>
+<a name='L515'></a><a href='#L515'>515</a>
+<a name='L516'></a><a href='#L516'>516</a>
+<a name='L517'></a><a href='#L517'>517</a>
+<a name='L518'></a><a href='#L518'>518</a>
+<a name='L519'></a><a href='#L519'>519</a>
+<a name='L520'></a><a href='#L520'>520</a>
+<a name='L521'></a><a href='#L521'>521</a>
+<a name='L522'></a><a href='#L522'>522</a>
+<a name='L523'></a><a href='#L523'>523</a>
+<a name='L524'></a><a href='#L524'>524</a>
+<a name='L525'></a><a href='#L525'>525</a>
+<a name='L526'></a><a href='#L526'>526</a>
+<a name='L527'></a><a href='#L527'>527</a>
+<a name='L528'></a><a href='#L528'>528</a>
+<a name='L529'></a><a href='#L529'>529</a>
+<a name='L530'></a><a href='#L530'>530</a>
+<a name='L531'></a><a href='#L531'>531</a>
+<a name='L532'></a><a href='#L532'>532</a>
+<a name='L533'></a><a href='#L533'>533</a>
+<a name='L534'></a><a href='#L534'>534</a>
+<a name='L535'></a><a href='#L535'>535</a>
+<a name='L536'></a><a href='#L536'>536</a>
+<a name='L537'></a><a href='#L537'>537</a>
+<a name='L538'></a><a href='#L538'>538</a>
+<a name='L539'></a><a href='#L539'>539</a>
+<a name='L540'></a><a href='#L540'>540</a>
+<a name='L541'></a><a href='#L541'>541</a>
+<a name='L542'></a><a href='#L542'>542</a>
+<a name='L543'></a><a href='#L543'>543</a>
+<a name='L544'></a><a href='#L544'>544</a>
+<a name='L545'></a><a href='#L545'>545</a>
+<a name='L546'></a><a href='#L546'>546</a>
+<a name='L547'></a><a href='#L547'>547</a>
+<a name='L548'></a><a href='#L548'>548</a>
+<a name='L549'></a><a href='#L549'>549</a>
+<a name='L550'></a><a href='#L550'>550</a>
+<a name='L551'></a><a href='#L551'>551</a>
+<a name='L552'></a><a href='#L552'>552</a>
+<a name='L553'></a><a href='#L553'>553</a>
+<a name='L554'></a><a href='#L554'>554</a>
+<a name='L555'></a><a href='#L555'>555</a>
+<a name='L556'></a><a href='#L556'>556</a>
+<a name='L557'></a><a href='#L557'>557</a>
+<a name='L558'></a><a href='#L558'>558</a>
+<a name='L559'></a><a href='#L559'>559</a>
+<a name='L560'></a><a href='#L560'>560</a>
+<a name='L561'></a><a href='#L561'>561</a>
+<a name='L562'></a><a href='#L562'>562</a>
+<a name='L563'></a><a href='#L563'>563</a>
+<a name='L564'></a><a href='#L564'>564</a>
+<a name='L565'></a><a href='#L565'>565</a>
+<a name='L566'></a><a href='#L566'>566</a>
+<a name='L567'></a><a href='#L567'>567</a>
+<a name='L568'></a><a href='#L568'>568</a>
+<a name='L569'></a><a href='#L569'>569</a>
+<a name='L570'></a><a href='#L570'>570</a>
+<a name='L571'></a><a href='#L571'>571</a>
+<a name='L572'></a><a href='#L572'>572</a>
+<a name='L573'></a><a href='#L573'>573</a>
+<a name='L574'></a><a href='#L574'>574</a>
+<a name='L575'></a><a href='#L575'>575</a>
+<a name='L576'></a><a href='#L576'>576</a>
+<a name='L577'></a><a href='#L577'>577</a>
+<a name='L578'></a><a href='#L578'>578</a>
+<a name='L579'></a><a href='#L579'>579</a>
+<a name='L580'></a><a href='#L580'>580</a>
+<a name='L581'></a><a href='#L581'>581</a>
+<a name='L582'></a><a href='#L582'>582</a>
+<a name='L583'></a><a href='#L583'>583</a>
+<a name='L584'></a><a href='#L584'>584</a>
+<a name='L585'></a><a href='#L585'>585</a>
+<a name='L586'></a><a href='#L586'>586</a>
+<a name='L587'></a><a href='#L587'>587</a>
+<a name='L588'></a><a href='#L588'>588</a>
+<a name='L589'></a><a href='#L589'>589</a>
+<a name='L590'></a><a href='#L590'>590</a>
+<a name='L591'></a><a href='#L591'>591</a>
+<a name='L592'></a><a href='#L592'>592</a>
+<a name='L593'></a><a href='#L593'>593</a>
+<a name='L594'></a><a href='#L594'>594</a>
+<a name='L595'></a><a href='#L595'>595</a>
+<a name='L596'></a><a href='#L596'>596</a>
+<a name='L597'></a><a href='#L597'>597</a>
+<a name='L598'></a><a href='#L598'>598</a>
+<a name='L599'></a><a href='#L599'>599</a>
+<a name='L600'></a><a href='#L600'>600</a>
+<a name='L601'></a><a href='#L601'>601</a>
+<a name='L602'></a><a href='#L602'>602</a>
+<a name='L603'></a><a href='#L603'>603</a>
+<a name='L604'></a><a href='#L604'>604</a>
+<a name='L605'></a><a href='#L605'>605</a>
+<a name='L606'></a><a href='#L606'>606</a>
+<a name='L607'></a><a href='#L607'>607</a>
+<a name='L608'></a><a href='#L608'>608</a>
+<a name='L609'></a><a href='#L609'>609</a>
+<a name='L610'></a><a href='#L610'>610</a>
+<a name='L611'></a><a href='#L611'>611</a>
+<a name='L612'></a><a href='#L612'>612</a>
+<a name='L613'></a><a href='#L613'>613</a>
+<a name='L614'></a><a href='#L614'>614</a>
+<a name='L615'></a><a href='#L615'>615</a>
+<a name='L616'></a><a href='#L616'>616</a>
+<a name='L617'></a><a href='#L617'>617</a>
+<a name='L618'></a><a href='#L618'>618</a>
+<a name='L619'></a><a href='#L619'>619</a>
+<a name='L620'></a><a href='#L620'>620</a>
+<a name='L621'></a><a href='#L621'>621</a>
+<a name='L622'></a><a href='#L622'>622</a>
+<a name='L623'></a><a href='#L623'>623</a>
+<a name='L624'></a><a href='#L624'>624</a>
+<a name='L625'></a><a href='#L625'>625</a>
+<a name='L626'></a><a href='#L626'>626</a>
+<a name='L627'></a><a href='#L627'>627</a>
+<a name='L628'></a><a href='#L628'>628</a>
+<a name='L629'></a><a href='#L629'>629</a>
+<a name='L630'></a><a href='#L630'>630</a>
+<a name='L631'></a><a href='#L631'>631</a>
+<a name='L632'></a><a href='#L632'>632</a>
+<a name='L633'></a><a href='#L633'>633</a>
+<a name='L634'></a><a href='#L634'>634</a>
+<a name='L635'></a><a href='#L635'>635</a>
+<a name='L636'></a><a href='#L636'>636</a>
+<a name='L637'></a><a href='#L637'>637</a>
+<a name='L638'></a><a href='#L638'>638</a>
+<a name='L639'></a><a href='#L639'>639</a>
+<a name='L640'></a><a href='#L640'>640</a>
+<a name='L641'></a><a href='#L641'>641</a>
+<a name='L642'></a><a href='#L642'>642</a>
+<a name='L643'></a><a href='#L643'>643</a>
+<a name='L644'></a><a href='#L644'>644</a>
+<a name='L645'></a><a href='#L645'>645</a>
+<a name='L646'></a><a href='#L646'>646</a>
+<a name='L647'></a><a href='#L647'>647</a>
+<a name='L648'></a><a href='#L648'>648</a>
+<a name='L649'></a><a href='#L649'>649</a>
+<a name='L650'></a><a href='#L650'>650</a>
+<a name='L651'></a><a href='#L651'>651</a>
+<a name='L652'></a><a href='#L652'>652</a>
+<a name='L653'></a><a href='#L653'>653</a>
+<a name='L654'></a><a href='#L654'>654</a>
+<a name='L655'></a><a href='#L655'>655</a>
+<a name='L656'></a><a href='#L656'>656</a>
+<a name='L657'></a><a href='#L657'>657</a>
+<a name='L658'></a><a href='#L658'>658</a>
+<a name='L659'></a><a href='#L659'>659</a>
+<a name='L660'></a><a href='#L660'>660</a>
+<a name='L661'></a><a href='#L661'>661</a>
+<a name='L662'></a><a href='#L662'>662</a>
+<a name='L663'></a><a href='#L663'>663</a>
+<a name='L664'></a><a href='#L664'>664</a>
+<a name='L665'></a><a href='#L665'>665</a>
+<a name='L666'></a><a href='#L666'>666</a>
+<a name='L667'></a><a href='#L667'>667</a>
+<a name='L668'></a><a href='#L668'>668</a>
+<a name='L669'></a><a href='#L669'>669</a>
+<a name='L670'></a><a href='#L670'>670</a>
+<a name='L671'></a><a href='#L671'>671</a>
+<a name='L672'></a><a href='#L672'>672</a>
+<a name='L673'></a><a href='#L673'>673</a>
+<a name='L674'></a><a href='#L674'>674</a>
+<a name='L675'></a><a href='#L675'>675</a>
+<a name='L676'></a><a href='#L676'>676</a>
+<a name='L677'></a><a href='#L677'>677</a>
+<a name='L678'></a><a href='#L678'>678</a>
+<a name='L679'></a><a href='#L679'>679</a>
+<a name='L680'></a><a href='#L680'>680</a>
+<a name='L681'></a><a href='#L681'>681</a>
+<a name='L682'></a><a href='#L682'>682</a>
+<a name='L683'></a><a href='#L683'>683</a>
+<a name='L684'></a><a href='#L684'>684</a>
+<a name='L685'></a><a href='#L685'>685</a>
+<a name='L686'></a><a href='#L686'>686</a>
+<a name='L687'></a><a href='#L687'>687</a>
+<a name='L688'></a><a href='#L688'>688</a>
+<a name='L689'></a><a href='#L689'>689</a>
+<a name='L690'></a><a href='#L690'>690</a>
+<a name='L691'></a><a href='#L691'>691</a>
+<a name='L692'></a><a href='#L692'>692</a>
+<a name='L693'></a><a href='#L693'>693</a>
+<a name='L694'></a><a href='#L694'>694</a>
+<a name='L695'></a><a href='#L695'>695</a>
+<a name='L696'></a><a href='#L696'>696</a>
+<a name='L697'></a><a href='#L697'>697</a>
+<a name='L698'></a><a href='#L698'>698</a>
+<a name='L699'></a><a href='#L699'>699</a>
+<a name='L700'></a><a href='#L700'>700</a>
+<a name='L701'></a><a href='#L701'>701</a>
+<a name='L702'></a><a href='#L702'>702</a>
+<a name='L703'></a><a href='#L703'>703</a>
+<a name='L704'></a><a href='#L704'>704</a>
+<a name='L705'></a><a href='#L705'>705</a>
+<a name='L706'></a><a href='#L706'>706</a>
+<a name='L707'></a><a href='#L707'>707</a>
+<a name='L708'></a><a href='#L708'>708</a>
+<a name='L709'></a><a href='#L709'>709</a>
+<a name='L710'></a><a href='#L710'>710</a>
+<a name='L711'></a><a href='#L711'>711</a>
+<a name='L712'></a><a href='#L712'>712</a>
+<a name='L713'></a><a href='#L713'>713</a>
+<a name='L714'></a><a href='#L714'>714</a>
+<a name='L715'></a><a href='#L715'>715</a>
+<a name='L716'></a><a href='#L716'>716</a>
+<a name='L717'></a><a href='#L717'>717</a>
+<a name='L718'></a><a href='#L718'>718</a>
+<a name='L719'></a><a href='#L719'>719</a>
+<a name='L720'></a><a href='#L720'>720</a>
+<a name='L721'></a><a href='#L721'>721</a>
+<a name='L722'></a><a href='#L722'>722</a>
+<a name='L723'></a><a href='#L723'>723</a>
+<a name='L724'></a><a href='#L724'>724</a>
+<a name='L725'></a><a href='#L725'>725</a>
+<a name='L726'></a><a href='#L726'>726</a>
+<a name='L727'></a><a href='#L727'>727</a>
+<a name='L728'></a><a href='#L728'>728</a>
+<a name='L729'></a><a href='#L729'>729</a>
+<a name='L730'></a><a href='#L730'>730</a>
+<a name='L731'></a><a href='#L731'>731</a>
+<a name='L732'></a><a href='#L732'>732</a>
+<a name='L733'></a><a href='#L733'>733</a>
+<a name='L734'></a><a href='#L734'>734</a>
+<a name='L735'></a><a href='#L735'>735</a>
+<a name='L736'></a><a href='#L736'>736</a>
+<a name='L737'></a><a href='#L737'>737</a>
+<a name='L738'></a><a href='#L738'>738</a>
+<a name='L739'></a><a href='#L739'>739</a>
+<a name='L740'></a><a href='#L740'>740</a>
+<a name='L741'></a><a href='#L741'>741</a>
+<a name='L742'></a><a href='#L742'>742</a>
+<a name='L743'></a><a href='#L743'>743</a>
+<a name='L744'></a><a href='#L744'>744</a>
+<a name='L745'></a><a href='#L745'>745</a>
+<a name='L746'></a><a href='#L746'>746</a>
+<a name='L747'></a><a href='#L747'>747</a>
+<a name='L748'></a><a href='#L748'>748</a>
+<a name='L749'></a><a href='#L749'>749</a>
+<a name='L750'></a><a href='#L750'>750</a>
+<a name='L751'></a><a href='#L751'>751</a>
+<a name='L752'></a><a href='#L752'>752</a>
+<a name='L753'></a><a href='#L753'>753</a>
+<a name='L754'></a><a href='#L754'>754</a>
+<a name='L755'></a><a href='#L755'>755</a>
+<a name='L756'></a><a href='#L756'>756</a>
+<a name='L757'></a><a href='#L757'>757</a>
+<a name='L758'></a><a href='#L758'>758</a>
+<a name='L759'></a><a href='#L759'>759</a>
+<a name='L760'></a><a href='#L760'>760</a>
+<a name='L761'></a><a href='#L761'>761</a>
+<a name='L762'></a><a href='#L762'>762</a>
+<a name='L763'></a><a href='#L763'>763</a>
+<a name='L764'></a><a href='#L764'>764</a>
+<a name='L765'></a><a href='#L765'>765</a>
+<a name='L766'></a><a href='#L766'>766</a>
+<a name='L767'></a><a href='#L767'>767</a>
+<a name='L768'></a><a href='#L768'>768</a>
+<a name='L769'></a><a href='#L769'>769</a>
+<a name='L770'></a><a href='#L770'>770</a>
+<a name='L771'></a><a href='#L771'>771</a>
+<a name='L772'></a><a href='#L772'>772</a>
+<a name='L773'></a><a href='#L773'>773</a>
+<a name='L774'></a><a href='#L774'>774</a>
+<a name='L775'></a><a href='#L775'>775</a>
+<a name='L776'></a><a href='#L776'>776</a>
+<a name='L777'></a><a href='#L777'>777</a>
+<a name='L778'></a><a href='#L778'>778</a>
+<a name='L779'></a><a href='#L779'>779</a>
+<a name='L780'></a><a href='#L780'>780</a>
+<a name='L781'></a><a href='#L781'>781</a>
+<a name='L782'></a><a href='#L782'>782</a>
+<a name='L783'></a><a href='#L783'>783</a>
+<a name='L784'></a><a href='#L784'>784</a>
+<a name='L785'></a><a href='#L785'>785</a>
+<a name='L786'></a><a href='#L786'>786</a>
+<a name='L787'></a><a href='#L787'>787</a>
+<a name='L788'></a><a href='#L788'>788</a>
+<a name='L789'></a><a href='#L789'>789</a>
+<a name='L790'></a><a href='#L790'>790</a>
+<a name='L791'></a><a href='#L791'>791</a>
+<a name='L792'></a><a href='#L792'>792</a>
+<a name='L793'></a><a href='#L793'>793</a>
+<a name='L794'></a><a href='#L794'>794</a>
+<a name='L795'></a><a href='#L795'>795</a>
+<a name='L796'></a><a href='#L796'>796</a>
+<a name='L797'></a><a href='#L797'>797</a>
+<a name='L798'></a><a href='#L798'>798</a>
+<a name='L799'></a><a href='#L799'>799</a>
+<a name='L800'></a><a href='#L800'>800</a>
+<a name='L801'></a><a href='#L801'>801</a>
+<a name='L802'></a><a href='#L802'>802</a>
+<a name='L803'></a><a href='#L803'>803</a>
+<a name='L804'></a><a href='#L804'>804</a>
+<a name='L805'></a><a href='#L805'>805</a>
+<a name='L806'></a><a href='#L806'>806</a>
+<a name='L807'></a><a href='#L807'>807</a>
+<a name='L808'></a><a href='#L808'>808</a>
+<a name='L809'></a><a href='#L809'>809</a>
+<a name='L810'></a><a href='#L810'>810</a>
+<a name='L811'></a><a href='#L811'>811</a>
+<a name='L812'></a><a href='#L812'>812</a>
+<a name='L813'></a><a href='#L813'>813</a>
+<a name='L814'></a><a href='#L814'>814</a>
+<a name='L815'></a><a href='#L815'>815</a>
+<a name='L816'></a><a href='#L816'>816</a>
+<a name='L817'></a><a href='#L817'>817</a>
+<a name='L818'></a><a href='#L818'>818</a>
+<a name='L819'></a><a href='#L819'>819</a>
+<a name='L820'></a><a href='#L820'>820</a>
+<a name='L821'></a><a href='#L821'>821</a>
+<a name='L822'></a><a href='#L822'>822</a>
+<a name='L823'></a><a href='#L823'>823</a>
+<a name='L824'></a><a href='#L824'>824</a>
+<a name='L825'></a><a href='#L825'>825</a>
+<a name='L826'></a><a href='#L826'>826</a>
+<a name='L827'></a><a href='#L827'>827</a>
+<a name='L828'></a><a href='#L828'>828</a>
+<a name='L829'></a><a href='#L829'>829</a>
+<a name='L830'></a><a href='#L830'>830</a>
+<a name='L831'></a><a href='#L831'>831</a>
+<a name='L832'></a><a href='#L832'>832</a>
+<a name='L833'></a><a href='#L833'>833</a>
+<a name='L834'></a><a href='#L834'>834</a>
+<a name='L835'></a><a href='#L835'>835</a>
+<a name='L836'></a><a href='#L836'>836</a>
+<a name='L837'></a><a href='#L837'>837</a>
+<a name='L838'></a><a href='#L838'>838</a>
+<a name='L839'></a><a href='#L839'>839</a>
+<a name='L840'></a><a href='#L840'>840</a>
+<a name='L841'></a><a href='#L841'>841</a>
+<a name='L842'></a><a href='#L842'>842</a>
+<a name='L843'></a><a href='#L843'>843</a>
+<a name='L844'></a><a href='#L844'>844</a>
+<a name='L845'></a><a href='#L845'>845</a>
+<a name='L846'></a><a href='#L846'>846</a>
+<a name='L847'></a><a href='#L847'>847</a>
+<a name='L848'></a><a href='#L848'>848</a>
+<a name='L849'></a><a href='#L849'>849</a>
+<a name='L850'></a><a href='#L850'>850</a>
+<a name='L851'></a><a href='#L851'>851</a>
+<a name='L852'></a><a href='#L852'>852</a>
+<a name='L853'></a><a href='#L853'>853</a>
+<a name='L854'></a><a href='#L854'>854</a>
+<a name='L855'></a><a href='#L855'>855</a>
+<a name='L856'></a><a href='#L856'>856</a>
+<a name='L857'></a><a href='#L857'>857</a>
+<a name='L858'></a><a href='#L858'>858</a>
+<a name='L859'></a><a href='#L859'>859</a>
+<a name='L860'></a><a href='#L860'>860</a>
+<a name='L861'></a><a href='#L861'>861</a>
+<a name='L862'></a><a href='#L862'>862</a>
+<a name='L863'></a><a href='#L863'>863</a>
+<a name='L864'></a><a href='#L864'>864</a>
+<a name='L865'></a><a href='#L865'>865</a>
+<a name='L866'></a><a href='#L866'>866</a>
+<a name='L867'></a><a href='#L867'>867</a>
+<a name='L868'></a><a href='#L868'>868</a>
+<a name='L869'></a><a href='#L869'>869</a>
+<a name='L870'></a><a href='#L870'>870</a>
+<a name='L871'></a><a href='#L871'>871</a>
+<a name='L872'></a><a href='#L872'>872</a>
+<a name='L873'></a><a href='#L873'>873</a>
+<a name='L874'></a><a href='#L874'>874</a>
+<a name='L875'></a><a href='#L875'>875</a>
+<a name='L876'></a><a href='#L876'>876</a>
+<a name='L877'></a><a href='#L877'>877</a>
+<a name='L878'></a><a href='#L878'>878</a>
+<a name='L879'></a><a href='#L879'>879</a>
+<a name='L880'></a><a href='#L880'>880</a>
+<a name='L881'></a><a href='#L881'>881</a>
+<a name='L882'></a><a href='#L882'>882</a>
+<a name='L883'></a><a href='#L883'>883</a>
+<a name='L884'></a><a href='#L884'>884</a>
+<a name='L885'></a><a href='#L885'>885</a>
+<a name='L886'></a><a href='#L886'>886</a>
+<a name='L887'></a><a href='#L887'>887</a>
+<a name='L888'></a><a href='#L888'>888</a>
+<a name='L889'></a><a href='#L889'>889</a>
+<a name='L890'></a><a href='#L890'>890</a>
+<a name='L891'></a><a href='#L891'>891</a>
+<a name='L892'></a><a href='#L892'>892</a>
+<a name='L893'></a><a href='#L893'>893</a>
+<a name='L894'></a><a href='#L894'>894</a>
+<a name='L895'></a><a href='#L895'>895</a>
+<a name='L896'></a><a href='#L896'>896</a>
+<a name='L897'></a><a href='#L897'>897</a>
+<a name='L898'></a><a href='#L898'>898</a>
+<a name='L899'></a><a href='#L899'>899</a>
+<a name='L900'></a><a href='#L900'>900</a>
+<a name='L901'></a><a href='#L901'>901</a>
+<a name='L902'></a><a href='#L902'>902</a>
+<a name='L903'></a><a href='#L903'>903</a>
+<a name='L904'></a><a href='#L904'>904</a>
+<a name='L905'></a><a href='#L905'>905</a>
+<a name='L906'></a><a href='#L906'>906</a>
+<a name='L907'></a><a href='#L907'>907</a>
+<a name='L908'></a><a href='#L908'>908</a>
+<a name='L909'></a><a href='#L909'>909</a>
+<a name='L910'></a><a href='#L910'>910</a>
+<a name='L911'></a><a href='#L911'>911</a>
+<a name='L912'></a><a href='#L912'>912</a>
+<a name='L913'></a><a href='#L913'>913</a>
+<a name='L914'></a><a href='#L914'>914</a>
+<a name='L915'></a><a href='#L915'>915</a>
+<a name='L916'></a><a href='#L916'>916</a>
+<a name='L917'></a><a href='#L917'>917</a>
+<a name='L918'></a><a href='#L918'>918</a>
+<a name='L919'></a><a href='#L919'>919</a>
+<a name='L920'></a><a href='#L920'>920</a>
+<a name='L921'></a><a href='#L921'>921</a>
+<a name='L922'></a><a href='#L922'>922</a>
+<a name='L923'></a><a href='#L923'>923</a>
+<a name='L924'></a><a href='#L924'>924</a>
+<a name='L925'></a><a href='#L925'>925</a>
+<a name='L926'></a><a href='#L926'>926</a>
+<a name='L927'></a><a href='#L927'>927</a>
+<a name='L928'></a><a href='#L928'>928</a>
+<a name='L929'></a><a href='#L929'>929</a>
+<a name='L930'></a><a href='#L930'>930</a>
+<a name='L931'></a><a href='#L931'>931</a>
+<a name='L932'></a><a href='#L932'>932</a>
+<a name='L933'></a><a href='#L933'>933</a>
+<a name='L934'></a><a href='#L934'>934</a>
+<a name='L935'></a><a href='#L935'>935</a>
+<a name='L936'></a><a href='#L936'>936</a>
+<a name='L937'></a><a href='#L937'>937</a>
+<a name='L938'></a><a href='#L938'>938</a>
+<a name='L939'></a><a href='#L939'>939</a>
+<a name='L940'></a><a href='#L940'>940</a>
+<a name='L941'></a><a href='#L941'>941</a>
+<a name='L942'></a><a href='#L942'>942</a>
+<a name='L943'></a><a href='#L943'>943</a>
+<a name='L944'></a><a href='#L944'>944</a>
+<a name='L945'></a><a href='#L945'>945</a>
+<a name='L946'></a><a href='#L946'>946</a>
+<a name='L947'></a><a href='#L947'>947</a>
+<a name='L948'></a><a href='#L948'>948</a>
+<a name='L949'></a><a href='#L949'>949</a>
+<a name='L950'></a><a href='#L950'>950</a>
+<a name='L951'></a><a href='#L951'>951</a>
+<a name='L952'></a><a href='#L952'>952</a>
+<a name='L953'></a><a href='#L953'>953</a>
+<a name='L954'></a><a href='#L954'>954</a>
+<a name='L955'></a><a href='#L955'>955</a>
+<a name='L956'></a><a href='#L956'>956</a>
+<a name='L957'></a><a href='#L957'>957</a>
+<a name='L958'></a><a href='#L958'>958</a>
+<a name='L959'></a><a href='#L959'>959</a>
+<a name='L960'></a><a href='#L960'>960</a>
+<a name='L961'></a><a href='#L961'>961</a>
+<a name='L962'></a><a href='#L962'>962</a>
+<a name='L963'></a><a href='#L963'>963</a>
+<a name='L964'></a><a href='#L964'>964</a>
+<a name='L965'></a><a href='#L965'>965</a>
+<a name='L966'></a><a href='#L966'>966</a>
+<a name='L967'></a><a href='#L967'>967</a>
+<a name='L968'></a><a href='#L968'>968</a>
+<a name='L969'></a><a href='#L969'>969</a>
+<a name='L970'></a><a href='#L970'>970</a>
+<a name='L971'></a><a href='#L971'>971</a>
+<a name='L972'></a><a href='#L972'>972</a>
+<a name='L973'></a><a href='#L973'>973</a>
+<a name='L974'></a><a href='#L974'>974</a>
+<a name='L975'></a><a href='#L975'>975</a>
+<a name='L976'></a><a href='#L976'>976</a>
+<a name='L977'></a><a href='#L977'>977</a>
+<a name='L978'></a><a href='#L978'>978</a>
+<a name='L979'></a><a href='#L979'>979</a>
+<a name='L980'></a><a href='#L980'>980</a>
+<a name='L981'></a><a href='#L981'>981</a>
+<a name='L982'></a><a href='#L982'>982</a>
+<a name='L983'></a><a href='#L983'>983</a>
+<a name='L984'></a><a href='#L984'>984</a>
+<a name='L985'></a><a href='#L985'>985</a>
+<a name='L986'></a><a href='#L986'>986</a>
+<a name='L987'></a><a href='#L987'>987</a>
+<a name='L988'></a><a href='#L988'>988</a>
+<a name='L989'></a><a href='#L989'>989</a>
+<a name='L990'></a><a href='#L990'>990</a>
+<a name='L991'></a><a href='#L991'>991</a>
+<a name='L992'></a><a href='#L992'>992</a>
+<a name='L993'></a><a href='#L993'>993</a>
+<a name='L994'></a><a href='#L994'>994</a>
+<a name='L995'></a><a href='#L995'>995</a>
+<a name='L996'></a><a href='#L996'>996</a>
+<a name='L997'></a><a href='#L997'>997</a>
+<a name='L998'></a><a href='#L998'>998</a>
+<a name='L999'></a><a href='#L999'>999</a>
+<a name='L1000'></a><a href='#L1000'>1000</a>
+<a name='L1001'></a><a href='#L1001'>1001</a>
+<a name='L1002'></a><a href='#L1002'>1002</a>
+<a name='L1003'></a><a href='#L1003'>1003</a>
+<a name='L1004'></a><a href='#L1004'>1004</a>
+<a name='L1005'></a><a href='#L1005'>1005</a>
+<a name='L1006'></a><a href='#L1006'>1006</a>
+<a name='L1007'></a><a href='#L1007'>1007</a>
+<a name='L1008'></a><a href='#L1008'>1008</a>
+<a name='L1009'></a><a href='#L1009'>1009</a>
+<a name='L1010'></a><a href='#L1010'>1010</a>
+<a name='L1011'></a><a href='#L1011'>1011</a>
+<a name='L1012'></a><a href='#L1012'>1012</a>
+<a name='L1013'></a><a href='#L1013'>1013</a>
+<a name='L1014'></a><a href='#L1014'>1014</a>
+<a name='L1015'></a><a href='#L1015'>1015</a>
+<a name='L1016'></a><a href='#L1016'>1016</a>
+<a name='L1017'></a><a href='#L1017'>1017</a>
+<a name='L1018'></a><a href='#L1018'>1018</a>
+<a name='L1019'></a><a href='#L1019'>1019</a>
+<a name='L1020'></a><a href='#L1020'>1020</a>
+<a name='L1021'></a><a href='#L1021'>1021</a>
+<a name='L1022'></a><a href='#L1022'>1022</a>
+<a name='L1023'></a><a href='#L1023'>1023</a>
+<a name='L1024'></a><a href='#L1024'>1024</a>
+<a name='L1025'></a><a href='#L1025'>1025</a>
+<a name='L1026'></a><a href='#L1026'>1026</a>
+<a name='L1027'></a><a href='#L1027'>1027</a>
+<a name='L1028'></a><a href='#L1028'>1028</a>
+<a name='L1029'></a><a href='#L1029'>1029</a>
+<a name='L1030'></a><a href='#L1030'>1030</a>
+<a name='L1031'></a><a href='#L1031'>1031</a>
+<a name='L1032'></a><a href='#L1032'>1032</a>
+<a name='L1033'></a><a href='#L1033'>1033</a>
+<a name='L1034'></a><a href='#L1034'>1034</a>
+<a name='L1035'></a><a href='#L1035'>1035</a>
+<a name='L1036'></a><a href='#L1036'>1036</a>
+<a name='L1037'></a><a href='#L1037'>1037</a>
+<a name='L1038'></a><a href='#L1038'>1038</a>
+<a name='L1039'></a><a href='#L1039'>1039</a>
+<a name='L1040'></a><a href='#L1040'>1040</a>
+<a name='L1041'></a><a href='#L1041'>1041</a>
+<a name='L1042'></a><a href='#L1042'>1042</a>
+<a name='L1043'></a><a href='#L1043'>1043</a>
+<a name='L1044'></a><a href='#L1044'>1044</a>
+<a name='L1045'></a><a href='#L1045'>1045</a>
+<a name='L1046'></a><a href='#L1046'>1046</a>
+<a name='L1047'></a><a href='#L1047'>1047</a>
+<a name='L1048'></a><a href='#L1048'>1048</a>
+<a name='L1049'></a><a href='#L1049'>1049</a>
+<a name='L1050'></a><a href='#L1050'>1050</a>
+<a name='L1051'></a><a href='#L1051'>1051</a>
+<a name='L1052'></a><a href='#L1052'>1052</a>
+<a name='L1053'></a><a href='#L1053'>1053</a>
+<a name='L1054'></a><a href='#L1054'>1054</a>
+<a name='L1055'></a><a href='#L1055'>1055</a>
+<a name='L1056'></a><a href='#L1056'>1056</a>
+<a name='L1057'></a><a href='#L1057'>1057</a>
+<a name='L1058'></a><a href='#L1058'>1058</a>
+<a name='L1059'></a><a href='#L1059'>1059</a>
+<a name='L1060'></a><a href='#L1060'>1060</a>
+<a name='L1061'></a><a href='#L1061'>1061</a>
+<a name='L1062'></a><a href='#L1062'>1062</a>
+<a name='L1063'></a><a href='#L1063'>1063</a>
+<a name='L1064'></a><a href='#L1064'>1064</a>
+<a name='L1065'></a><a href='#L1065'>1065</a>
+<a name='L1066'></a><a href='#L1066'>1066</a>
+<a name='L1067'></a><a href='#L1067'>1067</a>
+<a name='L1068'></a><a href='#L1068'>1068</a>
+<a name='L1069'></a><a href='#L1069'>1069</a>
+<a name='L1070'></a><a href='#L1070'>1070</a>
+<a name='L1071'></a><a href='#L1071'>1071</a>
+<a name='L1072'></a><a href='#L1072'>1072</a>
+<a name='L1073'></a><a href='#L1073'>1073</a>
+<a name='L1074'></a><a href='#L1074'>1074</a>
+<a name='L1075'></a><a href='#L1075'>1075</a>
+<a name='L1076'></a><a href='#L1076'>1076</a>
+<a name='L1077'></a><a href='#L1077'>1077</a>
+<a name='L1078'></a><a href='#L1078'>1078</a>
+<a name='L1079'></a><a href='#L1079'>1079</a>
+<a name='L1080'></a><a href='#L1080'>1080</a>
+<a name='L1081'></a><a href='#L1081'>1081</a>
+<a name='L1082'></a><a href='#L1082'>1082</a>
+<a name='L1083'></a><a href='#L1083'>1083</a>
+<a name='L1084'></a><a href='#L1084'>1084</a>
+<a name='L1085'></a><a href='#L1085'>1085</a>
+<a name='L1086'></a><a href='#L1086'>1086</a>
+<a name='L1087'></a><a href='#L1087'>1087</a>
+<a name='L1088'></a><a href='#L1088'>1088</a>
+<a name='L1089'></a><a href='#L1089'>1089</a>
+<a name='L1090'></a><a href='#L1090'>1090</a>
+<a name='L1091'></a><a href='#L1091'>1091</a>
+<a name='L1092'></a><a href='#L1092'>1092</a>
+<a name='L1093'></a><a href='#L1093'>1093</a>
+<a name='L1094'></a><a href='#L1094'>1094</a>
+<a name='L1095'></a><a href='#L1095'>1095</a>
+<a name='L1096'></a><a href='#L1096'>1096</a>
+<a name='L1097'></a><a href='#L1097'>1097</a>
+<a name='L1098'></a><a href='#L1098'>1098</a>
+<a name='L1099'></a><a href='#L1099'>1099</a>
+<a name='L1100'></a><a href='#L1100'>1100</a>
+<a name='L1101'></a><a href='#L1101'>1101</a>
+<a name='L1102'></a><a href='#L1102'>1102</a>
+<a name='L1103'></a><a href='#L1103'>1103</a>
+<a name='L1104'></a><a href='#L1104'>1104</a>
+<a name='L1105'></a><a href='#L1105'>1105</a>
+<a name='L1106'></a><a href='#L1106'>1106</a>
+<a name='L1107'></a><a href='#L1107'>1107</a>
+<a name='L1108'></a><a href='#L1108'>1108</a>
+<a name='L1109'></a><a href='#L1109'>1109</a>
+<a name='L1110'></a><a href='#L1110'>1110</a>
+<a name='L1111'></a><a href='#L1111'>1111</a>
+<a name='L1112'></a><a href='#L1112'>1112</a>
+<a name='L1113'></a><a href='#L1113'>1113</a>
+<a name='L1114'></a><a href='#L1114'>1114</a>
+<a name='L1115'></a><a href='#L1115'>1115</a>
+<a name='L1116'></a><a href='#L1116'>1116</a>
+<a name='L1117'></a><a href='#L1117'>1117</a>
+<a name='L1118'></a><a href='#L1118'>1118</a>
+<a name='L1119'></a><a href='#L1119'>1119</a>
+<a name='L1120'></a><a href='#L1120'>1120</a>
+<a name='L1121'></a><a href='#L1121'>1121</a>
+<a name='L1122'></a><a href='#L1122'>1122</a>
+<a name='L1123'></a><a href='#L1123'>1123</a>
+<a name='L1124'></a><a href='#L1124'>1124</a>
+<a name='L1125'></a><a href='#L1125'>1125</a>
+<a name='L1126'></a><a href='#L1126'>1126</a>
+<a name='L1127'></a><a href='#L1127'>1127</a>
+<a name='L1128'></a><a href='#L1128'>1128</a>
+<a name='L1129'></a><a href='#L1129'>1129</a>
+<a name='L1130'></a><a href='#L1130'>1130</a>
+<a name='L1131'></a><a href='#L1131'>1131</a>
+<a name='L1132'></a><a href='#L1132'>1132</a>
+<a name='L1133'></a><a href='#L1133'>1133</a>
+<a name='L1134'></a><a href='#L1134'>1134</a>
+<a name='L1135'></a><a href='#L1135'>1135</a>
+<a name='L1136'></a><a href='#L1136'>1136</a>
+<a name='L1137'></a><a href='#L1137'>1137</a>
+<a name='L1138'></a><a href='#L1138'>1138</a>
+<a name='L1139'></a><a href='#L1139'>1139</a>
+<a name='L1140'></a><a href='#L1140'>1140</a>
+<a name='L1141'></a><a href='#L1141'>1141</a>
+<a name='L1142'></a><a href='#L1142'>1142</a>
+<a name='L1143'></a><a href='#L1143'>1143</a>
+<a name='L1144'></a><a href='#L1144'>1144</a>
+<a name='L1145'></a><a href='#L1145'>1145</a>
+<a name='L1146'></a><a href='#L1146'>1146</a>
+<a name='L1147'></a><a href='#L1147'>1147</a>
+<a name='L1148'></a><a href='#L1148'>1148</a>
+<a name='L1149'></a><a href='#L1149'>1149</a>
+<a name='L1150'></a><a href='#L1150'>1150</a>
+<a name='L1151'></a><a href='#L1151'>1151</a>
+<a name='L1152'></a><a href='#L1152'>1152</a>
+<a name='L1153'></a><a href='#L1153'>1153</a>
+<a name='L1154'></a><a href='#L1154'>1154</a>
+<a name='L1155'></a><a href='#L1155'>1155</a>
+<a name='L1156'></a><a href='#L1156'>1156</a>
+<a name='L1157'></a><a href='#L1157'>1157</a>
+<a name='L1158'></a><a href='#L1158'>1158</a>
+<a name='L1159'></a><a href='#L1159'>1159</a>
+<a name='L1160'></a><a href='#L1160'>1160</a>
+<a name='L1161'></a><a href='#L1161'>1161</a>
+<a name='L1162'></a><a href='#L1162'>1162</a>
+<a name='L1163'></a><a href='#L1163'>1163</a>
+<a name='L1164'></a><a href='#L1164'>1164</a>
+<a name='L1165'></a><a href='#L1165'>1165</a>
+<a name='L1166'></a><a href='#L1166'>1166</a>
+<a name='L1167'></a><a href='#L1167'>1167</a>
+<a name='L1168'></a><a href='#L1168'>1168</a>
+<a name='L1169'></a><a href='#L1169'>1169</a>
+<a name='L1170'></a><a href='#L1170'>1170</a>
+<a name='L1171'></a><a href='#L1171'>1171</a>
+<a name='L1172'></a><a href='#L1172'>1172</a>
+<a name='L1173'></a><a href='#L1173'>1173</a>
+<a name='L1174'></a><a href='#L1174'>1174</a>
+<a name='L1175'></a><a href='#L1175'>1175</a>
+<a name='L1176'></a><a href='#L1176'>1176</a>
+<a name='L1177'></a><a href='#L1177'>1177</a>
+<a name='L1178'></a><a href='#L1178'>1178</a>
+<a name='L1179'></a><a href='#L1179'>1179</a>
+<a name='L1180'></a><a href='#L1180'>1180</a>
+<a name='L1181'></a><a href='#L1181'>1181</a>
+<a name='L1182'></a><a href='#L1182'>1182</a>
+<a name='L1183'></a><a href='#L1183'>1183</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">162x</span>
+<span class="cline-any cline-yes">162x</span>
+<span class="cline-any cline-yes">162x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">128x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">162x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">80x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">37x</span>
+<span class="cline-any cline-yes">44x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">20x</span>
+<span class="cline-any cline-yes">61x</span>
+<span class="cline-any cline-yes">58x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">162x</span>
+<span class="cline-any cline-yes">162x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">162x</span>
+<span class="cline-any cline-yes">162x</span>
+<span class="cline-any cline-yes">162x</span>
+<span class="cline-any cline-yes">162x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">162x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">267x</span>
+<span class="cline-any cline-yes">267x</span>
+<span class="cline-any cline-yes">267x</span>
+<span class="cline-any cline-yes">267x</span>
+<span class="cline-any cline-yes">267x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">267x</span>
+<span class="cline-any cline-yes">267x</span>
+<span class="cline-any cline-yes">267x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">59x</span>
+<span class="cline-any cline-yes">267x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">267x</span>
+<span class="cline-any cline-yes">261x</span>
+<span class="cline-any cline-yes">254x</span>
+<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">1584x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">792x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">441x</span>
+<span class="cline-any cline-yes">441x</span>
+<span class="cline-any cline-yes">441x</span>
+<span class="cline-any cline-yes">441x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-yes">313x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-yes">25x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">326x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">81x</span>
+<span class="cline-any cline-yes">373x</span>
+<span class="cline-any cline-yes">373x</span>
+<span class="cline-any cline-yes">292x</span>
+<span class="cline-any cline-yes">292x</span>
+<span class="cline-any cline-yes">292x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">35x</span>
+<span class="cline-any cline-yes">35x</span>
+<span class="cline-any cline-yes">35x</span>
+<span class="cline-any cline-yes">35x</span>
+<span class="cline-any cline-yes">35x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">46x</span>
+<span class="cline-any cline-yes">46x</span>
+<span class="cline-any cline-yes">46x</span>
+<span class="cline-any cline-yes">46x</span>
+<span class="cline-any cline-yes">46x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">258x</span>
+<span class="cline-any cline-yes">258x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">16x</span>
+<span class="cline-any cline-yes">16x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">199x</span>
+<span class="cline-any cline-yes">199x</span>
+<span class="cline-any cline-yes">273x</span>
+<span class="cline-any cline-yes">75x</span>
+<span class="cline-any cline-yes">75x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-yes">274x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">272x</span>
+<span class="cline-any cline-yes">272x</span>
+<span class="cline-any cline-yes">272x</span>
+<span class="cline-any cline-yes">272x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4014x</span>
+<span class="cline-any cline-yes">4014x</span>
+<span class="cline-any cline-yes">4014x</span>
+<span class="cline-any cline-yes">4012x</span>
+<span class="cline-any cline-yes">4012x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4002x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4002x</span>
+<span class="cline-any cline-yes">4002x</span>
+<span class="cline-any cline-yes">4002x</span>
+<span class="cline-any cline-yes">4002x</span>
+<span class="cline-any cline-yes">4002x</span>
+<span class="cline-any cline-yes">4001x</span>
+<span class="cline-any cline-yes">4001x</span>
+<span class="cline-any cline-yes">4002x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">4002x</span>
+<span class="cline-any cline-yes">4002x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">8018x</span>
+<span class="cline-any cline-yes">8018x</span>
+<span class="cline-any cline-yes">8018x</span>
+<span class="cline-any cline-yes">8018x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">8004x</span>
+<span class="cline-any cline-yes">8004x</span>
+<span class="cline-any cline-yes">8004x</span>
+<span class="cline-any cline-yes">8004x</span>
+<span class="cline-any cline-yes">8004x</span>
+<span class="cline-any cline-yes">8004x</span>
+<span class="cline-any cline-yes">8004x</span>
+<span class="cline-any cline-yes">8004x</span>
+<span class="cline-any cline-yes">8004x</span>
+<span class="cline-any cline-yes">8004x</span>
+<span class="cline-any cline-yes">8004x</span>
+<span class="cline-any cline-yes">8004x</span>
+<span class="cline-any cline-yes">8004x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">154x</span>
+<span class="cline-any cline-yes">154x</span>
+<span class="cline-any cline-yes">154x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">154x</span>
+<span class="cline-any cline-yes">154x</span>
+<span class="cline-any cline-yes">154x</span>
+<span class="cline-any cline-yes">154x</span>
+<span class="cline-any cline-yes">154x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">154x</span>
+<span class="cline-any cline-yes">136x</span>
+<span class="cline-any cline-yes">154x</span>
+<span class="cline-any cline-yes">154x</span>
+<span class="cline-any cline-yes">154x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-yes">28x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">19x</span>
+<span class="cline-any cline-yes">19x</span>
+<span class="cline-any cline-yes">19x</span>
+<span class="cline-any cline-yes">19x</span>
+<span class="cline-any cline-yes">19x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">10x</span>
+<span class="cline-any cline-yes">31x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-yes">30x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">11x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-yes">22x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">16x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">17x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">5x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">46x</span>
+<span class="cline-any cline-yes">46x</span>
+<span class="cline-any cline-yes">46x</span>
+<span class="cline-any cline-yes">46x</span>
+<span class="cline-any cline-yes">46x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">40x</span>
+<span class="cline-any cline-yes">40x</span>
+<span class="cline-any cline-yes">40x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-yes">12x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-yes">9x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">/**
+ * The ideogram view (§5.11): every sequence of a genome drawn whole, side by
+ * side, with the tracks beside each one.
+ *
+ * Nothing here draws a track. A chromosome is given a **frame per lane** —
+ * `render/lane.ts`'s {@link LaneFrame}, the one shape every lane in this
+ * application is drawn into — whose genomic axis is that chromosome's stretch
+ * of the browser's own axis, run down the page or across it, and whose
+ * thickness runs outward from the chromosome. Handed those frames, the painters
+ * that draw a lane beside a map draw it beside a chromosome: `drawTrack` a
+ * bigWig in any of its modes, `drawFeatures` a gene model, a peak set or a
+ * sashimi plot's arcs, `drawArcs` a loop set's arcs. A lane to the right of a
+ * standing chromosome is the right-hand stack beside a map, and a lane above a
+ * lying one is the top stack: two of the four edges §8.9 already covers, so a
+ * track cannot be drawn one way here and another way there. What this module
+ * owns is where those frames go, the chromosome's own body, the curves between
+ * two chromosomes, the marks drawn across one, and the hit test.
+ *
+ * ## Two layouts, one turned from the other
+ *
+ * **Standing** — the default, and ideogram.js's — the chromosomes are a row of
+ * columns, each read from its first base at the top to its last at the bottom,
+ * their names over them, and its lanes to its right. **Lying** — the view
+ * flipped — they are a column of rows, each read left to right, its name before
+ * it and its lanes above it. The second is the first turned a quarter: what is
+ * *above* a lying chromosome is *right of* a standing one, which is exactly how
+ * ideogram.js turns its own (`rotate(90)`), so a reader who learns which side
+ * the tracks are on learns it once.
+ *
+ * Every chromosome is drawn on **one scale** — base pairs per pixel are the same
+ * for all of them, the longest filling the room — because a karyotype whose
+ * chromosomes were each stretched to the same length would be a list of
+ * sequences, not a picture of a genome.
+ *
+ * ## The camera
+ *
+ * On screen the picture is looked at through a {@link KaryotypeCamera}: magnified
+ * about a point and moved under the window. Magnified, it grows **both ways**
+ * from one factor — along, every chromosome longer on the one scale; across,
+ * every column wider, the chromosome thicker and its lanes with it — so the
+ * chromosome under the pointer fills the window while its neighbours leave it
+ * on either side. Across stops once one column is the whole room, since a
+ * column wider than the window is a lane nobody can see the far side of; along
+ * stops at a base a pixel. A point is held under the pointer by its
+ * {@link KaryotypePoint}, the picture's own coordinates — base pairs down the
+ * chromosomes, and columns across them counted in their parts as they are at
+ * rest — which no magnification changes.
+ */
+&nbsp;
+import type { FeatureSet, PairSet } from '../annotations/types'
+import { ANCHOR_HALF, ANCHOR_LENGTH, snap } from './browser'
+import type { FeatureLayout, FeaturePaint } from './features'
+import { drawIdeogram, traceIdeogramOutline } from './ideogram'
+import {
+  OUTLINE_WIDTH,
+  laneCurve,
+  laneLine,
+  laneMove,
+  laneRect,
+  laneX,
+  laneY,
+  type LaneFrame,
+} from './lane'
+import type { LocusAxis } from './locus'
+import { drawTrack, type PixelProfile, type TrackPaint } from './tracks'
+&nbsp;
+/** Which way the chromosomes run: standing in a row, or lying in a column. */
+export type KaryotypeOrientation = 'vertical' | 'horizontal'
+&nbsp;
+/** One sequence to place: its name and its stretch of the browser's axis. */
+export interface KaryotypeSequence {
+  contig: string
+  unitStart: number
+  unitEnd: number
+}
+&nbsp;
+/** Clear space round the whole picture, in pixels. */
+export const KARYOTYPE_PAD = 10
+&nbsp;
+/**
+ * The strip on a chromosome's far side from its lanes, where an arrowhead's
+ * anchor hangs (§8.1): the triangle's length and a pixel either side of it.
+ */
+export const KARYOTYPE_GUTTER = ANCHOR_LENGTH + 2
+&nbsp;
+/**
+ * The thinnest a lane is drawn when the lanes are fitted to the room.
+ *
+ * Four pixels: a heatmap lane is still a colour and a profile still a shape.
+ * Under it a lane is a hairline that only says a track is there, and the
+ * picture is better wider than the room — it scrolls — than drawn in those.
+ */
+export const KARYOTYPE_LANE_FLOOR = 4
+&nbsp;
+/** The shortest the longest chromosome is drawn, whatever the room. */
+const MIN_LENGTH = 40
+&nbsp;
+/**
+ * The most a chromosome is thickened by the camera: twice. A body grows with
+ * its column to say it is the one being looked at, and is then thick enough to
+ * write its bands' names in; past that a chromosome is a slab, and the room is
+ * better spent on the lanes beside it, which have something to show at a width.
+ */
+export const BODY_ZOOM = 2
+&nbsp;
+/** The finest the camera magnifies a chromosome to: a pixel a unit of the axis — a base, unedited. */
+export const KARYOTYPE_FINEST = 1
+&nbsp;
+/**
+ * A point of the picture in its own terms, which no camera changes: units of
+ * the axis down the chromosomes from their first base, and columns across from
+ * the first one's edge — a column counted in its parts as they are at rest, so
+ * a point on a chromosome's body, or a third of the way into its second lane,
+ * is there at any magnification however unevenly the parts grow. The point a
+ * camera is held on, or the one under a pointer, stays the same place on the
+ * same chromosome whatever the picture is laid out at.
+ */
+export interface KaryotypePoint {
+  along: number
+  across: number
+}
+&nbsp;
+/**
+ * Where the picture is looked at from, on screen (§5.11): how far it is
+ * magnified, and the point of it in the middle of the window.
+ */
+export interface KaryotypeCamera {
+  /** One draws every chromosome whole in the room; more magnifies along and across. */
+  zoom: number
+  /**
+   * The point of the picture in the middle of the window, held to what the
+   * picture can show there — or `null` for the picture in the window's
+   * corner, as it is laid out at rest.
+   */
+  centre: KaryotypePoint | null
+}
+&nbsp;
+/** The camera at rest: the whole picture, from its corner. */
+export const REST_CAMERA: KaryotypeCamera = { zoom: 1, centre: null }
+&nbsp;
+export interface KaryotypeOptions {
+  orientation: KaryotypeOrientation
+  /**
+   * The room the picture is laid out in: the stage's width, and its height down
+   * to the foot of the column. A picture that cannot fit reports its own
+   * extent, which is larger, and the stage scrolls.
+   */
+  width: number
+  height: number
+  /** Taken off the top for the key over the chromosomes, in pixels. */
+  top: number
+  /**
+   * The names' room: the height of the row of names over standing chromosomes,
+   * or the width of the column of them before lying ones.
+   */
+  names: number
+  /** How thick a chromosome is drawn. */
+  body: number
+  /** Between two chromosomes. */
+  gap: number
+  /**
+   * Between a chromosome and its first lane, and between two lanes — a pixel
+   * where the lanes are shrunk to fit.
+   */
+  laneGap: number
+  /**
+   * Each lane's height in the browser, the one nearest the chromosome first.
+   * A lane of none takes no room, gap and all: a pair set whose every pair is
+   * between two chromosomes has nothing to draw beside one.
+   */
+  lanes: readonly number[]
+  /**
+   * Shrink every lane by one factor until every chromosome fits the room — and
+   * never grow one past its height in the browser, which is the height its
+   * reader chose. `false` keeps those heights and lets the picture run past the
+   * room.
+   */
+  fit: boolean
+  /** The longest chromosome's length on screen, or `null` for what the room allows. */
+  length: number | null
+  /**
+   * The window the picture is drawn through, on screen. Absent, the layout is
+   * the whole picture in its own pixels — a saved figure. Present, it is in the
+   * window's pixels: magnified and moved by the camera, the names held at the
+   * window's edge while the chromosomes move under them (the key over them is
+   * the caller's, and does not move), and every lane cut to the stretch in
+   * view, so nothing is read or drawn for what is not on screen.
+   * {@link KaryotypeOptions.width} and {@link KaryotypeOptions.height} are the
+   * window's.
+   */
+  camera?: KaryotypeCamera
+}
+&nbsp;
+/** Where one chromosome went, and the frames everything on it is drawn in. */
+export interface ChromosomePlace {
+  contig: string
+  unitStart: number
+  unitEnd: number
+  /** Where it runs along its own axis, in canvas pixels: down the page standing, across it lying. */
+  along0: number
+  along1: number
+  /**
+   * The chromosome itself, as a lane as thick as the chromosome is drawn —
+   * through a camera, cut to the stretch in view and a body's thickness
+   * either side, so an end just out of the window still rounds into it.
+   */
+  body: LaneFrame
+  /** One frame per lane, outward from the chromosome — through a camera, cut to the stretch in view. */
+  lanes: LaneFrame[]
+  /** Whether any of it is in the window: always, without a camera. */
+  visible: boolean
+  /**
+   * The two ends of a rule across it, in canvas pixels on the axis across the
+   * chromosome — from the anchors' strip to the far edge of its last lane: what
+   * the hairline, a reader's line and a box's wash span.
+   */
+  across: [number, number]
+  /** Everything this chromosome owns on the canvas — its column, or its row — for the hit test. */
+  box: { x: number; y: number; width: number; height: number }
+  /**
+   * Where its name is written — and, through a camera, the stretch across the
+   * window its column holds, which the name slides along to stay in sight
+   * while any of the column is.
+   */
+  name: { x: number; y: number; align: 'center' | 'right'; width: number; span?: [number, number] }
+}
+&nbsp;
+export interface KaryotypeLayout {
+  orientation: KaryotypeOrientation
+  places: ChromosomePlace[]
+  /** Each lane's thickness once fitted, in the order of {@link KaryotypeOptions.lanes}. */
+  lanes: number[]
+  /** How far the lanes were shrunk to fit: 1 is their heights in the browser. */
+  factor: number
+  /** Pixels per axis unit — per base pair, on the browser's axis — for every chromosome. */
+  perUnit: number
+  /** The picture's own extent, past the room where it could not fit — magnified, through a camera. */
+  width: number
+  height: number
+  /** How far it is magnified, along and across: across stops where one column is the room. */
+  zoom: number
+  across: number
+  /** The most it can be magnified: a pixel a unit along ({@link KARYOTYPE_FINEST}). */
+  most: number
+  /** From one chromosome's column to the next's, across. */
+  pitch: number
+  /**
+   * One column's parts across, in the canvas's order — the half gap before
+   * it, the anchors' strip, the chromosome and each lane with the gap before
+   * it, and what is left of the column — as drawn, and at rest: what a
+   * {@link KaryotypePoint} counts a column in.
+   */
+  columns: { drawn: number[]; rest: number[] }
+  /** Where the picture's own coordinates start, in its pixels: the chromosomes' first base, and the first column's edge. */
+  origin: { along: number; across: number }
+  /** How far it was moved under the window: the camera's, held to the picture. */
+  pan: { x: number; y: number }
+  /**
+   * Where the chromosomes are seen through a camera — the window less the key
+   * over them and the names beside them, which stay put while the chromosomes
+   * move — and `null` without one, the whole picture being drawn.
+   */
+  view: { x: number; y: number; width: number; height: number } | null
+}
+&nbsp;
+/**
+ * Place every chromosome, and cut every frame.
+ *
+ * The lanes are fitted **across** — beside a standing chromosome they take the
+ * row's width, above a lying one the column's height — and the chromosomes are
+ * fitted **along**: the longest fills the room it runs in, and the rest are
+ * drawn to its scale. Through a camera, that picture is then magnified both ways
+ * and moved under the window ({@link KaryotypeOptions.camera}).
+ */
+export function layoutKaryotype(
+  sequences: readonly KaryotypeSequence[],
+  options: KaryotypeOptions,
+): KaryotypeLayout {
+  const vertical = options.orientation === 'vertical'
+  const count = Math.max(1, sequences.length)
+  const natural = options.lanes.reduce((sum, size) =&gt; sum + size, 0)
+  const drawn = options.lanes.filter((size) =&gt; size &gt; 0).length
+  // What one chromosome may take across its axis, gutter and lanes and all.
+  const room = vertical ? options.width - 2 * KARYOTYPE_PAD : options.height - options.top - 2 * KARYOTYPE_PAD
+  const each = (room + options.gap) / count - options.gap
+  const fitted = (laneGap: number): number =&gt; {
+    const fixed = KARYOTYPE_GUTTER + options.body + laneGap * drawn
+    return options.fit &amp;&amp; natural &gt; 0 ? Math.max(0, Math.min(1, (each - fixed) / natural)) : 1
+  }
+  // Squeezed, the lanes keep a pixel between them and not the gap they have
+  // at their own heights: a picture short of room spends it on ink, and three
+  // pixels of air beside a lane four wide is most of the row.
+  const laneGap = fitted(options.laneGap) &lt; 1 ? Math.min(1, options.laneGap) : options.laneGap
+  const factor = fitted(laneGap)
+  // Whole pixels, so two lanes' shared edge is one edge and not two blurred
+  // ones; and never under the floor, past which the picture is better wider.
+  const fitting = options.lanes.map((size) =&gt;
+    size &lt;= 0 ? 0 : factor &gt;= 1 ? size : Math.max(KARYOTYPE_LANE_FLOOR, Math.floor(size * factor)),
+  )
+  const extentOf = (body: number, lanes: readonly number[]): number =&gt;
+    KARYOTYPE_GUTTER + body + lanes.reduce((sum, size) =&gt; sum + (size &gt; 0 ? size + laneGap : 0), 0)
+&nbsp;
+  const longest = sequences.reduce((most, sequence) =&gt; Math.max(most, sequence.unitEnd - sequence.unitStart), 0)
+  const alongStart = vertical ? options.top + options.names : KARYOTYPE_PAD + options.names
+  const alongRoom =
+    options.length ??
+    (vertical ? options.height - alongStart - KARYOTYPE_PAD : options.width - alongStart - KARYOTYPE_PAD)
+  const resting = Math.max(MIN_LENGTH, alongRoom)
+&nbsp;
+  // The camera's magnification. Along, to a base a pixel. Across, until one
+  // column is the whole room: past that a column is wider than the window, and
+  // the far side of its last lane is somewhere nobody can see.
+  const camera = options.camera
+  const most = Math.max(1, (KARYOTYPE_FINEST * Math.max(1, longest)) / resting)
+  const zoom = Math.min(most, Math.max(1, camera?.zoom ?? 1))
+  const restPitch = extentOf(options.body, fitting) + options.gap
+  const across = Math.max(1, Math.min(zoom, (room + options.gap) / restPitch))
+  const pitch = restPitch * across
+  // The chromosome thickens with its column, to {@link BODY_ZOOM}; the lanes
+  // take the rest of the column, each its share of what they had at rest.
+  const bodyWidth = across &gt; 1 ? Math.round(options.body * Math.min(across, BODY_ZOOM)) : options.body
+  const held = fitting.reduce((sum, size) =&gt; sum + size, 0)
+  const spare = pitch - options.gap - KARYOTYPE_GUTTER - bodyWidth - laneGap * drawn
+  const lanes =
+    across &gt; 1 &amp;&amp; held &gt; 0
+      ? fitting.map((size) =&gt; (size &lt;= <span class="branch-0 cbranch-no" title="branch not covered" >0 ? 0 : M</span>ath.max(size, Math.floor((size * spare) / held))))
+      : fitting
+  const extent = extentOf(bodyWidth, lanes)
+  const length = resting * zoom
+  const perUnit = length / Math.max(1, longest)
+  const crossTotal = count * pitch - options.gap
+  const width = vertical ? 2 * KARYOTYPE_PAD + crossTotal : alongStart + length + KARYOTYPE_PAD
+  const height = vertical ? alongStart + length + KARYOTYPE_PAD : options.top + 2 * KARYOTYPE_PAD + crossTotal
+&nbsp;
+  // The window, through a camera: everything under the key, and the
+  // chromosomes in the part of it past their names.
+  const under = { x: 0, y: options.top, width: options.width, height: Math.max(0, options.height - options.top) }
+  const view =
+    camera === undefined
+      ? null
+      : vertical
+        ? { x: 0, y: alongStart, width: options.width, height: Math.max(0, options.height - alongStart) }
+        : { x: alongStart, y: options.top, width: Math.max(0, options.width - alongStart), height: under.height }
+  const origin = {
+    along: alongStart,
+    across: (vertical ? KARYOTYPE_PAD : options.top + KARYOTYPE_PAD) - options.gap / 2,
+  }
+  const partsOf = (body: number, sizes: readonly number[], step: number): number[] =&gt; {
+    const inner = [KARYOTYPE_GUTTER, body]
+    for (const size of sizes) if (size &gt; 0) inner.push(laneGap, size)
+    // Lying, the lanes are over the chromosome and the strip under it.
+    const ordered = vertical ? inner : inner.reverse()
+    const used = options.gap / 2 + ordered.reduce((sum, size) =&gt; sum + size, 0)
+    return [options.gap / 2, ...ordered, Math.max(0, step - used)]
+  }
+  const columns = { drawn: partsOf(bodyWidth, lanes, pitch), rest: partsOf(options.body, fitting, restPitch) }
+  // The camera's point in the middle of the window, moved no further than the
+  // picture goes. Magnified, a picture smaller than the window may also move
+  // about inside it, so the point under the pointer stays there; at rest it
+  // sits in the window's corner, as it is laid out.
+  const centre = camera?.centre ?? null
+  const wanted = { x: 0, y: 0 }
+  if (view !== null &amp;&amp; centre !== null) {
+    const along = origin.along + centre.along * perUnit
+    const acrossAt = origin.across + acrossPixel(columns, pitch, centre.across)
+    wanted.x = (vertical ? acrossAt : along) - (view.x + view.width / 2)
+    wanted.y = (vertical ? along : acrossAt) - (view.y + view.height / 2)
+  }
+  const hold = (pan: number, picture: number, window: number): number =&gt;
+    Math.max(zoom &gt; 1 ? Math.min(0, picture - window) : 0, Math.min(Math.max(0, picture - window), pan))
+  const pan = { x: hold(wanted.x, width, options.width), y: hold(wanted.y, height, options.height) }
+  const panAlong = vertical ? pan.y : pan.x
+  const panAcross = vertical ? pan.x : pan.y
+  const boxOf = (box: ChromosomePlace['box']): ChromosomePlace['box'] =&gt; {
+    if (camera === undefined) return box
+    const x0 = Math.max(box.x, under.x)
+    const y0 = Math.max(box.y, under.y)
+    const x1 = Math.min(box.x + box.width, under.x + under.width)
+    const y1 = Math.min(box.y + box.height, under.y + under.height)
+    return { x: x0, y: y0, width: Math.max(0, x1 - x0), height: Math.max(0, y1 - y0) }
+  }
+&nbsp;
+  // A column's stretch of the window, which its name keeps to.
+  const spanOf = (from: number, low: number, high: number): [number, number] =&gt; [
+    Math.max(from, low),
+    Math.max(Math.max(from, low), Math.min(from + pitch, high)),
+  ]
+&nbsp;
+  const places = sequences.map((sequence, index): ChromosomePlace =&gt; {
+    const cross = (vertical ? KARYOTYPE_PAD : options.top + KARYOTYPE_PAD) + index * pitch - panAcross
+    const along0 = alongStart - panAlong
+    const along1 = along0 + (sequence.unitEnd - sequence.unitStart) * perUnit
+    // What of it the window shows, along — the lanes are cut to it, and the
+    // body to it and its own thickness either side — and whether it shows any.
+    const seen0 = view === null ? along0 : Math.max(along0, vertical ? view.y : view.x)
+    const seen1 =
+      view === null
+        ? along1
+        : Math.max(seen0, Math.min(along1, vertical ? view.y + view.height : view.x + view.width))
+    const reach = view === null ? 0 : bodyWidth
+    const body0 = Math.max(along0, Math.min(seen0, along1) - reach)
+    const body1 = Math.max(body0, Math.min(along1, seen1 + reach))
+    const visible =
+      view === null ||
+      (seen1 &gt; seen0 &amp;&amp;
+        (vertical
+          ? cross + extent &gt; view.x &amp;&amp; cross &lt; view.x + view.width
+          : cross + extent &gt; view.y &amp;&amp; cross &lt; view.y + view.height))
+    const toPixel = (unit: number): number =&gt; along0 + (unit - sequence.unitStart) * perUnit
+    const toUnit = (pixel: number): number =&gt; sequence.unitStart + (pixel - along0) / perUnit
+    // A frame's ends exactly, where it runs to the chromosome's.
+    const unitAt = (pixel: number): number =&gt;
+      pixel &lt;= along0 ? sequence.unitStart : pixel &gt;= along1 ? sequence.unitEnd : toUnit(pixel)
+    const frameOf = (acrossFrom: number, thickness: number, from: number, to: number): LaneFrame =&gt; ({
+      orientation: vertical ? 'right' : 'top',
+      toPixel,
+      toUnit,
+      domain: [unitAt(from), unitAt(to)],
+      alongFrom: from,
+      alongTo: to,
+      acrossFrom,
+      thickness,
+    })
+    if (vertical) {
+      // Standing: the anchors' strip, the chromosome, then each lane to the
+      // right of the one before — `acrossFrom` is a lane's edge nearest the
+      // chromosome, and across runs rightward from it.
+      const near = cross + KARYOTYPE_GUTTER
+      const body = frameOf(near, bodyWidth, body0, body1)
+      let at = near + bodyWidth
+      const frames = lanes.map((thickness) =&gt; {
+        if (thickness &gt; 0) at += laneGap
+        const frame = frameOf(at, thickness, seen0, seen1)
+        at += thickness
+        return frame
+      })
+      return {
+        contig: sequence.contig,
+        unitStart: sequence.unitStart,
+        unitEnd: sequence.unitEnd,
+        along0,
+        along1,
+        body,
+        lanes: frames,
+        visible,
+        across: [cross, cross + extent],
+        box: boxOf({
+          x: cross - options.gap / 2,
+          y: options.top,
+          width: pitch,
+          height: options.names + length - panAlong,
+        }),
+        // Over its column, and held there — at the window's top — while the
+        // chromosomes move under it.
+        name: {
+          x: near + bodyWidth / 2,
+          y: options.top + options.names / 2,
+          align: 'center',
+          width: pitch - 2,
+          ...(view === null ? {} : { span: spanOf(cross - options.gap / 2, view.x, view.x + view.width) }),
+        },
+      }
+    }
+    // Lying: the lanes above, the chromosome under them, the anchors' strip
+    // under it — `acrossFrom` is a lane's lower edge, and across runs upward.
+    const floor = cross + extent - KARYOTYPE_GUTTER
+    const body = frameOf(floor, bodyWidth, body0, body1)
+    let at = floor - bodyWidth
+    const frames = lanes.map((thickness) =&gt; {
+      if (thickness &gt; 0) at -= laneGap
+      const frame = frameOf(at, thickness, seen0, seen1)
+      at -= thickness
+      return frame
+    })
+    return {
+      contig: sequence.contig,
+      unitStart: sequence.unitStart,
+      unitEnd: sequence.unitEnd,
+      along0,
+      along1,
+      body,
+      lanes: frames,
+      visible,
+      across: [cross, cross + extent],
+      box: boxOf({
+        x: 0,
+        y: cross - options.gap / 2,
+        width: Math.max(options.width, alongStart + length - panAlong + KARYOTYPE_PAD),
+        height: pitch,
+      }),
+      // Before its row, and held there — at the window's left — while the
+      // chromosomes move under it.
+      name: {
+        x: KARYOTYPE_PAD + options.names - NAME_PAD,
+        y: floor - bodyWidth / 2,
+        align: 'right',
+        width: Math.max(0, options.names - NAME_PAD),
+        ...(view === null ? {} : { span: spanOf(cross - options.gap / 2, view.y, view.y + view.height) }),
+      },
+    }
+  })
+&nbsp;
+  return {
+    orientation: options.orientation,
+    places,
+    lanes,
+    factor,
+    perUnit,
+    width,
+    height,
+    zoom,
+    across,
+    most,
+    pitch,
+    columns,
+    origin,
+    pan,
+    view,
+  }
+}
+&nbsp;
+/**
+ * A point within one column carried from one set of its parts to another: as
+ * far into the same part, in proportion. The last part takes whatever is past
+ * the rest.
+ */
+function remap(from: readonly number[], to: readonly number[], offset: number): number {
+  let a = 0
+  let b = 0
+  for (let i = 0; i &lt; from.length; i++) {
+    const size = from[i]
+    if (offset &lt; a + size || i === from.length - 1) return b + (size &gt; 0 ? ((offset - a) / size) * to[i<span class="branch-0 cbranch-no" title="branch not covered" >] : 0)</span>
+    a += size
+    b += to[i]
+<span class="branch-0 cbranch-no" title="branch not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  return b</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/** How far across a column count is drawn, from the first column's edge. */
+function acrossPixel(columns: KaryotypeLayout['columns'], pitch: number, across: number): number {
+  const column = Math.floor(across)
+  const rest = columns.rest.reduce((sum, size) =&gt; sum + size, 0)
+  return column * pitch + remap(columns.rest, columns.drawn, (across - column) * rest)
+}
+&nbsp;
+/** …and the column count a distance across is, from the first column's edge. */
+function acrossCount(columns: KaryotypeLayout['columns'], pitch: number, pixel: number): number {
+  const column = Math.floor(pixel / pitch)
+  const rest = columns.rest.reduce((sum, size) =&gt; sum + size, 0)
+  return column + remap(columns.drawn, columns.rest, pixel - column * pitch) / Math.max(1e-9, rest)
+}
+&nbsp;
+/** Between a lying chromosome's name and the chromosome. */
+const NAME_PAD = 8
+&nbsp;
+// ---------------------------------------------------------------------------
+// The chromosome itself
+// ---------------------------------------------------------------------------
+&nbsp;
+/**
+ * Trace a chromosome with no bands to draw it by: a bar rounded at both
+ * telomeres, as thick as its frame, as long as its sequence — a pill, and the
+ * shape every ideogram draws a sequence its cytoBand does not cover. An end the
+ * frame was cut short of (`ends`) is left square, out of the window, where the
+ * chromosome carries on.
+ */
+export function tracePill(
+  ctx: CanvasRenderingContext2D,
+  frame: LaneFrame,
+  ends: { start: boolean; end: boolean } = { start: true, end: true },
+): void {
+  const half = frame.thickness / 2
+  const a0 = frame.alongFrom
+  const a1 = frame.alongTo
+  // A cap is half the thickness, or half the length where the sequence is
+  // shorter than it is thick: a plasmid at genome zoom is a dot, not a knot.
+  const cap = Math.max(0, Math.min(half, (a1 - a0) / 2))
+  const c0 = ends.start ? cap : 0
+  const c1 = ends.end ? cap : 0
+  laneMove(ctx, frame, a0 + c0, 0)
+  laneLine(ctx, frame, a1 - c1, 0)
+  if (c1 &gt; 0) {
+    laneCurve(ctx, frame, a1, 0, a1, half)
+    laneCurve(ctx, frame, a1, frame.thickness, a1 - c1, frame.thickness)
+  } else {
+    laneLine(ctx, frame, a1, frame.thickness)
+  }
+  laneLine(ctx, frame, a0 + c0, frame.thickness)
+  if (c0 &gt; 0) {
+    laneCurve(ctx, frame, a0, frame.thickness, a0, half)
+    laneCurve(ctx, frame, a0, 0, a0 + c0, 0)
+  } else {
+    laneLine(ctx, frame, a0, 0)
+  }
+  ctx.closePath()
+}
+&nbsp;
+/**
+ * What a chromosome is filled with (§5.11).
+ *
+ * - `bands` — its cytoBand's stains, which is what a karyotype is.
+ * - `plain` — one colour.
+ * - `track` — a track's value along it, against the track's own limits and in
+ *   the colours its lane is drawn in (a heatmap lane's colormap, any other's
+ *   colour from white): the track drawn as a heatmap lane the shape of a
+ *   chromosome.
+ * - `features` — a feature set's features in their own colours, over the plain
+ *   colour: compartments, chromatin states, a peak set.
+ */
+export type BodyFill =
+  | { kind: 'bands' }
+  | { kind: 'plain' }
+  | { kind: 'track'; profile: PixelProfile; paint: TrackPaint }
+  | {
+      kind: 'features'
+      set: FeatureSet
+      layout: FeatureLayout
+      colour: string
+      colourOf?: (index: number, reversed?: boolean) =&gt; string
+    }
+&nbsp;
+export interface ChromosomePaint {
+  fill: BodyFill
+  /**
+   * The cytoBand's bands on this chromosome, where one is open and covers it:
+   * the outline every fill is drawn inside — the waist at the centromere, a
+   * stalk's narrowing — and the bands themselves under `bands`.
+   */
+  bands: { set: FeatureSet; layout: FeatureLayout; paint: FeaturePaint } | null
+  /** The chromosome's own colour: a plain body, and the ground under features. */
+  colour: string
+  /** The ground under a track's colours, where the track has nothing. */
+  paper: string
+  /** The outline's ink. */
+  ink: string
+  opacity: number
+}
+&nbsp;
+/**
+ * Draw one chromosome: its outline, filled.
+ *
+ * Its cytoBand's where one covers it and the fill is the bands — the same
+ * `drawIdeogram` the karyotype lane is drawn by, at the frame's whole
+ * thickness. Otherwise the fill is clipped to the outline, the cytoBand's or
+ * the pill's, and the outline edged once over it in the plot's ink. In its
+ * body's frame, which a camera cuts to the window: an end cut off is out of
+ * view, and is not rounded.
+ */
+export function drawChromosome(ctx: CanvasRenderingContext2D, place: ChromosomePlace, paint: ChromosomePaint): void {
+  const frame = place.body
+  const bands = paint.bands
+  if (paint.fill.kind === <span class="branch-0 cbranch-no" title="branch not covered" >'bands' &amp;&amp; bands !== <span class="branch-0 cbranch-no" title="branch not covered" >null &amp;&amp; b</span>ands.layout.placements.length &gt; 0) <span class="branch-0 cbranch-no" title="branch not covered" >{</span></span>
+<span class="cstat-no" title="statement not covered" >    drawIdeogram(ctx, frame, bands.set, bands.layout, bands.paint, frame.thickness)</span>
+<span class="cstat-no" title="statement not covered" >    return</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+  const ends = { start: frame.alongFrom &lt;= place.along0, end: frame.alongTo &gt;= place.along1 }
+  const trace = (): void =&gt; {
+    ctx.beginPath()
+    const traced = bands === null ? <span class="branch-0 cbranch-no" title="branch not covered" >0 : traceIdeogramOutline(ctx, frame, bands.set, bands.layout, frame.thickness)</span>
+    if (traced === 0) tracePill(ctx, frame, ends)
+  }
+  ctx.save()
+  ctx.globalAlpha = paint.opacity
+  trace()
+  ctx.save()
+  ctx.clip()
+  const [x, y, width, height] = laneRect(frame, frame.alongFrom, frame.alongTo, 0, frame.thickness)
+  const fill = paint.fill
+  ctx.fillStyle = fill.kind === <span class="branch-0 cbranch-no" title="branch not covered" >'track' ? paint.paper : p</span>aint.colour
+  ctx.fillRect(x, y, width, height)
+  if (fill.kind === 'track') <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
+<span class="cstat-no" title="statement not covered" >    drawTrack(ctx, frame, fill.profile, { ...fill.paint, mode: 'heatmap', opacity: 1 })</span>
+  } else if (fill.kind === 'features') <span class="branch-0 cbranch-no" title="branch not covered" >{</span>
+    // Across the whole body, a block per feature: the body *is* the lane, and
+    // its rows are one — a chromosome painted by its states, not a row of boxes
+    // on it. In ink order, one fill per colour, as the feature lanes are.
+<span class="cstat-no" title="statement not covered" >    const byInk = new Map&lt;string, number[]&gt;()</span>
+<span class="cstat-no" title="statement not covered" >    for (const placement of fill.layout.placements) {</span>
+<span class="cstat-no" title="statement not covered" >      const ink = fill.colourOf?.(placement.index, placement.reversed) ?? fill.colour</span>
+<span class="cstat-no" title="statement not covered" >      const at = byInk.get(ink)</span>
+<span class="cstat-no" title="statement not covered" >      const along = [placement.along0, placement.along1]</span>
+<span class="cstat-no" title="statement not covered" >      if (at === undefined) byInk.set(ink, along)</span>
+<span class="cstat-no" title="statement not covered" >      else at.push(...along)</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >    for (const [ink, alongs] of byInk) {</span>
+<span class="cstat-no" title="statement not covered" >      ctx.fillStyle = ink</span>
+<span class="cstat-no" title="statement not covered" >      ctx.beginPath()</span>
+<span class="cstat-no" title="statement not covered" >      for (let i = 0; i &lt; alongs.length; i += 2) {</span>
+        // To the frame, which a feature as long as a chromosome arm runs far
+        // past at a high magnification.
+<span class="cstat-no" title="statement not covered" >        const from = Math.max(alongs[i], frame.alongFrom)</span>
+<span class="cstat-no" title="statement not covered" >        const to = Math.min(alongs[i + 1], frame.alongTo)</span>
+<span class="cstat-no" title="statement not covered" >        if (!(to &gt;= from)) continue</span>
+<span class="cstat-no" title="statement not covered" >        const [bx, by, bw, bh] = laneRect(frame, from, to, 0, frame.thickness)</span>
+<span class="cstat-no" title="statement not covered" >        ctx.rect(bx, by, bw, bh)</span>
+<span class="cstat-no" title="statement not covered" >      }</span>
+<span class="cstat-no" title="statement not covered" >      ctx.fill()</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+  ctx.restore()
+  trace()
+  ctx.strokeStyle = paint.ink
+  ctx.lineWidth = OUTLINE_WIDTH
+  ctx.lineJoin = 'round'
+  ctx.stroke()
+  ctx.restore()
+}
+&nbsp;
+// ---------------------------------------------------------------------------
+// Between two chromosomes
+// ---------------------------------------------------------------------------
+&nbsp;
+/**
+ * The most pairs drawn between chromosomes, the strongest first where a file
+ * scores them. The junction lanes' cap (§8.23), for its reason: past a few
+ * thousand curves the picture is a fog, and the pairs it hid are a count the
+ * caption can say.
+ */
+export const TRANS_CAP = 4000
+&nbsp;
+/**
+ * The pairs of a pair set whose two ends are on two chromosomes in the picture,
+ * drawn as curves between them (§5.11).
+ *
+ * A chromosome's own pairs are its lane's — `drawArcs`, as in the browser — and
+ * the pairs between two are these: each leaves its chromosome straight across
+ * it, towards the other, and arrives the same way, so two neighbours are joined
+ * by a gentle S and two far apart by a long one, and every curve says at both
+ * ends exactly where on the chromosome it begins. The two-lines picture of PR
+ * #107's circle seats its ribbons the same way. From the chromosome's middle,
+ * at half the set's opacity, and drawn first — under every body and lane — so
+ * the tracks a curve passes stay readable over it.
+ *
+ * Returns how many were drawn and how many there were.
+ */
+export function drawTransArcs(
+  ctx: CanvasRenderingContext2D,
+  layout: KaryotypeLayout,
+  axis: LocusAxis,
+  pairs: PairSet,
+  paint: { colour: string; opacity: number },
+): { drawn: number; total: number } {
+  const byContig = new Map(layout.places.map((place) =&gt; [place.contig, place]))
+  const chosen: number[] = []
+  for (let i = 0; i &lt; pairs.length; i++) {
+    const one = pairs.contigs[pairs.contig1[i]]
+    const two = pairs.contigs[pairs.contig2[i]]
+    if (one === two || !byContig.has(one) || !byContig.has(two)) continue
+    chosen.push(i)
+  }
+  const total = chosen.length
+  if (total &gt; TRANS_CAP) {
+    // The strongest, where the file says which those are: a score of `NaN` is a
+    // file with no score column, and there the file's own order is all there is.
+    chosen.sort((a, b) =&gt; (scoreOf(pairs, b) - scoreOf(pairs, a<span class="branch-0 cbranch-no" title="branch not covered" >)) || a - b)</span>
+    chosen.length = TRANS_CAP
+  }
+  const vertical = layout.orientation === 'vertical'
+  // Through a camera, a curve that cannot cross the window is not drawn: its
+  // control points share their ends' coordinates, so it stays inside the box
+  // its two ends span, and a box that misses the window is a curve that does.
+  const view = layout.view
+  const misses = (a: { x: number; y: number }, b: { x: number; y: number }): boolean =&gt;
+    view !== <span class="branch-0 cbranch-no" title="branch not covered" >null &amp;&amp;</span>
+<span class="cstat-no" title="statement not covered" >    (Math.max(a.x, b.x) &lt; view.x ||</span>
+<span class="cstat-no" title="statement not covered" >      Math.min(a.x, b.x) &gt; view.x + view.width ||</span>
+<span class="cstat-no" title="statement not covered" >      Math.max(a.y, b.y) &lt; view.y ||</span>
+<span class="cstat-no" title="statement not covered" >      Math.min(a.y, b.y) &gt; view.y + view.height)</span>
+  ctx.save()
+  ctx.strokeStyle = paint.colour
+  ctx.globalAlpha = paint.opacity * 0.5
+  ctx.lineWidth = 1
+  let drawn = 0
+  ctx.beginPath()
+  for (const i of chosen) {
+    const a = pointOn(byContig.get(pairs.contigs[pairs.contig1[i]]), axis, pairs.contigs[pairs.contig1[i]], (pairs.start1[i] + pairs.end1[i]) / 2)
+    const b = pointOn(byContig.get(pairs.contigs[pairs.contig2[i]]), axis, pairs.contigs[pairs.contig2[i]], (pairs.start2[i] + pairs.end2[i]) / 2)
+    if (a === null || b === null || misses(a, b)) <span class="branch-0 cbranch-no" title="branch not covered" >continue</span>
+    ctx.moveTo(a.x, a.y)
+    if (vertical) {
+      const mid = (a.x + b.x) / 2
+      ctx.bezierCurveTo(mid, a.y, mid, b.y, b.x, b.y)
+    } else {
+      const mid = (a.y + b.y) / 2
+      ctx.bezierCurveTo(a.x, mid, b.x, mid, b.x, b.y)
+    }
+    drawn++
+  }
+  ctx.stroke()
+  ctx.restore()
+  return { drawn, total }
+}
+&nbsp;
+function scoreOf(pairs: PairSet, index: number): number {
+  const score = pairs.score[index]
+  return Number.isFinite(score) ? <span class="branch-0 cbranch-no" title="branch not covered" >score : Number.NEGATIVE_INFINITY</span>
+}
+&nbsp;
+/** A base pair of a chromosome as a canvas point on the chromosome's middle line. */
+function pointOn(
+  place: ChromosomePlace | undefined,
+  axis: LocusAxis,
+  contig: string,
+  bp: number,
+): { x: number; y: number } | null {
+  if (place === undefined) <span class="branch-0 cbranch-no" title="branch not covered" >return null</span>
+  const unit = axis.locusToUnit(contig, bp)
+  if (unit === null || unit &lt; place.unitStart || unit &gt; place.unitEnd) <span class="branch-0 cbranch-no" title="branch not covered" >return null</span>
+  const along = place.body.toPixel(unit)
+  const middle = place.body.thickness / 2
+  return { x: laneX(place.body, along, middle), y: laneY(place.body, along, middle) }
+}
+&nbsp;
+// ---------------------------------------------------------------------------
+// Marks across a chromosome
+// ---------------------------------------------------------------------------
+&nbsp;
+/**
+ * A rule across one chromosome and its lanes, at one point along it: the
+ * hairline under the hand, another surface's pointer, a reader's line (§8.1).
+ *
+ * Across the chromosome and no further, because that is the axis the point is
+ * on: the next chromosome along has its own base pair at this height, and a
+ * rule carried on through it would name a place there nobody pointed at.
+ */
+export <span class="fstat-no" title="function not covered" >function drawRuleAcross(</span>
+<span class="cstat-no" title="statement not covered" >  ctx: CanvasRenderingContext2D,</span>
+<span class="cstat-no" title="statement not covered" >  layout: KaryotypeLayout,</span>
+<span class="cstat-no" title="statement not covered" >  place: ChromosomePlace,</span>
+<span class="cstat-no" title="statement not covered" >  along: number,</span>
+<span class="cstat-no" title="statement not covered" >  colour: string,</span>
+<span class="cstat-no" title="statement not covered" >  dpr: number,</span>
+<span class="cstat-no" title="statement not covered" >  alpha = 0.8,</span>
+<span class="cstat-no" title="statement not covered" >): void {</span>
+<span class="cstat-no" title="statement not covered" >  const at = snap(along, dpr)</span>
+<span class="cstat-no" title="statement not covered" >  const [from, to] = place.across</span>
+<span class="cstat-no" title="statement not covered" >  ctx.save()</span>
+<span class="cstat-no" title="statement not covered" >  ctx.strokeStyle = colour</span>
+<span class="cstat-no" title="statement not covered" >  ctx.globalAlpha = alpha</span>
+<span class="cstat-no" title="statement not covered" >  ctx.lineWidth = Math.max(1 / dpr, 0.75)</span>
+<span class="cstat-no" title="statement not covered" >  ctx.beginPath()</span>
+<span class="cstat-no" title="statement not covered" >  if (layout.orientation === 'vertical') {</span>
+<span class="cstat-no" title="statement not covered" >    ctx.moveTo(from, at)</span>
+<span class="cstat-no" title="statement not covered" >    ctx.lineTo(to, at)</span>
+<span class="cstat-no" title="statement not covered" >  } else {</span>
+<span class="cstat-no" title="statement not covered" >    ctx.moveTo(at, from)</span>
+<span class="cstat-no" title="statement not covered" >    ctx.lineTo(at, to)</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  ctx.stroke()</span>
+<span class="cstat-no" title="statement not covered" >  ctx.restore()</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/**
+ * A wash across one chromosome and its lanes over a stretch of it: a reader's
+ * box (§8.1), at the tenth of an ink a box washes the tracks with everywhere
+ * (`MARK_WASH`), and the drag that is choosing a stretch to open.
+ */
+export <span class="fstat-no" title="function not covered" >function drawWashAcross(</span>
+<span class="cstat-no" title="statement not covered" >  ctx: CanvasRenderingContext2D,</span>
+<span class="cstat-no" title="statement not covered" >  layout: KaryotypeLayout,</span>
+<span class="cstat-no" title="statement not covered" >  place: ChromosomePlace,</span>
+<span class="cstat-no" title="statement not covered" >  along0: number,</span>
+<span class="cstat-no" title="statement not covered" >  along1: number,</span>
+<span class="cstat-no" title="statement not covered" >  colour: string,</span>
+<span class="cstat-no" title="statement not covered" >  alpha: number,</span>
+<span class="cstat-no" title="statement not covered" >): void {</span>
+<span class="cstat-no" title="statement not covered" >  const low = Math.min(along0, along1)</span>
+<span class="cstat-no" title="statement not covered" >  const span = Math.max(1, Math.abs(along1 - along0))</span>
+<span class="cstat-no" title="statement not covered" >  const [from, to] = place.across</span>
+<span class="cstat-no" title="statement not covered" >  ctx.save()</span>
+<span class="cstat-no" title="statement not covered" >  ctx.globalAlpha = alpha</span>
+<span class="cstat-no" title="statement not covered" >  ctx.fillStyle = colour</span>
+<span class="cstat-no" title="statement not covered" >  if (layout.orientation === 'vertical') ctx.fillRect(from, low, to - from, span)</span>
+<span class="cstat-no" title="statement not covered" >  else ctx.fillRect(low, from, span, to - from)</span>
+<span class="cstat-no" title="statement not covered" >  ctx.restore()</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/**
+ * One end of a reader's arrowhead (§8.1), in the strip on the chromosome's far
+ * side from its lanes, pointing into it — the browser's anchor, which hangs
+ * from the ruler and points down into the tracks, turned to point at a
+ * chromosome and the tracks beyond it. The same triangle at the same size: one
+ * glyph for *this coordinate* on every surface.
+ */
+export <span class="fstat-no" title="function not covered" >function drawBodyAnchor(</span>
+<span class="cstat-no" title="statement not covered" >  ctx: CanvasRenderingContext2D,</span>
+<span class="cstat-no" title="statement not covered" >  body: LaneFrame,</span>
+<span class="cstat-no" title="statement not covered" >  along: number,</span>
+<span class="cstat-no" title="statement not covered" >  colour: string,</span>
+<span class="cstat-no" title="statement not covered" >): void {</span>
+<span class="cstat-no" title="statement not covered" >  ctx.save()</span>
+<span class="cstat-no" title="statement not covered" >  ctx.fillStyle = colour</span>
+<span class="cstat-no" title="statement not covered" >  ctx.beginPath()</span>
+<span class="cstat-no" title="statement not covered" >  laneMove(ctx, body, along, -1)</span>
+<span class="cstat-no" title="statement not covered" >  laneLine(ctx, body, along - ANCHOR_HALF, -1 - ANCHOR_LENGTH)</span>
+<span class="cstat-no" title="statement not covered" >  laneLine(ctx, body, along + ANCHOR_HALF, -1 - ANCHOR_LENGTH)</span>
+<span class="cstat-no" title="statement not covered" >  ctx.closePath()</span>
+<span class="cstat-no" title="statement not covered" >  ctx.fill()</span>
+<span class="cstat-no" title="statement not covered" >  ctx.restore()</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/** Every chromosome's name: over it standing, before it lying. */
+export function drawChromosomeNames(
+  ctx: CanvasRenderingContext2D,
+  layout: KaryotypeLayout,
+  font: string,
+  colour: string,
+  /** The one under the hand, set in the accent. */
+  lit: string | null = null,
+  accent = colour,
+): void {
+  ctx.save()
+  ctx.font = font
+  ctx.textBaseline = 'middle'
+  // Half a line, for a lying chromosome's name kept inside its row.
+  const half = (Number.parseFloat(/(\d+(?:\.\d+)?)px/.exec(font)?.[1<span class="branch-0 cbranch-no" title="branch not covered" >] ?? '11')</span> * 0.6)
+  for (const place of layout.places) {
+    const { align, width, span } = place.name
+    let { x, y } = place.name
+    if (width &lt; 4) <span class="branch-0 cbranch-no" title="branch not covered" >continue</span>
+    // Through a camera, slid along its column's stretch of the window to stay
+    // in sight while any of the column is: the lanes still say whose they are
+    // once the chromosome itself has gone past the edge. A chromosome nothing
+    // of which is in the window — a short one ended above it — is not named
+    // over the paper it left.
+    if (span !== undefined) {
+      if (!place.visible) continue
+      const reach = layout.orientation === 'vertical' ? Math.min(ctx.measureText(place.contig).width, width) / 2 : half
+      if (span[1] - span[0] &lt; 2 * reach) <span class="branch-0 cbranch-no" title="branch not covered" >continue</span>
+      if (layout.orientation === 'vertical') x = Math.max(span[0] + reach, Math.min(span[1] - reach, x))
+      else y = Math.max(span[0] + reach, Math.min(span[1] - reach, y))
+    }
+    ctx.textAlign = align
+    ctx.fillStyle = place.contig === <span class="branch-0 cbranch-no" title="branch not covered" >lit ? accent : c</span>olour
+    ctx.fillText(place.contig, x, y, width)
+  }
+  ctx.restore()
+}
+&nbsp;
+// ---------------------------------------------------------------------------
+// The stretch being dragged out
+// ---------------------------------------------------------------------------
+&nbsp;
+export interface KaryotypeSelection {
+  place: ChromosomePlace
+  /** The end that does not move, and the one under the pointer, along the chromosome. */
+  anchor: number
+  moving: number
+  /** The two ends' positions written out, and the span between them. */
+  start: string
+  end: string
+  span: string
+  colour: string
+  halo: string
+  font: string
+  chipHeight: number
+  chipPad: number
+  dpr: number
+}
+&nbsp;
+/**
+ * A stretch of one chromosome being dragged out, to the base at both ends.
+ *
+ * The browser's selection (`drawSelection`) turned to lie across a chromosome:
+ * a wash over the stretch, a hairline across each end, and a chip naming each
+ * end beside it — written level whichever way the chromosome runs, since a
+ * coordinate is read, not followed — with the span between them under the
+ * second. Outside the chromosome's lanes where there is room, so the chips are
+ * not written over what is being chosen.
+ */
+export <span class="fstat-no" title="function not covered" >function drawKaryotypeSelection(</span>
+<span class="cstat-no" title="statement not covered" >  ctx: CanvasRenderingContext2D,</span>
+<span class="cstat-no" title="statement not covered" >  layout: KaryotypeLayout,</span>
+<span class="cstat-no" title="statement not covered" >  selection: KaryotypeSelection,</span>
+<span class="cstat-no" title="statement not covered" >): void {</span>
+<span class="cstat-no" title="statement not covered" >  const { place, anchor, moving } = selection</span>
+<span class="cstat-no" title="statement not covered" >  drawWashAcross(ctx, layout, place, anchor, moving, selection.colour, 0.15)</span>
+<span class="cstat-no" title="statement not covered" >  drawRuleAcross(ctx, layout, place, anchor, selection.colour, selection.dpr, 1)</span>
+<span class="cstat-no" title="statement not covered" >  drawRuleAcross(ctx, layout, place, moving, selection.colour, selection.dpr, 1)</span>
+<span class="cstat-no" title="statement not covered" >  ctx.save()</span>
+<span class="cstat-no" title="statement not covered" >  ctx.font = selection.font</span>
+<span class="cstat-no" title="statement not covered" >  ctx.textBaseline = 'middle'</span>
+<span class="cstat-no" title="statement not covered" >  ctx.textAlign = 'left'</span>
+<span class="cstat-no" title="statement not covered" >  const chip = (text: string, x: number, y: number): void =&gt; {</span>
+<span class="cstat-no" title="statement not covered" >    const width = ctx.measureText(text).width + selection.chipPad * 2</span>
+<span class="cstat-no" title="statement not covered" >    ctx.fillStyle = selection.halo</span>
+<span class="cstat-no" title="statement not covered" >    ctx.strokeStyle = selection.colour</span>
+<span class="cstat-no" title="statement not covered" >    ctx.lineWidth = 1</span>
+<span class="cstat-no" title="statement not covered" >    ctx.beginPath()</span>
+<span class="cstat-no" title="statement not covered" >    if (ctx.roundRect === undefined) ctx.rect(x, y, width, selection.chipHeight)</span>
+<span class="cstat-no" title="statement not covered" >    else ctx.roundRect(x, y, width, selection.chipHeight, 3)</span>
+<span class="cstat-no" title="statement not covered" >    ctx.fill()</span>
+<span class="cstat-no" title="statement not covered" >    ctx.stroke()</span>
+<span class="cstat-no" title="statement not covered" >    ctx.fillStyle = selection.colour</span>
+<span class="cstat-no" title="statement not covered" >    ctx.fillText(text, x + selection.chipPad, y + selection.chipHeight / 2)</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  const widthOf = (text: string): number =&gt; ctx.measureText(text).width + selection.chipPad * 2</span>
+<span class="cstat-no" title="statement not covered" >  const low = Math.min(anchor, moving)</span>
+<span class="cstat-no" title="statement not covered" >  const high = Math.max(anchor, moving)</span>
+<span class="cstat-no" title="statement not covered" >  const [first, last] = anchor &lt;= moving ? [selection.start, selection.end] : [selection.end, selection.start]</span>
+<span class="cstat-no" title="statement not covered" >  const h = selection.chipHeight</span>
+  // Through a camera, inside the window: a magnified column runs past its
+  // edges, and a chip written where the column ends is written nowhere.
+<span class="cstat-no" title="statement not covered" >  const view = layout.view</span>
+<span class="cstat-no" title="statement not covered" >  const inX = (x: number, width: number): number =&gt;</span>
+<span class="cstat-no" title="statement not covered" >    view === null ? x : Math.max(view.x + 2, Math.min(view.x + view.width - width - 2, x))</span>
+<span class="cstat-no" title="statement not covered" >  const inY = (y: number): number =&gt; (view === null ? y : Math.max(view.y + 2, Math.min(view.y + view.height - h - 2, y)))</span>
+<span class="cstat-no" title="statement not covered" >  if (layout.orientation === 'vertical') {</span>
+    // Right of the chromosome's last lane, each chip level with its own end:
+    // the low end's above its rule, the high end's below its own.
+<span class="cstat-no" title="statement not covered" >    const widest = Math.max(widthOf(first), widthOf(last), widthOf(selection.span))</span>
+<span class="cstat-no" title="statement not covered" >    const x = inX(place.across[1] + 4, widest)</span>
+<span class="cstat-no" title="statement not covered" >    chip(first, x, inY(low - h - 2))</span>
+<span class="cstat-no" title="statement not covered" >    chip(last, x, inY(high + 2))</span>
+<span class="cstat-no" title="statement not covered" >    if (high - low &gt; 2 * h + 6) chip(selection.span, x, inY((low + high) / 2 - h / 2))</span>
+<span class="cstat-no" title="statement not covered" >  } else {</span>
+    // Over the chromosome's lanes, each chip outside its own end.
+<span class="cstat-no" title="statement not covered" >    const y = inY(place.across[0] - h - 3)</span>
+<span class="cstat-no" title="statement not covered" >    chip(first, inX(low - widthOf(first) - 3, widthOf(first)), y)</span>
+<span class="cstat-no" title="statement not covered" >    chip(last, inX(high + 3, widthOf(last)), y)</span>
+<span class="cstat-no" title="statement not covered" >    if (high - low &gt; widthOf(selection.span) + 8) {</span>
+<span class="cstat-no" title="statement not covered" >      chip(selection.span, inX((low + high) / 2 - widthOf(selection.span) / 2, widthOf(selection.span)), inY(y - h - 3))</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+<span class="cstat-no" title="statement not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  ctx.restore()</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/**
+ * Where the window is over a picture larger than it, on screen: a thin bar
+ * along the window's foot for the picture's width, and one down its right edge
+ * for its height — a scrollbar's thumb, drawn, which says there is more of the
+ * picture than the window shows and which part of it is shown. Nothing where
+ * the picture fits, and nothing without a camera.
+ */
+export function drawWindowPlace(
+  ctx: CanvasRenderingContext2D,
+  layout: KaryotypeLayout,
+  window: { width: number; height: number },
+  colour: string,
+): void {
+  const view = layout.view
+  if (view === null) return
+  const bar = 3
+  const inset = 2
+  ctx.save()
+  ctx.fillStyle = colour
+  ctx.globalAlpha = 0.35
+  const thumb = (x: number, y: number, width: number, height: number): void =&gt; {
+    ctx.beginPath()
+    if (ctx.roundRect === undefined) <span class="branch-0 cbranch-no" title="branch not covered" >ctx.rect(x, y, width, height)</span>
+    else ctx.roundRect(x, y, width, height, bar / 2)
+    ctx.fill()
+  }
+  if (layout.width &gt; window.width + 0.5) {
+    const span = view.width - 2 * inset
+    const from = (Math.max(0, layout.pan.x) / layout.width) * span
+    const to = (Math.min(layout.width, layout.pan.x + window.width) / layout.width) * span
+    thumb(view.x + inset + from, view.y + view.height - bar - inset, Math.max(bar, to - from), bar)
+  }
+  if (layout.height &gt; window.height + 0.5) {
+    const span = view.height - 2 * inset
+    const from = (Math.max(0, layout.pan.y) / layout.height) * span
+    const to = (Math.min(layout.height, layout.pan.y + window.height) / layout.height) * span
+    thumb(view.x + view.width - bar - inset, view.y + inset + from, bar, Math.max(bar, to - from))
+  }
+  ctx.restore()
+}
+&nbsp;
+// ---------------------------------------------------------------------------
+// The hit test
+// ---------------------------------------------------------------------------
+&nbsp;
+/** The chromosome whose column — or row — holds a canvas point, if any. */
+export function placeAt(layout: KaryotypeLayout, x: number, y: number): ChromosomePlace | null {
+  for (const place of layout.places) {
+    const { box } = place
+    if (x &gt;= box.x &amp;&amp; x &lt; box.x + box.width &amp;&amp; y &gt;= box.y &amp;&amp; y &lt; box.y + box.height) return place
+<span class="branch-0 cbranch-no" title="branch not covered" >  }</span>
+<span class="cstat-no" title="statement not covered" >  return null</span>
+<span class="cstat-no" title="statement not covered" >}</span>
+&nbsp;
+/** How far along its chromosome a canvas point is: its height standing, its x lying. */
+export function alongOf(layout: KaryotypeLayout, x: number, y: number): number {
+  return layout.orientation === 'vertical' ? <span class="branch-0 cbranch-no" title="branch not covered" >y : x</span>
+}
+&nbsp;
+/** How far across: its x standing, its y lying. */
+export function acrossOf(layout: KaryotypeLayout, x: number, y: number): number {
+  return layout.orientation === 'vertical' ? <span class="branch-0 cbranch-no" title="branch not covered" >x : y</span>
+}
+&nbsp;
+/** Whether a point along a chromosome is on it — between its first base and its last. */
+export function onSequence(place: ChromosomePlace, along: number): boolean {
+  return along &gt;= place.along0 &amp;&amp; along &lt;= place.along1
+}
+&nbsp;
+/**
+ * Which of a chromosome's lanes a point is in, by its index, or `-1` on the
+ * chromosome itself; `null` in a gap, the anchors' strip or past the last lane.
+ */
+export function laneIndexAt(layout: KaryotypeLayout, place: ChromosomePlace, x: number, y: number): number | null {
+  const across = acrossOf(layout, x, y)
+  const within = (frame: LaneFrame): boolean =&gt; {
+    // A lane of no thickness is not there to be pointed at (`KaryotypeOptions.lanes`).
+    if (frame.thickness &lt;= 0) return false
+    const [rx, ry, width, height] = laneRect(frame, frame.alongFrom, frame.alongTo, 0, frame.thickness)
+    return layout.orientation === 'vertical' ? across &gt;= rx &amp;&amp; across &lt;= rx + <span class="branch-0 cbranch-no" title="branch not covered" >width : across &gt;= ry &amp;&amp; across &lt;= ry + height</span>
+  }
+  if (within(place.body)) return -1
+  const index = place.lanes.findIndex(within)
+  return index &lt; 0 ? null : index
+}
+&nbsp;
+// ---------------------------------------------------------------------------
+// The camera
+// ---------------------------------------------------------------------------
+&nbsp;
+/** The point of the picture at a point of the window (or of the picture, laid out without a camera). */
+export function pointAt(layout: KaryotypeLayout, x: number, y: number): KaryotypePoint {
+  const vertical = layout.orientation === 'vertical'
+  const along = (vertical ? y + layout.pan.y : x + layout.pan.x) - layout.origin.along
+  const across = (vertical ? x + layout.pan.x : y + layout.pan.y) - layout.origin.across
+  return { along: along / layout.perUnit, across: acrossCount(layout.columns, layout.pitch, across) }
+}
+&nbsp;
+/** Where a point of the picture is drawn: in the window (or in the picture, laid out without a camera). */
+export function pixelOf(layout: KaryotypeLayout, point: KaryotypePoint): { x: number; y: number } {
+  const along = layout.origin.along + point.along * layout.perUnit
+  const across = layout.origin.across + acrossPixel(layout.columns, layout.pitch, point.across)
+  return layout.orientation === 'vertical'
+    ? { x: across - layout.pan.x, y: along - layout.pan.y <span class="branch-0 cbranch-no" title="branch not covered" >}</span>
+<span class="cstat-no" title="statement not covered" >    : { x: along - layout.pan.x, y: across - layout.pan.y }</span>
+}
+&nbsp;
+/** The middle of the window the chromosomes are seen in — of the whole picture, laid out without a camera. */
+export function middleOf(layout: KaryotypeLayout): { x: number; y: number } {
+  const view = layout.<span class="branch-0 cbranch-no" title="branch not covered" >view ?? { x: 0, y: 0, width: layout.width, height: layout.height }</span>
+  return { x: view.x + view.width / 2, y: view.y + view.height / 2 }
+}
+&nbsp;
+/** The camera a layout was drawn through, its point in the middle as the picture held it. */
+export function cameraOf(layout: KaryotypeLayout): KaryotypeCamera {
+  const middle = middleOf(layout)
+  return { zoom: layout.zoom, centre: pointAt(layout, middle.x, middle.y) }
+}
+&nbsp;
+/**
+ * The camera that magnifies the picture to `zoom` about a point of the window,
+ * what is under that point staying there (§5.11). `layout` is the picture on
+ * screen, and `relayout` lays the same picture out at another magnification.
+ * The zoom is held to what the picture allows — one at the least, a base a
+ * pixel at the most — and the point in the middle to what it can show there
+ * when it is laid out.
+ */
+export function zoomAbout(
+  layout: KaryotypeLayout,
+  x: number,
+  y: number,
+  zoom: number,
+  relayout: (zoom: number) =&gt; KaryotypeLayout,
+): KaryotypeCamera {
+  const point = pointAt(layout, x, y)
+  const next = Math.min(layout.most, Math.max(1, zoom))
+  // Magnified from its corner, the point is somewhere in the picture: moved
+  // so it is back under the pointer, the window's middle is over the point
+  // the camera is to be held on.
+  const magnified = relayout(next)
+  const at = pixelOf(magnified, point)
+  const moved = { ...magnified, pan: { x: magnified.pan.x + at.x - x, y: magnified.pan.y + at.y - y } }
+  const middle = middleOf(moved)
+  return { zoom: next, centre: pointAt(moved, middle.x, middle.y) }
+}
+&nbsp;
+/**
+ * The camera moved by a drag of `(dx, dy)` pixels, or a scroll: the picture
+ * follows the hand, so the point now in the middle is the one that was that
+ * far the other way.
+ */
+export function panBy(layout: KaryotypeLayout, dx: number, dy: number): KaryotypeCamera {
+  const middle = middleOf(layout)
+  return { zoom: layout.zoom, centre: pointAt(layout, middle.x - dx, middle.y - dy) }
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-11-25T20:29:00.044Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    
