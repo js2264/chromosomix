@@ -229,6 +229,15 @@
   gap: 0.4rem;
 }
 
+/* What `at least` means and the background the affinities are put against,
+   said once, under the first list that leans on it: a key, so faint. */
+.curate-selection-key {
+  margin: -0.15rem 0 0;
+  color: var(--text-faint);
+  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  line-height: 1.35;
+}
+
 /* The selection's acts in a grid: two to a row in the side's usual width,
    their keys in a column at the right, the act that unmakes something last. */
 .curate-selection-acts {
@@ -351,10 +360,13 @@
   font-size: calc(var(--step--2) * var(--text-scale, 1));
   font-variant-numeric: tabular-nums;
 }
+/* A row's act is the card's acts' size — the button's own type and their
+   padding —, never the row's: one button size a card, so `merge` on a row
+   does not outweigh `merge into…` above it. */
 .curate-selection-row-act {
   grid-area: act;
-  padding: 0.12rem 0.5rem;
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  padding: 0.28rem 0.5rem;
+  white-space: nowrap;
 }
 .curate-selection-more {
   align-self: flex-start;
@@ -383,6 +395,11 @@
 .curate-selection-offer {
   color: var(--accent);
   font-weight: 600;
+}
+/* Nothing on offer: what the method is sure of, said as the numbers are. */
+.curate-selection-offer.is-quiet {
+  color: var(--text-dim);
+  font-weight: 400;
 }
 
 /* Each two genomes' affinity, tinted as the contact map colours the pair — by
@@ -444,6 +461,10 @@
 .curate-selection-cell.is-self,
 .curate-selection-cell.is-none {
   background: none;
+  color: var(--text-faint);
+}
+/* At or under the background: a pair that meets no more than strangers do. */
+.curate-selection-cell.is-under {
   color: var(--text-faint);
 }
 

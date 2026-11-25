@@ -2,18 +2,26 @@
  * The inspector's selection card (SPECS §33.3): what is selected, and what it
  * can do, by what it is —
  *
- * - **nothing**: how to select, and what the curation changed so far;
+ * - **nothing**: how to select, the MAGs by grade — the ones under 50%
+ *   complete counted too —, and what the curation changed so far;
  * - **one MAG**: its length, contigs and change since the file, its quality —
  *   and, while a step is priced, what the step would leave of it; the genomes
- *   it meets most densely, each with `merge`; the contigs the suggestions would
- *   bring into it (`take`, and `take N at 50% or more`, one step) and send out
- *   of it (`move`);
+ *   it meets most densely, `merge` on those whose contacts stand out of the
+ *   background; the contigs the suggestions would bring into it (`take`, and
+ *   `take N at 50% or more`, one step) and send out of it (`move`);
  * - **several genomes**: their counts and length, the step's price, their
  *   affinities with one another;
- * - **contigs**: how long, where they are, the genomes they meet most;
+ * - **contigs**: how long, where they are, the genomes they meet most — how
+ *   many meet each most, and how many of those are in it already;
  * - **one element**: its hosts held and offered, and the elements that meet
  *   it, each with its own best host;
  * - **an element and a MAG**: the pair's numbers, `link` or `unlink`.
+ *
+ * Every affinity is put against the map's background, the rate of spurious
+ * ligation (`0.39 (at least 14× background)`, `below the background`), what
+ * `at least` means said once; every confidence says what it is sure of (`99%
+ * one organism`, `98% its host`, under `belong here` `79% sure`), never a bare
+ * percent beside a price; and a row's act is the card's acts' size.
  *
  * Its acts are the stage's keys printed (F2, M, L, B, E, ⌫, ⏎); hovering one
  * prices its step (`model.preview(step, false)`), so its outcome is read before
@@ -123,7 +131,11 @@ interface RowSpec {
   words: string
   /** The same with full names, for its title. */
   title?: string
+  /** A suggestion's confidence and what it is sure of — `99% one organism`, never a bare percent — and that in a sentence. */
   confidence?: string | null
+  confidenceTitle?: string
+  /** Whether its words lean on the cautious lower bound (`at least`), which the card explains once. */
+  bounded?: boolean
   /** Its act: it makes a step, so it answers nothing while the last one is counted. */
   act?: { label: string; title: string; run: () => void; step?: () => CurationStep | null } | null
 }
@@ -175,6 +187,8 @@ export class SelectionCard {
   private saying = false
   /** Whether the reader's last gesture in the card was a key: only then is the keyboard put back on an act after a repaint. */
   private byKeys = false
+  /** Whether the card, as drawn now, has said what `at least` means: once a drawing. */
+  private keyed = false
   private dirty = { all: true, preview: false, hover: false }
   private frame = 0
   private priceTimer: ReturnType<typeof setTimeout> | null = null
@@ -290,6 +304,7 @@ export class SelectionCard {
     this.priceSlots = { acts: null, rows: null }
     this.chooseActs.clear()
     this.lit = []
+    this.keyed = false
     const model = this.ctx.model
     const answer = model.answer
     const view = viewOf(answer, model.selection)
@@ -414,14 +429,16 @@ export class SelectionCard {
       const mags = answer.genomes.filter((genome) => genome.kind === 'mag')
       const elements = answer.genomes.length - mags.length
       const { pooled, pooledLength, tally: t } = this.mapNumbers(answer)
-      const grades = { high: 0, medium: 0, low: 0, contaminated: 0 }
+      // Every MAG counted once, the counts adding up to the MAGs: by its grade,
+      // or under 50% complete — the fragments curation works on, which metaTOR
+      // does not grade. With markers stored, every MAG has a quality.
+      const grades = { high: 0, medium: 0, low: 0, contaminated: 0, under: 0 }
       let graded = false
       for (const genome of mags) {
         const q = genome.quality
         if (q === null) continue
         graded = true
-        const g = grade(q.weightedCompleteness, q.weightedRedundancy)
-        if (g !== null) grades[g]++
+        grades[grade(q.weightedCompleteness, q.weightedRedundancy) ?? 'under']++
       }
       const tally = el('div', { class: 'curate-selection-tally' })
       tally.appendChild(
@@ -430,12 +447,14 @@ export class SelectionCard {
         }),
       )
       if (graded) {
-        const words = (['high', 'medium', 'low', 'contaminated'] as const).filter((g) => grades[g] > 0).map((g) => `${g} ${fmt.int(grades[g])}`)
+        const named = { high: 'high quality', medium: 'medium', low: 'low', contaminated: 'contaminated', under: 'under 50% complete' } as const
+        // A count and its grade kept on one line: the line breaks between them only.
+        const words = (['high', 'medium', 'low', 'contaminated', 'under'] as const).filter((g) => grades[g] > 0).map((g) => `${fmt.int(grades[g])} ${named[g]}`.replace(/ /g, '\u00a0'))
         tally.appendChild(
           el('div', {
             class: 'curate-selection-grades',
-            text: words.length === 0 ? 'no MAG reaches the low grade' : `graded ${words.join(' · ')}`,
-            title: 'The MAGs by metaTOR’s grades: high at 90% complete or more and 1.05 redundant or less, medium at 70%, low at 50%, contaminated above 1.10',
+            text: words.join(' · '),
+            title: 'Every MAG by metaTOR’s grades, on the weighted numbers: high quality at 90% complete or more and 1.05 redundant or less, medium at 70%, low at 50%, contaminated above 1.10 — and under 50% complete, which metaTOR does not grade',
           }),
         )
       }
@@ -592,46 +611,67 @@ export class SelectionCard {
     return null
   }
 
-  /** The genomes of its kind it meets most densely, each with `merge`. */
+  /**
+   * The genomes of its kind it meets most densely, each affinity put against
+   * the background, and `merge` on those whose contacts stand out of it — or
+   * whose merge is on offer: a pair that meets no more than strangers do is
+   * listed, and the act is left to `merge into…`, so no row offers a merge as
+   * prominently at forty times under the background as at forty over it.
+   */
   private meetsMost(answer: CurationStateResult, g: number, offered: readonly Suggestion[]): HTMLElement[] {
     const genome = answer.genomes[g]
     const met = this.metBy(answer, g).filter((m) => answer.genomes[m.other].kind === genome.kind)
     if (met.length === 0) return [this.sub(genome.kind === 'mag' ? 'meets most' : 'elements that meet it'), this.note(genome.kind === 'mag' ? 'It meets no other MAG.' : 'No other element meets it.')]
     const merges = offeredMerges(answer, offered)
     const best = genome.kind === 'element' ? this.bestHosts(answer) : null
+    const rho = this.background()
     const rows = met.slice(0, 5).map(({ other, affinity, contacts }): RowSpec => {
       const them = answer.genomes[other]
       const s = merges.get(pairKey(genome.id, them.id))
       // The longer keeps its name, as merge does unasked; a merge on offer, as it is offered.
       const [keep, fold] = them.length > genome.length ? [them, genome] : [genome, them]
       const step = (): CurationStep => s?.step ?? { op: 'merge', into: keep.id, genomes: [fold.id] }
-      let detail = `affinity ${affinityText(affinity)} (at least ${affinityText(lowerAffinity(affinity, contacts))}) · ${contactsText(contacts)}`
+      const evidence = this.against(affinity, contacts)
+      let detail = `affinity ${evidence.words} · ${contactsText(contacts)}`
+      let full = this.affinityInFull(affinity, contacts)
       let chip: HTMLElement | null = null
       if (best !== null) {
         const theirs = best.get(other)
-        if (theirs !== undefined) detail += ` · best host ${this.short(answer.genomes[theirs].id)}`
+        if (theirs !== undefined) {
+          detail += ` · best host ${this.short(answer.genomes[theirs].id)}`
+          full += ` · best host ${answer.genomes[theirs].name}`
+        }
         if (theirs !== undefined && theirs === best.get(g)) chip = el('span', { class: 'edit-chip', text: 'same best host', title: 'Its strongest MAG is this element’s strongest too: one molecule’s pieces, likely' })
       }
-      const offer = s === undefined ? '' : ` · merge ${confidenceText(s.confidence)}`
+      // A merge's confidence is that the two are one organism's fragments, not that the merge makes a better MAG: its price says that.
+      const sure = s === undefined ? null : sureOf(s.confidence, 'one organism')
+      const offer = sure === null ? '' : ` · ${sure}`
+      const mergeable = s !== undefined || standsOut(affinity, contacts, rho)
       return {
         genome: them.id,
         suggestion: s?.key,
         lead: [swatch(this.ctx.colourOf(them.id).css, them.kind), this.nameOf(them), chip],
         detail,
         words: `${this.short(genome.id)} × ${this.short(them.id)} · ${detail}${offer}`,
-        title: `${genome.name} × ${them.name} · ${detail}${offer}`,
-        confidence: s === undefined ? null : `merge ${confidenceText(s.confidence)}`,
-        act: {
-          label: 'merge',
-          title: `Merge ${fold.name} into ${keep.name}, which keeps its name`,
-          run: () => this.merge(s, keep.id, fold.id),
-          // An element's merge is never graded, and its view has no price to show:
-          // nothing is counted for it.
-          ...(genome.kind === 'mag' ? { step } : {}),
-        },
+        title: `${genome.name} × ${them.name} · ${full}${offer}`,
+        confidence: sure,
+        confidenceTitle:
+          s === undefined ? undefined : `A merge on offer: the method is ${confidenceText(s.confidence)} sure the two are fragments of one organism — what the merge does to the grades is its price, shown while the pointer rests on merge`,
+        bounded: evidence.bounded,
+        act: mergeable
+          ? {
+              label: 'merge',
+              title: `Merge ${fold.name} into ${keep.name}, which keeps its name`,
+              run: () => this.merge(s, keep.id, fold.id),
+              // An element's merge is never graded, and its view has no price to show:
+              // nothing is counted for it.
+              ...(genome.kind === 'mag' ? { step } : {}),
+            }
+          : null,
       }
     })
-    return [this.sub(genome.kind === 'mag' ? 'meets most' : 'elements that meet it'), this.list(rows)]
+    const head = this.sub(genome.kind === 'mag' ? 'meets most' : 'elements that meet it')
+    return [head, ...nonNull([this.affinityKey(bounded(rows))]), this.list(rows)]
   }
 
   /** The offered recruits and moves into a MAG, each with `take`, and all the likely ones in one press. */
@@ -640,7 +680,7 @@ export class SelectionCard {
     if (into.length === 0) return []
     const genome = answer.genomes[g]
     const rows = into.map((s): RowSpec => this.contigSuggestionRow(answer, s, 'take', 'in'))
-    const parts: HTMLElement[] = [this.sub(`belong here · ${fmt.int(into.length)}`), ...this.capped(`${genome.id}:in`, rows)]
+    const parts: HTMLElement[] = [this.sub(`belong here · ${fmt.int(into.length)}`), ...nonNull([this.affinityKey(bounded(rows))]), ...this.capped(`${genome.id}:in`, rows)]
     const likely = into.filter((s) => s.confidence >= LIKELY)
     if (likely.length >= 2) {
       const question = this.takeQuestion(answer, g, likely)
@@ -699,7 +739,7 @@ export class SelectionCard {
     const out = offered.filter((s) => s.kind === 'move' && s.genomes[1] === g)
     if (out.length === 0) return []
     const rows = out.map((s): RowSpec => this.contigSuggestionRow(answer, s, 'move', 'out'))
-    return [this.sub(`may belong elsewhere · ${fmt.int(out.length)}`), ...this.capped(`${answer.genomes[g].id}:out`, rows)]
+    return [this.sub(`may belong elsewhere · ${fmt.int(out.length)}`), ...nonNull([this.affinityKey(bounded(rows))]), ...this.capped(`${answer.genomes[g].id}:out`, rows)]
   }
 
   /** A recruit or a move as a row: the contig, where from or where to, its numbers, its act. */
@@ -715,13 +755,19 @@ export class SelectionCard {
     // Out: where it would go opens the second line, so neither name is cut to make room for the other.
     const detailLead: Array<Node | string | null> = []
     if (side === 'out') detailLead.push(el('span', { class: 'curate-selection-to' }, el('span', { class: 'curate-selection-arrow', text: '→' }), swatch(this.ctx.colourOf(target.id).css, target.kind), this.nameOf(target)), ' · ')
-    const lower = affinityText(lowerAffinity(s.affinity, s.contacts))
+    // A group of recruits carries its least affinity and every member's contacts: no bound is drawn from the two.
+    const there = this.against(s.affinity, one ? s.contacts : null)
     let detail: string
-    if (side === 'out') detail = `its own ${affinityText(answer.contigs.ownAffinity[c])} · there ${affinityText(s.affinity)} (at least ${lower}) · ${contactsText(s.contacts)}`
+    if (side === 'out') detail = `its own ${this.plainAffinity(answer.contigs.ownAffinity[c])} · there ${there.words} · ${contactsText(s.contacts)}`
     else {
       const from = one ? (own < 0 ? 'from the pool' : `from ${this.short(answer.genomes[own].id)}`) : fmt.bp(s.contigs.reduce((sum, k) => sum + (this.ctx.data.file.lengths[k] ?? 0), 0))
-      detail = `${from} · affinity ${affinityText(s.affinity)}${one ? ` (at least ${lower})` : ''} · ${contactsText(s.contacts)}`
+      detail = `${from} · affinity ${there.words} · ${contactsText(s.contacts)}`
     }
+    // What the confidence is sure of — that the contig belongs where the step
+    // would put it — is the list's heading (`belong here`, `may belong
+    // elsewhere`): the row says `sure`, its title the sentence.
+    const sure = sureOf(s.confidence, 'sure')
+    const what = one ? (names[c] ?? `#${c}`) : `${fmt.int(s.contigs.length)} contigs`
     return {
       genome: side === 'out' ? target.id : undefined,
       contigs: s.contigs,
@@ -729,10 +775,12 @@ export class SelectionCard {
       lead,
       detailLead,
       detail,
-      words: `${one ? (names[c] ?? `#${c}`) : `${fmt.int(s.contigs.length)} contigs`} ${side === 'out' ? '→' : 'into'} ${this.short(target.id)} · ${detail} · ${confidenceText(s.confidence)}`,
-      title: `${s.words} · ${confidenceText(s.confidence)} · ${s.evidence.join(' · ')}`,
-      confidence: confidenceText(s.confidence),
-      act: { label, title: `${capitalise(s.words)}: ${confidenceText(s.confidence)}`, run: () => this.ctx.model.accept(s), step: () => s.step },
+      words: `${what} ${side === 'out' ? '→' : 'into'} ${this.short(target.id)} · ${detail} · ${sure}`,
+      title: `${s.words} · ${sure} · ${s.evidence.join(' · ')}`,
+      confidence: sure,
+      confidenceTitle: `The method is ${confidenceText(s.confidence)} sure ${one ? 'it belongs' : 'they belong'} in ${target.name}`,
+      bounded: there.bounded,
+      act: { label, title: `${capitalise(s.words)}: ${sure}`, run: () => this.ctx.model.accept(s), step: () => s.step },
     }
   }
 
@@ -775,17 +823,21 @@ export class SelectionCard {
       const pair = answer.hosts.find((h) => h.element === e && h.mag === m)
       const s = offered.find((o) => o.kind === 'unlink' && o.genomes[0] === e && o.genomes[1] === m)
       const numbers = !answer.counted ? '' : pair === undefined ? ' · no contact between them' : ` · ${this.hostNumbers(pair)}`
+      // An unlink's confidence is that the MAG does not host it.
+      const sure = s === undefined ? null : sureOf(s.confidence, 'not its host')
       rows.push({
         genome: mag.id,
         suggestion: s?.key,
         lead: [swatch(this.ctx.colourOf(mag.id).css, mag.kind), this.nameOf(mag), el('span', { class: 'edit-chip', text: 'linked' })],
         detail: `${link.fromFile ? 'from the file' : 'added'}${numbers}`,
-        words: `${this.short(element.id)} ↔ ${this.short(mag.id)} · linked, ${link.fromFile ? 'from the file' : 'added'}${numbers}`,
-        title: `${element.name} ↔ ${mag.name} · linked, ${link.fromFile ? 'from the file' : 'added'}${numbers}`,
-        confidence: s === undefined ? null : `unlink ${confidenceText(s.confidence)}`,
+        words: `${this.short(element.id)} ↔ ${this.short(mag.id)} · linked, ${link.fromFile ? 'from the file' : 'added'}${numbers}${sure === null ? '' : ` · unlink offered, ${sure}`}`,
+        title: `${element.name} ↔ ${mag.name} · linked, ${link.fromFile ? 'from the file' : 'added'}${pair === undefined || !answer.counted ? numbers : ` · ${this.hostNumbers(pair, true)}`}`,
+        confidence: sure,
+        confidenceTitle: s === undefined ? undefined : `An unlink on offer: the method is ${confidenceText(s.confidence)} sure ${mag.name} does not host ${element.name}`,
+        bounded: pair !== undefined && answer.counted && this.against(pair.affinity, pair.contacts).bounded,
         act: {
           label: 'unlink',
-          title: s === undefined ? `Unlink ${element.name} from ${mag.name}` : `${capitalise(s.words)}: ${confidenceText(s.confidence)}`,
+          title: s === undefined ? `Unlink ${element.name} from ${mag.name}` : `${capitalise(s.words)}: ${sure}`,
           run: () => (s === undefined ? this.ctx.model.link(element.id, mag.id, false) : this.ctx.model.accept(s)),
         },
       })
@@ -797,24 +849,32 @@ export class SelectionCard {
       if (mag === undefined) continue
       const pair = answer.hosts.find((h) => h.element === e && h.mag === m)
       const numbers = pair === undefined ? '' : this.hostNumbers(pair)
+      // A link's confidence is that the MAG hosts it.
+      const sure = sureOf(s.confidence, 'its host')
       rows.push({
         genome: mag.id,
         suggestion: s.key,
         lead: [swatch(this.ctx.colourOf(mag.id).css, mag.kind), this.nameOf(mag)],
         detail: `offered · ${numbers}`,
-        words: `${this.short(element.id)} ↔ ${this.short(mag.id)} · link offered at ${confidenceText(s.confidence)} · ${numbers}`,
-        title: `${s.words} · ${confidenceText(s.confidence)} · ${numbers}`,
-        confidence: `link ${confidenceText(s.confidence)}`,
-        act: { label: 'link', title: `${capitalise(s.words)}: ${confidenceText(s.confidence)}`, run: () => this.ctx.model.accept(s) },
+        words: `${this.short(element.id)} ↔ ${this.short(mag.id)} · link offered, ${sure} · ${numbers}`,
+        title: [s.words, sure, ...(pair === undefined ? [] : [this.hostNumbers(pair, true)])].join(' · '),
+        confidence: sure,
+        confidenceTitle: `A link on offer: the method is ${confidenceText(s.confidence)} sure ${mag.name} hosts ${element.name}`,
+        bounded: pair !== undefined && this.against(pair.affinity, pair.contacts).bounded,
+        act: { label: 'link', title: `${capitalise(s.words)}: ${sure}`, run: () => this.ctx.model.accept(s) },
       })
     }
     if (rows.length === 0) return [this.sub('hosts'), this.note(answer.counted ? 'Linked to no MAG, and no link is offered.' : 'Linked to no MAG.')]
-    return [this.sub('hosts'), this.list(rows)]
+    return [this.sub('hosts'), ...nonNull([this.affinityKey(bounded(rows))]), this.list(rows)]
   }
 
-  /** `affinity 0.53 (at least 0.47) · 99% of its MAG contacts · 120 contacts`. */
-  private hostNumbers(pair: CurationStateResult['hosts'][number]): string {
-    return `affinity ${affinityText(pair.affinity)} (at least ${affinityText(lowerAffinity(pair.affinity, pair.contacts))}) · ${fmt.pct(pair.share, 0)} of its MAG contacts · ${contactsText(pair.contacts)}`
+  /**
+   * `affinity 0.53 (at least 20× background) · 99% of its MAG contacts · 120
+   * contacts`; `full`, the affinity's numbers in full, for a title.
+   */
+  private hostNumbers(pair: CurationStateResult['hosts'][number], full = false): string {
+    const affinity = full ? this.affinityInFull(pair.affinity, pair.contacts) : `affinity ${this.against(pair.affinity, pair.contacts).words}`
+    return `${affinity} · ${fmt.pct(pair.share, 0)} of its MAG contacts${full ? '' : ` · ${contactsText(pair.contacts)}`}`
   }
 
   /** Every element's strongest MAG, by the host map's affinity. */
@@ -863,18 +923,30 @@ export class SelectionCard {
     else if (pair === undefined) parts.push(this.note('No contact between them.'))
     else {
       parts.push(
-        el('div', { class: 'curate-selection-numbers', text: `${this.hostNumbers(pair)} · host ${confidenceText(pair.confidence)}`, title: 'Its affinity with the MAG, the lower bound its contacts allow, the share of its contacts with MAGs that go to this one, and how sure the method is that the MAG hosts it' }),
+        el('div', {
+          class: 'curate-selection-numbers',
+          text: this.hostNumbers(pair),
+          title: `Its affinity with the MAG against the background, the share of its contacts with MAGs that go to this one, and the contacts — ${this.hostNumbers(pair, true)}`,
+        }),
       )
     }
-    if (s !== undefined) {
+    // What the method is sure of, said as such: a link's confidence is that the MAG hosts it, an unlink's that it does not.
+    const hosts = s !== undefined ? (s.kind === 'link' ? sureOf(s.confidence, 'its host') : sureOf(s.confidence, 'not its host')) : pair !== undefined && answer.counted ? sureOf(pair.confidence, 'its host') : null
+    if (hosts !== null) {
+      const sentence = (confidence: number, not: boolean): string => `the method is ${confidenceText(confidence)} sure ${mag.name} ${not ? 'does not host' : 'hosts'} ${element.name}`
       parts.push(
         el(
           'div',
-          { class: 'curate-selection-offer' },
-          el('span', { text: `${s.kind === 'link' ? 'link' : 'unlink'} offered at ${confidenceText(s.confidence)}`, title: s.evidence.join(' · ') }),
+          { class: `curate-selection-offer${s === undefined ? ' is-quiet' : ''}` },
+          el('span', {
+            text: s === undefined ? hosts : `${s.kind === 'link' ? 'link' : 'unlink'} offered: ${hosts}`,
+            title: s === undefined ? `Nothing is offered: ${sentence(pair?.confidence ?? 0, false)}` : `${capitalise(sentence(s.confidence, s.kind === 'unlink'))} · ${s.evidence.join(' · ')}`,
+          }),
         ),
       )
     }
+    // What `at least` means, under what the method is sure of rather than between the two.
+    if (answer.counted && pair !== undefined) parts.push(this.affinityKey(this.against(pair.affinity, pair.contacts).bounded))
     const linkAct = this.stepAct('link', 'link', `Link ${element.name} to ${mag.name}: the MAG hosts it`, () => (s?.kind === 'link' ? model.accept(s) : model.link(element.id, mag.id, true)), SELECTION_KEYS.link)
     const unlinkAct = this.stepAct('unlink', 'unlink', `Unlink ${element.name} from ${mag.name}`, () => (s?.kind === 'unlink' ? model.accept(s) : model.link(element.id, mag.id, false)), SELECTION_KEYS.remove)
     parts.push(this.acts(link === undefined ? linkAct : unlinkAct, this.act('close-up', 'zoom-in', 'Their contigs on the contact map', () => this.hooks.closeUp(), SELECTION_KEYS.closeUp)))
@@ -953,8 +1025,8 @@ export class SelectionCard {
     const { pairs } = answer
     for (let k = 0; k < pairs.a.length; k++) at.set(`${pairs.a[k]}:${pairs.b[k]}`, { affinity: pairs.affinity[k], contacts: pairs.contacts[k] })
     const merges = offeredMerges(answer, offered)
-    const background = this.ctx.data.background
-    const rho = background !== null && background > 0 ? background : FALLBACK_BACKGROUND
+    const measured = this.background()
+    const rho = measured ?? FALLBACK_BACKGROUND
     const low = Math.log10(rho)
     const high = Math.log10(AFFINITY_SATURATES)
     const grid = el('div', { class: 'curate-selection-matrix', attrs: { role: 'table', 'aria-label': 'Affinities' } })
@@ -977,8 +1049,10 @@ export class SelectionCard {
         const lower = lowerAffinity(pair.affinity, pair.contacts)
         const heat = lower > 0 ? Math.max(0, Math.min(1, (Math.log10(lower) - low) / (high - low))) : 0
         const s = merges.get(pairKey(answer.genomes[a].id, answer.genomes[b].id))
-        const title = `${names} · affinity ${affinityText(pair.affinity)} (at least ${affinityText(lower)}) · ${contactsText(pair.contacts)}${s === undefined ? '' : ` · merge ${confidenceText(s.confidence)} on offer`}`
-        const cell = el('span', { class: `curate-selection-cell${s === undefined ? '' : ' is-offered'}`, text: affinityText(pair.affinity), title })
+        const title = `${names} · ${this.affinityInFull(pair.affinity, pair.contacts)}${s === undefined ? '' : ` · a merge on offer, ${sureOf(s.confidence, 'one organism')}`}`
+        // A pair that meets no more than strangers do is quiet, as its tint is.
+        const under = measured !== null && pair.affinity <= measured
+        const cell = el('span', { class: `curate-selection-cell${s === undefined ? '' : ' is-offered'}${under ? ' is-under' : ''}`, text: affinityNumber(pair.affinity), title })
         cell.style.setProperty('--heat', heat.toFixed(3))
         grid.appendChild(cell)
       })
@@ -1058,7 +1132,7 @@ export class SelectionCard {
     const offered = this.ctx.model.offered()
     const chosen = new Set(contigs)
     const c = contigs[0]
-    const ownWords = answer.genomeOf[c] >= 0 && Number.isFinite(places.ownAffinity[c]) ? ` · its own ${affinityText(places.ownAffinity[c])}` : ''
+    const ownWords = answer.genomeOf[c] >= 0 && Number.isFinite(places.ownAffinity[c]) ? ` · its own ${this.plainAffinity(places.ownAffinity[c])}` : ''
     const rows = homes.map((home): RowSpec => {
       const genome = answer.genomes[home.genome]
       const { movers } = home
@@ -1066,29 +1140,47 @@ export class SelectionCard {
       // A suggestion on offer that moves exactly these contigs there is taken as the suggestion.
       const s = offered.find((o) => (o.kind === 'recruit' || o.kind === 'move') && o.genomes[0] === home.genome && o.contigs.length === moving.size && o.contigs.every((k) => moving.has(k)))
       const anyOffer = offered.filter((o) => (o.kind === 'recruit' || o.kind === 'move') && o.genomes[0] === home.genome && o.contigs.some((k) => chosen.has(k)))
-      const surest = anyOffer.reduce((most, o) => Math.max(most, o.confidence), 0)
-      const already = home.contigs.length - movers.length
+      const surest = anyOffer.reduce<Suggestion | null>((most, o) => (most === null || o.confidence > most.confidence ? o : most), null)
+      const affinity = this.plainAffinity(home.affinity)
       let detail: string
       if (one) {
-        if ('next' in home) detail = `meets it next · affinity ${affinityText(home.affinity)}${ownWords}`
-        else if (movers.length === 0) detail = `its own · affinity ${affinityText(home.affinity)}`
-        else detail = `affinity ${affinityText(home.affinity)}${ownWords}`
-      } else detail = `${fmt.int(home.contigs.length)} of ${fmt.int(contigs.length)} · affinity ${affinityText(home.affinity)}${already > 0 ? ` · ${fmt.int(already)} in it already` : ''}`
+        if ('next' in home) detail = `meets it next · affinity ${affinity}${ownWords}`
+        else if (movers.length === 0) detail = `its own · affinity ${affinity}`
+        else detail = `affinity ${affinity}${ownWords}`
+      } else {
+        // Counted over the contigs that meet it most, which the row's act moves —
+        // the ones of them in it already, never the selection's in it, which the
+        // facts count: `3 of them in it already` beside `move 1` adds up to the `4`.
+        const n = home.contigs.length
+        const already = n - movers.length
+        const held = already === 0 ? '' : already === n ? (n === 1 ? ', in it already' : ', all in it already') : `, ${fmt.int(already)} of them in it already`
+        detail = `${fmt.int(n)} of ${fmt.int(contigs.length)} ${n === 1 ? 'meets' : 'meet'} it most${held} · affinity ${affinity}`
+      }
+      // The surest move or recruit on offer towards it, as what it is sure of.
+      const sure = surest === null ? null : sureOf(surest.confidence, `${surest.contigs.length === 1 ? 'belongs' : 'belong'} there`)
+      const offerWords =
+        surest === null
+          ? undefined
+          : `${surest.kind === 'recruit' ? 'A recruit' : 'A move'} on offer: the method is ${confidenceText(surest.confidence)} sure ${surest.contigs.length === 1 ? `${this.ctx.data.file.names[surest.contigs[0]] ?? 'its contig'} belongs` : `its ${fmt.int(surest.contigs.length)} contigs belong`} in ${genome.name}`
       return {
         genome: genome.id,
         contigs: home.contigs,
         suggestion: s?.key,
         lead: [swatch(this.ctx.colourOf(genome.id).css, genome.kind), this.nameOf(genome)],
         detail,
-        words: `${this.nameWords(home.contigs)} · ${this.short(genome.id)} · ${detail}`,
-        title: `${this.nameWords(home.contigs)} · ${genome.name} · ${detail}`,
-        confidence: anyOffer.length === 0 ? null : confidenceText(surest),
+        words: `${this.nameWords(home.contigs)} · ${this.short(genome.id)} · ${detail}${sure === null ? '' : ` · ${sure}`}`,
+        title: `${this.nameWords(home.contigs)} · ${genome.name} · ${detail}${offerWords === undefined ? '' : ` · ${offerWords}`}`,
+        confidence: sure,
+        confidenceTitle: offerWords,
         act:
           movers.length === 0
             ? null
             : {
                 label: one || movers.length === contigs.length ? 'move' : `move ${fmt.int(movers.length)}`,
-                title: s === undefined ? `Move ${this.nameWords(movers)} to ${genome.name}` : `${capitalise(s.words)}: ${confidenceText(s.confidence)}`,
+                title:
+                  s === undefined
+                    ? `Move ${this.nameWords(movers)} to ${genome.name}`
+                    : `${capitalise(s.words)}: ${sureOf(s.confidence, `${s.contigs.length === 1 ? 'belongs' : 'belong'} there`)}`,
                 run: () => (s === undefined ? this.ctx.model.drop({ kind: 'contigs', contigs: movers }, { kind: 'genome', id: genome.id }) : this.ctx.model.accept(s)),
                 step: () => s?.step ?? { op: 'move', contigs: movers.map((k) => this.ctx.data.file.names[k]), to: genome.id },
               },
@@ -1129,6 +1221,57 @@ export class SelectionCard {
 
   private uncounted(text: string): HTMLElement {
     return el('p', { class: 'edit-note curate-selection-uncounted', text })
+  }
+
+  /** The map's background, the rate of spurious ligation, once the contacts are read. */
+  private background(): number | null {
+    const rho = this.ctx.data.background
+    return rho !== null && rho > 0 ? rho : null
+  }
+
+  /** An affinity put against the background (`affinityAgainst`). */
+  private against(a: number, contacts: number | null): { words: string; bounded: boolean } {
+    return affinityAgainst(a, contacts, this.background())
+  }
+
+  /**
+   * An affinity a step's evidence is weighed against rather than the evidence
+   * itself — a contig's with its own genome, where contigs meet a genome most
+   * on average —: its number, or `below the background` at or under it.
+   */
+  private plainAffinity(a: number): string {
+    const rho = this.background()
+    return rho !== null && a > 0 && a <= rho ? 'below the background' : affinityNumber(a)
+  }
+
+  /**
+   * An affinity in full, for a title: the number, the bound its contacts allow,
+   * and where that stands against the background — `affinity 1.50, at least
+   * 1.42 on 540 contacts: 60× the background (0.024)`.
+   */
+  private affinityInFull(a: number, contacts: number): string {
+    const rho = this.background()
+    const lower = lowerAffinity(a, contacts)
+    const words = `affinity ${affinityText(a)}, at least ${affinityText(lower)} on ${contactsText(contacts)}`
+    if (rho === null || !(a > 0)) return words
+    const where = lower > rho ? `${timesText(lower / rho)} the background` : a > rho ? 'within the background' : 'below the background'
+    return `${words}: ${where} (${affinityText(rho)})`
+  }
+
+  /**
+   * What `at least` means, said once a drawing, under the first list that
+   * leans on it, with the background every affinity is put against: the
+   * lower bound is what the contact map colours by and the method trusts.
+   */
+  private affinityKey(needed: boolean): HTMLElement | null {
+    const rho = this.background()
+    if (!needed || this.keyed || rho === null) return null
+    this.keyed = true
+    return el('p', {
+      class: 'curate-selection-key',
+      text: `at least: the cautious lower bound the contacts allow · the background ${affinityText(rho)}`,
+      title: `Affinity is how densely they meet against how densely a genome’s own contigs meet each other: 1 is as its own. At least is its one-sided 90% lower bound on the contacts it rests on, which the contact map colours by — cautious where they are few. The background, ${affinityText(rho)}, is the rate of spurious ligation: a pair at or under it meets no more than strangers do.`,
+    })
   }
 
   /**
@@ -1317,7 +1460,9 @@ export class SelectionCard {
     const lead = el('span', { class: 'curate-selection-row-lead' })
     for (const part of spec.lead) if (part !== null) lead.appendChild(part)
     const main = el('span', { class: 'curate-selection-row-main' }, lead)
-    if (spec.confidence !== undefined && spec.confidence !== null) main.appendChild(el('span', { class: 'curate-selection-row-confidence', text: spec.confidence }))
+    if (spec.confidence !== undefined && spec.confidence !== null) {
+      main.appendChild(el('span', { class: 'curate-selection-row-confidence', text: spec.confidence, ...(spec.confidenceTitle === undefined ? {} : { title: spec.confidenceTitle }) }))
+    }
     node.append(main, el('span', { class: 'curate-selection-row-detail' }, ...(spec.detailLead ?? []), spec.detail))
     const a = spec.act
     if (a !== undefined && a !== null) {
@@ -1414,9 +1559,70 @@ function offeredMerges(answer: CurationStateResult, offered: readonly Suggestion
   return merges
 }
 
+/** Whether any of the rows leans on the lower bound. */
+function bounded(rows: readonly RowSpec[]): boolean {
+  return rows.some((row) => row.bounded === true)
+}
+
+function nonNull<T>(items: ReadonlyArray<T | null>): T[] {
+  return items.filter((item): item is T => item !== null)
+}
+
 /** `1 contig`, `2,286 contigs`. */
 function countWords(n: number, one: string, many: string): string {
   return `${fmt.int(n)} ${n === 1 ? one : many}`
+}
+
+/**
+ * An affinity's number as the card prints it: `affinityText`'s, but under a
+ * thousandth `< 0.001` — never an exponent, whose hyphen a line may break at —
+ * its space unbreakable, so no number is ever cut across two lines.
+ */
+export function affinityNumber(value: number): string {
+  return Number.isFinite(value) && value > 0 && value < 1e-3 ? '<\u00a00.001' : affinityText(value)
+}
+
+/** How many times the background: `1.3×`, `14×`, `1,200×`. */
+function timesText(multiple: number): string {
+  if (multiple >= 10) return `${fmt.int(Math.round(multiple))}×`
+  return `${Number(multiple.toPrecision(2))}×`
+}
+
+/**
+ * An affinity as the card prints it (§33.3), put against the map's background
+ * `rho` — the rate of spurious ligation, the contact map's key's foot: the
+ * number and, where the contacts it rests on are known, how far the cautious
+ * lower bound they allow stands above the background (`0.39 (at least 14×
+ * background)`); where they are not — a group of recruits carries its least
+ * affinity and all their contacts —, the number's own multiple (`0.95 (40×
+ * background)`); `(within the background)`
+ * where only the bound falls in it; and at or under the background `below the
+ * background` alone, whose digits would be noise printed to a false precision.
+ * `0` where there is no contact; the number alone where no background is known.
+ *
+ * `bounded` is whether the words lean on the lower bound, for the card to say
+ * once what `at least` means.
+ */
+export function affinityAgainst(a: number, contacts: number | null, rho: number | null): { words: string; bounded: boolean } {
+  if (!Number.isFinite(a)) return { words: '—', bounded: false }
+  if (a <= 0) return { words: '0', bounded: false }
+  if (rho === null || !(rho > 0)) return { words: affinityNumber(a), bounded: false }
+  if (a <= rho) return { words: 'below the background', bounded: false }
+  if (contacts === null) return { words: `${affinityNumber(a)} (${timesText(a / rho)} background)`, bounded: false }
+  const lower = lowerAffinity(a, contacts)
+  if (lower <= rho) return { words: `${affinityNumber(a)} (within the background)`, bounded: true }
+  return { words: `${affinityNumber(a)} (at least ${timesText(lower / rho)} background)`, bounded: true }
+}
+
+/** Whether a pair's contacts stand out of the background: the cautious lower bound they allow above it. */
+function standsOut(a: number, contacts: number, rho: number | null): boolean {
+  if (rho === null || !(rho > 0)) return a > 0
+  return lowerAffinity(a, contacts) > rho
+}
+
+/** A confidence and what it is sure of: `99% one organism`, `98% its host`, `79% sure` under a heading that says of what. */
+function sureOf(confidence: number, of: string): string {
+  return `${confidenceText(confidence)} ${of}`
 }
 
 function pairKey(a: string, b: string): string {

@@ -5,8 +5,12 @@
  * of nothing, a MAG, an element, an element and a MAG, several genomes and
  * contigs; its acts and the hooks they ask the stage for; a row's act making
  * the step its suggestion offers; a hover pricing a step, and the after column
- * it fills; and the card before the contacts are read.
+ * it fills; every affinity put against the background and every confidence
+ * saying what it is sure of; and the card before the contacts are read.
  */
+
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -14,7 +18,7 @@ import { bareAnswer } from '@/curate/answer'
 import { CurateModel } from '@/curate/model'
 import type { Suggestion } from '@/curate/suggest'
 import type { CurateContext } from '@/curate/ui/context'
-import { SelectionCard, type SelectionHooks } from '@/curate/ui/cards/SelectionCard'
+import { affinityAgainst, affinityNumber, SelectionCard, type SelectionHooks } from '@/curate/ui/cards/SelectionCard'
 import { priceList, qualityShift } from '@/curate/ui/cards/card'
 import type { Quality } from '@/curate/quality'
 import { CuratedBinning, fileBinning } from '@/genome/curation'
@@ -98,6 +102,10 @@ function rowsUnder(sub: string): HTMLElement[] {
 }
 const rowText = (row: HTMLElement): string =>
   [row.querySelector('.curate-selection-row-main')?.textContent, row.querySelector('.curate-selection-row-detail')?.textContent].map((t) => (t ?? '').trim()).join(' | ')
+/** Words as read, the spaces that keep them on one line read as spaces. */
+const words = (text: string): string => text.replace(/\u00a0/g, ' ')
+const rowActLabel = (row: HTMLElement): string | null => row.querySelector('.curate-selection-row-act')?.textContent ?? null
+const confidences = (): string[] => textsOf(document.body, '.curate-selection-row-confidence')
 function rowAct(row: HTMLElement): HTMLButtonElement {
   const button = row.querySelector<HTMLButtonElement>('.curate-selection-row-act')
   if (button === null) throw new Error(`no act on ${rowText(row)}`)
@@ -109,7 +117,21 @@ describe('the selection card, by what is selected', () => {
     await mount()
     expect(head()).toBe('selection')
     expect(document.querySelector('.curate-selection-card .edit-empty')?.textContent).toContain('drag along the map’s diagonal')
-    expect(textsOf(document.body, '.curate-selection-tally > div')).toEqual(['4 MAGs · 1 element · 1 unbinned contig (50.0 kb)', 'graded high 2 · low 2', 'as in the file'])
+    const [counts, grades, steps] = textsOf(document.body, '.curate-selection-tally > div')
+    expect([counts, words(grades), steps]).toEqual(['4 MAGs · 1 element · 1 unbinned contig (50.0 kb)', '2 high quality · 2 low', 'as in the file'])
+    // A count and its grade never parted by a line's end: only the separators break.
+    expect(grades.split(' · ').every((chunk) => !chunk.includes(' '))).toBe(true)
+  })
+
+  it('counts every MAG in its tally, the ones under 50% complete too: the counts add up to the MAGs', async () => {
+    const m = await mount()
+    // A MAG of x2 alone, which carries no marker: 0% complete, which metaTOR does not grade.
+    m.store.apply({ op: 'create', id: 'curated:1', name: 'E0', kind: 'mag', contigs: ['x2'] })
+    await settle(m)
+    const [counts, grades] = textsOf(document.body, '.curate-selection-tally > div')
+    expect(counts).toMatch(/^5 MAGs · /)
+    expect(words(grades)).toBe('2 high quality · 2 low · 1 under 50% complete')
+    expect(grades.split(' · ').reduce((sum, part) => sum + Number.parseInt(part, 10), 0)).toBe(5)
   })
 
   it('shows a MAG: its numbers, its quality, what it meets, what belongs in it and what may not', async () => {
@@ -122,14 +144,18 @@ describe('the selection card, by what is selected', () => {
     expect(actLabels()).toEqual(['rename', 'merge into…', 'close-up', 'make it an element', 'dissolve'])
     expect(actKeys()).toEqual(['F2', 'M', '⏎', 'E', '⌫'])
     expect(subs()).toEqual(['meets most', 'belong here · 1', 'may belong elsewhere · 1'])
+    // Each affinity against the background (0.0062 here): how far its cautious lower bound stands above it, or that it does not.
     expect(rowsUnder('meets most').map(rowText)).toEqual([
-      'X2merge 99% | affinity 1.50 (at least 1.42) · 540 contacts',
-      'Y | affinity 0.46 (at least 0.42) · 300 contacts',
-      'Z | affinity 0.0020 (at least 0.00021) · 1 contact',
+      'X299% one organism | affinity 1.50 (at least 228× background) · 540 contacts',
+      'Y | affinity 0.46 (at least 68× background) · 300 contacts',
+      'Z | affinity below the background · 1 contact',
     ])
-    expect(rowsUnder('belong here').map(rowText)).toEqual(['u098% | from the pool · affinity 1.95 (at least 1.77) · 180 contacts'])
+    expect(rowsUnder('belong here').map(rowText)).toEqual(['u098% sure | from the pool · affinity 1.95 (at least 285× background) · 180 contacts'])
     // Where it would go opens the second line, so neither name is cut for the other.
-    expect(rowsUnder('may belong elsewhere').map(rowText)).toEqual(['y597% | →Y · its own 0 · there 1.25 (at least 1.16) · 300 contacts'])
+    expect(rowsUnder('may belong elsewhere').map(rowText)).toEqual(['y597% sure | →Y · its own 0 · there 1.25 (at least 187× background) · 300 contacts'])
+    // What `at least` means, once, under the first list that leans on it.
+    expect(textsOf(document.body, '.curate-selection-key')).toEqual(['at least: the cautious lower bound the contacts allow · the background 0.0062'])
+    expect(document.querySelector('.curate-selection-key')?.previousElementSibling?.textContent).toBe('meets most')
   })
 
   it('shows an element: its hosts held and offered', async () => {
@@ -137,9 +163,14 @@ describe('the selection card, by what is selected', () => {
     await select(m, { genomes: ['P'] })
     expect(head()).toBe('element · P')
     expect(actLabels()).toEqual(['link to…', 'merge into…', 'rename', 'make it a MAG', 'dissolve'])
+    // A link's confidence is that the MAG hosts it, an unlink's that it does not.
     expect(rowsUnder('hosts').map(rowText)).toEqual([
-      'Zlinkedunlink 99% | from the file · affinity 0.0033 (at least 0.00035) · 1% of its MAG contacts · 1 contact',
-      'Ylink 99% | offered · affinity 0.53 (at least 0.47) · 99% of its MAG contacts · 120 contacts',
+      'Zlinked99% not its host | from the file · affinity below the background · 1% of its MAG contacts · 1 contact',
+      'Y99% its host | offered · affinity 0.53 (at least 76× background) · 99% of its MAG contacts · 120 contacts',
+    ])
+    expect(rowsUnder('hosts').map((row) => row.querySelector<HTMLElement>('.curate-selection-row-confidence')?.title)).toEqual([
+      'An unlink on offer: the method is 99% sure Z does not host P',
+      'A link on offer: the method is 99% sure Y hosts P',
     ])
     expect(document.body.textContent).toContain('No other element meets it.')
   })
@@ -149,14 +180,25 @@ describe('the selection card, by what is selected', () => {
     await select(m, { genomes: ['P', 'Y'] })
     expect(head()).toBe('pair · P ↔ Y')
     expect(textsOf(document.body, '.curate-selection-facts')).toEqual(['not linked'])
-    expect(document.querySelector('.curate-selection-numbers')?.textContent).toBe('affinity 0.53 (at least 0.47) · 99% of its MAG contacts · 120 contacts · host 99%')
-    expect(document.querySelector('.curate-selection-offer')?.textContent).toBe('link offered at 99%')
+    expect(document.querySelector('.curate-selection-numbers')?.textContent).toBe('affinity 0.53 (at least 76× background) · 99% of its MAG contacts · 120 contacts')
+    // Not a bare percent beside the share of contacts: what the method is sure of.
+    expect(document.querySelector('.curate-selection-offer')?.textContent).toBe('link offered: 99% its host')
     expect(actLabels()).toEqual(['link', 'close-up'])
     act('link').click()
     await settle(m)
     expect(m.model.answer?.links.map((link) => `${link.element}>${link.mag}`)).toEqual(['P>Z', 'P>Y'])
     // Taken as the suggestion it was: the history says so.
     expect(m.store.curation.history.at(-1)?.by).toBe('suggestion')
+    expect(actLabels()).toEqual(['unlink', 'close-up'])
+  })
+
+  it('shows an element and a MAG it barely meets: the unlink on offer, sure it is not its host', async () => {
+    const m = await mount()
+    await select(m, { genomes: ['P', 'Z'] })
+    expect(document.querySelector('.curate-selection-numbers')?.textContent).toBe('affinity below the background · 1% of its MAG contacts · 1 contact')
+    expect(document.querySelector('.curate-selection-offer')?.textContent).toBe('unlink offered: 99% not its host')
+    // Nothing leans on the lower bound: no key.
+    expect(document.querySelector('.curate-selection-key')).toBeNull()
     expect(actLabels()).toEqual(['unlink', 'close-up'])
   })
 
@@ -171,7 +213,7 @@ describe('the selection card, by what is selected', () => {
     // The merge on offer between them is marked, as the map marks it; the tint is the map's lower bound.
     const cells = [...document.querySelectorAll<HTMLElement>('.curate-selection-cell:not(.is-self)')]
     expect(cells.map((cell) => cell.classList.contains('is-offered'))).toEqual([true, true])
-    expect(cells[0].title).toBe('X1 × X2 · affinity 1.50 (at least 1.42) · 540 contacts · merge 99% on offer')
+    expect(cells[0].title).toBe('X1 × X2 · affinity 1.50, at least 1.42 on 540 contacts: 228× the background (0.0062) · a merge on offer, 99% one organism')
     expect(Number(cells[0].style.getPropertyValue('--heat'))).toBeGreaterThan(0.9)
     act('merge').click()
     await settle(m)
@@ -198,7 +240,7 @@ describe('the selection card, by what is selected', () => {
     expect(actLabels()).toEqual(['move to…', 'new MAG', 'new element', 'unbin'])
     expect(actKeys()).toEqual(['M', 'B', 'E', '⌫'])
     const rows = rowsUnder('meets most')
-    expect(rows.map(rowText)).toEqual(['Y97% | affinity 1.25 · its own 0'])
+    expect(rows.map(rowText)).toEqual(['Y97% belongs there | affinity 1.25 · its own 0'])
     rowAct(rows[0]).click()
     await settle(m)
     expect(m.store.binning.genomeOf[3]).toBe(m.store.binning.indexOfId('Y'))
@@ -211,9 +253,23 @@ describe('the selection card, by what is selected', () => {
     expect(head()).toBe('4 contigs')
     expect(document.querySelector('.curate-selection-facts')?.textContent).toBe('200.0 kb · 4 in X1')
     const rows = rowsUnder('meet most')
-    expect(rows.map(rowText)).toEqual(['X1 | 3 of 4 · affinity 2.90 · 3 in it already', 'Y97% | 1 of 4 · affinity 1.25'])
+    // How many meet it most, and how many of those are in it already: what the
+    // row's act moves is the difference, never the selection's count in it.
+    expect(rows.map(rowText)).toEqual(['X1 | 3 of 4 meet it most, all in it already · affinity 2.90', 'Y97% belongs there | 1 of 4 meets it most · affinity 1.25'])
+    expect(rows[1].querySelector<HTMLElement>('.curate-selection-row-confidence')?.title).toBe('A move on offer: the method is 97% sure y5 belongs in Y')
     expect(rows[0].querySelector('.curate-selection-row-act')).toBeNull()
     expect(rowAct(rows[1]).textContent).toBe('move 1')
+  })
+
+  it('counts the contigs that meet a genome most and how many of them are in it already: its act moves the rest', async () => {
+    const m = await mount()
+    // x0 and x1 of X1, and u0 of the pool, which belongs with them.
+    await select(m, { contigs: [0, 1, 18] })
+    expect(document.querySelector('.curate-selection-facts')?.textContent).toBe('150.0 kb · 1 unbinned · 2 in X1')
+    const [row] = rowsUnder('meet most')
+    expect(row.querySelector('.curate-selection-row-detail')?.textContent).toMatch(/^3 of 3 meet it most, 2 of them in it already · affinity \d/)
+    expect(rowActLabel(row)).toBe('move 1')
+    expect(row.querySelector('.curate-selection-row-confidence')?.textContent).toBe('98% belongs there')
   })
 
   it('holds unbin back for contigs in the pool', async () => {
@@ -345,7 +401,7 @@ describe('the acts', () => {
     const row = rowsUnder('meets most')[0]
     row.dispatchEvent(new PointerEvent('pointerenter'))
     expect(m.model.hovered.genome).toBe('X2')
-    expect(m.said.at(-1)).toBe('X1 × X2 · affinity 1.50 (at least 1.42) · 540 contacts · merge 99%')
+    expect(m.said.at(-1)).toBe('X1 × X2 · affinity 1.50 (at least 228× background) · 540 contacts · 99% one organism')
     row.dispatchEvent(new PointerEvent('pointerleave'))
     expect(m.model.hovered.genome).toBeNull()
     expect(m.said.at(-1)).toBeNull()
@@ -410,6 +466,84 @@ describe('the acts', () => {
     merge.dispatchEvent(new PointerEvent('pointerleave'))
     // The stage prices review's question again; nothing else is put back.
     expect(m.model.previewSteps).toBeNull()
+  })
+})
+
+describe('affinity against the background, and what a confidence is sure of', () => {
+  it('puts an affinity against the background: the cautious bound’s multiple, within it, or below it — never an exponent', () => {
+    const rho = 0.024
+    // 0.39 on 92,787 contacts: its bound hardly lower.
+    expect(affinityAgainst(0.39, 92_787, rho)).toEqual({ words: '0.39 (at least 16× background)', bounded: true })
+    // 1.18 on one contact: the bound says how little one contact proves.
+    expect(affinityAgainst(1.18, 1, rho)).toEqual({ words: '1.18 (at least 5.2× background)', bounded: true })
+    // Above it, but on too few contacts for the bound to clear it.
+    expect(affinityAgainst(0.05, 1, rho)).toEqual({ words: '0.050 (within the background)', bounded: true })
+    // At or under it, no digits: they would be noise printed to a false precision.
+    expect(affinityAgainst(0.00064, 83, rho)).toEqual({ words: 'below the background', bounded: false })
+    expect(affinityAgainst(rho, 10_000, rho)).toEqual({ words: 'below the background', bounded: false })
+    // No contacts to bound it by (a group's least): the number's own multiple.
+    expect(affinityAgainst(0.95, null, rho)).toEqual({ words: '0.95 (40× background)', bounded: false })
+    expect(affinityAgainst(0, 0, rho)).toEqual({ words: '0', bounded: false })
+    // No background known: the number alone, and under a thousandth no exponent, its space unbreakable.
+    expect(affinityAgainst(0.00036, 2, null)).toEqual({ words: '< 0.001', bounded: false })
+    expect(affinityNumber(9.6e-5)).toBe('< 0.001')
+    expect(affinityNumber(0.0013)).toBe('0.0013')
+    for (const value of [9.6e-5, 2.1e-5, 0.00036, 0.0075, 0.39, 1.16, 3.64]) expect(affinityAgainst(value, 2, rho).words).not.toMatch(/e-/)
+  })
+
+  it('offers merge only where the contacts stand out of the background, or a merge is on offer', async () => {
+    const m = await mount()
+    await select(m, { genomes: ['X1'] })
+    // X2 on offer, Y well above the background; Z on a single contact, below it.
+    expect(rowsUnder('meets most').map(rowActLabel)).toEqual(['merge', 'merge', null])
+    // Z meets every MAG at most as strangers do: listed, nothing offered, no key to read.
+    await select(m, { genomes: ['Z'] })
+    const rows = rowsUnder('meets most')
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.map(rowActLabel).every((label) => label === null)).toBe(true)
+    expect(rows.map((row) => row.querySelector('.curate-selection-row-detail')?.textContent ?? '').every((detail) => detail.startsWith('affinity below the background'))).toBe(true)
+    expect(document.querySelector('.curate-selection-key')).toBeNull()
+    // `merge into…` still reaches any genome.
+    expect(act('merge into…').disabled).toBe(false)
+  })
+
+  it('says what every confidence is sure of, never a bare percent', async () => {
+    const m = await mount()
+    const seen: string[] = []
+    for (const selection of [{ genomes: ['X1'] }, { genomes: ['P'] }, { contigs: [3] }, { contigs: [0, 1, 2, 3] }]) {
+      await select(m, selection)
+      seen.push(...confidences())
+    }
+    expect(seen).toEqual(['99% one organism', '98% sure', '97% sure', '99% not its host', '99% its host', '97% belongs there', '97% belongs there'])
+    // `sure` alone only under a heading that says of what: `belong here`, `may belong elsewhere`.
+    await select(m, { genomes: ['X1'] })
+    expect(rowsUnder('belong here')[0].querySelector<HTMLElement>('.curate-selection-row-confidence')?.title).toBe('The method is 98% sure it belongs in X1')
+    expect(rowsUnder('meets most')[0].querySelector<HTMLElement>('.curate-selection-row-confidence')?.title).toMatch(/sure the two are fragments of one organism — what the merge does to the grades is its price/)
+  })
+
+  it('draws a row’s act the size of the card’s acts: one button size a card', () => {
+    // No layout here: the rule is held as text, the pictures by the gallery's measure of both. From the
+    // working directory, not `import.meta.url`, which is not a file's address under jsdom.
+    const css = readFileSync(resolve(process.cwd(), 'src/curate/ui/cards.css'), 'utf8')
+    const rule = (selector: string): Record<string, string> => {
+      for (const block of css.split('}')) {
+        const at = block.lastIndexOf('{')
+        if (at < 0) continue
+        if ((block.slice(0, at).split('*/').pop()?.replace(/\s+/g, ' ').trim() ?? '') !== selector) continue
+        const out: Record<string, string> = {}
+        for (const line of block.slice(at + 1).split(';')) {
+          const colon = line.indexOf(':')
+          if (colon >= 0) out[line.slice(0, colon).trim()] = line.slice(colon + 1).replace(/\s+/g, ' ').trim()
+        }
+        return out
+      }
+      throw new Error(`no rule for ${selector}`)
+    }
+    const row = rule('.curate-selection-row-act')
+    // The button's own type, as the card's acts keep it: no size of the row's.
+    expect(row['font-size']).toBeUndefined()
+    expect(rule('.curate-card-acts .edit-act')['font-size']).toBeUndefined()
+    expect(row['padding']).toBe(rule('.curate-card-acts .edit-act')['padding'])
   })
 })
 
