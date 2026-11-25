@@ -17532,7 +17532,9 @@ and a key held down answers once — a question just taken is still in the queue
 it. Nor does a card's act, or the key printed on it (`M`, `L`, `B`, `E`, `Delete`), make a step then:
 it is taken, the card dims, and nothing is made — not the link or unlink on offer, nor, in its place,
 the genomes dissolved. After an answer review moves on:
-past a question answered whole, to the next along; when part of it was answered — a member stepped
+past a question answered whole, to the question at its place once the answer is counted — an answer
+may rank the queue anew, and after the first the next is the new first, whatever the answer brought
+—; when part of it was answered — a member stepped
 into, or one taken from its card — to the members left. An undo stops an auto run, and auto asks a question again where a
 step was made while it was priced, never taking one priced on another binning. A genome a step makes
 gets an id never used before (`curated:N`), so what was turned down for one undone never holds for
