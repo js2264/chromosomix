@@ -10518,7 +10518,22 @@ diamond mean that then reads as structure. It emits **A/B segments** from E1's s
 because the interval is what gets cited and thresholding a bigWig elsewhere is a second tool for one
 comparison against zero. *Saddle*, which follows from the two above, is drawn by the same run —
 *draw the saddle*, on by default, over 50 *quantile groups* of E1 — with its AA, BB and AB strengths
-under it. The task is absent on a metacool: a bacterial MAG has domains and no compartments.
+under it. **Under *cis only* it is one saddle over every ticked sequence by default** (*saddles*,
+`saddleScope`: *one over every sequence*, `pooled`, or *one per sequence*, `each`; offered only there,
+with more than one ticked, since the other two modes decompose one square and draw one saddle of it):
+each sequence's bins are grouped at the quantiles of **its own** E1, and every pair of groups' cells
+summed and counted over all of them before the mean is taken — the per-sequence saddles' sums added
+up, which is `cooltools.saddle` over the regions of its view, each region's track cut at its own
+quantiles — so a cell weighs every contact in it and chromosome 19 does not count as much as
+chromosome 1. Its own quantiles rather than the genome's, because E1's scale is its sequence's: the
+correlation's eigenvector is a unit vector, so a short chromosome's values are larger for the same
+checkerboard and genome-wide quantiles would fill the end groups with its bins, and cooltools' is
+scaled by √|λ|, so a chromosome whose checkerboard is faint would be squeezed into the middle ones.
+Each sequence is phased on its own, and one whose E1 the signal did not sign would lay its A on the
+others' B: the pooled saddle's *unphased* counts them, beside its corners, and the drawer says so.
+It is *Saddle · genome-wide*, or *Saddle · 20 of 21 sequences* with some unticked, where one per
+sequence is *Saddle · chr1*. The
+task is absent on a metacool: a bacterial MAG has domains and no compartments.
 
 **On a bacterial chromosome the expectation can be taken along both arms** — *decay along both
 arms*, the map's own reading of §7.5, within a window along them (50 bins by default, the whole
@@ -10547,7 +10562,7 @@ phasing signal is a gene model, else **a track** — any loaded or computed lane
 assumed (§18.2) — else a FASTA's GC content. Circular sequences are divided by their decay measured
 the short way round, which is version 2 of the task; version 3 is ranked by eigenvalue alone,
 reports r as drawn and decomposes cooltools' matrix by default; version 4 divides that matrix by
-cooltools' own expectation.
+cooltools' own expectation; version 5 draws one saddle over every sequence under cis only by default.
 
 **What the eigenvectors are taken of is a choice** — *method*, **cooltools' by default**
 (`eigs_cis`), which is what the field computes today; the other, *Lieberman-Aiden 2009*
@@ -11732,7 +11747,8 @@ SciPy, a window any track lacks left out of every pair as deepTools leaves it, a
 deepTools, whose zoom-level means are measured apart; cis and trans per sequence, on a chicken map
 of macro- and microchromosomes, against cooltools' `expected_cis` and `expected_trans` sums, the
 ratio to indifference against NumPy over them; the compartment call's saddle against
-`cooltools.saddle` over chromosomix's own E1, cut into its groups by cooltools' `digitize`; the
+`cooltools.saddle` over chromosomix's own E1, cut into its groups by cooltools' `digitize`, one
+chromosome at a time and pooled over all of them; the
 fraction of signal in features against pyBigWig's exact sums and NumPy, the whole track's own read
 from a zoom level and measured apart; and signal by group against pyBigWig's exact stretch means,
 rank for rank in each group, and its summaries and tests against NumPy's and SciPy's; the chain the

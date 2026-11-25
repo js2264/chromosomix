@@ -73,7 +73,7 @@ the mean of 100, which is what is written.
 | 18 | Track correlation | mouse ATAC-seq, two replicates, and insulation, chr19, 100 bp to 10 kb | pyBigWig and SciPy; deepTools `multiBigwigSummary`, `plotCorrelation` |
 | 19 | Loop calling | mouse Hi-C, 10 kb | `cooltools.dots` |
 | 20 | Cis and trans per sequence | chicken Hi-C, 100 kb | `cooltools.expected_cis`, `expected_trans` |
-| 21 | Saddle | mouse Hi-C, 100 kb, § 3's E1 | `cooltools.saddle` |
+| 21 | Saddle | mouse Hi-C, 100 kb, § 3's E1, pooled and per chromosome | `cooltools.saddle` |
 | 22 | Fraction of signal in features | mouse ATAC-seq, two replicates, chr19; peaks and promoters | pyBigWig and NumPy |
 | 23 | Signal by group | mouse ATAC-seq, two replicates, chr19; § 3's compartments | pyBigWig, NumPy and SciPy |
 | 24 | CTCF sites in GM12878 (Fig. 2): insulation at four scales, peaks, APA between consecutive peaks, metaplot | GM12878 Hi-C, 10 kb; CTCF ChIP-seq of two labs and ATAC-seq; chr19 | `cooltools.insulation`; yapc 0.1 with IDR 2.0.3; coolpuppy; deepTools `computeMatrix`, `plotProfile`, `plotHeatmap` |
@@ -3102,20 +3102,28 @@ record('Cis and trans per sequence', f'chicken Hi-C, 100 kb, {len(SEQUENCES)} se
 
 ## 21 · Saddle (cooltools)
 
-The saddle § 3's compartment call draws for each chromosome: its bins in 50 groups at the quantiles of
-E1 over the chromosome, and the mean observed/expected of every pair of groups, the first two
-diagonals left out as the call leaves them out; and AA, BB and AB, the means of its corners over the
-fifth of the groups at each end (§18.8). cooltools' `saddle`, over each chromosome alone, its expected
+The saddle § 3's compartment call draws: one over every chromosome, its default (§18.8), and one per
+chromosome, `--saddleScope each`, each from § 3's command run again with nothing else changed. The one
+over every chromosome is over the chromosomes § 3 compares, ticked, so that chrY, which it leaves out,
+is left out of this one too: its E1, over the 128 bins of it that hold data, is a few values held by
+many bins, and cut at its quantiles from the float32 its bigWig holds it to, those bins fall either
+side of an edge that the app, cutting its own E1, does not see. Each chromosome's bins in 50 groups at
+the quantiles of its own E1, and the mean observed/expected of every pair of groups, the first two
+diagonals left out as the call leaves them out — over the chromosome's cells, or over every
+chromosome's pooled, each cell's sum and count added up before the mean is taken; and AA, BB and AB,
+the means of its corners over the fifth of the groups at each end. cooltools' `saddle`, its expected
 `expected_cis`'s unsmoothed `balanced.avg`, is handed chromosomix's own E1 as its track, from the bigWig
-chromosomix writes, cut into its groups by cooltools' `digitize`: what is compared is the saddle, the
-eigenvector being § 3's to compare. AA, BB and AB are taken from cooltools' saddle as chromosomix takes
-them from its own.
+chromosomix writes, cut into its groups by cooltools' `digitize` one chromosome at a time, and run over
+each chromosome alone and over a view of them all: what is compared is the saddle, the eigenvector
+being § 3's to compare. AA, BB and AB are taken from cooltools' saddle as chromosomix takes them from
+its own.
 
 | | chromosomix | cooltools |
 |---|---|---|
-| groups | `--quantiles 50` (the default), E1's quantiles over the chromosome | `digitize(n_bins=50, qrange=(0, 1))`, over the chromosome (`view_df`) |
+| groups | `--quantiles 50` (the default), E1's quantiles over each chromosome | `digitize(n_bins=50, qrange=(0, 1))`, over each chromosome (`view_df`) |
+| one saddle or one each | one over the chromosomes ticked (the default), `--sequences` all but chrY; one each, `--saddleScope each` | `saddle` over a view of those chromosomes; over each alone |
 | diagonals left out | 2 (the default) | `min_diag=2` |
-| expected | the chromosome's decay with distance | `expected_cis(ignore_diags=2, smooth=False)`, `balanced.avg` |
+| expected | each chromosome's decay with distance | `expected_cis(ignore_diags=2, smooth=False)`, `balanced.avg` |
 | track | its own E1 | chromosomix's E1, from its bigWig |
 
 ```{python}
@@ -3138,6 +3146,12 @@ if not E1_TRACK.exists():
 reference('cooltools-saddle', 'Saddle', 'cooltools',
           [PYTHON, script('cooltools_saddle'), MOUSE_100K, E1_TRACK, SADDLE_GROUPS, OUT, ','.join(COMPARED)],
           out=SD / 'cooltools.npz', bench=False)
+# § 3's command twice more: its saddle over the chromosomes compared, and its saddles drawn apart. Each
+# chromosome is decomposed on its own under cis, so the same E1 to the last digit, and the same groups.
+mr('compartments', MOUSE_100K, '--components', 3, '--phaseTrack', GC_TRACK, '--sequences', ','.join(COMPARED),
+   out=SD / 'app-pooled', name='compartments-saddle-pooled', analysis='Saddle', bench=False)
+mr('compartments', MOUSE_100K, '--components', 3, '--phaseTrack', GC_TRACK, '--saddleScope', 'each',
+   out=SD / 'app-each', name='compartments-saddles-each', analysis='Saddle', bench=False)
 
 saddles_ref = np.load(SD / 'cooltools.npz')
 CORNER = max(1, round(SADDLE_GROUPS / 5))
@@ -3149,26 +3163,35 @@ def corners(cells):
     return {'AA': np.nanmean(cells[-k:, -k:]), 'BB': np.nanmean(cells[:k, :k]), 'AB': np.nanmean(cells[:k, -k:])}
 
 
-sd, rows = {}, []
-for chrom in COMPARED:
-    path = one(CMP / 'app', f'*.compartment-saddle-{chrom}.tsv')
+def compared(name, path, ref):
+    """One saddle chromosomix wrote, against cooltools': its cells and its corners."""
     frame = table(path)
     app = frame.set_index(frame.columns[0]).to_numpy(float)
     stated = {k: float(v) for k, v in re.findall(r'^# (AA|BB|AB): (\S+)$', path.read_text(), flags=re.M)}
-    ref = saddles_ref[chrom]
     both = np.isfinite(app) & np.isfinite(ref)
     expected_corners = corners(ref)
-    sd[chrom] = dict(app=app, stated=stated, corners=expected_corners, rel=relative_difference(app, ref)[both])
-    rows.append({'chromosome': chrom, 'the same cells without a value': bool((np.isfinite(app) == np.isfinite(ref)).all()),
-                 'max relative difference': sd[chrom]['rel'].max(),
-                 **{f'{k}, chromosomix / cooltools': f"{stated[k]:.2f} / {v:.4f}" for k, v in expected_corners.items()}})
+    held = dict(app=app, stated=stated, corners=expected_corners, rel=relative_difference(app, ref)[both])
+    row = {'saddle': name, 'the same cells without a value': bool((np.isfinite(app) == np.isfinite(ref)).all()),
+           'max relative difference': held['rel'].max(),
+           **{f'{k}, chromosomix / cooltools': f"{stated[k]:.2f} / {v:.4f}" for k, v in expected_corners.items()}}
+    return held, row
+
+
+sd, rows = {}, []
+# The default, one over every chromosome ticked: the only saddle that command writes.
+sd['pooled'], row = compared('every chromosome, pooled', one(SD / 'app-pooled', '*.compartment-saddle-*.tsv'),
+                             saddles_ref['pooled'])
+rows.append(row)
+for chrom in COMPARED:
+    sd[chrom], row = compared(chrom, one(SD / 'app-each', f'*.compartment-saddle-{chrom}.tsv'), saddles_ref[chrom])
+    rows.append(row)
 saddle_table = pd.DataFrame(rows)
 show(saddle_table, **{'max relative difference': '{:.1e}'})
 ```
 
 ```{python}
 #| label: fig-saddle
-#| fig-cap: "Saddles, mouse Hi-C at 100 kb, by chromosomix's E1. a, chr2's, as chromosomix draws it; b, every cell of every chromosome's against cooltools'; c, the three corners of every chromosome."
+#| fig-cap: "Saddles, mouse Hi-C at 100 kb, by chromosomix's E1. a, the one over every chromosome, as chromosomix draws it by default; b, every cell of it and of every chromosome's own against cooltools'; c, the three corners of each."
 TEXT['sd_n'] = f'{len(COMPARED)}'
 TEXT['sd_rel'] = f"{saddle_table['max relative difference'].max():.1e}"
 corner_gap = max(abs(v['stated'][k] - v['corners'][k]) for v in sd.values() for k in ('AA', 'BB', 'AB'))
@@ -3180,7 +3203,8 @@ SADDLE_EXACT = SADDLE_GAPS and saddle_table['max relative difference'].max() < 6
 fig, axes = plt.subplots(1, 3, figsize=(12, 3.9), layout='constrained', width_ratios=[1, 1.1, 1])
 diverging = plt.get_cmap('RdBu_r').copy()
 diverging.set_bad(MISSING)
-bar = square(axes[0], sd['chr2']['app'], 'a  chr2', cmap=diverging, norm=LogNorm(1 / 2, 2), label='observed / expected')
+bar = square(axes[0], sd['pooled']['app'], 'a  every chromosome', cmap=diverging, norm=LogNorm(1 / 2, 2),
+             label='observed / expected')
 bar.set_ticks([1 / 2, 1, 2], labels=['½', '1', '2'])
 bar.minorticks_off()
 axes[0].set(xlabel='E1, B to A', ylabel='E1, B to A')
@@ -3200,15 +3224,17 @@ ax.legend(loc='upper left')
 drawn('fig-saddle')
 ```
 
-Every cell of the `{python} TEXT['sd_n']` chromosomes' saddles agrees with cooltools' within
-`{python} TEXT['sd_rel']`, the six digits chromosomix writes, with `{python} TEXT['sd_gaps']` left
-without a value, and AA, BB and AB within `{python} TEXT['sd_corners']`, their two decimals.
+Every cell of the saddle over every chromosome, and of the `{python} TEXT['sd_n']` chromosomes' own,
+agrees with cooltools' within `{python} TEXT['sd_rel']`, the six digits chromosomix writes, with
+`{python} TEXT['sd_gaps']` left without a value, and AA, BB and AB within
+`{python} TEXT['sd_corners']`, their two decimals.
 
 ```{python}
-record('Saddle', f"mouse Hi-C, 100 kb, § 3's E1, {len(COMPARED)} chromosomes", f"cooltools {VERSIONS['cooltools']}",
+record('Saddle', f"mouse Hi-C, 100 kb, § 3's E1, pooled and {len(COMPARED)} chromosomes",
+       f"cooltools {VERSIONS['cooltools']}",
        f"every cell within {TEXT['sd_rel']}, the corners within {TEXT['sd_corners']}",
        'Identical (float32)' if SADDLE_EXACT else 'Differs',
-       apps=['compartments'], refs=['cooltools-saddle'])
+       apps=['compartments-saddle-pooled', 'compartments-saddles-each'], refs=['cooltools-saddle'])
 ```
 
 ## 22 · Fraction of signal in features (pyBigWig)

@@ -1477,6 +1477,98 @@ describe('compartments by either method', () => {
 })
 
 /**
+ * One saddle or one per sequence, under cis only — where every sequence is
+ * decomposed on its own and there are as many saddles to draw as sequences.
+ * One is the default: each sequence's bins grouped by its own E1 and their
+ * cells pooled, as `cooltools.saddle` pools the regions of its view.
+ */
+describe('the compartments’ saddles', () => {
+  const kind = (bin: number): number => Math.floor(bin / 5) % 2
+  let pair = ''
+  let reference = ''
+  beforeAll(async () => {
+    // Two chromosomes, each a checkerboard of blocks of five bins, the second
+    // half as long; and a reference GC-rich in one kind, so each is phased.
+    const block = (bins: number): HicRecord[] => {
+      const list: HicRecord[] = []
+      for (let x = 0; x < bins; x++) {
+        for (let y = x; y < bins; y++) {
+          list.push({ x, y, value: Math.round((1000 * (kind(x) === kind(y) ? 2 : 1)) / (1 + y - x)) })
+        }
+      }
+      return list
+    }
+    const fixture = await writeHic({
+      version: 9,
+      chroms: [
+        { name: 'chrI', length: 60_000 },
+        { name: 'chrII', length: 30_000 },
+      ],
+      resolutions: [1000],
+      records: { '1_1': block(60), '2_2': block(30) },
+      blockBinCount: 32,
+    })
+    pair = join(directory, 'pair.hic')
+    await writeFile(pair, fixture.bytes)
+    reference = join(directory, 'pair.fa')
+    const bases = (bins: number): string => {
+      let text = ''
+      for (let bin = 0; bin < bins; bin++) text += (kind(bin) === 0 ? 'GC' : 'AT').repeat(500)
+      return text
+    }
+    await writeFile(reference, `>chrI\n${bases(60)}\n>chrII\n${bases(30)}\n`)
+  })
+
+  const saddles = async (where: string): Promise<string[]> =>
+    (await readdir(where)).filter((name) => name.includes('compartment-saddle')).sort()
+
+  it('draws one over every sequence by default, and says how it was pooled', async () => {
+    reset()
+    const where = join(directory, 'one-saddle')
+    expect(
+      await main([
+        'compartments', pair, '--sequence', reference, '--phaseSequence', reference,
+        '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    expect(complained()).not.toMatch(/failed:/)
+    expect(await saddles(where)).toEqual(['pair.compartments.compartment-saddle-genome-wide.tsv'])
+    const text = await readFile(join(where, 'pair.compartments.compartment-saddle-genome-wide.tsv'), 'utf8')
+    expect(text).toMatch(/^# output: Saddle · genome-wide$/m)
+    // Both phased, so nothing is said to be unphased; and the corners are the
+    // checkerboard's, like with like above 1 and across below.
+    expect(text).not.toMatch(/unphased/)
+    const corner = (name: string): number => Number(text.match(new RegExp(`^# ${name}: (\\S+)$`, 'm'))?.[1])
+    expect(corner('AA')).toBeGreaterThan(1)
+    expect(corner('BB')).toBeGreaterThan(1)
+    expect(corner('AB')).toBeLessThan(1)
+  })
+
+  it('draws one per sequence under --saddleScope each', async () => {
+    reset()
+    const where = join(directory, 'each-saddle')
+    expect(
+      await main([
+        'compartments', pair, '--sequence', reference, '--phaseSequence', reference,
+        '--saddleScope', 'each', '--out', where, '--quiet',
+      ]),
+    ).toBe(0)
+    expect(await saddles(where)).toEqual([
+      'pair.compartments.compartment-saddle-chrI.tsv',
+      'pair.compartments.compartment-saddle-chrII.tsv',
+    ])
+  })
+
+  it('says when the one saddle pools sequences nothing phased', async () => {
+    reset()
+    const where = join(directory, 'one-saddle-unphased')
+    expect(await main(['compartments', pair, '--out', where, '--quiet'])).toBe(0)
+    const text = await readFile(join(where, 'pair.compartments.compartment-saddle-genome-wide.tsv'), 'utf8')
+    expect(text).toMatch(/^# unphased: 2$/m)
+  })
+})
+
+/**
  * The one task whose unit is a pair of files. The deck supplies the second
  * map in the app; a shell has one file and one mount, and `--against` is the
  * flag that stands in for the deck — mounted through the same `peer` the

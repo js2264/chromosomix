@@ -129,6 +129,16 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **Compartments draw one saddle over every sequence, not one per sequence (§18.8).** Under *cis
+  only*, with several sequences ticked, the drawer held a saddle for each; it now holds one, *Saddle ·
+  genome-wide*: each sequence's bins grouped at the quantiles of its own E1, as before, and every pair
+  of groups' cells pooled over all of them — `cooltools.saddle` over the view's regions, which it
+  matches to the digits written (validation § 21). A sequence's own quantiles, and not the genome's,
+  because E1's scale is its sequence's: a correlation's eigenvector is a unit vector, larger on a
+  short chromosome, and cooltools' is scaled by √λ, smaller on a faint one. Its *unphased* says how
+  many sequences no signal signed, whose A and B it may hold the wrong way round. *Saddles: one per
+  sequence* (`--saddleScope each`), in the form's *Saddle* section, draws them apart as before. The
+  task is version 5.
 - **A map whose contigs are not grouped by genome is told how to group them without its pairs (a dev
   feature, §10).** The refusal said to re-create the map from its pairs. It now leads with
   `metacooler reassign --layout genome-then-length`, given the map's own assignment
