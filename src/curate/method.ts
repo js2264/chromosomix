@@ -285,13 +285,14 @@ function lnFactorial(n: number): number {
  * picture's readout: two decimals from 1 (`1.16`), two significant figures
  * below (`0.084`, `0.00036`), and under a ten-thousandth `< 0.0001`, never an
  * exponent in prose, which breaks across lines at its hyphen; a dash where
- * there is none.
+ * there is none. The one rule: the selection card, the chips, the pictures.
  */
 export function affinityText(value: number): string {
   if (!Number.isFinite(value)) return '—'
   if (value <= 0) return '0'
   if (value >= 1) return value.toFixed(2)
-  if (value < 1e-4) return '< 0.0001'
+  // Its space unbreakable: no number is cut across two lines.
+  if (value < 1e-4) return '<\u00a00.0001'
   const text = value.toPrecision(2)
   // 0.999 rounds up to the next decade: printed as 1 is, from 1.
   return text === '1.0' ? '1.00' : text

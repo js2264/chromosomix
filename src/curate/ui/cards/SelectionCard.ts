@@ -1574,12 +1574,12 @@ function countWords(n: number, one: string, many: string): string {
 }
 
 /**
- * An affinity's number as the card prints it: `affinityText`'s, but under a
- * thousandth `< 0.001` — never an exponent, whose hyphen a line may break at —
- * its space unbreakable, so no number is ever cut across two lines.
+ * An affinity's number as the card prints it: the stage's one rule
+ * (`method.ts`'s `affinityText`) — never an exponent, whose hyphen a line may
+ * break at, and under a ten-thousandth `< 0.0001`, its space unbreakable.
  */
 export function affinityNumber(value: number): string {
-  return Number.isFinite(value) && value > 0 && value < 1e-3 ? '<\u00a00.001' : affinityText(value)
+  return affinityText(value)
 }
 
 /** How many times the background: `1.3×`, `14×`, `1,200×`. */

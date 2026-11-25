@@ -484,9 +484,9 @@ describe('affinity against the background, and what a confidence is sure of', ()
     // No contacts to bound it by (a group's least): the number's own multiple.
     expect(affinityAgainst(0.95, null, rho)).toEqual({ words: '0.95 (40× background)', bounded: false })
     expect(affinityAgainst(0, 0, rho)).toEqual({ words: '0', bounded: false })
-    // No background known: the number alone, and under a thousandth no exponent, its space unbreakable.
-    expect(affinityAgainst(0.00036, 2, null)).toEqual({ words: '< 0.001', bounded: false })
-    expect(affinityNumber(9.6e-5)).toBe('< 0.001')
+    // No background known: the number alone, never an exponent; under a ten-thousandth `< 0.0001`, its space unbreakable.
+    expect(affinityAgainst(0.00036, 2, null)).toEqual({ words: '0.00036', bounded: false })
+    expect(affinityNumber(9.6e-5)).toBe('<\u00a00.0001')
     expect(affinityNumber(0.0013)).toBe('0.0013')
     for (const value of [9.6e-5, 2.1e-5, 0.00036, 0.0075, 0.39, 1.16, 3.64]) expect(affinityAgainst(value, 2, rho).words).not.toMatch(/e-/)
   })
