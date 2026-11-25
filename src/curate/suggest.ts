@@ -24,6 +24,7 @@ import type { CuratedBinning, CurationStep } from '../genome/curation'
 import {
   affinity,
   affinityBetween,
+  affinityText,
   confidenceOf,
   contigFeatures,
   densities,
@@ -276,8 +277,9 @@ function grouped(n: number): string {
   return Math.round(n).toLocaleString('en-US')
 }
 
-function affinityText(a: number): string {
-  return `affinity ${a >= 10 ? a.toFixed(0) : a >= 1 ? a.toFixed(1) : a.toFixed(2)}`
+/** An evidence chip's affinity, printed as every part prints one (`method.ts`). */
+function affinityChip(a: number): string {
+  return `affinity ${affinityText(a)}`
 }
 
 function merges(
@@ -336,7 +338,7 @@ function merges(
     const ca = quality[a]?.weightedCompleteness ?? -1
     const cb = quality[b]?.weightedCompleteness ?? -1
     const [keep, fold] = ca > cb || (ca === cb && lengthOf(evidence, A.contigs) >= lengthOf(evidence, B.contigs)) ? [A, B] : [B, A]
-    const evidenceChips = [affinityText(aff), `${grouped(o)} contacts`]
+    const evidenceChips = [affinityChip(aff), `${grouped(o)} contacts`]
     if (merged !== null) {
       // Its price as the review's band prints it (`price.ts`): each MAG's own
       // weighted numbers, the one kept first, and the merged genome's.
@@ -542,7 +544,7 @@ function links(
     const pair = `${element.id}\t${mag.id}`
     seen.add(pair)
     hosts.push({ element: e, mag: m, contacts: o, affinity: aff, share, confidence, linked: linked.has(pair) })
-    const chips = [affinityText(aff), `${percent(share)} of its contacts with MAGs`, `${grouped(o)} contacts`]
+    const chips = [affinityChip(aff), `${percent(share)} of its MAG contacts`, `${grouped(o)} contacts`]
     if (p > 1e-3) chips.push('within the background')
     if (linked.has(pair)) {
       if (confidence >= OFFER_FLOOR) continue

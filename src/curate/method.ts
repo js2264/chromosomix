@@ -280,6 +280,23 @@ function lnFactorial(n: number): number {
   return n * Math.log(n) - n + 0.5 * Math.log(2 * Math.PI * n) + 1 / (12 * n) - 1 / (360 * n ** 3)
 }
 
+/**
+ * An affinity as the stage prints it, in every part — a chip, a card, a
+ * picture's readout: two decimals from 1 (`1.16`), two significant figures
+ * below (`0.084`, `0.00036`), and under a ten-thousandth `< 0.0001`, never an
+ * exponent in prose, which breaks across lines at its hyphen; a dash where
+ * there is none.
+ */
+export function affinityText(value: number): string {
+  if (!Number.isFinite(value)) return '—'
+  if (value <= 0) return '0'
+  if (value >= 1) return value.toFixed(2)
+  if (value < 1e-4) return '< 0.0001'
+  const text = value.toPrecision(2)
+  // 0.999 rounds up to the next decade: printed as 1 is, from 1.
+  return text === '1.0' ? '1.00' : text
+}
+
 /** An affinity scaled to the lower bound of the contacts it rests on. */
 export function lowerAffinity(a: number, o: number): number {
   return o > 0 ? (a * poissonLower(o)) / o : 0

@@ -19,7 +19,7 @@
 
 import type { CurationStep, GenomeKind } from '../../genome/curation'
 import { encode, pyramid, triangleIndex, triangleSize, type PictureLevel, type Quantizer } from '../../metacooler/picture'
-import { lowerAffinity } from '../method'
+import { affinityText as methodAffinityText, lowerAffinity } from '../method'
 import type { GenomePairs, Suggestion } from '../suggest'
 
 /** The affinity at the scale's top byte: past it, every cell is the darkest. */
@@ -387,10 +387,7 @@ export function centredView(span: number, from: number, to: number, n: number, l
 
 /** An affinity as the stage prints it: two significant figures below 1, two decimals from 1. */
 export function affinityText(a: number): string {
-  if (!Number.isFinite(a) || a <= 0) return '0'
-  if (a >= 1) return a.toFixed(2)
-  if (a < 1e-4) return a.toExponential(1)
-  return a.toPrecision(2)
+  return Number.isFinite(a) ? methodAffinityText(a) : '0'
 }
 
 /** Observed over expected, as the close-up's readout prints it: `0.84×`, `3.2×`, `41×`. */

@@ -20,6 +20,7 @@ import { displayPercent } from '../../model'
 import { priceOf, priceVerdict, redundancyText, type PriceRow } from '../../price'
 import type { Quality } from '../../quality'
 import { grade } from '../grade'
+import { affinityText as methodAffinityText } from '../../method'
 
 /** A card: its root, its heading and the body under it. */
 export interface Card {
@@ -100,21 +101,8 @@ export function acts(...buttons: Array<HTMLButtonElement | null>): HTMLElement {
   return row
 }
 
-/**
- * An affinity as the stage prints it: two significant figures below 1, two
- * decimals from 1 — `0.084`, `0.84`, `1.16`; past four decimal places an
- * exponent, as the contact map's readout and an axis take one (`2.1e-5`, not a
- * run of zeros); a dash where there is none.
- */
-export function affinityText(value: number): string {
-  if (!Number.isFinite(value)) return '—'
-  if (value <= 0) return '0'
-  if (value >= 1) return value.toFixed(2)
-  if (value < 1e-4) return value.toExponential(1)
-  const text = value.toPrecision(2)
-  // 0.999 rounds up to the next decade: printed as 1 is, from 1.
-  return text === '1.0' ? '1.00' : text
-}
+/** An affinity as the stage prints it in every part (`method.ts`'s {@link methodAffinityText}). */
+export const affinityText = methodAffinityText
 
 /**
  * A preview's key, as the model keys one (`CurateModel.preview`): a step's

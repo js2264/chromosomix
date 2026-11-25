@@ -21,7 +21,15 @@ import { gallery, sleep } from './gallery-lib.mjs'
 const OUT = process.argv[2] ?? 'gallery'
 const CONFIG = process.env.CONFIG ?? 'demo/metagenomics/mock-community/MM133.chromosomix.json'
 const g = await gallery(OUT)
-const { page, shot, text } = g
+const { page, text } = g
+/** A shot, and — on the stage — how many small pictures it shows beside the large one, so a layout that hides them says so. */
+async function shot(name) {
+  await g.shot(name)
+  const smalls = await page.evaluate(() =>
+    document.querySelector('.curate-stage') === null ? null : [...document.querySelectorAll('.curate-slot.is-small')].filter((slot) => slot.getBoundingClientRect().width > 0).length,
+  )
+  if (smalls !== null) console.log(`${name}: ${smalls} small pictures shown`)
+}
 const files = join(OUT, 'files')
 mkdirSync(files, { recursive: true })
 
