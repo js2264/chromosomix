@@ -9,7 +9,9 @@
  *
  * Rendered from a list on every change rather than patched in place. Twelve
  * buttons is not a number worth reconciling, and rebuilding is what guarantees
- * the strip cannot drift from the sessions it describes.
+ * the strip cannot drift from the sessions it describes. The one exception is a
+ * tab being carried along the strip ({@link TabDrag}), which holds the rebuilds
+ * back until it is let go.
  */
 
 import { button, el } from '../ui/dom'
@@ -57,6 +59,13 @@ export interface TabStripProps {
    * for undoing a rename.
    */
   onRename(index: number, name: string): void
+  /**
+   * Take the tab at `from` and stand it at `to`, the index it holds once the
+   * others have closed up behind it — what letting go of a carried tab asks.
+   * Never called with the two equal: a tab let go where it was picked up has
+   * not moved.
+   */
+  onMove(from: number, to: number): void
 }
 
 /**
@@ -69,6 +78,17 @@ export interface TabStripProps {
  * Escape.
  */
 const DOUBLE_CLICK_MS = 500
+
+/**
+ * How far the pointer travels before a press on a tab becomes a carry.
+ *
+ * The card headings' own (`ui/cardLayout.ts`), for the same reason: a press
+ * that wobbles is a click, and a click on a tab is the commonest thing done to
+ * one.
+ */
+const DRAG_START = 5
+/** How near the strip's either end the pointer scrolls it, while a tab is carried. */
+const SCROLL_EDGE = 32
 
 export class TabStrip {
   readonly el: HTMLElement
@@ -105,6 +125,13 @@ export class TabStrip {
   private editing: { id: string; value: string; abandon: () => void } | null = null
   /** The last tab clicked and when, so a double click can be recognised. */
   private lastClick: { id: string; at: number } | null = null
+  /** The press that may become a carry, and is one once it has travelled. */
+  private drag: TabDrag | null = null
+  /**
+   * What the strip was last asked to show — the list a carry puts back on
+   * Escape, and the one a rebuild held back during a carry is made from.
+   */
+  private shown: { tabs: readonly TabSpec[]; canAdd: boolean } = { tabs: [], canAdd: true }
 
   constructor(private readonly props: TabStripProps) {
     this.add = button('', () => this.props.onNew(), {
@@ -113,9 +140,14 @@ export class TabStrip {
     })
     this.add.replaceChildren(icon('plus', { size: 15 }))
     this.el = el('div', { class: 'tabstrip' }, this.list, this.add)
+    this.list.addEventListener('pointerdown', (event) => this.pointerDown(event))
   }
 
   render(tabs: readonly TabSpec[], canAdd: boolean): void {
+    this.shown = { tabs, canAdd }
+    // A tab in the hand is a node the reader is holding: a rebuild would take it
+    // out of the document mid-carry. The list is kept and drawn on the drop.
+    if (this.drag?.carrying === true) return
     // Taken *before* the rebuild and put back after it. See {@link editing}: the
     // outgoing box is silenced first, or its removal from the document would
     // read as the reader clicking away and commit a half-typed name.
@@ -139,14 +171,14 @@ export class TabStrip {
   private tabNode(tab: TabSpec, index: number, total: number): HTMLElement {
     const node = el('div', {
       class: `tab${tab.active ? ' is-active' : ''}${tab.pending ? ' is-pending' : ''}`,
-      attrs: { role: 'tab', 'aria-selected': String(tab.active) },
+      attrs: { role: 'tab', 'aria-selected': String(tab.active), 'data-tab': tab.id },
     })
 
     const label = el('button', {
       class: 'tab-label',
       type: 'button',
       text: tab.label,
-      title: tab.nameable ? `${tab.hint}\n\nDouble-click to rename this tab.` : tab.hint,
+      title: labelTitle(tab, total),
     })
     // Double-click, which is what every application with a nameable row uses and
     // what a reader will try first. It is *also* two selects, which is harmless:
@@ -161,6 +193,10 @@ export class TabStrip {
     // never fired, which is the one tab a reader most needs to rename. A tab id
     // and a timestamp survive the rebuild; nothing about the DOM does.
     label.addEventListener('click', () => {
+      // A label the strip has since rebuilt away speaks for a list that is no
+      // longer on screen — the one a carried tab was dropped out of, where a
+      // browser hands the click that ends the carry to the button it began on.
+      if (!label.isConnected) return
       this.props.onSelect(index)
       if (!tab.nameable) return
       const at = Date.now()
@@ -194,6 +230,70 @@ export class TabStrip {
     node.append(label, close)
     this.rows.set(tab.id, { node, label, tab, index })
     return node
+  }
+
+  /**
+   * A press on a tab, which is a click until the pointer travels.
+   *
+   * Pointer events rather than the browser's drag and drop, which this strip
+   * cannot use: a tab is mostly its label, the label is a `<button>`, and
+   * Firefox will not start a drag from a button. A carried tab also has
+   * nowhere to go but along this strip, so nothing is lost by it — no other
+   * target in the app takes a tab.
+   *
+   * Not from the ×, which is a button of its own, nor from a rename's box,
+   * where a drag selects text; not with a finger, whose sideways swipe scrolls
+   * a strip too long for the window and which the palette's *Move this tab*
+   * serves instead; and not on a strip of one, which has nowhere to move it.
+   */
+  private pointerDown(event: PointerEvent): void {
+    if (event.button !== 0 || event.pointerType === 'touch' || this.drag !== null) return
+    if (this.shown.tabs.length < 2) return
+    const target = event.target
+    if (!(target instanceof Element) || target.closest('.tab-close, .tab-rename') !== null) return
+    const node = target.closest<HTMLElement>('.tab')
+    const id = node?.dataset['tab']
+    if (id === undefined || !this.rows.has(id)) return
+    this.drag = new TabDrag(this, id, event, () => {
+      this.drag = null
+    })
+  }
+
+  /** The strip's tabs as they stand in the document, left to right. */
+  tabNodes(): HTMLElement[] {
+    return [...this.list.children].filter((child): child is HTMLElement => child instanceof HTMLElement && child.classList.contains('tab'))
+  }
+
+  /** The scrolling row the tabs stand in. */
+  get row(): HTMLElement {
+    return this.list
+  }
+
+  /** The node a tab id is drawn as, now. */
+  nodeOf(id: string): HTMLElement | undefined {
+    return this.rows.get(id)?.node
+  }
+
+  /**
+   * A carry has ended: draw the strip from its list again — which puts back the
+   * order the carry was showing and anything a rebuild held back meanwhile —
+   * and only then report the move, which repaints it once more in its new order.
+   *
+   * Where it landed is said as the tab it landed **after** (`null` for first),
+   * not as an index, because the list may have changed while it was held — a
+   * tab opened by a link, one closed by the palette — and a neighbour is still
+   * a neighbour in that list where a position is not. `undefined` is no move.
+   */
+  settle(id: string, after: string | null | undefined): void {
+    const tabs = this.shown.tabs
+    this.render(tabs, this.shown.canAdd)
+    if (after === undefined) return
+    const from = tabs.findIndex((tab) => tab.id === id)
+    const others = tabs.filter((tab) => tab.id !== id).map((tab) => tab.id)
+    const to = after === null ? 0 : others.indexOf(after) + 1
+    // A neighbour that has gone is a landing nobody can name.
+    if (from < 0 || (after !== null && to === 0) || to === from) return
+    this.props.onMove(from, to)
   }
 
   /**
@@ -303,5 +403,182 @@ export class TabStrip {
     label.replaceWith(input)
     input.focus()
     input.select()
+  }
+}
+
+/**
+ * The tooltip on a tab's label: where it points, then what can be done to it
+ * that a click does not say — renamed, where it has a file to keep a name
+ * against, and moved, where there is another tab to move it past.
+ */
+function labelTitle(tab: TabSpec, total: number): string {
+  const verbs =
+    tab.nameable && total > 1
+      ? 'Double-click to rename this tab, or drag it along the strip to move it.'
+      : tab.nameable
+        ? 'Double-click to rename this tab.'
+        : total > 1
+          ? 'Drag it along the strip to move it.'
+          : null
+  return verbs === null ? tab.hint : `${tab.hint}\n\n${verbs}`
+}
+
+/**
+ * One tab carried along the strip by its label (§5.6).
+ *
+ * The tab itself is what moves: it follows the pointer sideways, lifted over
+ * its neighbours, and stands in the row wherever it would land — so the others
+ * close up behind it and open a gap ahead of it as it goes, and the gap is the
+ * answer to *where will it go*. It lands at the place among the others whose
+ * middles are left of the pointer, which is the place the gap is in.
+ *
+ * Nothing is reported until the drop, and Escape puts the strip back as it
+ * was. A tab carried is not selected: selecting a tab that was remembered and
+ * not yet opened reads its file, and moving one is not asking for that.
+ */
+class TabDrag {
+  /** Whether the press has travelled far enough to be a carry. */
+  carrying = false
+  /** Where in the tab the pointer took hold of it, from its left edge. */
+  private grab = 0
+  private scrollTimer = 0
+  private lastX = 0
+
+  constructor(
+    private readonly strip: TabStrip,
+    private readonly id: string,
+    private readonly start: PointerEvent,
+    private readonly done: () => void,
+  ) {
+    this.lastX = start.clientX
+    window.addEventListener('pointermove', this.move)
+    window.addEventListener('pointerup', this.up)
+    window.addEventListener('pointercancel', this.cancel)
+    window.addEventListener('keydown', this.key, true)
+  }
+
+  private readonly move = (event: PointerEvent): void => {
+    if (event.pointerId !== this.start.pointerId) return
+    if (!this.carrying) {
+      if (Math.hypot(event.clientX - this.start.clientX, event.clientY - this.start.clientY) < DRAG_START) return
+      if (!this.lift()) return
+    }
+    event.preventDefault()
+    this.lastX = event.clientX
+    this.aim()
+    this.autoScroll()
+  }
+
+  /**
+   * Take hold of the tab — found by its id, since a rename committed by this
+   * very press may have rebuilt the strip under it — or give up on a tab that
+   * is no longer there.
+   */
+  private lift(): boolean {
+    const node = this.strip.nodeOf(this.id)
+    if (node === undefined) {
+      this.finish()
+      return false
+    }
+    this.carrying = true
+    this.grab = this.start.clientX - node.getBoundingClientRect().left
+    node.classList.add('is-carried')
+    this.strip.el.classList.add('is-carrying')
+    document.body.classList.add('is-carrying-tab')
+    return true
+  }
+
+  /** Stand the tab where it would land, and under the pointer. */
+  private aim(): void {
+    const node = this.strip.nodeOf(this.id)
+    if (node === undefined) return
+    const others = this.strip.tabNodes().filter((each) => each !== node)
+    const to = others.filter((each) => {
+      const box = each.getBoundingClientRect()
+      return box.left + box.width / 2 < this.lastX
+    }).length
+    const before = others[to]
+    if (before === undefined) {
+      const last = others.at(-1)
+      if (last !== undefined && last.nextElementSibling !== node) last.after(node)
+    } else if (before.previousElementSibling !== node) {
+      before.before(node)
+    }
+    // Where the row puts it, less whatever it is already shifted by, is where
+    // it stands; the shift is whatever is left to the pointer — kept between
+    // where the first tab and the last one stand, since the row clips what
+    // crosses its ends and a tab's shoulders reach into its margins.
+    node.style.transform = ''
+    const rest = node.getBoundingClientRect()
+    const row = this.strip.row.getBoundingClientRect()
+    const inset =
+      (parseFloat(getComputedStyle(this.strip.row).paddingLeft) || 0) + (parseFloat(getComputedStyle(node).marginLeft) || 0)
+    const left = Math.max(row.left + inset, Math.min(this.lastX - this.grab, row.right - inset - rest.width))
+    node.style.transform = `translateX(${left - rest.left}px)`
+  }
+
+  /** Scroll the strip while the tab is held near either end of it. */
+  private autoScroll(): void {
+    window.clearTimeout(this.scrollTimer)
+    const row = this.strip.row
+    if (row.scrollWidth <= row.clientWidth) return
+    const box = row.getBoundingClientRect()
+    const step = this.lastX < box.left + SCROLL_EDGE ? -12 : this.lastX > box.right - SCROLL_EDGE ? 12 : 0
+    if (step === 0) return
+    row.scrollLeft += step
+    this.aim()
+    this.scrollTimer = window.setTimeout(() => this.autoScroll(), 30)
+  }
+
+  private readonly up = (event: PointerEvent): void => {
+    if (event.pointerId !== this.start.pointerId) return
+    if (!this.carrying) {
+      this.finish()
+      return
+    }
+    // The click that ends a carry is not a press on the tab: without this the
+    // tab would be selected — and, if it was only remembered, its file read —
+    // the moment it landed, and the click would count towards a rename.
+    const swallow = (click: Event): void => {
+      click.stopPropagation()
+      click.preventDefault()
+    }
+    window.addEventListener('click', swallow, { capture: true, once: true })
+    window.setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 0)
+    const node = this.strip.nodeOf(this.id)
+    const before = node?.previousElementSibling
+    this.drop(node === undefined ? undefined : before instanceof HTMLElement ? (before.dataset['tab'] ?? null) : null)
+  }
+
+  private readonly cancel = (): void => {
+    if (this.carrying) this.drop(undefined)
+    else this.finish()
+  }
+
+  private readonly key = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape' || !this.carrying) return
+    // Stopped, as a rename's Escape is: the shell's own would clear a selection
+    // or close a dialog behind the strip.
+    event.preventDefault()
+    event.stopPropagation()
+    this.cancel()
+  }
+
+  /** Let go after the tab `after` names, first for `null`, or — for `undefined` — back where it was. */
+  private drop(after: string | null | undefined): void {
+    window.clearTimeout(this.scrollTimer)
+    this.carrying = false
+    this.strip.el.classList.remove('is-carrying')
+    document.body.classList.remove('is-carrying-tab')
+    this.finish()
+    this.strip.settle(this.id, after)
+  }
+
+  private finish(): void {
+    window.removeEventListener('pointermove', this.move)
+    window.removeEventListener('pointerup', this.up)
+    window.removeEventListener('pointercancel', this.cancel)
+    window.removeEventListener('keydown', this.key, true)
+    this.done()
   }
 }

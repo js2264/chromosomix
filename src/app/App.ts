@@ -546,6 +546,7 @@ export class App implements SessionHost {
       onClose: (index) => this.closeSession(index),
       onNew: () => this.newSession(),
       onRename: (index, name) => this.renameSession(index, name),
+      onMove: (from, to) => this.moveSession(from, to),
     })
 
     // The title is the way home. It reads as one, so it should behave as one:
@@ -1568,6 +1569,29 @@ export class App implements SessionHost {
     this.sessions[index]?.rename(name)
   }
 
+  /**
+   * Stand the tab at `from` at `to` instead (§5.6): a tab carried along the
+   * strip, or the palette's *Move this tab left* and *right*.
+   *
+   * The tab in front stays in front, wherever it now stands — the index is a
+   * place in the strip and the one being read is a session, so it is found
+   * again by itself. Nothing is mounted and nothing navigates: the same
+   * sessions are open and the same one is on screen, so the address bar is
+   * already right. What changes is the order the strip is written down in,
+   * which is the order a reload, a restored workspace and a saved one bring
+   * the tabs back in.
+   */
+  private moveSession(from: number, to: number): void {
+    const count = this.sessions.length
+    if (from === to || from < 0 || to < 0 || from >= count || to >= count) return
+    const front = this.current
+    const [moved] = this.sessions.splice(from, 1)
+    this.sessions.splice(to, 0, moved)
+    if (front !== undefined) this.active = this.sessions.indexOf(front)
+    this.paintTabs()
+    this.remember()
+  }
+
   private newSession(): Session | null {
     if (this.sessions.length >= MAX_SESSIONS) {
       this.warn(
@@ -2451,6 +2475,24 @@ export class App implements SessionHost {
           const id = this.current?.id
           if (id !== undefined) this.tabs.beginRename(id)
         },
+      },
+      {
+        id: 'move-session-left',
+        group: 'File',
+        title: 'Move this tab left',
+        // The keyboard's road to what a drag along the strip does — and the
+        // touch screen's, where a sideways swipe scrolls the strip instead.
+        hint: 'One place towards the start of the tab strip; drag a tab to carry it further.',
+        enabled: this.active > 0,
+        run: () => this.moveSession(this.active, this.active - 1),
+      },
+      {
+        id: 'move-session-right',
+        group: 'File',
+        title: 'Move this tab right',
+        hint: 'One place towards the end of the tab strip; drag a tab to carry it further.',
+        enabled: this.active < this.sessions.length - 1,
+        run: () => this.moveSession(this.active, this.active + 1),
       },
       {
         id: 'close-session',

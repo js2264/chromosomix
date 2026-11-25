@@ -14,6 +14,10 @@ bookmarks and settings. A window holds up to twelve tabs.
 - **Rename a tab** by double-clicking it or with <kbd>F2</kbd>: Enter keeps the name, Escape abandons
   it, an empty box gives back the file's name, and Tab moves on to the next tab. The name travels with
   a workspace and a shared link.
+- **Move a tab** by dragging it along the strip: the other tabs make room where it will land, and
+  <kbd>Esc</kbd> before you let go puts it back. Moving a tab does not open it or bring it to the front.
+  From the keyboard, **Move this tab left** and **Move this tab right** in the command palette move the
+  tab in front one place. The order is kept when you reload, restore or save your tabs.
 - **Close a tab** with its × or a middle-click; the last tab is emptied instead. No key closes a tab:
   <kbd>Ctrl</kbd>+<kbd>W</kbd> (<kbd>⌘</kbd><kbd>W</kbd>) belongs to your browser.
 

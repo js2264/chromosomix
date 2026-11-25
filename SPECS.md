@@ -1552,6 +1552,30 @@ emptied box hands the tab back to its file's name, Escape abandons, and Tab comm
 the next tab's name (§26.8). A middle-click closes one,
 and the last is emptied rather than closed, since a window with no tab has nothing to drop a file on.
 
+**A tab is moved by carrying it along the strip** (`TabStrip`'s `TabDrag`). A press on a tab is a
+click until the pointer has travelled five pixels — the card headings' threshold (§26.6) — and then
+the tab itself follows the pointer sideways, lifted over its neighbours by a shadow and kept inside
+the row, while the row stands it wherever it would land: the others close up behind it and open a
+gap ahead of it, at the place among them whose middles are left of the pointer, and the gap is the
+answer to *where will it go*. Held near either end of a strip too long for the window, it scrolls the
+strip. Letting go moves it there; Escape, or letting go where it started, leaves the strip as it was.
+A tab carried is **not selected** — the click that ends the carry is swallowed — because selecting a
+tab that was remembered and not yet opened reads its file, and moving one is not asking for that;
+the tab in front stays in front wherever it now stands. Nothing is opened or navigated: the same
+tabs are open and the same one is on screen, so the address bar is already right, and what changes
+is the order the strip is written down in, which is the order a reload, a remembered workspace and
+a saved one bring the tabs back in. While a tab is in the hand, the strip's rebuilds — a track
+finishing in another tab, a name committed by the press itself — are held and drawn on the drop, and
+the landing is reported as the tab it landed after, which is still a neighbour in a list that
+changed meanwhile. Pointer events rather than the browser's drag and drop, because a tab is mostly
+its label, the label is a `<button>`, and Firefox does not start a drag from a button; and nothing
+else in the app takes a tab, so nothing is lost by it. Not from the ×, nor from a rename's box, where
+a drag selects text, nor with a finger, whose sideways swipe scrolls the strip. The palette's **Move
+this tab left** and **Move this tab right** are the keyboard's road to the same move, and the touch
+screen's, one place at a time and greyed at either end; no key is bound to them, since the browser
+keeps Control-Shift with Page Up and Page Down for its own tabs. The label's tooltip says the gesture
+is there once there is another tab to move past.
+
 Four things are per *window* rather than per session, because they are preferences about this window
 rather than facts about a file: the theme, the fold and width of each column, and where the reader
 has moved its cards (§26.6). The theme's cycle

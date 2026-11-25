@@ -886,6 +886,36 @@ p {
     background 0.12s ease;
 }
 
+/* A tab carried along the strip (§5.6): itself, under the pointer, lifted over
+   its neighbours by a shadow on its body and on both shoulders — the active
+   tab's own lift, a little deeper — while the row closes up behind it. No
+   transition on it, or the tab would trail the hand it is following. */
+.tab.is-carried {
+  z-index: 3;
+  transition: none;
+  box-shadow: 0 1px 8px color-mix(in srgb, var(--text) 22%, transparent);
+}
+
+.tab.is-carried::before,
+.tab.is-carried::after {
+  box-shadow: 0 1px 8px color-mix(in srgb, var(--text) 16%, transparent);
+}
+
+body.is-carrying-tab,
+body.is-carrying-tab * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+/* No × while a tab is in the hand: the pointer rests on the carried tab the
+   whole way, and on a narrow tab mostly on its ×, which lit red under it and
+   read as a tab about to be closed. Nothing can be pressed mid-carry anyway. */
+.tabstrip.is-carrying .btn.tab-close {
+  opacity: 0;
+  pointer-events: none;
+  transition: none;
+}
+
 /* `.tab` in front: `.btn:hover:not(:disabled)` is also two classes and a
    pseudo-class, and it is declared a thousand lines further down — a tie on
    specificity goes to whoever comes last, so without the extra step the × turns
