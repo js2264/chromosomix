@@ -42,8 +42,23 @@ export interface StageDialogProps {
   /** Extra classes on the stage and the sidebar, for a caller's own rules. */
   stageClass?: string
   sideClass?: string
-  /** Controls in the dialog's head, beside its title (`ModalProps.head`). */
+  /**
+   * Controls in the dialog's head, beside its title (`ModalProps.head`). With
+   * an `end`, the side's toggle is docked at its end, last before the ✕,
+   * rather than floated over the side's foot, where it sat on whatever card
+   * was scrolled under it.
+   */
   head?: ModalProps['head']
+  /** What the side is called on its toggle and its grip: `settings` unless said. */
+  sideName?: string
+  /**
+   * The narrowest the stage may be beside the side, in pixels, asked on every
+   * resize. Narrower, the side folds by itself, and its toggle opens it over
+   * the stage — a drawer — rather than beside it; wide enough again, it comes
+   * back beside the stage, unless the reader folded it. Without it the side
+   * stays where the reader put it, whatever the width.
+   */
+  stageMin?: () => number
   /** Where the sidebar's width is remembered: the file's key and a scope. */
   memoryKey: () => string
   scope: string
@@ -54,11 +69,27 @@ export interface StageDialogProps {
   onClose?: () => void
 }
 
-/** Open the dialog. The caller keeps the {@link Modal} so it can close it. */
-export function stageDialog(props: StageDialogProps): Modal {
-  const resize = (): void => props.onResize?.()
+/** The dialog, and what its caller asks of its side. */
+export interface StageModal extends Modal {
+  /**
+   * Fold the side where it no longer fits beside the stage, or put it back
+   * where it fits again — for a change the shell cannot see, such as a column
+   * of the stage dragged wider. Nothing without `stageMin`.
+   */
+  fitSide(): void
+  /** Fold the side where it is open over the stage, as a drawer: `true` where it was — Escape's, in the caller's order. */
+  foldDrawer(): boolean
+}
 
-  return new Modal({
+/** Open the dialog. The caller keeps the {@link StageModal} so it can close it. */
+export function stageDialog(props: StageDialogProps): StageModal {
+  const resize = (): void => props.onResize?.()
+  const name = props.sideName ?? 'settings'
+  let fitSide = (): void => undefined
+  let foldDrawer = (): boolean => false
+  let stopWatching = (): void => undefined
+
+  const modal = new Modal({
     title: props.title,
     // Always a name: a figure's own title or the structure row's label.
     titleIsName: true,
@@ -88,8 +119,13 @@ export function stageDialog(props: StageDialogProps): Modal {
       // can choose for the reader.
       const grip = el('div', {
         class: 'stage-side-grip',
-        attrs: { role: 'separator', 'aria-orientation': 'vertical', tabindex: '0' },
-        title: 'Drag to make the settings wider or narrower',
+        attrs: {
+          role: 'separator',
+          'aria-orientation': 'vertical',
+          tabindex: '0',
+          ...(props.sideName === undefined ? {} : { 'aria-label': `Resize the ${name}` }),
+        },
+        title: `Drag to make the ${name} wider or narrower`,
       })
       const widthAt = (clientX: number, modal: HTMLElement): number =>
         clamp(
@@ -132,23 +168,72 @@ export function stageDialog(props: StageDialogProps): Modal {
         resize()
       })
 
-      // The sidebar out of the way for a look at the picture, and back.
+      // The sidebar out of the way for a look at the picture, and back. Who
+      // folded it decides whether a wider window brings it back: the width
+      // does, the reader's choice it does not.
+      let foldedBy: 'reader' | 'width' | null = null
+      // Whether the side fits beside the stage; a side opened where it does
+      // not is a drawer over the stage, which squeezes nothing.
+      let fits = true
+      // The side's own width, folded or not: what it takes beside the stage,
+      // and what it keeps as a drawer, out of the row its basis sizes it in.
+      const basis = (): number => parseFloat(getComputedStyle(side).flexBasis) || side.getBoundingClientRect().width
+      const show = (shown: boolean, by: 'reader' | 'width'): void => {
+        const drawer = shown && !fits
+        side.style.width = drawer ? `${Math.round(basis())}px` : ''
+        side.classList.toggle('hidden', !shown)
+        side.classList.toggle('is-drawer', drawer)
+        grip.classList.toggle('hidden', drawer)
+        foldedBy = shown ? null : by
+        toggle.replaceChildren(icon(shown ? 'panel-right-close' : 'panel-right-open', { size: 14 }))
+        toggle.title = `${shown ? 'Hide' : 'Show'} the ${name}`
+        toggle.setAttribute('aria-label', toggle.title)
+        toggle.setAttribute('aria-expanded', String(shown))
+        requestAnimationFrame(resize)
+      }
       const toggle = iconButton(
         'panel-right-close',
-        'Hide the settings',
-        () => {
-          const hidden = side.classList.toggle('hidden')
-          toggle.replaceChildren(icon(hidden ? 'panel-right-open' : 'panel-right-close', { size: 14 }))
-          toggle.title = hidden ? 'Show the settings' : 'Hide the settings'
-          toggle.setAttribute('aria-label', toggle.title)
-          requestAnimationFrame(resize)
-        },
+        `Hide the ${name}`,
+        () => show(side.classList.contains('hidden'), 'reader'),
         { class: 'btn btn-icon stage-side-toggle', size: 14 },
       )
+      toggle.setAttribute('aria-expanded', 'true')
+      const end = props.head?.end
+      if (end !== undefined) end.appendChild(toggle)
 
-      return el('div', { class: 'stage-modal' }, stage, grip, side, toggle)
+      foldDrawer = () => {
+        if (!side.classList.contains('is-drawer') || side.classList.contains('hidden')) return false
+        show(false, 'width')
+        return true
+      }
+      const shell = el('div', { class: 'stage-modal' }, stage, grip, side, ...(end === undefined ? [toggle] : []))
+      const stageMin = props.stageMin
+      if (stageMin !== undefined) {
+        fitSide = () => {
+          if (shell.clientWidth === 0) return
+          const now = shell.clientWidth - basis() >= stageMin()
+          if (now === fits) return
+          fits = now
+          const open = !side.classList.contains('hidden')
+          if (!fits && open) show(false, 'width')
+          else if (fits && foldedBy === 'width') show(true, 'width')
+          // A drawer the reader opened goes back beside the stage.
+          else if (fits && open) show(true, 'reader')
+        }
+        if (typeof ResizeObserver !== 'undefined') {
+          // Its first answer comes once the shell is laid out in the page.
+          const observer = new ResizeObserver(() => fitSide())
+          observer.observe(shell)
+          stopWatching = () => observer.disconnect()
+        }
+      }
+      return shell
     },
     ...(props.onEscape === undefined ? {} : { onEscape: props.onEscape }),
-    onClose: props.onClose,
+    onClose: () => {
+      stopWatching()
+      props.onClose?.()
+    },
   })
+  return Object.assign(modal, { fitSide: () => fitSide(), foldDrawer: () => foldDrawer() })
 }

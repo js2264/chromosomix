@@ -270,7 +270,23 @@ describe('the stage', () => {
         const kind = [...card.classList].find((name) => /^edit-(modes|[a-z]+-card)$/.test(name))
         return kind ?? (card.querySelector('.edit-card-head')?.textContent?.split(' ')[0] ?? '')
       })
-    expect(order()).toEqual(['edit-modes', 'selection', 'edit-sequences-card', 'history', 'edit-suggestions-card', 'edit-export-card', 'edit-picture-card'])
+    expect(order()).toEqual(['selection', 'edit-sequences-card', 'history', 'edit-suggestions-card', 'edit-export-card', 'edit-picture-card'])
+    // The modes are the title bar's, in its middle, as the curation's are (§33.3).
+    const modes = document.querySelector('.modal-edit .modal-head-centre > .edit-modes') as HTMLElement
+    expect(modes.textContent).toBe('apply suggestionsmanualreviewauto')
+    // The view's tools and the steps' before the ✕, the inspector's toggle last of them.
+    const end = document.querySelector('.modal-edit .modal-head-end') as HTMLElement
+    expect([...end.querySelectorAll('button')].map((node) => (node.getAttribute('aria-label') ?? '').replace(/ \(.*\)$/, ''))).toEqual([
+      'Show the whole assembly',
+      'Zoom out',
+      'Zoom in',
+      'Undo the last step',
+      'Redo it',
+      'Hide the inspector',
+      'Close',
+    ])
+    // The line at the head of the picture keeps the readout alone.
+    expect([...(document.querySelector('.edit-toolbar')?.children ?? [])].map((node) => node.className)).toEqual(['edit-readout'])
   })
 
   it('renames a sequence from its pencil, as a step, and refuses a name another has', async () => {
@@ -458,7 +474,7 @@ describe('the suggestions', () => {
 
   it('puts the suggestions card first in review and auto, and back after the history in manual', async () => {
     await openOnATurn()
-    const first = (): string | undefined => [...(document.querySelector('.edit-side-body')?.children ?? [])][1]?.className
+    const first = (): string | undefined => [...(document.querySelector('.edit-side-body')?.children ?? [])][0]?.className
     expect(first()).toBe('edit-card')
     button('review').click()
     expect(first()).toBe('edit-card edit-suggestions-card')

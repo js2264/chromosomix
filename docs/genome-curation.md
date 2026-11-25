@@ -188,7 +188,8 @@ and is tested against that map (SPECS §33.4).
   genome merged away follows its contigs into the one they joined, and a contig no layout holds is
   drawn whole, last, longest first. Its sequences take cooler's bins, placed as an edit's lens places
   them, so the genome's block is pixel for pixel its own map through its edit (SPECS §33.4). The
-  editor opens on a genome from the curation stage (`S`) over it, and every contig it brings in,
+  editor opens on a genome from the curation stage (*edit the sequence…*, first of its acts, or `S`)
+  over it, and every contig it brings in,
   sends away or sets aside whole is a move of the curation (SPECS §27.10).
 - **The heading says so**: the word on the genomes reads `genomes · curated · 7 steps`, lit, and
   `· 2 laid out` where genomes are drawn laid out; a press opens the stage; the arrow beside it puts

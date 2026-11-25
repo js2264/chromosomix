@@ -35,8 +35,7 @@ import { el } from '../ui/dom'
 import { TAB_WALKS, tabStep } from '../ui/tabWalk'
 import { icon, iconButton } from '../ui/icons'
 import { closeMenu, openMenu, type MenuItem } from '../ui/Menu'
-import type { Modal } from '../ui/Modal'
-import { stageDialog } from '../ui/StageDialog'
+import { stageDialog, type StageModal } from '../ui/StageDialog'
 import { keyBelongsElsewhere } from '../ui/stageKeys'
 import { fmt } from '../units'
 import type { GenomeLinksResult, PictureResult, StageWindowSide } from '../worker/protocol'
@@ -252,6 +251,12 @@ const MIN_SPAN = 12
 const CORNER_PX = 10
 /** The rail's width, beside the map. */
 const RAIL_WIDTH = 150
+/**
+ * The narrowest the picture is kept beside the inspector — the rail and a map
+ * of three hundred pixels: narrower, the inspector folds by itself, and its
+ * toggle opens it over the picture (`StageDialogProps.stageMin`).
+ */
+const PICTURE_BESIDE_INSPECTOR = RAIL_WIDTH + 330
 /** The confidence auto mode applies at and above (§27.6). */
 const AUTO_THRESHOLD = 0.5
 /**
@@ -286,7 +291,7 @@ const REASONS: Array<{ why: AsideReason; label: string; title: string }> = [
 
 export class EditStage {
   private readonly props: EditStageProps
-  private readonly modal: Modal
+  private readonly modal: StageModal
   private readonly root: HTMLElement
   private readonly side: HTMLElement
   private readonly plot: HTMLElement
@@ -467,13 +472,16 @@ export class EditStage {
       class: 'btn btn-icon',
       size: 15,
     })
-    const toolbar = el(
+    // The tools in the title bar, before its ✕ (§27.3), as the curation's
+    // are: the view's, then the steps'; the readout alone on the line at the
+    // head of the picture.
+    const tools = el(
       'div',
-      { class: 'edit-toolbar' },
+      { class: 'edit-head-tools' },
       el('div', { class: 'edit-tools' }, fitButton, zoomOut, zoomIn),
-      this.readoutEl,
       el('div', { class: 'edit-tools' }, this.undoButton, this.redoButton),
     )
+    const toolbar = el('div', { class: 'edit-toolbar' }, this.readoutEl)
     this.reviewBar = el('div', { class: 'edit-review hidden', attrs: { 'aria-live': 'polite' } })
     this.root = el('div', { class: 'edit-stage' }, toolbar, this.reviewBar, this.plot)
 
@@ -506,7 +514,14 @@ export class EditStage {
       review: mode('review', 'Work through the suggestions, best first: Y takes one, N turns it down, and every answer teaches the ranking'),
       auto: mode('auto', `Apply every suggestion at ${percent(AUTO_THRESHOLD)} or more, best first — each a step to undo like any other`),
     }
-    this.modesEl = el('div', { class: 'edit-modes', attrs: { role: 'group', 'aria-label': 'Who presses accept' } }, ...Object.values(this.modes))
+    // Who presses take, in the title bar's middle — the curation's words and
+    // place for its own three (§33.3).
+    this.modesEl = el(
+      'div',
+      { class: 'edit-modes', attrs: { role: 'group', 'aria-label': 'Who presses accept' } },
+      el('span', { class: 'edit-modes-label', text: 'apply suggestions', attrs: { 'aria-hidden': 'true' } }),
+      ...Object.values(this.modes),
+    )
     this.side = el('div', { class: 'edit-side-body' })
     this.arrangeSide()
 
@@ -561,6 +576,9 @@ export class EditStage {
     this.modal = stageDialog({
       // One genome of a metagenome is edited on its own (§27.10), and says so.
       title: props.store.edit.original.genome === undefined ? `Edit the reference · ${props.title}` : `Edit ${this.genomeLabel()} · ${props.title}`,
+      head: { centre: this.modesEl, end: tools },
+      sideName: 'inspector',
+      stageMin: () => PICTURE_BESIDE_INSPECTOR,
       variant: 'modal-edit',
       stage: this.root,
       stageClass: 'edit-stage-body',
@@ -1911,6 +1929,8 @@ export class EditStage {
   private escape(): void {
     closeMenu()
     if (this.cancelDrag()) return
+    // The inspector open over the picture, on a narrow window: folded.
+    if (this.modal.foldDrawer()) return
     if (this.selection !== null) {
       this.selection = null
       this.paintSide()
@@ -2494,7 +2514,6 @@ export class EditStage {
   private arrangeSide(): void {
     const answering = this.mode !== 'manual'
     const cards = [
-      this.modesEl,
       ...(answering ? [this.suggestionsCard] : []),
       this.selectionCard,
       this.sequencesCard,

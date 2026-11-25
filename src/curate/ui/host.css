@@ -25,7 +25,7 @@
   padding: 0.25rem 0.5rem 0.25rem 0.7rem;
   border-bottom: 1px solid var(--border);
   color: var(--text-dim);
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-size: var(--step--1);
 }
 .curate-host.is-small .curate-host-head,
 .curate-host.is-small .curate-host-foot {
@@ -171,7 +171,7 @@
   background: var(--bg-raised);
   box-shadow: var(--shadow-1);
   color: var(--text-dim);
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-size: var(--step--1);
   line-height: 1.45;
   text-align: center;
 }
@@ -189,7 +189,7 @@
   padding: 0.15rem 0.5rem 0.15rem 0.7rem;
   border-top: 1px solid var(--border);
   color: var(--text-dim);
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-size: var(--step--1);
 }
 .curate-host-status {
   flex: 1 1 auto;

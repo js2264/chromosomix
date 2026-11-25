@@ -159,16 +159,24 @@ describe('the selection card, by what is selected', () => {
     expect(document.querySelector('.curate-selection-key')?.previousElementSibling?.textContent).toBe('meets most')
   })
 
-  it('offers to lay one genome out where the reference editing is on, and says when it is laid out', async () => {
+  it('offers to edit one genome’s sequence first of its acts where the reference editing is on, and says when it is laid out', async () => {
     const m = await mount((stage) => ({ ...stage.ctx, laidOut: (id: string) => id === 'P' }), { layOut: true })
     await select(m, { genomes: ['X1'] })
-    expect(actLabels()).toEqual(['rename', 'merge into…', 'close-up', 'lay out', 'make it an element', 'dissolve'])
-    expect(actKeys()).toEqual(['F2', 'M', '⏎', 'S', 'E', '⌫'])
-    ;(document.querySelector('[data-focus="act:lay out"]') as HTMLButtonElement).click()
+    expect(actLabels()).toEqual(['edit the sequence…', 'rename', 'merge into…', 'close-up', 'make it an element', 'dissolve'])
+    expect(actKeys()).toEqual(['S', 'F2', 'M', '⏎', 'E', '⌫'])
+    const sequence = document.querySelector('[data-focus="act:edit the sequence…"]') as HTMLButtonElement
+    // Haloed apart from the steps: the door to another tool.
+    expect(sequence.classList.contains('curate-act-sequence')).toBe(true)
+    expect(sequence.classList.contains('is-laid-out')).toBe(false)
+    expect(sequence.title).toMatch(/^Order, turn, join and cut its contigs in the reference editor/)
+    sequence.click()
     expect(m.asked).toEqual(['lay out X1'])
-    // An element too; one laid out says so.
+    // An element too, first as well; one laid out says so in its title.
     await select(m, { genomes: ['P'] })
-    expect(actLabels()).toContain('laid out…')
+    expect(actLabels()[0]).toBe('edit the sequence…')
+    const laid = document.querySelector('[data-focus="act:edit the sequence…"]') as HTMLButtonElement
+    expect(laid.classList.contains('is-laid-out')).toBe(true)
+    expect(laid.title).toMatch(/^Its sequence as laid out, in the reference editor/)
   })
 
   it('shows an element: its hosts held and offered', async () => {

@@ -12,9 +12,9 @@
   height: 100%;
   container-type: inline-size;
   background: var(--bg);
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-size: var(--step--1);
   /* The rows' em: a column's width in it scales with the text, wherever it is drawn. */
-  --row-em: calc(var(--step--1) * var(--text-scale, 1));
+  --row-em: var(--step--1);
 }
 
 .curate-list-head {
@@ -41,7 +41,7 @@
 
 .curate-filter-note {
   color: var(--text-dim);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 .curate-filter-missing {
   color: var(--warn);
@@ -63,7 +63,7 @@
   align-items: center;
   gap: 0.3rem;
   color: var(--text-dim);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 .curate-sort {
   font: inherit;
@@ -205,7 +205,7 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-dim);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   cursor: pointer;
 }
 .curate-list-sticky {
@@ -434,7 +434,7 @@
   border-radius: 999px;
   background: var(--accent);
   color: var(--on-accent);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
@@ -518,7 +518,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   transition: border-color 120ms, color 120ms, background 120ms;
 }
 body.is-curate-dragging .curate-dock-target {

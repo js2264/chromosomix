@@ -24,7 +24,7 @@
   min-height: 2.5rem;
   padding: 0.25rem 0.5rem 0.25rem 0.6rem;
   border-bottom: 1px solid var(--border);
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-size: var(--step--1);
 }
 .curate-contact.is-small .curate-contact-head {
   display: none;
@@ -159,7 +159,8 @@
 }
 
 /* The key: what a colour means, on the map's own ramp, under the map as a
-   figure's — its right edge on the map's, placed by the pane. */
+   figure's — its right edge on the map's, placed by the pane, and in the
+   reader's text scale, as the words drawn on the map are (`.map-key`'s). */
 .curate-contact-key {
   position: absolute;
   z-index: 1;
@@ -197,7 +198,7 @@
   background: var(--bg-raised);
   box-shadow: var(--shadow-1);
   color: var(--text-dim);
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-size: var(--step--1);
   line-height: 1.45;
   text-align: center;
 }

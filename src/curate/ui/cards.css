@@ -44,7 +44,7 @@
   padding: 0;
   list-style: none;
   color: var(--text-dim);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-variant-numeric: tabular-nums;
 }
 .curate-card-price-row {
@@ -170,7 +170,7 @@
   white-space: nowrap;
   text-align: right;
   color: var(--text-faint);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 .curate-selection-quality .is-value {
   text-align: right;
@@ -194,7 +194,7 @@
 }
 .curate-selection-grade {
   color: var(--text-faint);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 .curate-selection-grade .is-high {
   color: var(--ok);
@@ -234,7 +234,7 @@
 .curate-selection-key {
   margin: -0.15rem 0 0;
   color: var(--text-faint);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   line-height: 1.35;
 }
 
@@ -349,7 +349,7 @@
   margin-left: auto;
   color: var(--accent);
   font-weight: 600;
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-variant-numeric: tabular-nums;
 }
 .curate-selection-row-detail {
@@ -357,7 +357,7 @@
   min-width: 0;
   overflow-wrap: anywhere;
   color: var(--text-dim);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-variant-numeric: tabular-nums;
 }
 /* A row's act is the card's acts' size — the button's own type and their
@@ -370,7 +370,7 @@
 }
 .curate-selection-more {
   align-self: flex-start;
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 
 .curate-selection-pair {
@@ -411,7 +411,7 @@
   display: grid;
   grid-template-columns: 1.1rem repeat(var(--n, 2), minmax(0, 1fr));
   gap: 2px;
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-variant-numeric: tabular-nums;
 }
 .curate-selection-matrix-head {
@@ -485,7 +485,7 @@
   background: var(--bg-raised);
   box-shadow: var(--shadow-2);
   color: var(--text);
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-size: var(--step--1);
   line-height: 1.45;
   overflow: hidden;
 }
@@ -569,14 +569,14 @@
 }
 .curate-chooser:not(.is-beside) > .curate-chooser-list:has(> .curate-chooser-row ~ .curate-chooser-row ~ .curate-chooser-row ~ .curate-chooser-row) {
   min-height: min(
-    calc(4 * (0.65rem + 1.45 * (var(--step--1) + 2 * var(--step--2)) * var(--text-scale, 1)) + 0.6rem + 1.45 * var(--step--2) * var(--text-scale, 1)),
+    calc(4 * (0.65rem + 1.45 * (var(--step--1) + 2 * var(--step--2))) + 0.6rem + 1.45 * var(--step--2)),
     36vh
   );
 }
 .curate-chooser-group {
   padding: 0.45rem 0.4rem 0.15rem;
   color: var(--text-faint);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -630,7 +630,7 @@
   white-space: nowrap;
   text-align: right;
   color: var(--text-dim);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-variant-numeric: tabular-nums;
 }
 .curate-chooser-confidence {
@@ -639,7 +639,7 @@
   text-align: right;
   color: var(--accent);
   font-weight: 600;
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-variant-numeric: tabular-nums;
 }
 .curate-chooser-empty,
@@ -651,12 +651,12 @@
 .curate-chooser-note {
   padding: 0.45rem 0.45rem 0;
   color: var(--text-faint);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 .curate-chooser-more {
   padding-top: 0.3rem;
   color: var(--text-faint);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 /* The price of the row under the keyboard: what it makes, the genomes it
    changes most in a box that scrolls where the room is short (two lines at
@@ -699,7 +699,7 @@
   flex: none;
   padding-top: 0.15rem;
   color: var(--text-faint);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-variant-numeric: tabular-nums;
 }
 .curate-chooser-others > .is-demoted {
@@ -715,7 +715,7 @@
 }
 .curate-chooser-counting {
   color: var(--text-faint);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 .curate-chooser-keys {
   display: flex;
@@ -725,7 +725,7 @@
   padding: 0.3rem 0.65rem 0.4rem;
   border-top: 1px solid var(--border);
   color: var(--text-faint);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 .curate-chooser-keys > .kbd-inline {
   margin-left: 0;
@@ -817,7 +817,7 @@
   align-self: start;
   margin-top: 0.05rem;
   padding: 0 0.3rem;
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 .curate-suggestions-main > svg {
   align-self: start;
@@ -876,7 +876,7 @@
 /* A question's suggestion answers with its mark alone: its word is its title's. */
 .curate-suggestions-act.is-small {
   padding: 0.12rem 0.3rem;
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 /* Its key is the title's too: the row keeps its room for what the suggestion says. */
 .curate-suggestions-act.is-small > .kbd-inline,
@@ -899,7 +899,7 @@
 .curate-suggestions-members-head {
   width: max-content;
   color: var(--text-dim);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   cursor: pointer;
   user-select: none;
 }
@@ -941,7 +941,7 @@
   text-align: right;
   color: var(--accent);
   font-weight: 600;
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-variant-numeric: tabular-nums;
 }
 
@@ -954,7 +954,7 @@
   gap: 0.45rem;
   margin: 0.25rem 0 0;
   color: var(--text-faint);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -971,7 +971,7 @@
   font-weight: 400;
 }
 .curate-suggestions-more {
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 
 /* Auto: the run, and what it held back and why — a grade it would lower. */
@@ -1054,7 +1054,7 @@
 }
 .curate-suggestions-held-why {
   color: var(--warn);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   overflow-wrap: anywhere;
 }
 
@@ -1071,10 +1071,10 @@
 }
 .curate-suggestions-restore {
   flex: none;
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 .curate-suggestions-learned {
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 
 /* ---- The history card (cards/HistoryCard.ts) ---- */
@@ -1124,7 +1124,7 @@
 }
 .curate-history-undone,
 .curate-history-hint {
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 
 /* ---- The export card (cards/ExportCard.ts) ---- */
@@ -1164,7 +1164,7 @@
 }
 .curate-export-stale {
   color: var(--warn);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 .curate-export-sub {
   margin-top: 0.3rem;
@@ -1201,7 +1201,7 @@
   border-radius: 999px;
   background: var(--bg-muted);
   color: var(--text-dim);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-weight: 600;
   line-height: 1.15rem;
   text-align: center;
@@ -1226,7 +1226,7 @@
   background: var(--bg-sunken);
   color: var(--text);
   font-family: var(--mono);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   line-height: 1.5;
   white-space: pre-wrap;
   user-select: all;
@@ -1253,7 +1253,7 @@
 .curate-export-then {
   grid-area: then;
   margin: 0;
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
 }
 
 /* ---- The card about the map (cards/AboutCard.ts) ---- */
@@ -1280,6 +1280,29 @@
 }
 .curate-about-note {
   color: var(--text-faint);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   line-height: 1.4;
+}
+
+/* *Edit the sequence*: the door to the reference editor (§27.10), first of a
+   genome's acts and haloed in the second accent — a soft glow round a hairline
+   of it, its icon in it — so it reads as another tool rather than a step here.
+   The glow brightens under the pointer and the keyboard. */
+.curate-act-sequence {
+  /* The whole first row of the acts' grid, over the rest. */
+  grid-column: 1 / -1;
+  border-color: color-mix(in srgb, var(--accent-alt) 55%, var(--border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent-alt) 20%, transparent),
+    0 0 10px 1px color-mix(in srgb, var(--accent-alt) 28%, transparent);
+}
+.curate-act-sequence > svg {
+  color: var(--accent-alt);
+}
+.curate-act-sequence:hover:not(:disabled),
+.curate-act-sequence:focus-visible {
+  border-color: var(--accent-alt);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent-alt) 35%, transparent),
+    0 0 14px 2px color-mix(in srgb, var(--accent-alt) 40%, transparent);
 }

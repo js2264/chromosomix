@@ -129,8 +129,9 @@ describe('the curation stage', () => {
     expect(document.querySelector('.modal-panel')?.classList.contains('modal-curate')).toBe(true)
     expect(document.querySelector('.curate-list')).not.toBeNull()
     expect([...document.querySelectorAll('.curate-slot')].map((slot) => `${(slot as HTMLElement).dataset.slot}:${slot.classList.contains('is-large') ? 'large' : 'small'}`)).toEqual(['contacts:large', 'hosts:small', 'scatter:small'])
-    const side = [...document.querySelectorAll('.curate-side-body > section')].map((node) => node.className.replace(/.*stand-in-/, '').replace('edit-card curate-modes-card', 'modes'))
-    expect(side).toEqual(['modes', 'selection', 'history', 'suggestions', 'export', 'about'])
+    const side = [...document.querySelectorAll('.curate-side-body > section')].map((node) => node.className.replace(/.*stand-in-/, ''))
+    // The modes are the title bar's, not a card of the inspector's.
+    expect(side).toEqual(['selection', 'history', 'suggestions', 'export', 'about'])
     expect(document.querySelector('.curate-stage')?.getAttribute('data-contacts')).toBe('read')
   })
 
@@ -430,6 +431,11 @@ describe('the curation stage', () => {
     // Whole under the pointer, where a narrow bar cuts it short.
     expect(head.querySelector('.modal-title')?.getAttribute('title')).toBe('Curate the genomes · community.metacool')
     expect(textsOf(head.querySelector('.modal-head-centre') as HTMLElement, '[data-pane-tab] > span')).toEqual(['contacts', 'hosts', 'scatter'])
+    // The modes beside the tabs, under the words they decide.
+    const modes = head.querySelector('.modal-head-centre .curate-modes') as HTMLElement
+    expect(modes.getAttribute('aria-label')).toBe('Apply suggestions')
+    expect(modes.textContent).toBe('apply suggestionsmanualreviewauto')
+    expect([...modes.querySelectorAll('[data-mode]')].map((node) => node.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false'])
     const end = head.querySelector('.modal-head-end') as HTMLElement
     expect([...end.children].map((node) => node.className)).toEqual(['curate-tools', 'btn-close'])
     // Tidy, undo, redo, the keys, then the inspector's toggle.
@@ -452,7 +458,7 @@ describe('the curation stage', () => {
     ;(head.querySelector('[data-pane-tab="contacts"]') as HTMLButtonElement).click()
   })
 
-  it('docks the inspector’s toggle in the title bar, named for the inspector, and words the modes by what they apply', async () => {
+  it('docks the inspector’s toggle in the title bar, named for the inspector', async () => {
     await open()
     const toggle = document.querySelector('.modal-head-end .curate-tools .stage-side-toggle') as HTMLButtonElement
     expect(toggle).not.toBeNull()
@@ -468,7 +474,6 @@ describe('the curation stage', () => {
     // The shell's grip named for what it moves here, as the list's is.
     expect(document.querySelector('.stage-side-grip')?.getAttribute('aria-label')).toBe('Resize the inspector')
     expect(document.querySelector('.curate-list-grip')?.getAttribute('aria-label')).toBe('Resize the genome list')
-    expect(document.querySelector('.curate-modes-card .edit-card-head')?.textContent).toBe('apply suggestions')
   })
 
   it('prints Enter and Delete in the keys sheet as every other part prints them', async () => {
@@ -528,6 +533,9 @@ describe('the curation stage', () => {
     ;(closed as unknown as () => void)()
     await settle()
     expect(ctx().laidOut('X1')).toBe(true)
+    // The list draws its rows in an animation frame, which a few turns of the
+    // event loop do not always reach.
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
     expect(document.querySelector('[data-genome="X1"] .curate-laid-out')).not.toBeNull()
     expect(document.querySelector('[data-genome="X2"] .curate-laid-out')).toBeNull()
   })
@@ -535,7 +543,7 @@ describe('the curation stage', () => {
   it('prints S in the keys sheet only where the reference editing is on, and takes it only then', async () => {
     const { ctx } = await open()
     key('?')
-    expect(textsOf(document, '.curate-keys-row').some((row) => row.includes('lay the selected genome out'))).toBe(false)
+    expect(textsOf(document, '.curate-keys-row').some((row) => row.includes('edit the selected genome’s sequence'))).toBe(false)
     ctx().model.selectGenomes(['X1'])
     const event = new KeyboardEvent('keydown', { key: 's', bubbles: true, cancelable: true })
     window.dispatchEvent(event)

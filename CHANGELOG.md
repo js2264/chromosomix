@@ -126,18 +126,21 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   window: the genome list (MAGs, elements and the unbinned pool, each MAG's quality recomputed from
   its contigs' marker genes as miComplete computes it), one large picture with the other two small
   beside it, and the inspector, under a title bar that carries the stage's controls — the pictures'
-  tabs in its middle, *tidy*, undo, redo, the keys and the inspector's toggle beside its `×`.
-  Contigs are moved, recruited or unbinned, genomes merged, made, dissolved, renamed or retyped,
-  elements linked to the MAGs that host them — by dragging onto a genome, a section or the pool, or
-  by keys — each step undone with ⌘Z. The app suggests merges, recruits, moves and host links from
-  the contacts and the markers; review asks them as questions, an organism's fragments one question,
-  each with its price — every changed MAG's completeness and redundancy before → after, in metaTOR's
-  grades — and auto takes the sure ones, holding back any that would lower a grade. What the curation makes leaves as tables for `metacooler reassign` and
+  tabs and the modes (*apply suggestions*: manual, review, auto) in its middle, *tidy*, undo, redo,
+  the keys and the inspector's toggle beside its `×`. On a narrow window the inspector folds by
+  itself, and its toggle opens it over the pictures. Its words are at the app's own sizes, as the
+  rest of the page is. Contigs are moved, recruited or unbinned, genomes merged, made, dissolved,
+  renamed or retyped, elements linked to the MAGs that host them — by dragging onto a genome, a
+  section or the pool, or by keys — each step undone with ⌘Z. The app suggests merges, recruits,
+  moves and host links from the contacts and the markers; review asks them as questions, an
+  organism's fragments one question, each with its price — every changed MAG's completeness and
+  redundancy before → after, in metaTOR's grades — and auto takes the sure ones, holding back any
+  that would lower a grade. What the curation makes leaves as tables for `metacooler reassign` and
   `metacooler annotate`, never as a written map.
 
 - **A genome's edit of the reference inside the curation — a dev feature (§27.10, §33.4, §33.8).**
-  On the curation stage, *lay out* (or `S`) on one genome opens the reference editor on it, over the
-  stage: its contigs ordered, turned, joined and cut there, and every contig it sends away, sets aside
+  On the curation stage, *edit the sequence…* (or `S`) — first of one genome's acts, haloed in a
+  violet of its own — opens the reference editor on it, over the stage: its contigs ordered, turned, joined and cut there, and every contig it sends away, sets aside
   whole or brings in moved in the curation too, as one step to undo there. Back on the curation stage
   the genome is marked as laid out, and the session draws it in its place as its edit lays it out —
   pixel for pixel the genome's own map through its edit — beside every other genome, with or without
@@ -160,6 +163,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   renamed or merged genome went. A workspace and a link carry the curation.
 
 ### Changed
+
+- **The reference editor's title bar carries its tools — a dev feature (§27.3).** Its modes in the
+  middle (*apply suggestions*: manual, review, auto), the whole assembly, zoom out and in, undo, redo
+  and the inspector's toggle before its `×` — the toggle no longer floats over the sidebar's last
+  card — and the readout alone on the line over the picture. On a narrow window the inspector folds
+  by itself and opens over the picture. Its words are at the app's own sizes, as the page's are; the
+  reader's text scale is for what is drawn on the picture.
+
+- **A stage dialog's settings column is a fold like any other (§26.3).** Its toggle — on the model
+  enlarged and on a figure's *customise* too — says whether the column is open, to a screen reader and
+  by being lit while it is, as the map's settings button does; and the column's own words are at the
+  app's step, as a card in a panel is, rather than at the pictures' text scale.
 
 - **A metagenome's contact map is refused as what it is (§29.3).** A `.metacool`, or a collection of
   them, was refused in the words any HDF5 file this viewer does not read gets — *it is not a cooler*,

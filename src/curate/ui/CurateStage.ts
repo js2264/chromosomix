@@ -32,8 +32,7 @@ import { watchTheme } from '../../ui/analysisPlots'
 import { keyBadge, withKey } from '../../ui/commands'
 import { el } from '../../ui/dom'
 import { iconButton } from '../../ui/icons'
-import type { Modal } from '../../ui/Modal'
-import { stageDialog } from '../../ui/StageDialog'
+import { stageDialog, type StageModal } from '../../ui/StageDialog'
 import { stageKeys } from '../../ui/stageKeys'
 import { recall, remember } from '../../state/UiMemory'
 import type { CurationStore } from '../../state/curation'
@@ -148,6 +147,11 @@ const NOTHING_ON_OFFER = `Nothing on offer: every suggestion is answered, turned
  */
 const NARROW = 720
 const TIGHT = 440
+/**
+ * The narrowest the pictures are kept beside the inspector: narrower, it folds
+ * by itself, and its toggle opens it over them (`StageDialogProps.stageMin`).
+ */
+const PICTURES_BESIDE_INSPECTOR = 480
 /** A held drag rests this long on a target before the pictures draw it made. */
 const DROP_PREVIEW_MS = 300
 /** The MAGs the band's price prints, before it counts the rest; and the genomes a sum names, as the cards' (`cards/card.ts`). */
@@ -158,7 +162,7 @@ const BAND_FORMS = ['whole', 'unsummed', 'bare'] as const
 type BandForm = (typeof BAND_FORMS)[number]
 
 export class CurateStage {
-  private readonly modal: Modal
+  private readonly modal: StageModal
   private readonly model: CurateModel
   private readonly ctx: CurateContext
   private readonly root: HTMLElement
@@ -174,6 +178,8 @@ export class CurateStage {
   private readonly panes: Record<PaneName, CuratePane & { closeUp?(): void; back?(): void }>
   private readonly cards: CurateCard[] = []
   private readonly modes: Record<'manual' | 'review' | 'auto', HTMLButtonElement>
+  /** The modes, beside the tabs in the title bar's middle. */
+  private readonly modesGroup: HTMLElement
   private readonly modeTitles: Record<'manual' | 'review' | 'auto', string>
   private readonly undoButton: HTMLButtonElement
   private readonly redoButton: HTMLButtonElement
@@ -288,13 +294,17 @@ export class CurateStage {
       review: this.modeButton('review', this.modeTitles.review),
       auto: this.modeButton('auto', this.modeTitles.auto),
     }
-    // What the three modes decide, in the words a newcomer reads it by: who
-    // applies the suggestions — the reader, one question at a time, or auto.
-    const modesCard = el(
-      'section',
-      { class: 'edit-card curate-modes-card' },
-      el('h3', { class: 'edit-card-head', text: 'apply suggestions' }),
-      el('div', { class: 'edit-modes', attrs: { role: 'group', 'aria-label': 'Apply suggestions' } }, this.modes.manual, this.modes.review, this.modes.auto),
+    // What the three modes decide, in the words a newcomer reads them by —
+    // who applies the suggestions: the reader, one question at a time, or
+    // auto — in the title bar beside the tabs, as global to the stage as they
+    // are (§33.3).
+    this.modesGroup = el(
+      'div',
+      { class: 'curate-modes', attrs: { role: 'group', 'aria-label': 'Apply suggestions' } },
+      el('span', { class: 'curate-modes-label', text: 'apply suggestions', attrs: { 'aria-hidden': 'true' } }),
+      this.modes.manual,
+      this.modes.review,
+      this.modes.auto,
     )
     this.cardOf = {
       selection: props.parts.selection(this.ctx, {
@@ -309,7 +319,7 @@ export class CurateStage {
       about: props.parts.about(this.ctx, { network: () => this.networkSummary }),
     }
     this.cards.push(...Object.values(this.cardOf))
-    this.side = el('div', { class: 'curate-side-body' }, modesCard)
+    this.side = el('div', { class: 'curate-side-body' })
     this.arrangeSide()
 
     this.offs.push(this.model.subscribe((change) => this.changed(change)))
@@ -328,7 +338,9 @@ export class CurateStage {
 
     this.modal = stageDialog({
       title: `Curate the genomes · ${props.title}`,
-      head: { centre: this.tabs, end: this.tools },
+      head: { centre: el('div', { class: 'curate-head-centre' }, this.tabs, this.modesGroup), end: this.tools },
+      sideName: 'inspector',
+      stageMin: () => this.listColumn.getBoundingClientRect().width + PICTURES_BESIDE_INSPECTOR,
       stage: this.root,
       side: this.side,
       variant: 'modal-curate',
@@ -340,7 +352,6 @@ export class CurateStage {
       onEscape: () => this.escape(),
       onClose: () => this.teardown(),
     })
-    this.dockSideToggle()
     this.place()
     if (typeof ResizeObserver !== 'undefined') {
       const observer = new ResizeObserver(() => this.resized())
@@ -1026,6 +1037,7 @@ export class CurateStage {
         grip.removeEventListener('pointermove', move)
         grip.removeEventListener('pointerup', up)
         remember(this.props.memoryKey(), 'curate:list', column.getBoundingClientRect().width)
+        this.modal.fitSide()
         this.resized()
       }
       grip.addEventListener('pointermove', move)
@@ -1037,6 +1049,7 @@ export class CurateStage {
       const now = column.getBoundingClientRect().width
       column.style.width = `${Math.max(220, Math.min(480, now + (event.key === 'ArrowLeft' ? -24 : 24)))}px`
       remember(this.props.memoryKey(), 'curate:list', column.getBoundingClientRect().width)
+      this.modal.fitSide()
       this.resized()
     })
   }
@@ -1073,35 +1086,6 @@ export class CurateStage {
           ? [c.suggestions, c.selection, c.history, c.export, c.about]
           : [c.suggestions, c.history, c.selection, c.export, c.about]
     for (const card of order) this.side.appendChild(card.element)
-  }
-
-  /**
-   * The inspector's toggle, docked among the title bar's tools beside the keys:
-   * the dialog's shell floats it over the side's foot, where it sat on whatever
-   * card was scrolled under it. Moved, not rebuilt — its press is the shell's —
-   * and named, with the shell's grip, for what they move here: the inspector.
-   */
-  private dockSideToggle(): void {
-    const shell = this.root.closest('.stage-modal')
-    if (shell === null) return
-    const children = [...shell.children] as HTMLElement[]
-    const toggle = children.find((node) => node.classList.contains('stage-side-toggle'))
-    const side = children.find((node) => node.classList.contains('stage-side'))
-    const grip = children.find((node) => node.classList.contains('stage-side-grip'))
-    if (grip !== undefined) {
-      grip.title = 'Drag to make the inspector wider or narrower'
-      grip.setAttribute('aria-label', 'Resize the inspector')
-    }
-    if (toggle === undefined || side === undefined) return
-    this.tools.appendChild(toggle)
-    const name = (): void => {
-      const words = side.classList.contains('hidden') ? 'Show the inspector' : 'Hide the inspector'
-      toggle.title = words
-      toggle.setAttribute('aria-label', words)
-    }
-    name()
-    // After the shell's own listener, which names it for its settings.
-    toggle.addEventListener('click', name)
   }
 
   private frameSuggestion(s: Suggestion): void {
@@ -1505,6 +1489,8 @@ export class CurateStage {
       } else this.list.focus()
       return
     }
+    // The inspector open over the pictures, on a narrow window: folded.
+    if (this.modal.foldDrawer()) return
     if (this.model.running) {
       this.model.stopAuto()
       return
@@ -1540,6 +1526,8 @@ export class CurateStage {
       if (this.closed) return
       this.laidOut = layouts.laidOut()
       this.listColumn.classList.toggle('has-laid-out', this.laidOut.size > 0)
+      // A wider list may leave the inspector no room beside the pictures.
+      this.modal.fitSide()
       this.changed('state')
     })
   }
@@ -1567,7 +1555,7 @@ export class CurateStage {
       [['b', 'e'], 'a new MAG, a new element, of the selected contigs'],
       [['⌫'], 'unbin the contigs, dissolve the genome, or unlink (Backspace or Delete)'],
       [['r', 'F2'], 'rename the selected genome'],
-      ...(this.props.layouts === undefined ? [] : [[['s'], 'lay the selected genome out: its contigs ordered, turned and joined, in the reference editor'] as [string[], string]]),
+      ...(this.props.layouts === undefined ? [] : [[['s'], 'edit the selected genome’s sequence: its contigs ordered, turned, joined and cut, in the reference editor'] as [string[], string]]),
       // Printed as every other part prints them: the contact map's close-up, the selection card, the chooser.
       [['⏎', 'shift+⏎'], 'the contigs of the selected genomes close up, and back'],
       [['/'], 'filter the list'],

@@ -16487,7 +16487,18 @@ file's order, which is what lets an edit redraw it without a read; the map behin
 as the reader left it. A deck's other cells stay behind the stage, untouched; the stage is not a deck
 and never becomes one.
 
-**Escape never closes it.** Escape cancels, innermost first — a menu, a drag, the selection — and when
+**Its title bar carries its controls**, as the curation stage's does (§33.3): the modes in its middle,
+under the words they decide — *apply suggestions*: manual, review, auto (§27.6) —, and before its `×`
+the view's tools (the whole assembly, zoom out, zoom in), undo and redo, and the sidebar's toggle,
+*Hide the inspector*, over no card; the readout keeps the line at the head of the picture. Where the
+picture would be narrower than the rail and 330 px of map beside the sidebar, the sidebar folds by
+itself, and its toggle opens it over the picture, a drawer at its own width; wide enough again, it is
+back beside the picture, unless the reader folded it (`StageDialogProps.stageMin`). Its words and
+controls are at the app's own steps, as the rest of the page is; the reader's text scale is for what
+is drawn on the picture, the rail's labels and the dot plot's words with it.
+
+**Escape never closes it.** Escape cancels, innermost first — a menu, a drag, the sidebar open over
+the picture, the selection — and when
 there is nothing to cancel it does nothing: the stage is closed by its `×` alone, and a press on the
 dimmed page around it does not close it either. The Analysis drawer is not a modal because a modal
 "answers Escape by destroying what is being read"; a stage that must be modal has to answer it some
@@ -16557,8 +16568,8 @@ What is on it:
   a split's one point — and a label, its number, its kind and its confidence (`1 turn 98%`), at the
   bracket's middle, pushed apart and kept inside the map's height, only for what is in view; a press
   frames it. The list in the sidebar is lit with them.
-- **The sidebar**: the mode (*manual*, *review*, *auto*, §27.6 — the last two greyed until the
-  suggestions have been counted); **selection**, what is selected and what can be done with it, each act
+- **The sidebar**, the inspector — the mode (*manual*, *review*, *auto*, §27.6 — the last two greyed
+  until the suggestions have been counted) being the title bar's: **selection**, what is selected and what can be done with it, each act
   printing its key; **history**, every step in words, the cursor lit and undone steps greyed, a press
   on a row going back or forward to it; **sequences**, the edited assembly — a press selects a whole
   sequence and frames it — with what was set aside, and why, at the foot, each with *put back*;
@@ -16569,7 +16580,7 @@ What is on it:
   *Built*, each a card as the panels' are — bordered and raised on the sunken ground of the column, so
   that one reads as ending where the next begins — in the order *selection*, *sequences* (and on a
   metagenome the genome's card), *history*, *suggestions*, **export** (§27.8) and *picture*; in review
-  and auto mode, whose work is the suggestions, their card comes first, under the modes. A step a
+  and auto mode, whose work is the suggestions, their card comes first. A step a
   suggestion made is tagged in the history — *suggested* or *auto* — with what it rested on; and on the
   sequences card, a **grip** before each row that drags the sequence to another place in the order —
   a line across the list where it would go, one `place` step on the drop, nothing joined — and takes
@@ -17204,7 +17215,7 @@ genome's contigs now — held and not kept until the reader makes a step there
 (`EditStore.provisional`). The genome card names the partners of its contigs by the curated genomes
 as they stand, not the map drawn (`genomeLinks`' `assignment`), the heading names the genome by its
 name now, and the contig → MAG table is the curation's. The stage opens from the curation stage, over
-it (`S`, §33.3) — Escape speaks to the stage on top, and only to it — and goes back to it on closing;
+it (*edit the sequence…*, `S`, §33.3) — Escape speaks to the stage on top, and only to it — and goes back to it on closing;
 from the session, on the curated genome in view or picked, the session drawn again with it laid out
 once it closes (§33.4).
 
@@ -18024,14 +18035,18 @@ which starts a curation of its own in its place, drawn as any other.
 *Curate the genomes* — the palette's, or a press on the heading's word on the genomes (§33.4) —
 opens a stage on the whole window (`stageDialog`, §27.3's shell), titled `Curate the genomes ·
 <map>`. Its **title bar carries its controls**, so the pictures keep the height a row of them would
-take: the pictures' tabs in the middle of the bar, and *tidy*, undo, redo, the keys' sheet and the
-inspector's toggle before its `×`, a hairline between (`ModalProps.head`); where the bar cannot hold
-the title's first words — twelve of its ems, the rest cut short and whole under the pointer — beside
-them, the tabs go on a line of their own under the title. Its controls are in the scale of its
-words — the title, every button, chip, tab and key cap, the inspector's and the chooser's too, at
-the app's steps times the reader's text scale — and *tidy* bordered as the tools beside it. **Escape never closes it**: it cancels the innermost thing — the keys' sheet, a chooser, a
+take: in the middle of the bar the pictures' tabs and, behind a hairline, the modes under the words
+they decide, *apply suggestions*: manual, review, auto; and *tidy*, undo, redo, the keys' sheet and
+the inspector's toggle before its `×`, a hairline between (`ModalProps.head`). Where the bar cannot
+hold the title's first words — twelve of its ems, the rest cut short and whole under the pointer —
+beside them, the tabs and the modes go on a line of their own under the title. Its words and
+controls are at the **app's own steps**, as the rest of the page is — the title as every dialog's,
+every button, chip, tab and key cap, the list's rows, the inspector's cards and the chooser's at the
+steps a panel's are —, and *tidy* bordered as the tools beside it; the reader's text scale is for
+what is drawn on the pictures (`ui/textScale.ts`), and the contact map's key, which reads with
+them. **Escape never closes it**: it cancels the innermost thing — the keys' sheet, a chooser, a
 drag, a picture's own press or lasso in flight, a rename, a field's text (and then the field: the
-keyboard goes back to the list), an auto
+keyboard goes back to the list), the inspector open over the pictures, an auto
 run, the selection — and `×` alone closes it, which loses nothing: every step is kept with the file
 as it is made, and the session is redrawn through the curation (§33.4).
 
@@ -18042,11 +18057,15 @@ map, the host map or the GC × coverage scatter large, kept per file; in review 
 one the question's evidence is in, the contact map for a merge, a move or a recruit, the host map for
 a link. Narrower than 720 px — a laptop's window — the two small ones go in a strip under the large
 one, still lit with it; narrower than 440 px the large one shows alone and tabs choose it. The **inspector** on the
-right is the reference stage's sunken column of cards (§27.3), in the mode's order: *apply
-suggestions* (manual, review or auto), then the selection, the history, the suggestions, the export
-and *about the map* — the suggestions first in review and in auto —; its toggle, *Hide the
-inspector*, stands among the title bar's tools, over no card. Every column keeps its width per file, and its
-two dividers are alike: the column's hairline, its grip shown under the pointer or the keyboard.
+right is the reference stage's sunken column of cards (§27.3), in the mode's order: the selection,
+the history, the suggestions, the export and *about the map* — the suggestions first in review and in
+auto —; its toggle, *Hide the inspector*, stands among the title bar's tools, over no card. **Where
+the pictures would be narrower than 480 px beside it, the inspector folds by itself**, and its toggle
+opens it over them — a drawer at its own width, which Escape folds — rather than squeezing them;
+the window wide enough again, it is back beside the pictures, unless the reader folded it
+(`StageDialogProps.stageMin`, asked again when the list's width changes). Every column keeps its
+width per file, and its two dividers are alike: the column's hairline, its grip shown under the
+pointer or the keyboard.
 
 **One selection, one hover**, in every part: whole genomes, or contigs, one kind at a time; a press
 selects, ⌘/Ctrl toggles, ⇧ extends. The genome under the pointer is lit in the list, the maps and
@@ -18081,8 +18100,8 @@ it the grade went (1.1004 is `1.101`), here, in the band and in the cards — or
 host (`→ 00003_00001`, `3 hosts`, `no host`; an element's short name takes its own width, its host
 the rest), and a disc counting the suggestions that name it; the
 MAGs' head names their columns, *length · complete · redundant*. Each column is as wide as its widest
-value in the rows' own type, and the list opens wide enough for them at any text scale (380 px at
-the default), giving way as it narrows — the MAGs' prefix to their legend, then a genome's length,
+value in the rows' own type, and the list opens wide enough for them — their words, and the pixels
+a row's padding, swatch and disc take whatever the type (305 px), giving way as it narrows — the MAGs' prefix to their legend, then a genome's length,
 the legend, the change, the GC. It opens on its contigs, longest first, each by its name — an
 assembler's without the length it carries, `NODE_7229` for `NODE_7229_len_201310`, which a pasted
 list finds too — with its length and GC content; or, where a suggestion would move it, that
@@ -18182,7 +18201,9 @@ it would take them. Nothing is dropped on it: clouds overlap, and a drop is neve
 weighted and not, the genomes it meets most, each with its merge; several genomes' sum and their
 affinities with one another; contigs' homes — with the acts on it and their keys, each step priced while
 the pointer or the keyboard rests on its act; for one genome, where the reference editing is on,
-*lay out* (`S`), its edit opened over the stage, *laid out…* where its edit lays it out. Every affinity there is put against the map's background:
+**edit the sequence…** (`S`), first of its acts, the row's whole width, and haloed in a second
+accent (`--accent-alt`, a violet: the door to another tool, never read as the blue that says
+*pressed*) — its edit opened over the stage, its title saying so where its edit lays it out. Every affinity there is put against the map's background:
 `0.39 (at least 16× background)` from the cautious lower bound its contacts allow, `(within the
 background)` where only the bound falls in it, and at or under it `below the background`, its digits
 noise; *at least* is said once, under the first list that leans on it, and a genome met no more than
@@ -18249,9 +18270,9 @@ picture — the keys the digits are printed on, whatever the layout types there 
 genome — MAGs with MAGs and elements with elements, the readout saying so otherwise; `L` link the
 selected element to the selected MAG, or *link to…* for elements or one MAG; `B` and `E` a new MAG or
 element of the selected contigs, or the selected genomes made one; `Delete` unbins contigs,
-dissolves genomes, unlinks a selected element and MAG; `F2`/`R` rename; `S` lays the selected
-genome out — its edit of the reference opened over the stage (§27.10), back here once it closes —
-where the reference editing is on; `Enter` the selected
+dissolves genomes, unlinks a selected element and MAG; `F2`/`R` rename; `S` edits the selected
+genome's sequence — its edit of the reference opened over the stage (§27.10), back here once it
+closes — where the reference editing is on; `Enter` the selected
 genomes' contigs close up, `⇧Enter` back; `/` the list's filter; ⌘Z, ⇧⌘Z undo and redo; `Y N ← → ↓ ↑
 Space` in review; `0 + −` the picture under the pointer; `?` this list, which prints its keys as
 the parts do (`⏎`, `⇧⏎`, `⌫`). Enter presses a focused
