@@ -1,6 +1,13 @@
 {
-  "latest": "fc671ed",
+  "latest": "4647580",
   "versions": [
+    {
+      "commit": "4647580",
+      "version": "0.21.0",
+      "date": "2026-11-25T19:30:59+01:00",
+      "subject": "Reorder tabs by dragging them along the strip (#186)",
+      "tag": ""
+    },
     {
       "commit": "fc671ed",
       "version": "0.21.0",
@@ -135,13 +142,6 @@
       "tag": "v0.21.0"
     },
     {
-      "commit": "2767c78",
-      "version": "0.20.0",
-      "date": "2026-11-05T22:53:09+01:00",
-      "subject": "refactor: update notebooks workflow to publish independently of laptop render; improve summary handling",
-      "tag": ""
-    },
-    {
       "commit": "40ec1ec",
       "version": "0.20.0",
       "date": "2026-11-04T23:19:15+01:00",
@@ -262,13 +262,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 186,
-      "commit": "35b7730",
-      "title": "Reorder tabs by dragging them along the strip",
-      "branch": "js/great-shannon-p2dq3w",
-      "date": "2026-11-25T17:56:54Z"
-    },
     {
       "number": 184,
       "commit": "b133de9",
