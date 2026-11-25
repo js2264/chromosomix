@@ -1130,9 +1130,12 @@
 /* ---- The export card (cards/ExportCard.ts) ---- */
 
 /* Four tables, two by two: each button named for its file. */
+/* Two a row where a name like `contig → genome ✓` fits whole in each, one a
+   row where it does not — in the stage's own type, which is scaled — never a
+   name cut to `contig → ge…`. */
 .curate-export-files {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10.5em), 1fr));
   gap: 0.3rem;
 }
 .curate-export-file {
