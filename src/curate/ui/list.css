@@ -1,0 +1,531 @@
+/* The curation stage's genome list (SPECS §33.3). */
+
+/* ---------------------------------------------------------------------------
+   The genome list.
+   ------------------------------------------------------------------------- */
+
+.curate-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  container-type: inline-size;
+  background: var(--bg);
+  font-size: var(--step--1);
+  /* The rows' em: a column's width in it scales with the text, wherever it is drawn. */
+  --row-em: var(--step--1);
+}
+
+.curate-list-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem 0.45rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.curate-filter {
+  width: 100%;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--text);
+  font: inherit;
+}
+.curate-filter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.curate-filter-note {
+  color: var(--text-dim);
+  font-size: var(--step--2);
+}
+.curate-filter-missing {
+  color: var(--warn);
+}
+
+.curate-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.curate-sorts {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.curate-sort-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--text-dim);
+  font-size: var(--step--2);
+}
+.curate-sort {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.05rem 0.2rem;
+}
+
+.curate-list-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.curate-list-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  outline: none;
+}
+.curate-list-scroll:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--accent-soft);
+}
+
+.curate-list-spacer {
+  width: 1px;
+}
+
+.curate-row,
+.curate-list-sticky {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  /* A margin at the left for the marks a row wears — the selection's rule,
+     the review's rule and disc —, clear of the chevron. */
+  padding: 0 0.55rem 0 0.7rem;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+
+.curate-row:hover {
+  background-color: var(--bg-sunken);
+}
+
+.curate-row.is-lit {
+  background-color: var(--bg-muted);
+}
+
+/* What the question in review names, genomes or contigs: a tint, a broken
+   rule down the margin and a disc in it — the selection's are a fuller fill
+   and a whole rule, so one row can say both, and the disc says it whichever
+   wins the fill. */
+.curate-row.is-current {
+  background-color: color-mix(in srgb, var(--accent-soft) 60%, var(--bg));
+}
+.curate-row.is-current:not(.is-selected):is(:hover, .is-lit) {
+  background-color: color-mix(in srgb, var(--accent-soft) 85%, var(--bg-muted));
+}
+.curate-row.is-current::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: repeating-linear-gradient(to bottom, var(--accent) 0 4px, transparent 4px 7px);
+}
+.curate-row.is-current::after {
+  content: '';
+  position: absolute;
+  left: 0.3rem;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* A selected row: a fill and a rule, its text as it was (§26.3). */
+.curate-row.is-selected {
+  background-color: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* A genome holding selected contigs — a lasso's, a filter's, out of sight
+   in its closed row —: the selection's rule at half its height, and how many
+   in the selection's colours beside its name, in the room its length gives
+   up (the length is in the row's title, as a changed row's is); the pool's
+   head says its own. */
+.curate-row-genome.has-held {
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-size: 3px 50%;
+  background-position: left center;
+  background-repeat: no-repeat;
+}
+.curate-row-genome.has-held .curate-row-length {
+  display: none;
+}
+.curate-row-held {
+  display: none;
+  flex: 0 0 auto;
+  margin-right: auto;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+.curate-row.has-held > .curate-row-held {
+  display: block;
+}
+/* Beside a change chip, the chip keeps the room that pushes the numbers right. */
+.curate-row.has-change > .curate-row-held {
+  margin-right: 0;
+}
+
+.curate-row.is-active {
+  outline: 1px dashed var(--accent);
+  outline-offset: -2px;
+}
+
+.curate-row-section,
+.curate-list-sticky {
+  gap: 0.35rem;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  font-size: var(--step--2);
+  cursor: pointer;
+}
+.curate-list-sticky {
+  z-index: 2;
+}
+.curate-row-section.is-drop-target,
+.curate-row-genome.is-drop-target,
+.curate-row-contig.is-drop-target {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  background: var(--accent-soft);
+}
+
+.curate-section-chevron {
+  display: inline-flex;
+  width: 0.85rem;
+  justify-content: center;
+}
+/* The prefix gives way from its end, its `…` kept outside the part that
+   shrinks: `MetaTOR_MGE_…`, cut short `MetaTOR_M…`, never `MetaTOR_MGE…`. */
+.curate-section-prefix {
+  display: inline-flex;
+  min-width: 0;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-faint);
+}
+.curate-section-prefix-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+.curate-section-count {
+  margin-left: auto;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+/* The MAGs' count beside their title, and their columns named at the right. */
+.curate-section-count.is-beside {
+  margin-left: 0;
+}
+.curate-section-legend {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-faint);
+}
+
+.curate-row-disclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.85rem;
+  height: 1rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.curate-row-disclosure:hover {
+  color: var(--accent);
+}
+
+/* A MAG's swatch is filled, an element's a ring, in the genome's own hue. */
+.curate-swatch {
+  flex: 0 0 auto;
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  background: var(--swatch);
+}
+.curate-swatch-element {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--swatch);
+}
+
+.curate-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+/* A genome's short name whole, before its change chip: the chip gives way. */
+.curate-row-genome .curate-row-name {
+  flex: 0 1 auto;
+  min-width: min(11ch, 100%);
+}
+/* An element's short name is short (`00003`): it takes its own width, and its
+   host the room a MAG's eleven characters would keep — `→ 00706_00000` whole. */
+.curate-row-genome.is-element .curate-row-name {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 45%;
+}
+
+.curate-row-contig .curate-row-name {
+  color: var(--text-dim);
+}
+
+.curate-row-indent {
+  flex: 0 0 1.35rem;
+}
+
+.curate-change {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: auto;
+}
+/* A genome its edit of the reference lays out (§27.10): a mark beside its name that never gives way. */
+.curate-laid-out {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+}
+.curate-laid-out svg {
+  display: block;
+}
+
+/* The numbers and the suggestions' disc never give way: the name and the change do. */
+.curate-row-quality,
+.curate-row-redundant,
+.curate-row-suggested {
+  flex-shrink: 0;
+}
+
+.curate-row-length,
+.curate-row-gc,
+.curate-row-complete,
+.curate-row-redundant {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  text-align: right;
+}
+/* Each column as wide as its widest value in the rows' own type ('867.4 kb',
+   'GC 36%', '1.049'), so a scaled text never runs one value into the next. */
+.curate-row-length {
+  width: calc(4.25 * var(--row-em));
+}
+.curate-row-genome .curate-row-length {
+  /* '6.84 Mb': a genome's length is megabases, or kilobases with no decimal. */
+  width: calc(4.05 * var(--row-em));
+}
+.curate-row-gc {
+  width: calc(4.4 * var(--row-em));
+  color: var(--text-faint);
+}
+.curate-row-redundant {
+  /* Room for a third decimal near a grade's bound (1.049). */
+  width: calc(2.75 * var(--row-em));
+}
+/* A changed genome's length gives its room to the change (both are in the
+   row's title); a contig's length and GC to the offer that would move it —
+   which contig, where to and how sure, whole. */
+.curate-row.has-change .curate-row-length,
+.curate-row-contig.has-offer .curate-row-length,
+.curate-row-contig.has-offer .curate-row-gc {
+  display: none;
+}
+.curate-row-contig .curate-row-name {
+  min-width: min(10ch, 100%);
+}
+.curate-row-redundant.is-warn {
+  color: var(--warn);
+}
+
+/* The completeness over its bar: the bar a line under the number, no width of its own. */
+.curate-row-quality {
+  position: relative;
+  flex: 0 0 auto;
+  width: calc(2.65 * var(--row-em));
+  text-align: right;
+}
+.curate-row-quality.is-none {
+  color: var(--text-faint);
+}
+
+.curate-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.2rem;
+  height: 0.18rem;
+  border-radius: 999px;
+  background: var(--bg-muted);
+  overflow: hidden;
+}
+.curate-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--text-dim);
+}
+.curate-bar-fill.is-high {
+  background: var(--ok);
+}
+
+.curate-row-hosts {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-dim);
+}
+.curate-row-hosts.is-faint {
+  color: var(--text-faint);
+}
+
+.curate-row-suggested {
+  flex: 0 0 auto;
+  /* One width for one and two digits, so every row's numbers stand in one column. */
+  min-width: calc(1.5 * var(--row-em));
+  height: 1.2rem;
+  padding: 0 0.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--step--2);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.curate-row-suggested.is-none {
+  background: none;
+  cursor: default;
+}
+
+/* A contig's offer whole — where it would go and how sure —: its name gives way first. */
+.curate-row-offer {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+.curate-row-moved {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-faint);
+}
+
+.curate-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg-raised);
+  color: var(--text);
+  font: inherit;
+}
+.curate-rename.is-refused {
+  border-color: var(--danger);
+}
+
+/* Narrow, in the rows' em, so the steps follow the text scale: the MAGs'
+   prefix gives way to their legend (it is in the title's title), then a
+   genome's length — in the row's title and the selection card —, the legend,
+   the change chip (its words are in the name's title), and the GC. */
+@container (max-width: 25em) {
+  .curate-section-prefix.is-mags {
+    display: none;
+  }
+}
+@container (max-width: 21.8em) {
+  .curate-row-genome .curate-row-length {
+    display: none;
+  }
+}
+@container (max-width: 21em) {
+  .curate-section-legend {
+    display: none;
+  }
+}
+@container (max-width: 18.5em) {
+  .curate-change {
+    display: none;
+  }
+}
+@container (max-width: 16em) {
+  .curate-row-gc {
+    display: none;
+  }
+}
+
+/* The dock: three drop targets at the list's foot, lit while something is held. */
+.curate-dock {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.3rem;
+  padding: 0.4rem 0.5rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-sunken);
+}
+.curate-dock-target {
+  padding: 0.3rem 0.2rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text-faint);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--step--2);
+  transition: border-color 120ms, color 120ms, background 120ms;
+}
+body.is-curate-dragging .curate-dock-target {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.curate-dock-target.is-drop-target {
+  background: var(--accent-soft);
+  border-style: solid;
+}

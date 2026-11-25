@@ -64,5 +64,8 @@ export function stepText(step: EditStep): string {
       const count = step.sequences.length
       return `lay out as in ${step.from} · ${count.toLocaleString('en-US')} sequence${count === 1 ? '' : 's'}`
     }
+    default:
+      // A step a newer build wrote, kept and not applied (see `apply`).
+      return `a step this version does not know (${String((step as { op?: unknown }).op)})`
   }
 }

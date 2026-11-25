@@ -127,7 +127,84 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   the figure exports as PNG or PDF — the whole picture at rest, the window as framed when magnified.
   `scripts/ui-ideogram-view.mjs` drives it on the yeast and human demos.
 
+- **Curate the genomes: a stage that curates a metagenome's binning — a dev feature (§33.3).** The
+  palette's *Curate the genomes*, or the heading's word on the genomes, opens a stage on the whole
+  window: the genome list (MAGs, elements and the unbinned pool, each MAG's quality recomputed from
+  its contigs' marker genes as miComplete computes it), one large picture with the other two small
+  beside it, and the inspector, under a title bar that carries the stage's controls — the pictures'
+  tabs and the modes (*apply suggestions*: manual, review, auto) in its middle, *tidy*, undo, redo,
+  the keys and the inspector's toggle beside its `×`. On a narrow window the inspector folds by
+  itself, and its toggle opens it over the pictures. Its words are at the app's own sizes, as the
+  rest of the page is. Contigs are moved, recruited or unbinned, genomes merged, made, dissolved,
+  renamed or retyped, elements linked to the MAGs that host them — by dragging onto a genome, a
+  section or the pool, or by keys — each step undone with ⌘Z. The app suggests merges, recruits,
+  moves and host links from the contacts and the markers; review asks them as questions, an
+  organism's fragments one question, each with its price — every changed MAG's completeness and
+  redundancy before → after, in metaTOR's grades — and auto takes the sure ones, holding back any
+  that would lower a grade. What the curation makes leaves as tables for `metacooler reassign` and
+  `metacooler annotate`, never as a written map.
+
+- **A genome's edit of the reference inside the curation — a dev feature (§27.10, §33.4, §33.8).**
+  On the curation stage, *edit the sequence…* (or `S`) — first of one genome's acts, haloed in a
+  violet of its own — opens the reference editor on it, over the stage: its contigs ordered, turned, joined and cut there, and every contig it sends away, sets aside
+  whole or brings in moved in the curation too, as one step to undo there. Back on the curation stage
+  the genome is marked as laid out, and the session draws it in its place as its edit lays it out —
+  pixel for pixel the genome's own map through its edit — beside every other genome, with or without
+  a curation. A curation that moves a genome's contigs later leaves its edit as it was: the drawing
+  follows the curation, breaking a scaffold where a contig left. The export card writes every genome
+  as drawn, as one AGP, one FASTA (from the assembly's sequence loaded in the session) and a sequence
+  → genome table. Escape now closes only the dialog on top.
+
+- **The session drawn through a curation of the genomes — a dev feature (§33.4).** A metagenome with
+  a curation kept for it opens as the map `metacooler reassign` writes from the curation's contig →
+  genome table: its contigs regrouped, the pool first and the genomes by name, each genome's contigs
+  longest first — every view, table and task reading the curated genomes, and a test holding the
+  map, pixel for pixel, to `reassign`'s own file of it; the export card's `reassign` command asks for
+  that layout, `--layout genome-then-length`, whatever order the file kept. The genomes table has a `kind` and a
+  `curation` column and leaves a changed genome's file columns empty; the contigs table names each
+  contig's genome; the File card counts MAGs and elements apart and says how many steps the curation
+  has (`curation 17 steps`); the
+  Binning QC card sets the file's pool beside the curated one. The heading's word reads `genomes ·
+  curated · 7 steps`, and its arrow puts the file's binning back, carrying the view to where a
+  renamed or merged genome went. A workspace and a link carry the curation.
+
 ### Changed
+
+- **The reference editor's title bar carries its tools — a dev feature (§27.3).** Its modes in the
+  middle (*apply suggestions*: manual, review, auto), the whole assembly, zoom out and in, undo, redo
+  and the inspector's toggle before its `×` — the toggle no longer floats over the sidebar's last
+  card — and the readout alone on the line over the picture. On a narrow window the inspector folds
+  by itself and opens over the picture. Its words are at the app's own sizes, as the page's are; the
+  reader's text scale is for what is drawn on the picture.
+
+- **A stage dialog's settings column is a fold like any other (§26.3).** Its toggle — on the model
+  enlarged and on a figure's *customise* too — says whether the column is open, to a screen reader and
+  by being lit while it is, as the map's settings button does; and the column's own words are at the
+  app's step, as a card in a panel is, rather than at the pictures' text scale.
+
+- **A metagenome's contact map is refused as what it is (§29.3).** A `.metacool`, or a collection of
+  them, was refused in the words any HDF5 file this viewer does not read gets — *it is not a cooler*,
+  over a list of a cooler's own keys — and a `.metacool` is a cooler. The refusal now says it is a
+  metagenome's contact map, a cooler with a genome layer over its contigs, which this viewer does not
+  open.
+
+- **The goldens of metacooler's fixtures are rebuilt with 0.4.0, the release CI installs.** The
+  fixtures metacooler writes now carry each contig's intra-contig QC counts
+  (`qc_intra_contig_short`, `qc_intra_contig_long`) and, for a map made from pairs, the QC block's
+  distance threshold of 1,001 bp; the goldens record them, and the version that wrote them.
+
+- **The mock community's demo is MM133: 50 MAGs and 127 mobile elements with their hosts, and the
+  marker genes of every contig — a dev feature (§33).** `demo/metagenomics/mock-community/` holds
+  `MM133.metacool`, `MM133.mmetacool` and `MM133.chromosomix.json` in place of
+  `Mock_microbial_community.*`, an older binning of the same library: the same 20,566 contigs and
+  7,081,501 pixels, binned by metaTOR 1.4 into 50 MAGs and 127 elements (`MetaTOR_MGE_*`, `mge`
+  true), with `/clusters` holding its rounds and the elements' hosts, and every contig's markers as
+  `metator markers` stores them (`/contigs/markers_Bact105` and `markers_Arch131`). The collection
+  is its zoomify at 1, 2 and 4 kb, each entry with the clusters and the markers, and the workspace
+  opens it on the genomes table as before. It is the demo curating the genomes is shown and tested
+  on. The demo's goldens are rebuilt from it — the contigs' order follows the binning, so every bin
+  id moves — and the galleries open it with the dev features on, `ui-edit-metagenome` on
+  MM133_metator_00001_00002.
 
 - **A map whose contigs are not grouped by genome is told how to group them without its pairs (a dev
   feature, §10).** The refusal said to re-create the map from its pairs. It now leads with
@@ -465,7 +542,8 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 - **The mock microbial community from the lab's store (a dev feature, §29).** Its files were deleted
   from the lab's bucket, so the store's *Mock microbial community* figure and its `.metacool` and
-  `.mmetacool` rows went with them. The files stay in the repository, where the tests read them.
+  `.mmetacool` rows went with them. The community's map stays in the repository, where the tests read
+  it: MM133 now, under *Changed*.
 - ***match all resolutions*, from the deck's bar (§16.2, §16.5).** Every map is read at the deck's
   one resolution already, so the press had nothing left to do; **match all scales** stays. With it
   goes the way a change of the first map's rung reached the other maps, reopening each at that rung:
@@ -474,6 +552,22 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **An edit of the reference kept with a file is drawn again after a reload, a workspace or a link
+  (§27.7).** The stage checked the kept edit against the sequences the reader answered with — which,
+  with the session drawn through that very edit, were the edited ones — and refused it as made on
+  another assembly: it opened on an empty history, the first step overwrote the edit being drawn, and
+  the heading's revert arrow put the word back to *as in the file* while the map stayed edited. The
+  edit is checked against the file's own sequences now.
+- **A key pressed on a stage no longer reaches the session behind it (§26.4).** Any letter the
+  reference editor had no use for — `t`, `g`, a digit, `<` — ran a command on the session under the
+  stage, folding its columns or stepping its map; the window's keys now stand down while any dialog
+  is open, but for the dialog's own — the enlarged 3D model's letters. On the editor, ↓ in a
+  right-click menu no longer also moves the selection a place, Space and Enter press a focused button
+  instead of panning the map, and the arrows move a focused grip.
+- **A step this build does not know no longer fails the open (§29.4).** A workspace or a link from a
+  newer build whose edit held an operation this one has never heard of threw while the edit was
+  replayed, inside the reader's open, so the session was lost. The step is kept in the history,
+  changes nothing, and is named there as *a step this version does not know*.
 - **The line under a pooled map counts every sequence on it (§5.2).** Where a window is too wide to
   read bin for bin, the contigs too small for a cell share one, labelled with the first of them —
   and the line under the map counted one sequence a cell, measuring the first alone: a MAG of 59

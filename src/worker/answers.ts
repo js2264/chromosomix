@@ -21,8 +21,8 @@
  * kept as well (`render/heatmap.ts`, `pooledOf`).
  *
  * **What it is kept against** is the map the worker holds, which only a few
- * requests change. An `open` names it — the file, its source, the edit it is
- * drawn through, its import, the page's dev switch — and answers are filed under
+ * requests change. An `open` names it — the file, its source, the edit or the
+ * curation it is drawn through, its import, the page's dev switch — and answers are filed under
  * that name, so switching to another resolution and back finds them again. A
  * total drawn to (`resample`), a cell set (`selectCells`), the weights balanced
  * by (`selectWeight`), a `close`, a failed
@@ -70,15 +70,22 @@ const NEUTRAL: ReadonlySet<RequestKind> = new Set<RequestKind>([
   'suggest',
   'refine',
   'genomeLinks',
+  'curationBase',
+  'curationNetwork',
+  'curationState',
+  'curationFocus',
   'cancel',
 ])
 
 /**
  * Fields of a request that are not part of the question: when it runs, not what
  * it asks. A credential is how a source is reached, and is refreshed under a
- * session that does not change.
+ * session that does not change. A curation an `open` carries is `held` beside
+ * the fingerprint of the binning it folds into (§33.4), and that is what names
+ * the map: the history itself, a step per contig moved, would be pasted into
+ * the key of every answer kept of it.
  */
-const NOT_ASKED = new Set(['id', 'background', 'credential', 'headers'])
+const NOT_ASKED = new Set(['id', 'background', 'credential', 'headers', 'held'])
 
 /** What a page lends kept answers, out of each GiB the machine reports. */
 const SHARE_OF_MEMORY = 1 / 16

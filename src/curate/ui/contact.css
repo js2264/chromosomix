@@ -1,0 +1,204 @@
+/* The curation stage (SPECS §33.3): contact. Tokens only, both themes from the app's own. */
+
+/* ---------------------------------------------------------------------------
+   The contact map: a head (the crumb, the close-up's act, the zoom), then
+   the plot — the picture on its paper, one canvas over it that draws the
+   furniture and takes the hand, and the key under the map.
+   ------------------------------------------------------------------------- */
+
+.curate-contact {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: var(--bg);
+  container-type: inline-size;
+}
+
+.curate-contact-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex: 0 0 auto;
+  min-height: 2.5rem;
+  padding: 0.25rem 0.5rem 0.25rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--step--1);
+}
+.curate-contact.is-small .curate-contact-head {
+  display: none;
+}
+
+/* The crumb: `genomes`, then the close-up's genomes. Short of room, the
+   counts give way first, and the names last. */
+.curate-crumbs {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.curate-crumb {
+  flex: 0 0 auto;
+  padding: 0.1rem 0.35rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.curate-crumb:hover,
+.curate-crumb:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
+}
+.curate-crumb[aria-current='page'] {
+  color: var(--text);
+  font-weight: 600;
+  cursor: default;
+}
+.curate-crumb[aria-current='page']:hover {
+  background: none;
+}
+.curate-crumb-sep {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+}
+.curate-crumb-here {
+  flex: 0 1 auto;
+  min-width: 4em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+  font-weight: 600;
+}
+.curate-crumb-count {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.curate-crumb-count:empty {
+  display: none;
+}
+
+/* The one act the map's head offers: the close-up of the selection. */
+.curate-contact-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.curate-contact-tools {
+  display: inline-flex;
+  gap: 0.15rem;
+  flex: 0 0 auto;
+}
+
+/* Narrow: the act keeps its key, the crumb its names. */
+@container (max-width: 26rem) {
+  .curate-contact-act > span:first-child {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   The plot.
+   ------------------------------------------------------------------------- */
+
+.curate-contact-plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The picture: a figure, on its paper in either theme, framed by a hairline. */
+.curate-contact-picture {
+  position: absolute;
+  box-shadow: 0 0 0 1px var(--border);
+  pointer-events: none;
+}
+
+.curate-contact-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  outline: none;
+  touch-action: none;
+  user-select: none;
+}
+.curate-contact-overlay:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.curate-contact-overlay[data-cursor='crosshair'] {
+  cursor: crosshair;
+}
+.curate-contact-overlay[data-cursor='pointer'] {
+  cursor: pointer;
+}
+.curate-contact-overlay[data-cursor='grab'] {
+  cursor: grab;
+}
+.curate-contact-overlay[data-cursor='grabbing'] {
+  cursor: grabbing;
+}
+
+/* A thumbnail beside the large picture: the stage's head above it makes it large. */
+.curate-contact.is-small .curate-contact-overlay {
+  pointer-events: none;
+}
+
+/* The key: what a colour means, on the map's own ramp, under the map as a
+   figure's — its right edge on the map's, placed by the pane, and in the
+   reader's text scale, as the words drawn on the map are (`.map-key`'s). */
+.curate-contact-key {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: calc(100% - 12px);
+  font-size: calc(var(--step--1) * var(--text-scale, 1));
+}
+.curate-contact.is-small .curate-contact-key {
+  display: none;
+}
+.curate-key-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.curate-key-ramp {
+  display: block;
+  flex: 0 0 auto;
+}
+
+/* What the map is waiting for, or why it draws nothing. */
+.curate-contact-note {
+  position: absolute;
+  z-index: 1;
+  transform: translate(-50%, -50%);
+  max-width: min(24rem, 84%);
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-1);
+  color: var(--text-dim);
+  font-size: var(--step--1);
+  line-height: 1.45;
+  text-align: center;
+}

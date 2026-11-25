@@ -80,6 +80,21 @@ import {
   type Quantizer,
 } from './picture'
 import { BinLens, LensStore, lensFor, lensedHandle, sequenceTable } from './lens'
+import {
+  curatedBins,
+  curatedContigs,
+  curatedGenomes,
+  curatedHandle,
+  curationLayout,
+  followingStore,
+  laidOutContigs,
+  laidOutRows,
+  narrowTable,
+  type CuratedMap,
+} from './curationLens'
+import { CuratedBinning, curationMismatch, type Curation } from '../genome/curation'
+import { readFileBinning, type FileBinningRead } from '../curate/base'
+import { curatedMapKey, drawnLayouts } from '../curate/layouts'
 import { CoarseGrid } from './coarsen'
 import { CoarseStore, coarsenedHandle } from './coarseMap'
 import type { ReferenceEdit } from '../genome/edit'
@@ -191,6 +206,17 @@ export interface MetaCoolerInit {
    * file's own order, the editing stage's picture (§27.9), reads through it.
    */
   unlensed?: MetaCooler
+  /**
+   * The map whose pixels this one presents and which is drawn to a total in its
+   * place (§6.5): a curated binning's (§33.4), resampled beneath its lens so the
+   * draw is the file's own and every pixel of it is carried. Its census, its
+   * weight scale and its draw are this map's.
+   */
+  beneath?: MetaCooler
+  /** The pixels as the file stores them, where {@link store} is drawn from a map {@link beneath}. */
+  stored?: PixelStore
+  /** The curation this map is drawn through (§33.4), where it is one's. */
+  curation?: CuratedMap
 }
 
 /** Anything `MetaCooler.open` needs that is not the file or its bytes. */
@@ -272,8 +298,14 @@ export class MetaCooler {
   readonly contigs: Table
   /** Uniform bin size in bp. Never `null` here — §3.2 refuses variable bins. */
   readonly binsize: number
-  /** The map this one is an edit of, or `null` for a map that is the file (§27.7). */
+  /** The map this one is an edit or a curation of, or `null` for a map that is the file (§27.7, §33.4). */
   readonly unlensed: MetaCooler | null
+  /** The curated binning this map is drawn through, or `null` (§33.4). */
+  readonly curation: CuratedMap | null
+  /** The map drawn to a total in this one's place: a curated map's file (§33.4). */
+  private readonly beneath: MetaCooler | null
+  /** The pixels as the file stores them, where {@link pixelStore} draws from {@link beneath}. */
+  private readonly storedStore: PixelStore | null
   /** `symmetric-upper` or `square`, read from the attribute, never assumed. */
   readonly storageMode: StorageMode
   /** Dtype kind of `pixels/count`, resolved once (correction #2). */
@@ -347,7 +379,9 @@ export class MetaCooler {
    */
   get handle(): Hdf5Handle {
     const base = this.weightView()
-    const scale = this.resampled?.weightScale ?? 1
+    // A curated map is drawn to its total beneath its lens, and its weights
+    // take that draw's scale (§33.4).
+    const scale = (this.beneath ?? this).resampled?.weightScale ?? 1
     if (scale === 1) return base
     if (this.weighted?.scale !== scale || this.weighted.base !== base) {
       this.weighted = { scale, base, handle: scaledWeights(base, scale) }
@@ -385,7 +419,7 @@ export class MetaCooler {
    * `attrs['sum']`, and a resampled map would fail it by construction.
    */
   get storedPixels(): PixelStore {
-    return this.pixelStore
+    return this.storedStore ?? this.pixelStore
   }
 
   /** The map drawn to another total, or `null` for the file as stored (§6.5). */
@@ -780,6 +814,9 @@ export class MetaCooler {
   constructor(init: MetaCoolerInit) {
     this.uri = init.uri
     this.unlensed = init.unlensed ?? null
+    this.curation = init.curation ?? null
+    this.beneath = init.beneath ?? null
+    this.storedStore = init.stored ?? null
     this.rawHandle = init.handle
     this.tables = init.tables ?? init.handle
     this.layout = init.layout
@@ -1572,6 +1609,125 @@ export class MetaCooler {
   }
 
   /**
+   * This map through a curation of its binning (§33.4): the map `metacooler
+   * reassign --layout genome-then-length` writes from the curation's contig →
+   * genome table — its contigs regrouped whole, its genome layer replaced —
+   * presented over the file as it is. See `metacooler/curationLens.ts`. And,
+   * where genomes' edits of the reference lay them out (§27.10), each of those
+   * drawn as its edit lays it out, kept to the contigs the curation gives it —
+   * see `curate/layouts.ts` — with no curation at all as with one.
+   *
+   * A new map over the same handle and the same store, as {@link withLens}
+   * makes one: closing it closes the file. Resampled beneath its lens — a
+   * total drawn to is the file's draw, carried whole. The map as it was where
+   * the curation applies no step and no edit lays a genome out, and a refusal,
+   * with the map as it was, where it cannot be drawn: a map with no genome
+   * layer, a single-cell file, a map storing both triangles (which `reassign`
+   * will not re-group), a map already drawn through an edit, and a curation
+   * made on another binning.
+   *
+   * @param read The file's binning as `readFileBinning` reads it, where the
+   *   caller holds it already; read here otherwise.
+   * @param edits Each genome's edit of the reference, by the curated genome id
+   *   it is kept under.
+   */
+  static withCuration(
+    mc: MetaCooler,
+    curation: Curation | null,
+    read?: FileBinningRead,
+    edits?: ReadonlyMap<string, ReferenceEdit>,
+  ): { map: MetaCooler; refusal: string | null } {
+    if (!mc.hasGenomes) return { map: mc, refusal: 'A curation is drawn on a map with genomes, and this one has none.' }
+    if (mc.layout.kind === 'scool') return { map: mc, refusal: 'A curation is not drawn on a single-cell file.' }
+    if (mc.unlensed !== null) return { map: mc, refusal: 'A curation is not drawn over an edit of the reference.' }
+    if (mc.storageMode !== 'symmetric-upper') {
+      return {
+        map: mc,
+        refusal: 'This map stores both triangles, and a curation regroups only a map that stores one, as metacooler reassign does.',
+      }
+    }
+    // Whatever goes wrong drawing a curation leaves the file opened as it is,
+    // with a sentence: a record from a link or a workspace is never a reason
+    // the file cannot be opened (§29.4).
+    try {
+      const file = read ?? readFileBinning(mc)
+      if (curation !== null) {
+        const wrong = curationMismatch(curation, file.file)
+        if (wrong !== null) return { map: mc, refusal: `The curation was made on another binning: ${wrong}.` }
+      }
+      const binning = CuratedBinning.of(file.base, curation)
+      const drawn = edits === undefined || edits.size === 0 ? [] : drawnLayouts({ binning, names: mc.chromnames, lengths: mc.contigLengths, edits })
+      if (binning.isIdentity && drawn.length === 0) return { map: mc, refusal: null }
+      const key = curatedMapKey(binning, drawn)
+      const layout = curationLayout(mc.chromnames, mc.contigLengths, binning)
+      const binsOf = new Float64Array(mc.nContigs)
+      for (let c = 0; c < mc.nContigs; c++) binsOf[c] = mc.chromOffset[c + 1] - mc.chromOffset[c]
+      const genomesOf = (rows?: Parameters<typeof curatedGenomes>[0]['rows']): ReturnType<typeof curatedGenomes> =>
+        curatedGenomes({
+          layout,
+          binning,
+          base: file.base,
+          file: mc.fullGenomes() ?? makeTable(0, [], {}),
+          fileGenomeOf: mc.contigGenomeIds,
+          lengths: mc.contigLengths,
+          bins: binsOf,
+          markers: file.markers,
+          ...(rows === undefined ? {} : { rows }),
+        })
+      if (drawn.length === 0) {
+        const bins = curatedBins(layout.order, mc.chromOffset)
+        const names = Array.from(layout.order, (c) => mc.chromnames[c])
+        const lengths = Float64Array.from(layout.order, (c) => mc.contigLengths[c])
+        const lens = BinLens.permutation({ names, lengths, chromOffset: bins.chromOffset, toOriginal: bins.toOriginal, originalBins: mc.nBins })
+        const genomes = genomesOf()
+        const attrs: Record<string, AttrValue> = { ...mc.rawHandle.attrs(), ngenomes: layout.genomes.length }
+        const map = new MetaCooler({
+          uri: mc.uri,
+          // The weights in force with it, as an edit's lens carries them (§6.4).
+          handle: curatedHandle(mc.weightView(), { lens, layout, attrs, genomes: genomes.table, contigs: () => curatedContigs(mc.fullContigs(), layout) }),
+          layout: mc.layout,
+          attrs,
+          genomes: narrowTable(genomes.table, READER_GENOME_COLUMNS),
+          genomeOffset: layout.genomeOffset,
+          contigs: curatedContigs(mc.contigs, layout),
+          chromOffset: bins.chromOffset,
+          store: new LensStore(followingStore(() => mc.store), lens, true),
+          stored: new LensStore(mc.storedPixels, lens, true),
+          unlensed: mc,
+          beneath: mc,
+          curation: { key, steps: binning.applied, genomeOfContig: layout.genomeOfContig, laidOut: 0, owned: genomes.owned, recomputed: genomes.recomputed },
+        })
+        return { map, refusal: null }
+      }
+      // Some genomes laid out by their edits: their sequences in their place,
+      // each with cooler's count of bins, the stored bins it shows placed on
+      // them as an edit's lens places them (`lens.ts`).
+      const rows = laidOutRows(layout, drawn, mc.coords, mc.chromnames)
+      const lens = BinLens.ofBins({ names: rows.names, lengths: rows.lengths, chromOffset: rows.chromOffset, toOriginal: rows.toOriginal, originalBins: mc.nBins })
+      const genomes = genomesOf(rows)
+      const attrs: Record<string, AttrValue> = { ...mc.rawHandle.attrs(), ngenomes: layout.genomes.length, nchroms: rows.names.length, nbins: lens.nBins }
+      const map = new MetaCooler({
+        uri: mc.uri,
+        handle: curatedHandle(mc.weightView(), { lens, layout, attrs, genomes: genomes.table, contigs: () => laidOutContigs(mc.fullContigs(), rows, true), rows }),
+        layout: mc.layout,
+        attrs,
+        genomes: narrowTable(genomes.table, READER_GENOME_COLUMNS),
+        genomeOffset: rows.genomeOffset,
+        contigs: laidOutContigs(mc.contigs, rows, false),
+        chromOffset: rows.chromOffset,
+        store: new LensStore(followingStore(() => mc.store), lens, true),
+        stored: new LensStore(mc.storedPixels, lens, true),
+        unlensed: mc,
+        beneath: mc,
+        curation: { key, steps: binning.applied, genomeOfContig: layout.genomeOfContig, laidOut: drawn.length, owned: genomes.owned, recomputed: genomes.recomputed },
+      })
+      return { map, refusal: null }
+    } catch (error) {
+      return { map: mc, refusal: `The curation kept for this file is not drawn: ${error instanceof Error ? error.message : String(error)}.` }
+    }
+  }
+
+  /**
    * This map at a resolution the reader added (§3.4): every `factor` of its bins
    * along each sequence summed into one, as the map is drawn there — see
    * `metacooler/coarseMap.ts`. Everything above sees an ordinary map at the
@@ -1608,6 +1764,8 @@ export class MetaCooler {
       ...(mc.genomes === null ? {} : { genomes: mc.genomes, genomeOffset: mc.genomeOffset }),
       store: new CoarseStore(mc.store, grid, mc.storageMode),
       ...(mc.unlensed === null ? {} : { unlensed: mc.unlensed }),
+      // The same contigs in the same order, so the same curation (§33.4).
+      ...(mc.curation === null ? {} : { curation: mc.curation }),
     })
     return { map, refusal: null }
   }
@@ -2106,6 +2264,9 @@ export class MetaCooler {
       cancelled?(): boolean
     } = {},
   ): Promise<ResamplePlan | null> {
+    // A curated map is drawn beneath its lens: the file's map is, and every
+    // pixel of the draw is carried (§33.4).
+    if (this.beneath !== null) return this.beneath.resample(spec, options)
     if (spec === null) {
       this.resampled = null
       return null
@@ -2172,6 +2333,7 @@ export class MetaCooler {
       pause?(wanted: () => boolean): Promise<void>
     } = {},
   ): Promise<number | null> {
+    if (this.beneath !== null) return this.beneath.countContacts(options)
     const declared = this.declaredContacts
     if (declared !== null) return declared
     if (this.resampleRefusal() !== null) return null
@@ -2190,6 +2352,7 @@ export class MetaCooler {
 
   /** The census, where one has been taken and has finished. */
   async takenCensus(): Promise<Census | null> {
+    if (this.beneath !== null) return this.beneath.takenCensus()
     if (this.census === null) return null
     try {
       return await this.census
@@ -2223,7 +2386,10 @@ export class MetaCooler {
   close(): void {
     if (this.closed) return
     this.closed = true
-    this.rawHandle.close()
+    // The same file, through the map it is drawn from: closed there, so a
+    // census that map is taking stops with it.
+    if (this.beneath !== null) this.beneath.close()
+    else this.rawHandle.close()
   }
 }
 

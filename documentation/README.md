@@ -74,8 +74,8 @@ the code for the exact words on screen (`src/ui/`). Name a control as the app la
 **Load files**, **Analysis**, **run**. If a detail cannot be checked — a shortcut, a default, a limit
 — leave it out rather than guess. **Dev features are not documented at all**, not even by name
 (SPECS §29): the multi-genome format (`.metacool`, `.mmetacool`) with its genomes table, genome views
-and metagenome tasks; editing the reference (§27); the dot plot (§28); the DNA Bacterial Zoo store;
-and the switch itself.
+and metagenome tasks; editing the reference (§27); the dot plot (§28); curating the genomes (§33);
+the DNA Bacterial Zoo store; and the switch itself.
 
 **How it reads.** Second person, present tense, plain words, short paragraphs. British spelling, as
 the app writes: *colour*, *normalise*, *centre*. Headings in sentence case, starting at `##` (the

@@ -20,6 +20,7 @@
 
 import { ViewerError, type ErrorCode } from '../errors'
 import type { ReferenceEdit } from '../genome/edit'
+import type { CurationDrawn } from '../curate/layouts'
 import type { FileCorner } from '../edit/corners'
 import type { GridLayout } from '../edit/grid'
 import type { WindowRead } from '../edit/paint'
@@ -34,6 +35,7 @@ import type { ReadPlan } from '../sources/RemoteRangeSource'
 import type { Column, Extent, Info, Layout, ParsedRange, SourceStats, Table } from '../types'
 import type { Census, ResampleMode } from '../metacooler/resample'
 import type { PairStats } from '../pairs/stats'
+import type { CurationRequest, CurationResults } from './curateProtocol'
 
 // ---------------------------------------------------------------------------
 // Byte sources
@@ -440,6 +442,26 @@ export interface OpenResult {
    * assembly, or a container it is not yet drawn on. Absent where none was asked.
    */
   edit?: { refusal: string | null }
+  /**
+   * What became of the curation the open asked for (§33.4): `refusal` `null`
+   * where the map is drawn through it, the reason where it is not — a curation
+   * made on another binning, a map it is not drawn on; `steps` its applied
+   * steps; `key` the fingerprint of the binning drawn, where one is. Absent
+   * where none was asked.
+   */
+  curation?: {
+    refusal: string | null
+    steps: number
+    key?: string
+    /**
+     * The file's own binning beside the curated one, where the map is drawn
+     * through it: its genomes but the pool, and the pool's figures, which the
+     * Binning QC card sets beside the curated pool's where they differ.
+     */
+    file?: { genomes: number; unassigned: UnassignedStats | null }
+    /** Genomes drawn as their edits lay them out (§27.10). */
+    laidOut?: number
+  }
   sourceKind: SourceKind
 }
 
@@ -458,6 +480,13 @@ export interface GenomesResult {
    * proxy wherever it is shown.
    */
   density: Float64Array
+  /**
+   * Where the map is drawn through a curation (§33.4): its steps, and which of
+   * the table's columns are the curation's own — `kind`, `curation`, metaTOR's
+   * `mge`, `n_mges` and `mges` — and which it recomputed from the contigs'
+   * markers, so the table titles them as such rather than as the file's.
+   */
+  curation?: { steps: number; owned: string[]; recomputed: string[] }
 }
 
 export interface ContigsResult {
@@ -900,7 +929,7 @@ export interface StatsResult {
 }
 
 /** Every request kind, mapped to what it resolves with. */
-export interface ResultMap {
+export interface ResultMap extends CurationResults {
   open: OpenResult
   genomes: GenomesResult
   contigs: ContigsResult
@@ -958,6 +987,21 @@ export type WorkerRequest =
        * features are on (§29), and only for an edit that changes something.
        */
       edit?: ReferenceEdit
+      /**
+       * A curation of the metagenome's binning to draw the map through
+       * (§33.4): the file is opened as it is, then presented as the map
+       * `metacooler reassign` writes from the curated binning — its contigs
+       * regrouped, its genome layer replaced (`metacooler/curationLens.ts`) —
+       * and so is every rung opened after it. Folded here, over the file's own
+       * binning. `key` is the curated binning's fingerprint and names the map
+       * for the answers kept of it; `held` is the curation itself, which the
+       * answers' keys leave out (`answers.ts`), since a history of a thousand
+       * steps named in every key would be megabytes of them. Never with `edit`.
+       * `layouts`, each genome's edit of the reference that lays it out
+       * (§27.10), drawn in its place (`curate/layouts.ts`) — with or without a
+       * curation, `held` `null` for none.
+       */
+      curation?: CurationDrawn
     }
   // Build the `.mcool` for the pairs import this session was opened from.
   // Separate from `open` because it is a second long job with its own
@@ -1244,7 +1288,14 @@ export type WorkerRequest =
       kind: 'genomeLinks'
       /** The contigs of one genome's edit, by name (§27.10). */
       contigs: string[]
+      /**
+       * The genomes to name the partners by, where the session's curation has
+       * moved on from the map drawn (§33.4): each of the file's contigs, its
+       * genome, an index into `genomes`. Absent, the map's own.
+       */
+      assignment?: { genomes: string[]; genomeOf: Int32Array }
     }
+  | CurationRequest
   | { id: number; kind: 'cancel'; target: number }
   | { id: number; kind: 'close' }
 

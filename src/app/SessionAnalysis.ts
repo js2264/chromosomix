@@ -300,6 +300,8 @@ export class SessionAnalysis {
             ...binningOfMap(file.info),
             ...this.session.resampleOf(this.session.reader),
             ...(this.session.lens === null ? {} : { edit: this.session.lens.edit }),
+            // …and through the curation of its binning (§33.4).
+            ...(this.session.curationDrawn === null ? {} : { curation: this.session.curationDrawn }),
             label: this.leadLabel(file.uri, at?.uri),
           }
         }
@@ -696,6 +698,7 @@ export class SessionAnalysis {
         ...binningOfMap(file.info),
         ...this.session.resampleOf(this.session.reader),
         ...(this.session.lens === null ? {} : { edit: this.session.lens.edit }),
+        ...(this.session.curationDrawn === null ? {} : { curation: this.session.curationDrawn }),
         // What the reader calls it (§16.10), which is what every tab, legend,
         // lane and table a task makes of it is named by — not the file's name,
         // which is only the default a map starts with.

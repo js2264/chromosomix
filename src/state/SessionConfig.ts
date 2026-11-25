@@ -32,6 +32,8 @@ import { ORIGIN_SCOPE } from './origins'
 import { EDIT_SCOPE, LEARNED_SCOPE, genomeEditKey, readEdit, readLearned, type Learned } from './referenceEdit'
 import { ORDER_SCOPE, readOrder, storedOrder } from './readerOrder'
 import type { ReferenceEdit } from '../genome/edit'
+import { readCuration, type Curation } from '../genome/curation'
+import { CURATION_LEARNED_SCOPE, CURATION_SCOPE, learnedNothing, readCurationLearned, type CurationLearned } from './curation'
 import { RESOLUTIONS_SCOPE } from './resolutions'
 import { IDEOGRAM_SCOPE, readIdeogramLook, type IdeogramLook } from './ideogramLook'
 import { recall, recallBelow, remember } from './UiMemory'
@@ -223,6 +225,22 @@ export interface SessionConfig {
    * rather than none of it. Absent where no genome has one.
    */
   genomeEdits?: Record<string, { edit?: ReferenceEdit; learned?: Learned }>
+  /**
+   * The curation of a metagenome's binning (§33.2): the steps the reader made
+   * on the curation stage, where the cursor stands in them, and the fingerprint
+   * of the binning they were made on — which is what keeps them from being
+   * drawn on a file binned otherwise. A fact about the file, as {@link edit} is,
+   * and carried for its reason. See `state/curation.ts`.
+   *
+   * Optional, so a workspace written before this existed imports as none; and
+   * carried whatever the dev features switch says (§29.4).
+   */
+  curation?: Curation
+  /**
+   * What the reader's answers on the curation stage taught it about this file
+   * (§33.6), kept beside {@link curation}. Absent where nothing was.
+   */
+  curationLearned?: CurationLearned
   /**
    * The reader's order of a metagenome's genomes, and of the contigs within
    * each (§7.6), by name — carried so a workspace or a link of a circle the
@@ -500,6 +518,7 @@ const SCOPES = {
   circularEvidence: CIRCULAR_EVIDENCE_SCOPE,
   origins: ORIGIN_SCOPE,
   edit: EDIT_SCOPE,
+  curation: CURATION_SCOPE,
   order: ORDER_SCOPE,
   resolutions: RESOLUTIONS_SCOPE,
   groups: 'browser:groups',
@@ -597,6 +616,8 @@ export function buildConfig(options: {
     ...editOf(recall<unknown>(key, SCOPES.edit)),
     ...learnedOf(recall<unknown>(key, LEARNED_SCOPE)),
     ...genomeEditsOf(key),
+    ...curationOf(recall<unknown>(key, SCOPES.curation)),
+    ...curationLearnedOf(recall<unknown>(key, CURATION_LEARNED_SCOPE)),
     ...orderOf(recall<unknown>(key, SCOPES.order)),
     ...resolutionsOf(recall<number[]>(key, SCOPES.resolutions)),
     groups: recall<GroupModes>(key, SCOPES.groups) ?? {},
@@ -713,6 +734,18 @@ function readGenomeEdits(stored: unknown): { genomeEdits?: SessionConfig['genome
   return Object.keys(out).length > 0 ? { genomeEdits: out } : {}
 }
 
+/** `{ curation: … }` for a file with a step on its binning, else nothing (§33.2). */
+function curationOf(stored: unknown): { curation?: Curation } {
+  const curation = readCuration(stored)
+  return curation !== null && curation.history.length > 0 ? { curation } : {}
+}
+
+/** What the curation stage learned, where anything was (§33.6); nothing where nothing was. */
+function curationLearnedOf(stored: unknown): { curationLearned?: CurationLearned } {
+  const learned = readCurationLearned(stored)
+  return learnedNothing(learned) ? {} : { curationLearned: learned }
+}
+
 /** `{ order: … }` where the reader moved a genome or a contig (§7.6), checked by the store's own reader. */
 function orderOf(stored: unknown): { order?: SessionConfig['order'] } {
   const order = storedOrder(readOrder(stored))
@@ -766,6 +799,8 @@ export function applyConfig(config: SessionConfig, memoryKey: string): void {
   if (config.origins !== undefined) remember(key, SCOPES.origins, config.origins)
   if (config.edit !== undefined) remember(key, SCOPES.edit, config.edit)
   if (config.editLearned !== undefined) remember(key, LEARNED_SCOPE, config.editLearned)
+  if (config.curation !== undefined) remember(key, SCOPES.curation, config.curation)
+  if (config.curationLearned !== undefined) remember(key, CURATION_LEARNED_SCOPE, config.curationLearned)
   for (const [genome, record] of Object.entries(config.genomeEdits ?? {})) {
     if (record.edit !== undefined) remember(genomeEditKey(key, genome), EDIT_SCOPE, record.edit)
     if (record.learned !== undefined) remember(genomeEditKey(key, genome), LEARNED_SCOPE, record.learned)
@@ -1037,6 +1072,10 @@ export function readTab(parsed: unknown): SessionConfig | ConfigRefusal {
     ...editOf(row['edit']),
     ...learnedOf(row['editLearned']),
     ...readGenomeEdits(row['genomeEdits']),
+    // The curation of the binning (§33.2), on the same rule: every step checked
+    // by the model's own reader, an op this build does not know kept.
+    ...curationOf(row['curation']),
+    ...curationLearnedOf(row['curationLearned']),
     ...orderOf(row['order']),
     ...resolutionsOf(
       Array.isArray(row['resolutions'])

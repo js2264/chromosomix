@@ -41,6 +41,13 @@ export interface ModalProps {
    */
   titleIsName?: boolean
   /**
+   * Controls the head carries beside the title: `centre` in the middle of the
+   * bar, `end` before the ✕. A stage on the whole window keeps its tools here
+   * rather than in a row of their own under the head, which the window's
+   * height pays for (the curation's, §33.3). Moved in as they are, never built.
+   */
+  head?: { centre?: HTMLElement; end?: HTMLElement }
+  /**
    * What Escape does instead of closing, for a dialog that holds work.
    *
    * The edit stage (§27.3) answers Escape by cancelling whatever is innermost —
@@ -63,6 +70,13 @@ export interface ModalProps {
  */
 const FOCUSABLE = 'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]'
 
+/**
+ * How much of its title, in its own ems, a head keeps beside a centre: the
+ * dialog's first words. Narrower, the centre goes on a line of its own under
+ * the title and the end (`.modal-head.is-stacked`).
+ */
+const HEAD_TITLE_EM = 12
+
 export class Modal {
   private readonly props: ModalProps
   private closed = false
@@ -71,6 +85,8 @@ export class Modal {
   private readonly onKeyDown: (event: KeyboardEvent) => void
   /** What this dialog took out of the page, and must put back. */
   private readonly inerted: readonly HTMLElement[]
+  /** Watches a head with a centre, which goes under the title where the bar is too narrow for both. */
+  private readonly headObserver: ResizeObserver | null = null
 
   constructor(props: ModalProps) {
     this.props = props
@@ -78,20 +94,43 @@ export class Modal {
     const close = (): void => this.close()
 
     const body = props.body(close)
+    const closeButton = iconButton('x', props.onEscape === undefined ? 'Close (Esc)' : 'Close', close, { class: 'btn-close', size: 16 })
+    const { centre, end } = props.head ?? {}
+    const title = el('h2', {
+      class: `modal-title${props.titleIsName === true ? ' is-name' : ''}`,
+      text: props.title,
+      // Whole under the pointer, where a bar with controls cuts it short.
+      ...(props.head === undefined ? {} : { title: props.title }),
+    })
+    const tail = end === undefined ? closeButton : el('div', { class: 'modal-head-end' }, end, closeButton)
+    const head = el(
+      'header',
+      { class: `modal-head${centre === undefined ? '' : ' has-centre'}` },
+      title,
+      ...(centre === undefined ? [] : [el('div', { class: 'modal-head-centre' }, centre)]),
+      tail,
+    )
     const panel = el(
       'div',
       { class: `modal-panel${props.variant === undefined ? '' : ` ${props.variant}`}` },
-      el(
-        'header',
-        { class: 'modal-head' },
-        el('h2', {
-          class: `modal-title${props.titleIsName === true ? ' is-name' : ''}`,
-          text: props.title,
-        }),
-        iconButton('x', props.onEscape === undefined ? 'Close (Esc)' : 'Close', close, { class: 'btn-close', size: 16 }),
-      ),
+      head,
       body,
     )
+    if (centre !== undefined && typeof ResizeObserver !== 'undefined') {
+      // Measured, not queried: a container query on the head cannot restyle
+      // the head itself, and one on the panel would make it every fixed
+      // popover's containing block.
+      const fit = (): void => {
+        const style = getComputedStyle(head)
+        const gap = parseFloat(style.columnGap) || 0
+        const room = head.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0)
+        const em = parseFloat(getComputedStyle(title).fontSize) || 16
+        const need = HEAD_TITLE_EM * em + centre.offsetWidth + tail.offsetWidth + 2 * gap
+        head.classList.toggle('is-stacked', head.clientWidth > 0 && room < need)
+      }
+      this.headObserver = new ResizeObserver(fit)
+      this.headObserver.observe(head)
+    }
     panel.setAttribute('role', 'dialog')
     panel.setAttribute('aria-modal', 'true')
 
@@ -104,6 +143,10 @@ export class Modal {
 
     this.onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        // Only the dialog on top: a stage opened over another — a genome's
+        // edit over the curation (§27.10) — is the one Escape speaks to.
+        const open = document.querySelectorAll('.modal-backdrop')
+        if (open.length > 0 && open[open.length - 1] !== this.root) return
         event.preventDefault()
         if (props.onEscape !== undefined) props.onEscape()
         else close()
@@ -189,6 +232,7 @@ export class Modal {
     if (this.closed) return
     this.closed = true
     window.removeEventListener('keydown', this.onKeyDown, true)
+    this.headObserver?.disconnect()
     this.root.remove()
     // Before the caret is handed back, and the order is not cosmetic: an inert
     // subtree refuses focus, so restoring first would leave the keyboard on

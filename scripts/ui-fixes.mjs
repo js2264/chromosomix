@@ -243,7 +243,7 @@ console.log('clip box tooltip:', await tasks.locator('.clip-box').first().getAtt
 await tasks.context().close()
 
 // ---- the palette's Annotations row on a metacool --------------------------------
-const metacool = await fresh(`${g.base}/?dev&config=${g.base}/demo/metagenomics/mock-community/Mock_microbial_community.chromosomix.json`)
+const metacool = await fresh(`${g.base}/?dev&config=${g.base}/demo/metagenomics/mock-community/MM133.chromosomix.json`)
 await metacool.waitForSelector('.view-genomes .tr', { timeout: 120000 }).catch(() => console.log('no genomes table'))
 await sleep(2500)
 await metacool.keyboard.press('Control+p')

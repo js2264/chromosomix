@@ -23,6 +23,7 @@ import {
   type EditStep,
   type ReferenceEdit,
 } from '../../src/genome/edit'
+import { stepText } from '../../src/edit/words'
 
 const ORIGINAL = { names: ['I', 'II', 'III'], lengths: [1000, 600, 300] }
 
@@ -275,5 +276,20 @@ describe('the history', () => {
     expect(mismatch(edit, ['I', 'II', 'III'], [1000, 600, 300])).toBeNull()
     expect(mismatch(edit, ['I', 'II', 'III'], [1000, 601, 300])).toBe('II is 600 bp in the edit and 601 bp here')
     expect(mismatch(edit, ['I', 'II'], [1000, 600])).toMatch(/3 sequences/)
+  })
+
+  it('folds past a step this build does not know, and names it, rather than failing the open (§29.4)', () => {
+    // A workspace written by a newer build: an op this one has never heard of,
+    // between two it knows.
+    const newer = { op: 'braid', sequence: 'I', at: 10 } as unknown as EditStep
+    const edit = [{ op: 'cut', sequence: 'I', at: 500 }, newer, { op: 'invert', sequence: 'II', from: 0, to: 600 }].reduce(
+      (held: ReferenceEdit, step, i) => withStep(held, step as EditStep, 'reader', i),
+      emptyEdit(ORIGINAL),
+    )
+    const assembly = EditedAssembly.of(edit)
+    expect(assembly.junctions()).toHaveLength(1)
+    expect(assembly.sequence('I')).not.toBeNull()
+    expect(assembly.lengthOf('II_e1')).toBe(600)
+    expect(stepText(newer)).toBe('a step this version does not know (braid)')
   })
 })

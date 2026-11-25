@@ -320,6 +320,47 @@ describe('the round trip', () => {
   })
 
   /**
+   * The curation of a metagenome's binning (§33.2) and what its review taught
+   * (§33.6), through JSON and back — `readTab` included, the read that once
+   * dropped what `buildConfig` wrote. Carried whatever the dev features say
+   * (§29.4), so this suite is not one of theirs.
+   */
+  it('carries the curation of the genomes, its history, its cursor and what it learned', () => {
+    const key = 'curate|mock.metacool'
+    const curation = {
+      version: 1,
+      original: { contigs: 4, names: 'abc', assignment: 'def', genomes: [{ name: 'MAG_1', contigs: 2, kind: 'mag' }, { name: 'MGE_1', contigs: 1, kind: 'element' }] },
+      history: [
+        { step: { op: 'move', contigs: ['c3'], to: 'MAG_1' }, by: 'reader', when: 1 },
+        { step: { op: 'rename', genome: 'MAG_1', name: 'Kleb' }, by: 'suggestion', when: 2, suggestion: 'recruit · 91%' },
+        // An op a newer build wrote: kept, never applied (§29.4).
+        { step: { op: 'split', genome: 'MAG_1' }, by: 'reader', when: 3 },
+      ],
+      cursor: 2,
+    }
+    const learned = { weights: { merge: [1, 2, 3] }, answers: 3, rejected: ['merge:MAG_1:MAG_2'] }
+    remember(key, 'map:curation', curation)
+    remember(key, 'map:curation-learned', learned)
+    const config = buildConfig({ state: STATE, memoryKey: key, plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })
+    const read = roundTrip(config)
+    expect(read?.curation).toEqual(curation)
+    expect(read?.curationLearned).toEqual(learned)
+    applyConfig(read as NonNullable<typeof read>, 'into|mock.metacool')
+    expect(recall('into|mock.metacool', 'map:curation')).toEqual(curation)
+    expect(recall('into|mock.metacool', 'map:curation-learned')).toEqual(learned)
+
+    // No steps and nothing learned, no fields: absent rather than empty.
+    remember(key, 'map:curation', null)
+    remember(key, 'map:curation-learned', null)
+    const none = buildConfig({ state: STATE, memoryKey: key, plot: DEFAULT_UI_PLOT_OPTIONS, now: new Date(0) })
+    expect('curation' in none).toBe(false)
+    expect('curationLearned' in none).toBe(false)
+    // …and a hand-written one that is not a curation is left out rather than trusted.
+    const odd = parseTab({ state: STATE, curation: { version: 1, original: { contigs: 'many' }, history: [] } })
+    expect(odd !== null && 'curation' in odd).toBe(false)
+  })
+
+  /**
    * The reader's order of a metagenome (§7.6): what a drag on the circle sets,
    * carried so a workspace of a rearranged circle opens rearranged.
    */

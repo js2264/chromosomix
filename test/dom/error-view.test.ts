@@ -487,6 +487,28 @@ describe('with the multi-genome format switched off (§29)', () => {
     expect(textsOf(view.el, '.advice li').join(' ')).toContain('cooler cload pairs')
   })
 
+  // The multi-genome file itself, refused under the same code: the plain
+  // heading said *not a contact map* over *it is not a cooler*, and a .metacool
+  // is both — so it is headed as what it is, by the container the refusal
+  // names and not by its prose.
+  it.each([
+    ['metacool', 'This is a metagenome’s contact map'],
+    ['mmetacool', 'This is a collection of metagenome contact maps'],
+  ] as const)('heads a refused %s as what it is', (container, heading) => {
+    const { view } = build(new ViewerError('not-a-cooler', 'the reader’s sentence', { group: '/', container }))
+    expect(title(view)).toBe(heading)
+    const words = said(view)
+    expect(words).not.toMatch(/not a (cooler|contact map)|is not a cooler/i)
+    expect(words).toContain('This viewer opens a plain cooler, an .mcool or an .scool')
+    // Never the switch: nothing says this page could read it, or how (§29.1, §29.2).
+    expect(words).not.toMatch(/\bdev\b|switch|feature|turn (it )?on|enable/i)
+  })
+
+  it('keeps the plain heading for an HDF5 file that names no container', () => {
+    const { view } = build(new ViewerError('not-a-cooler', 'the reader’s sentence', { group: '/' }))
+    expect(title(view)).toBe('HDF5, but not a contact map')
+  })
+
   it('never says one bin per contig, whatever the counts', () => {
     const { view } = build(
       new ViewerError('variable-bins', 'the reader’s sentence', { 'bin-type': 'variable', nbins: 16, nchroms: 16 }),

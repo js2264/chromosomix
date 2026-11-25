@@ -1,22 +1,22 @@
 {
  "bucket": "https://rsglab-data.s3.eu-west-3.amazonaws.com/",
- "cooler_version": "0.10.4",
+ "cooler_version": "0.12.1",
  "generator": "scripts/make_demo_golden.py",
  "maps": [
   {
-   "bytes": 14497503,
-   "file": "Mock_microbial_community.metacool",
-   "golden": "Mock_microbial_community_metacool.json",
-   "md5": "6532ac85ad13ad6b9b6ca507320ebd5f",
-   "path": "demo/metagenomics/mock-community/Mock_microbial_community.metacool",
+   "bytes": 11770740,
+   "file": "MM133.metacool",
+   "golden": "MM133_metacool.json",
+   "md5": "3c8fe8050c98cfdfd72f18f4deb6d11b",
+   "path": "demo/metagenomics/mock-community/MM133.metacool",
    "url": null
   },
   {
-   "bytes": 34620120,
-   "file": "Mock_microbial_community.mmetacool",
-   "golden": "Mock_microbial_community_mmetacool.json",
-   "md5": "59d1a598f2bedf205909e978aeec8a3f",
-   "path": "demo/metagenomics/mock-community/Mock_microbial_community.mmetacool",
+   "bytes": 27159768,
+   "file": "MM133.mmetacool",
+   "golden": "MM133_mmetacool.json",
+   "md5": "af8c1510edd02c05abc1743efbec0e47",
+   "path": "demo/metagenomics/mock-community/MM133.mmetacool",
    "url": null
   },
   {

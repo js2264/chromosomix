@@ -33,6 +33,8 @@
  * what it meant when it was made.
  */
 
+import { appliedSteps, fnv1a, pushStep, stepBack, stepForward, type HistoryEntryOf, type StepAuthor } from './history'
+
 /** A stretch of one original sequence, placed in an edited sequence. */
 export interface Piece {
   /** Stable across later steps, so a label, a suggestion or a test can name it. */
@@ -209,18 +211,11 @@ export interface LayoutStep {
 /** A stretch of an original sequence, or a run of `N`, as a layout names it. */
 export type LayoutPart = { sequence: string; start: number; end: number; strand: 1 | -1 } | { gap: number }
 
-/** Who made a step. */
-export type StepAuthor = 'reader' | 'suggestion' | 'auto'
+/** Who made a step: one history's word for it, shared with the curation (§33.2). */
+export type { StepAuthor } from './history'
 
 /** A step, with what the history keeps about it. */
-export interface HistoryEntry {
-  step: EditStep
-  by: StepAuthor
-  /** Milliseconds since the epoch. */
-  when: number
-  /** The suggestion it was, where it was one. */
-  suggestion?: string
-}
+export type HistoryEntry = HistoryEntryOf<EditStep>
 
 /** The assembly an edit was made against: names and lengths, in file order. */
 export interface OriginalAssembly {
@@ -648,6 +643,11 @@ function apply(state: Folded, step: EditStep, original: OriginalAssembly, ids: I
     }
     case 'layout':
       return laidOut(step, original, ids)
+    default:
+      // A step this build does not know — a workspace written by a newer one —
+      // changes nothing: it stays in the history, and the fold goes on past it
+      // rather than failing the open it is replayed in (§29.4).
+      return state
   }
 }
 
@@ -732,7 +732,7 @@ function laidOut(step: LayoutStep, original: OriginalAssembly, ids: IdSource): F
 }
 
 /** The original name an edited sequence descends from, for naming what splits off it. */
-function baseName(name: string): string {
+export function baseName(name: string): string {
   return name.replace(/_e\d+$/, '')
 }
 
@@ -979,19 +979,17 @@ function partIndexAt(offsets: readonly number[], bp: number): number {
 
 /** The edit with one more step, dropping any that had been undone. */
 export function withStep(edit: ReferenceEdit, step: EditStep, by: StepAuthor, when: number, suggestion?: string): ReferenceEdit {
-  const history = edit.history.slice(0, edit.cursor)
-  history.push({ step, by, when, ...(suggestion === undefined ? {} : { suggestion }) })
-  return { ...edit, history, cursor: history.length }
+  return pushStep(edit, step, by, when, suggestion)
 }
 
 /** The edit one step back, or unchanged at the start. */
 export function undone(edit: ReferenceEdit): ReferenceEdit {
-  return edit.cursor === 0 ? edit : { ...edit, cursor: edit.cursor - 1 }
+  return stepBack(edit)
 }
 
 /** The edit one step forward again, or unchanged at the end. */
 export function redone(edit: ReferenceEdit): ReferenceEdit {
-  return edit.cursor >= edit.history.length ? edit : { ...edit, cursor: edit.cursor + 1 }
+  return stepForward(edit)
 }
 
 /**
@@ -1000,13 +998,7 @@ export function redone(edit: ReferenceEdit): ReferenceEdit {
  * one assembly. What a mount is keyed by and a task's framing carries (§27.7).
  */
 export function editFingerprint(edit: ReferenceEdit): string {
-  const text = JSON.stringify(edit.history.slice(0, edit.cursor).map((entry) => entry.step))
-  let hash = 2166136261
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i)
-    hash = Math.imul(hash, 16777619)
-  }
-  return `${edit.cursor}:${(hash >>> 0).toString(36)}`
+  return `${edit.cursor}:${fnv1a(JSON.stringify(appliedSteps(edit)))}`
 }
 
 /**

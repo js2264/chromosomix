@@ -1172,7 +1172,8 @@ export class StructurePanel implements DeckCell {
     // O/E, a new tab, the breaks), so the shortcuts dialog printed two rows
     // for one letter and the reader could not tell which it would do. They are
     // pressed on the buttons, in the corner or on the card.
-    const key = (binding: string): { keys?: string } => (this.expanded === null ? {} : { keys: binding })
+    const key = (binding: string): { keys?: string; inDialog?: Element } =>
+      this.expanded === null ? {} : { keys: binding, inDialog: this.wrap }
     return [
       { id: 'structure-frame', group: 'Structure', title: 'Frame what the maps are looking at', ...key(STRUCTURE_KEYS.frame), enabled: has, run: () => this.frameLit() },
       { id: 'structure-all', group: 'Structure', title: 'Show the whole model', ...key(STRUCTURE_KEYS.all), enabled: has, run: () => this.frameAll() },

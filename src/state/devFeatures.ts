@@ -39,6 +39,12 @@ export const DEV_FEATURES = {
   /** Two sequences on two axes (§28). */
   dotplot: 'The dot plot is not validated yet.',
   /**
+   * Curating a metagenome's binning (§33): the stage, its keys, the heading's
+   * word on the genomes and the lens the session is drawn through. Never
+   * without `metacool`, whose maps it curates.
+   */
+  curate: 'Curating a metagenome’s binning is not validated yet.',
+  /**
    * A metagenome drawn round (§7.6): the toggle, the Genomes table's button,
    * the command, and the key it writes in a link. Its own line rather than a
    * clause of `metacool`'s, so the format can be published without it.

@@ -1,0 +1,214 @@
+/* The curation stage (SPECS §33.3): host. Tokens only, both themes from the app's own. */
+
+/* ---------------------------------------------------------------------------
+   The host map: a head (the links counted, which genomes, the key, the rows'
+   height), then the plot — one canvas that draws the two columns and their
+   links and takes the hand — then a foot: what the map leaves out, and why.
+   ------------------------------------------------------------------------- */
+
+.curate-host {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: var(--bg);
+  container-type: inline-size;
+}
+
+.curate-host-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 0 0 auto;
+  min-height: 2.5rem;
+  padding: 0.25rem 0.5rem 0.25rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: var(--step--1);
+}
+.curate-host.is-small .curate-host-head,
+.curate-host.is-small .curate-host-foot {
+  display: none;
+}
+
+/* The links counted: never cut while there is room for the rest. */
+.curate-host-counts {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.curate-host-counts:empty {
+  display: none;
+}
+
+/* Which genomes: every one, or what is around the selection. */
+.curate-host-views {
+  display: inline-flex;
+  gap: 0.2rem;
+  flex: 0 0 auto;
+}
+.curate-host-view {
+  white-space: nowrap;
+}
+
+/* The key, in the foot under the map as a figure's: what a link drawn so
+   means, each mark drawn as the map draws it. Never cut: it goes whole when
+   the room goes. */
+.curate-host-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.curate-host-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 0 0 auto;
+}
+.curate-host-key-mark {
+  display: block;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+.curate-host-key-line {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.curate-host-key-mark.is-offered .curate-host-key-line {
+  stroke: var(--accent);
+  stroke-dasharray: 5 3;
+  stroke-linecap: butt;
+}
+.curate-host-key-cross {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+}
+/* Around an element, a MAG it meets that no link joins it to: faint, dotted. */
+.curate-host-key-mark.is-met .curate-host-key-line {
+  stroke: var(--text-faint);
+  stroke-width: 1.5;
+  stroke-dasharray: 1.5 3;
+  stroke-linecap: butt;
+}
+
+.curate-host-tools {
+  display: inline-flex;
+  gap: 0.15rem;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* Short of room, pieces give way whole, never cut, as the pane measures them —
+   not at set widths, since the reader's text scale grows the words and not the
+   pane: in the head the view's long words (`around`), then what is offered and
+   what is to unlink, the links held staying (`fitHead`); in the foot the
+   status's `around the selection`, then the key (`fitFoot`). */
+.curate-host-key.is-crowded {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   The plot.
+   ------------------------------------------------------------------------- */
+
+.curate-host-plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.curate-host-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  outline: none;
+  touch-action: none;
+  user-select: none;
+}
+.curate-host-canvas:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.curate-host-canvas[data-cursor='pointer'] {
+  cursor: pointer;
+}
+.curate-host-canvas[data-cursor='grab'] {
+  cursor: grab;
+}
+.curate-host-canvas[data-cursor='grabbing'] {
+  cursor: grabbing;
+}
+
+/* A thumbnail beside the large picture: the stage's head above it makes it large. */
+.curate-host.is-small .curate-host-canvas {
+  pointer-events: none;
+}
+
+/* What the map is waiting for, or why it draws nothing. */
+.curate-host-note {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(24rem, 84%);
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-1);
+  color: var(--text-dim);
+  font-size: var(--step--1);
+  line-height: 1.45;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------------------
+   The foot: why the map shows what it shows, and the elements it folds.
+   ------------------------------------------------------------------------- */
+
+.curate-host-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 0 0 auto;
+  min-height: 2rem;
+  padding: 0.15rem 0.5rem 0.15rem 0.7rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: var(--step--1);
+}
+.curate-host-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Beside the key, what the map shows stands at the foot's far end, apart from
+   the marks' words: `meets` is never read into `20 of 177 genomes`. */
+.curate-host-key:not(.hidden):not(.is-crowded) ~ .curate-host-status {
+  text-align: right;
+}
+.curate-host-fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+  margin-left: auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}

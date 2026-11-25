@@ -37,6 +37,7 @@
 
 import type { AnnotationPayload, FeatureSet, PairSet } from '../annotations/types'
 import { editFingerprint, type ReferenceEdit } from '../genome/edit'
+import type { CurationDrawn } from '../curate/layouts'
 import { isCancellation, type Cancellable } from '../worker/client'
 import type { OrientationSummary, PairsBinning, SourceSpec } from '../worker/protocol'
 import type { PairStats } from '../pairs/stats'
@@ -127,6 +128,8 @@ export interface RunnerHost {
     resample?: ResampleTarget
     /** The edit of the reference the map is drawn through, where it is drawn through one (§27.7). */
     edit?: ReferenceEdit
+    /** The curation of the binning the map is drawn through, and its genomes' layouts, where it is drawn through one (§33.4). */
+    curation?: CurationDrawn
     /** What the reader calls this map (§16.10), which its results are named by. */
     label?: string
   } | null
@@ -251,6 +254,9 @@ function sameFraming(a: AnalysisFraming, b: AnalysisFraming): boolean {
     // And so does the edit it is drawn through (§27.7) — an inversion leaves a
     // whole-genome window's bins where they were and moves every contact in it.
     (a.edit ?? null) === (b.edit ?? null) &&
+    // And the curation of the binning (§33.4), which moves every contig between
+    // genomes it regroups.
+    (a.curation ?? null) === (b.curation ?? null) &&
     // And the resolution the reader added, which the bin size says already —
     // and which is said here too, since a stored 4 kb rung and 1 kb summed to
     // 4 kb are two reads of one file (§3.4).
@@ -353,6 +359,7 @@ function mountKey(
   resample?: ResampleTarget,
   edit?: ReferenceEdit,
   coarsen?: number,
+  curation?: { key: string },
   weight?: string,
 ): string {
   const cellsKey =
@@ -373,9 +380,12 @@ function mountKey(
   // And the edit it is drawn through (§27.7), by the steps it applies: two
   // edits of one file are two assemblies, as two totals are two maps.
   const edited = edit === undefined ? drawn : `${drawn}\u0000edit:${editFingerprint(edit)}`
+  // And the curation it is drawn through (§33.4), by the binning it folds
+  // into: two curations of one file are two maps.
+  const curated = curation === undefined ? edited : `${edited}\u0000curation:${curation.key}`
   // And the resolution it is summed to (§3.4): one file at 1 kb and at 3 kb is
   // two maps, as one file at two totals is.
-  return coarsen === undefined ? edited : `${edited}\u0000coarsen:${coarsen}`
+  return coarsen === undefined ? curated : `${curated}\u0000coarsen:${coarsen}`
 }
 
 /**
@@ -461,6 +471,12 @@ export interface RunTarget {
    * it would answer a task about the edit with the file as it was.
    */
   edit?: ReferenceEdit
+  /**
+   * The curation of the binning this map is drawn through (§33.4), for
+   * {@link edit}'s reason: every task reads the curated genomes, as the view
+   * draws them, laid out as it lays them out (§27.10).
+   */
+  curation?: CurationDrawn
   /**
    * The resolution this map is summed to, in base pairs, where it is read at the
    * deck's (§16.2) from a rung of its own that divides it rather than one that
@@ -917,6 +933,7 @@ export class AnalysisRunner {
       ...(source?.resample === undefined ? {} : { resample: source.resample }),
       // …and through the edit it is drawn through (§27.7), for the same reason.
       ...(source?.edit === undefined ? {} : { edit: source.edit }),
+      ...(source?.curation === undefined ? {} : { curation: source.curation }),
       // The map's name where the host has one — the tab, the lane and every
       // figure that names the map take it from here — and the framing's address
       // where it has none, which is a genome browsed as tracks.
@@ -1267,7 +1284,7 @@ export class AnalysisRunner {
     // picture, and that picture is at this resolution — unless this map reaches
     // the deck's resolution by summing a rung of its own (§16.2).
     const coarsen = source.coarsen ?? job.framing.coarsen
-    const key = mountKey(source.uri, source.cells, source.binning, source.resample, source.edit, coarsen, source.weight)
+    const key = mountKey(source.uri, source.cells, source.binning, source.resample, source.edit, coarsen, source.curation, source.weight)
     if (this.mounted === key) return
     this.setState(job.task.id, {
       status: 'running',
@@ -1290,6 +1307,7 @@ export class AnalysisRunner {
       ...(source.binning === undefined ? {} : { binning: source.binning }),
       ...(source.resample === undefined ? {} : { resample: source.resample }),
       ...(source.edit === undefined ? {} : { edit: source.edit }),
+      ...(source.curation === undefined ? {} : { curation: source.curation }),
       ...(coarsen === undefined ? {} : { coarsen }),
     })
     this.mounted = key

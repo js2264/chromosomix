@@ -27,6 +27,7 @@ code disagree, the code is right and this file is a bug.
 - [The picture](#the-picture) — score, O/E, transform, clip, drawn to a total, the turn, refine
 - [Analysis](#analysis) — task, availability, the surfaces, framing, synthetic track, called set, port, figure spec and style, the stage dialog
 - [Editing the reference](#editing-the-reference) — original, edit, piece, lens, breakpoint, corner, suggestion, the stage, the dot plot
+- [Curating the genomes](#curating-the-genomes) — the pool, MAG, element, host link, curation, gesture, affinity, question, price
 - [Machinery](#machinery) — workers, sources, budgets, dev features, buckets, the console
 - [Build targets](#build-targets) — web, desktop, standalone, pinned, package, CLI, embed
 - [Overloaded words](#overloaded-words) — session, workspace, panel, tab, browser, entry, origin, cell, junction, reader, bin, metacooler
@@ -1029,6 +1030,51 @@ as it is made (§27.3).
 
 ---
 
+## Curating the genomes
+
+The vocabulary of §33, which is a dev feature (§29): the curation of a metagenome's binning, by hand
+and by suggestion, and the session drawn through it.
+
+### the pool, MAG, element
+
+**The pool** is the contigs in no genome — `__unbinned__`, which is never a genome (§7.4). A genome is
+a **MAG** (a metagenome-assembled genome) or an **element** (a mobile genetic element: a plasmid, a
+phage). Every contig is in exactly one MAG, one element or the pool.
+
+### host link
+
+An element and a MAG that hosts it. A link is never a membership: an element's contigs stay the
+element's whichever MAGs it is linked to.
+
+### curation, step, gesture
+
+A **curation** is everything done to the file's binning, kept as a **history** of **steps** with a
+cursor — `move`, `create`, `merge`, `dissolve`, `rename`, `retype`, `link`, `unlink` — each naming
+contigs and genome **ids** (a file genome's stored name, kept through a rename; a created one's minted
+id) (`src/genome/curation.ts`). A **gesture** is the steps one drop or one answer makes, undone and
+redone together. A curation is a fact about a file, kept, carried and refused as an edit of the
+reference is.
+
+### affinity
+
+How densely a set of contigs meets a genome, against how densely the genome's own contigs meet each
+other: 1 is *as its own*. Its **lower bound** is what a few contacts can vouch for; the **background**
+is the rate of spurious ligation, measured from the file's own binning (§33.5).
+
+### suggestion, question
+
+A **suggestion** is a step the method offers, with its **confidence**: a merge, a recruit (of a pool
+contig), a move, a link or an unlink. A **question** is the suggestions a curator answers as one — an
+organism's fragments, the recruits into one genome, an element's links (`src/curate/questions.ts`).
+
+### price
+
+What a step does to every genome it changes, printed before it is taken: weighted completeness and
+redundancy before → after, the grade metaTOR would give (high, medium, low, contaminated), and the
+markers it makes present twice.
+
+---
+
 ## Machinery
 
 ### the three workers
@@ -1064,7 +1110,7 @@ A feature on `main` that a reader **does not see at all** unless the page asked 
 built, specified and tested like any other, and absent rather than greyed while the switch is off,
 which is the one place §8.5's corrected form does not apply. The switch is on no surface a reader
 sees and is read once per page; the registry of what is dev is one file
-(`src/state/devFeatures.ts`); making a feature public is deleting its line. Today: `metacool` (everything `.metacool`), `edit` (the reference editor) and `dotplot`. A
+(`src/state/devFeatures.ts`); making a feature public is deleting its line. Today: `metacool` (everything `.metacool`), `edit` (the reference editor), `dotplot` and `curate` (the curation of a metagenome's binning). A
 session that carries one while the switch is off keeps it, unapplied (§29.4). Never in an embed; not
 in the CLI, which shows everything.
 

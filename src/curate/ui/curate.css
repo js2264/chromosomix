@@ -1,0 +1,9 @@
+/* The curation stage (SPECS §33.3), one file a part, imported from `main.ts`.
+   Tokens only: both themes come from the app's own `--bg*`, `--text*`,
+   `--accent*`, `--warn`, `--ok` and `--border*`. */
+@import './stage.css';
+@import './list.css';
+@import './contact.css';
+@import './host.css';
+@import './scatter.css';
+@import './cards.css';

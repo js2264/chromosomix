@@ -150,8 +150,8 @@ them from disk, and the gallery and documentation scripts from the dev server, a
 
 | file | data | provenance |
 | --- | --- | --- |
-| `metagenomics/mock-community/Mock_microbial_community.metacool` (14 MB) | 49 MAGs over 20,566 contigs, 1 kb bins, 7.1 M pixels | SRA `SRR32680160`, binned with MetaTOR |
-| `metagenomics/mock-community/Mock_microbial_community.mmetacool` (35 MB) | the same map zoomified to 1 / 2 / 4 kb | derived from the metacool above |
+| `metagenomics/mock-community/MM133.metacool` (12 MB) | 50 MAGs and 127 mobile elements over 20,566 contigs, with `/clusters` (the rounds and the elements' hosts) and every contig's marker genes; 1 kb bins, 7.1 M pixels | SRA `SRR32680160`, binned with metaTOR 1.4, its markers by `metator markers` |
+| `metagenomics/mock-community/MM133.mmetacool` (27 MB) | the same map zoomified to 1 / 2 / 4 kb, each entry with its clusters and markers | derived from the metacool above |
 | `yeast-mpneumoniae/Yeast_mpneumoniae_G2M.mcool` (17 MB) | 18 contigs (16 yeast chromosomes, the mitochondrion, *M. pneumoniae*), 19.6 M contacts, 1–16 kb | GEO `GSM6703657` |
 | `ecoli/Ecoli.mcool` (46 MB) | one 4.64 Mb chromosome, 111 M contacts, 500 bp – 100 kb | wild type of Bignaud et al., *Nat. Struct. Mol. Biol.* |
 | `human/` (9 MB) | Geuvadis RNA-seq of chrX: one sample's reads, four samples' junctions, the gene model and hg19's bands | what the store's `human/` is copied from |

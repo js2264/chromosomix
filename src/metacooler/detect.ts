@@ -239,9 +239,9 @@ export function detectLayout(
   // Switched off (§29), a multi-genome container is a file this viewer does
   // not read — and refused *here*, as the first question, because a
   // `.metacool` also passes the cooler test below and would otherwise open as
-  // a cooler of twenty thousand contigs. The sentence is the one any unknown
-  // HDF5 file gets, and names neither container.
-  if (options.metacool === false && isMultiGenome(h, attrs, format)) refuseUnknown(h)
+  // a cooler of twenty thousand contigs. In words of its own, and true of it:
+  // the ones any unknown HDF5 file gets say it is not a cooler, and it is one.
+  if (options.metacool === false && isMultiGenome(h, attrs, format)) refuseMultiGenome(h, attrs, format)
 
   if (format === MMETACOOLER_FORMAT && h.has('entries')) {
     return { kind: 'mmetacool', group: h.group, entries: listEntryNames(h) }
@@ -301,12 +301,20 @@ export interface DetectOptions {
    * Whether the multi-genome containers are read (§29).
    *
    * `false` while the *dev features* switch is off: a `.metacool` and an
-   * `.mmetacool` are refused as files this viewer does not read, and no
-   * refusal a plain file can meet names either. Absent reads them, which is
-   * what the command line — which has no switch — wants.
+   * `.mmetacool` are refused as files this viewer does not read, each named
+   * as what it is in its own refusal and nowhere else, and no refusal a plain
+   * file can meet names either. Absent reads them, which is what the command
+   * line — which has no switch — wants.
    */
   metacool?: boolean
 }
+
+/**
+ * Which multi-genome container a refusal names, carried as its detail's
+ * `container` so the view can head it as one (`ui/ErrorView.ts`) without
+ * reading the sentence.
+ */
+export type RefusedContainer = 'metacool' | 'mmetacool'
 
 /** Either multi-genome container, asked of its root attributes alone. */
 function isMultiGenome(h: Hdf5Handle, attrs: Record<string, AttrValue>, format: string | null): boolean {
@@ -317,12 +325,51 @@ function isMultiGenome(h: Hdf5Handle, attrs: Record<string, AttrValue>, format: 
 }
 
 /**
+ * The refusal a multi-genome container gets while that format is a dev
+ * feature that is off (§29.3): what the file is, and that this viewer does not
+ * open one.
+ *
+ * Its own words, not the ones {@link refuseUnknown} gives any HDF5 file this
+ * viewer does not read. Those said *it is not a cooler*, and a `.metacool` is
+ * one — `cooler.Cooler()` opens it, which is the point of its format — over a
+ * list of its top-level keys that read `bins`, `chroms`, `indexes`, `pixels`:
+ * a cooler's, contradicting the sentence above them. Naming the container
+ * here teaches a reader of a plain file nothing, since only a file that is
+ * one is refused in these words; and nothing here says the page could read
+ * it, or how — that is the switch, which a reader who did not ask is never
+ * told of (§29.1, §29.2).
+ *
+ * The same code as every file this page does not read, so the console and a
+ * test treat it as one; the detail names the container — which is what the
+ * view heads it by — and the attributes the file declares itself one with.
+ */
+function refuseMultiGenome(h: Hdf5Handle, attrs: Record<string, AttrValue>, format: string | null): never {
+  const container: RefusedContainer = format === MMETACOOLER_FORMAT && h.has('entries') ? 'mmetacool' : 'metacool'
+  throw new ViewerError(
+    'not-a-cooler',
+    container === 'mmetacool'
+      ? `${h.uri} is a collection of metagenome contact maps — each a cooler with a genome layer ` +
+          `over its contigs — and this viewer does not open one.`
+      : `${h.uri} is a metagenome’s contact map — a cooler with a genome layer over its contigs — ` +
+          `and this viewer does not open one.`,
+    {
+      group: h.group,
+      container,
+      format,
+      ...(container === 'metacool' ? { 'metacooler-format': strAttr(attrs, 'metacooler-format') } : {}),
+    },
+  )
+}
+
+/**
  * The refusal an HDF5 file this viewer does not read gets while the
  * multi-genome containers are a dev feature that is off (§29).
  *
  * The same code as any other file that is not a cooler, so the view, the
  * console and a test all treat it as one; words that name no container this
- * page cannot open, and no command that would make one.
+ * page cannot open, and no command that would make one. Never a multi-genome
+ * container's, which has words of its own ({@link refuseMultiGenome}): these say
+ * *it is not a cooler*, and a `.metacool` is one.
  */
 function refuseUnknown(h: Hdf5Handle): never {
   throw new ViewerError(

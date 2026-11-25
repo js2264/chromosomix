@@ -1,0 +1,1308 @@
+/* The curation stage (SPECS §33.3): cards. Tokens only, both themes from the app's own. */
+
+/* ---- The card (cards/card.ts): shared by every card of the inspector ---- */
+
+/* The body stands under the heading with the card's own rhythm. */
+.curate-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+/* A name in a heading keeps its case: the heading's words are uppercased, a
+   genome's name is not a word to shout. */
+.curate-card .edit-card-head .is-name {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+}
+
+.curate-card-acts {
+  margin-top: 0.15rem;
+}
+
+.curate-card-acts .edit-act {
+  padding: 0.28rem 0.5rem;
+  white-space: nowrap;
+}
+/* A key is never printed on a dead control (§26.4): an act held back keeps
+   its word and its title's reason, and its key's place, so the grid holds. */
+.curate-card-acts .edit-act:disabled > .kbd-inline {
+  visibility: hidden;
+}
+
+/* What a step would leave, genome by genome (card.ts → priceList): the name,
+   then its completeness and its redundancy a line each. A price, so dim; the
+   number that makes a grade fall in the warning colour, the one that makes it
+   high quality in the finished one. */
+.curate-card-price {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-dim);
+  font-size: var(--step--2);
+  font-variant-numeric: tabular-nums;
+}
+.curate-card-price-row {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  column-gap: 0.6rem;
+  align-items: baseline;
+}
+.curate-card-price-row.is-two > .curate-card-price-name {
+  grid-row: span 2;
+}
+.curate-card-price-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+  max-width: 11rem;
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.curate-card-price-new {
+  color: var(--text-faint);
+}
+.curate-card-price-line {
+  grid-column: 2;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.curate-card-price-line.is-demoted {
+  color: var(--warn);
+}
+.curate-card-price-line.is-promoted {
+  color: var(--ok);
+}
+/* What the genomes not listed do: `and 27 more genomes lose contigs`, how
+   many of them fall a grade in the warning colour. */
+.curate-card-price-more {
+  color: var(--text-faint);
+}
+.curate-card-price-more > .is-demoted {
+  color: var(--warn);
+  white-space: nowrap;
+}
+
+/* ---- The selection card (cards/SelectionCard.ts) ---- */
+
+/* While a step is counted the card shows the binning before it, and its acts
+   answer nothing: dimmed — after a moment, so a quick count does not flicker
+   it, and at once when an act was pressed meanwhile. */
+.curate-selection-card .curate-card-body {
+  transition: opacity 120ms ease;
+}
+.curate-selection-card.is-weighing .curate-card-body {
+  opacity: 0.55;
+  transition-delay: 180ms;
+}
+.curate-selection-card.is-weighing.is-waiting .curate-card-body {
+  transition-delay: 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .curate-selection-card .curate-card-body {
+    transition-duration: 0s;
+  }
+}
+
+.curate-selection-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.45rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.curate-selection-hosts {
+  color: var(--text-faint);
+}
+
+.curate-selection-tally {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-top: 0.15rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.curate-selection-grades,
+.curate-selection-steps {
+  color: var(--text-faint);
+}
+
+/* Completeness and redundancy, weighted and plain — the plain numbers' place
+   taken by what a priced step would leave — under one another, each column
+   as wide as its numbers, never narrower, so no head runs into the next; the
+   labels are served first, and the after head, which names the genome a
+   merge would leave, gives way before them. It stays on one line, and the
+   table's height with it: the table
+   stands above the acts, and a price that moved them would move the act being
+   priced from under the pointer. */
+.curate-selection-quality {
+  display: grid;
+  grid-template-columns: minmax(3.8rem, 1fr) repeat(2, auto);
+  column-gap: 0.5rem;
+  row-gap: 0.05rem;
+  font-variant-numeric: tabular-nums;
+}
+.curate-selection-quality-row {
+  display: contents;
+}
+.curate-selection-quality .is-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.curate-selection-quality .is-head {
+  /* A head gives way before the numbers under it: at the side's narrowest the
+     columns are as wide as their numbers, and the table stays in the card. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--text-faint);
+  font-size: var(--step--2);
+}
+.curate-selection-quality .is-value {
+  text-align: right;
+  color: var(--text);
+}
+.curate-selection-quality .is-plain {
+  color: var(--text-dim);
+}
+.curate-selection-quality .is-after {
+  color: var(--text-dim);
+}
+.curate-selection-quality .is-head.is-after {
+  max-width: 9rem;
+}
+.curate-selection-quality .is-warn,
+.curate-selection-quality .is-after.is-demoted {
+  color: var(--warn);
+}
+.curate-selection-quality .is-after.is-promoted {
+  color: var(--ok);
+}
+.curate-selection-grade {
+  color: var(--text-faint);
+  font-size: var(--step--2);
+}
+.curate-selection-grade .is-high {
+  color: var(--ok);
+}
+.curate-selection-grade .is-warn {
+  color: var(--warn);
+}
+
+.curate-selection-price:not(.hidden) {
+  padding: 0.3rem 0.45rem;
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+}
+/* An act's price stands over what follows the acts, raised, and lets the
+   pointer through: it moves nothing, so neither the act it prices nor a row
+   the pointer goes on to jumps. */
+.curate-selection-price.is-over:not(.hidden) {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  right: 0;
+  z-index: 3;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-2);
+  pointer-events: none;
+}
+
+.curate-selection-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+/* What `at least` means and the background the affinities are put against,
+   said once, under the first list that leans on it: a key, so faint. */
+.curate-selection-key {
+  margin: -0.15rem 0 0;
+  color: var(--text-faint);
+  font-size: var(--step--2);
+  line-height: 1.35;
+}
+
+/* The selection's acts in a grid: two to a row in the side's usual width,
+   their keys in a column at the right, the act that unmakes something last. */
+.curate-selection-acts {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.3rem;
+}
+.curate-selection-acts > .edit-act {
+  justify-content: flex-start;
+  min-width: 0;
+}
+.curate-selection-acts > .edit-act > .kbd-inline {
+  margin-left: auto;
+}
+
+/* A row: what it names on the first line, what the contacts say on the
+   second, its act at the end — the edit stage's genome rows. */
+.curate-selection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.curate-selection-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'main act'
+    'detail act';
+  column-gap: 0.5rem;
+  align-items: center;
+  padding: 0.22rem 0.25rem 0.22rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+}
+.curate-selection-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+.curate-selection-row.is-lit {
+  background: var(--bg-muted);
+}
+.curate-selection-row.is-current {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+/* The first line: what the row names — its swatch, its name, its chips, held
+   together — and the confidence, which goes under them where the side is too
+   narrow for both. */
+.curate-selection-row-main {
+  grid-area: main;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.35rem;
+  min-width: 0;
+}
+.curate-selection-row-lead {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.curate-selection-row-lead > .edit-chip,
+.curate-selection-row-lead > .curate-swatch {
+  flex: none;
+}
+.curate-selection-row-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.curate-selection-arrow {
+  flex: none;
+  color: var(--text-faint);
+}
+/* Where a contig would go, opening a row's second line: its name whole, in
+   the ink, the rest of the line dim. */
+.curate-selection-to {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  max-width: 100%;
+}
+.curate-selection-to > .curate-swatch {
+  align-self: center;
+}
+.curate-selection-to > .curate-selection-row-name {
+  color: var(--text);
+}
+.curate-selection-index {
+  flex: none;
+  min-width: 0.9rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.curate-selection-row-confidence {
+  flex: none;
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: var(--step--2);
+  font-variant-numeric: tabular-nums;
+}
+.curate-selection-row-detail {
+  grid-area: detail;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-dim);
+  font-size: var(--step--2);
+  font-variant-numeric: tabular-nums;
+}
+/* A row's act is the card's acts' size — the button's own type and their
+   padding —, never the row's: one button size a card, so `merge` on a row
+   does not outweigh `merge into…` above it. */
+.curate-selection-row-act {
+  grid-area: act;
+  padding: 0.28rem 0.5rem;
+  white-space: nowrap;
+}
+.curate-selection-more {
+  align-self: flex-start;
+  font-size: var(--step--2);
+}
+
+.curate-selection-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.curate-selection-pair-genome {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.curate-selection-dim {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.curate-selection-numbers {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.curate-selection-offer {
+  color: var(--accent);
+  font-weight: 600;
+}
+/* Nothing on offer: what the method is sure of, said as the numbers are. */
+.curate-selection-offer.is-quiet {
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+/* Each two genomes' affinity, tinted as the contact map colours the pair — by
+   its lower bound, from the background to twice a genome's own density — in
+   the ink, since a tint is no act (§26.5): light enough that the number on it
+   reads in either theme. A merge on offer wears the map's mark for one, an
+   accent bracket at two corners. */
+.curate-selection-matrix {
+  display: grid;
+  grid-template-columns: 1.1rem repeat(var(--n, 2), minmax(0, 1fr));
+  gap: 2px;
+  font-size: var(--step--2);
+  font-variant-numeric: tabular-nums;
+}
+.curate-selection-matrix-head {
+  text-align: center;
+  color: var(--text-faint);
+}
+.curate-selection-matrix-head.is-row {
+  text-align: right;
+  padding-right: 0.15rem;
+}
+.curate-selection-cell {
+  padding: 0.18rem 0.1rem;
+  border-radius: 3px;
+  text-align: center;
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) calc(3% + var(--heat, 0) * 15%), transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.curate-selection-cell.is-offered {
+  position: relative;
+}
+.curate-selection-cell.is-offered::before,
+.curate-selection-cell.is-offered::after {
+  content: '';
+  position: absolute;
+  width: 0.4rem;
+  height: 0.4rem;
+  border: 0 solid var(--accent);
+  pointer-events: none;
+}
+.curate-selection-cell.is-offered::before {
+  top: 1px;
+  left: 1px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+  border-top-left-radius: 2px;
+}
+.curate-selection-cell.is-offered::after {
+  right: 1px;
+  bottom: 1px;
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+  border-bottom-right-radius: 2px;
+}
+.curate-selection-cell.is-self,
+.curate-selection-cell.is-none {
+  background: none;
+  color: var(--text-faint);
+}
+/* At or under the background: a pair that meets no more than strangers do. */
+.curate-selection-cell.is-under {
+  color: var(--text-faint);
+}
+
+/* ---- The chooser (Chooser.ts): the popover move to…, merge into…, link to… open ---- */
+
+/* On an act of a card, the list stands in the card's column, its edges the
+   card's (Chooser.ts → chooserFrame); the width here is a point's. */
+.curate-chooser {
+  position: fixed;
+  z-index: 110;
+  width: 23rem;
+  max-width: calc(100vw - 16px);
+  max-height: min(40rem, 80vh);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-2);
+  color: var(--text);
+  font-size: var(--step--1);
+  line-height: 1.45;
+  overflow: hidden;
+}
+
+/* The price beside the list, where the window has room: a pane of its own to
+   the list's left, over the pictures, as tall as the chooser, so the list
+   keeps every row its room holds whatever the price says; the keys under
+   both. The pane's width is set where it is placed (`--chooser-price`). */
+.curate-chooser.is-beside {
+  display: grid;
+  grid-template-columns: var(--chooser-price, 19em) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'price head'
+    'price filter'
+    'price list'
+    'keys keys';
+}
+.curate-chooser.is-beside > .curate-chooser-head {
+  grid-area: head;
+}
+.curate-chooser.is-beside > .curate-chooser-filter {
+  grid-area: filter;
+}
+.curate-chooser.is-beside > .curate-chooser-list {
+  grid-area: list;
+  min-height: 0;
+}
+.curate-chooser.is-beside > .curate-chooser-foot {
+  grid-area: price;
+  padding-top: 0.55rem;
+  border-top: 0;
+  border-right: 1px solid var(--border);
+}
+.curate-chooser.is-beside > .curate-chooser-keys {
+  grid-area: keys;
+}
+.curate-chooser-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.65rem 0.3rem;
+}
+.curate-chooser-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.curate-chooser-head > .curate-chooser-glyph {
+  flex: none;
+  color: var(--text-faint);
+}
+.curate-chooser-filter {
+  margin: 0 0.6rem 0.45rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.curate-chooser-filter:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+/* The price under the list gives way before it — the list shrinks a
+   thousand times as readily, so the price keeps its height until the list is
+   down to its least —, and the least is four ranked rows and their group's
+   head (a row its name and two lines of what the contacts say), or what the
+   window's height allows; a list of three rows or fewer keeps its own.
+   Beside the price, the list has the chooser's height and no least. */
+.curate-chooser-list {
+  flex: 1 1000 auto;
+  min-height: 7.5rem;
+  overflow-y: auto;
+  padding: 0 0.3rem 0.35rem;
+  border-top: 1px solid var(--border);
+}
+.curate-chooser:not(.is-beside) > .curate-chooser-list:has(> .curate-chooser-row ~ .curate-chooser-row ~ .curate-chooser-row ~ .curate-chooser-row) {
+  min-height: min(
+    calc(4 * (0.65rem + 1.45 * (var(--step--1) + 2 * var(--step--2))) + 0.6rem + 1.45 * var(--step--2)),
+    36vh
+  );
+}
+.curate-chooser-group {
+  padding: 0.45rem 0.4rem 0.15rem;
+  color: var(--text-faint);
+  font-size: var(--step--2);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.curate-chooser-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.curate-chooser-row.is-ranked {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 0.45rem;
+  row-gap: 0.05rem;
+}
+.curate-chooser-row.is-ranked > .curate-chooser-evidence {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.curate-chooser-row.is-ranked > .curate-chooser-confidence {
+  grid-column: 3;
+  grid-row: 1;
+}
+.curate-chooser-row.is-active {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.curate-chooser-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.curate-chooser-row.is-extra > .curate-chooser-glyph {
+  flex: none;
+  color: var(--accent);
+}
+.curate-chooser-evidence {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--text-dim);
+  font-size: var(--step--2);
+  font-variant-numeric: tabular-nums;
+}
+.curate-chooser-confidence {
+  flex: none;
+  min-width: 2.1rem;
+  text-align: right;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: var(--step--2);
+  font-variant-numeric: tabular-nums;
+}
+.curate-chooser-empty,
+.curate-chooser-more {
+  padding: 0.6rem 0.45rem;
+  color: var(--text-dim);
+}
+/* Before the contacts are read: the genomes in the stage's order, and why. */
+.curate-chooser-note {
+  padding: 0.45rem 0.45rem 0;
+  color: var(--text-faint);
+  font-size: var(--step--2);
+}
+.curate-chooser-more {
+  padding-top: 0.3rem;
+  color: var(--text-faint);
+  font-size: var(--step--2);
+}
+/* The price of the row under the keyboard: what it makes, the genomes it
+   changes most in a box that scrolls where the room is short (two lines at
+   least: the genome that takes the contigs in), and what the others do,
+   never scrolled out of view. */
+.curate-chooser-foot {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  gap: 0.15rem;
+  padding: 0.4rem 0.65rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-sunken);
+}
+.curate-chooser.is-beside > .curate-chooser-foot {
+  min-height: 0;
+  overflow: hidden;
+}
+.curate-chooser-price {
+  flex: 0 1 auto;
+  min-height: 2.8em;
+  overflow-y: auto;
+}
+/* In the pane beside the list, a genome's name above its numbers, which have
+   the pane's width: `complete 100% + 9 more → 100%` on a line. */
+.curate-chooser.is-beside .curate-card-price-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+.curate-chooser.is-beside .curate-card-price-row.is-two > .curate-card-price-name {
+  grid-row: auto;
+}
+.curate-chooser.is-beside .curate-card-price-name {
+  max-width: none;
+}
+.curate-chooser.is-beside .curate-card-price-line {
+  grid-column: 1;
+  padding-left: 0.9em;
+}
+.curate-chooser-others {
+  flex: none;
+  padding-top: 0.15rem;
+  color: var(--text-faint);
+  font-size: var(--step--2);
+  font-variant-numeric: tabular-nums;
+}
+.curate-chooser-others > .is-demoted {
+  color: var(--warn);
+  white-space: nowrap;
+}
+.curate-chooser-words {
+  overflow-wrap: anywhere;
+  color: var(--text);
+}
+.curate-chooser-words.is-refused {
+  color: var(--text-dim);
+}
+.curate-chooser-counting {
+  color: var(--text-faint);
+  font-size: var(--step--2);
+}
+.curate-chooser-keys {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.3rem 0.65rem 0.4rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: var(--step--2);
+}
+.curate-chooser-keys > .kbd-inline {
+  margin-left: 0;
+}
+.curate-chooser-keys > span {
+  margin-right: 0.45rem;
+}
+
+/* ---- The suggestions card (cards/SuggestionsCard.ts): the review's questions ---- */
+
+/* The kinds, one lit: every question, or the merges alone. */
+.curate-suggestions-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.curate-suggestions-kind {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The list scrolls inside the card, so the cards under it stay in reach: a
+   sunken well the rows stand in, whose edge says where the scroll cuts them.
+   Rows are measured against it when the question in review is scrolled to. */
+.curate-suggestions-list {
+  position: relative;
+  max-height: min(30rem, 56vh);
+  padding: 0.3rem 0.3rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  overscroll-behavior: contain;
+  transition: opacity 120ms ease;
+}
+/* While a step is counted the questions are the binning's before it, and an
+   answer pressed meanwhile answers nothing: dimmed — after a moment, so a
+   quick count does not flicker it, and at once when one was pressed. */
+/* Its foot fades where the scroll cuts a row, so a row cut through reads as
+   more below, never as a broken glyph; at the end it fades the padding only. */
+.curate-suggestions-list::after {
+  content: '';
+  position: sticky;
+  bottom: -1rem;
+  display: block;
+  flex: none;
+  height: 1.6rem;
+  margin-top: -1.6rem;
+  background: linear-gradient(to bottom, transparent, var(--bg-sunken));
+  pointer-events: none;
+}
+.curate-suggestions-card.is-weighing .curate-suggestions-list {
+  opacity: 0.55;
+  transition-delay: 180ms;
+}
+.curate-suggestions-card.is-waiting .curate-suggestions-list {
+  opacity: 0.55;
+  transition-delay: 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .curate-suggestions-list {
+    transition-duration: 0s;
+  }
+}
+.curate-suggestions-row {
+  flex: none;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.curate-suggestions-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.curate-suggestions-row.is-current {
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--bg));
+}
+.curate-suggestions-main {
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.curate-suggestions-main:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.curate-suggestions-words {
+  min-width: 0;
+  line-height: 1.35;
+}
+.curate-suggestions-confidence {
+  align-self: start;
+  padding-top: 0.05rem;
+}
+.curate-suggestions-n {
+  align-self: start;
+  margin-top: 0.05rem;
+  padding: 0 0.3rem;
+  font-size: var(--step--2);
+}
+.curate-suggestions-main > svg {
+  align-self: start;
+  margin-top: 0.12rem;
+}
+/* A chip is one line, never a two-line blob: one too long for the side is
+   cut, whole in its title. */
+.curate-suggestions-chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A worry among the evidence — within the background, markers it has
+   already, markers shared, a grade lost — is to be looked at before the step
+   is trusted; a MAG made high quality is the good news. */
+.curate-suggestions-chip.is-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.curate-suggestions-chip.is-ok {
+  background: color-mix(in srgb, var(--ok) 14%, var(--bg));
+  color: var(--ok);
+}
+/* In auto, what a run would take wears the accent's rule; the rest stands back. */
+.curate-suggestions-row.is-auto-sure {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.curate-suggestions-row.is-auto-later {
+  opacity: 0.6;
+}
+.curate-suggestions-row.is-auto-later:hover,
+.curate-suggestions-row.is-auto-later:focus-within {
+  opacity: 1;
+}
+.curate-suggestions-acts {
+  margin-left: auto;
+}
+.curate-suggestions-act {
+  white-space: nowrap;
+}
+.curate-suggestions-act > .kbd-inline {
+  display: none;
+  margin-left: 0.15rem;
+}
+.curate-suggestions-act.is-keyed > .kbd-inline {
+  display: inline-block;
+}
+/* On the filled answer the key is drawn in its ink, not as a key cap pasted on. */
+.curate-suggestions-act.btn-primary > .kbd-inline {
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+  background: transparent;
+  color: inherit;
+  opacity: 0.85;
+}
+/* A question's suggestion answers with its mark alone: its word is its title's. */
+.curate-suggestions-act.is-small {
+  padding: 0.12rem 0.3rem;
+  font-size: var(--step--2);
+}
+/* Its key is the title's too: the row keeps its room for what the suggestion says. */
+.curate-suggestions-act.is-small > .kbd-inline,
+.curate-suggestions-act.is-small.is-keyed > .kbd-inline {
+  display: none;
+}
+.curate-suggestions-act-word {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A question of several suggestions opens on them, each with its own answer. */
+.curate-suggestions-members {
+  margin: -0.1rem 0.5rem 0.4rem 2.1rem;
+}
+.curate-suggestions-members-head {
+  width: max-content;
+  color: var(--text-dim);
+  font-size: var(--step--2);
+  cursor: pointer;
+  user-select: none;
+}
+.curate-suggestions-members-head:hover {
+  color: var(--accent);
+}
+.curate-suggestions-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.curate-suggestions-member {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  column-gap: 0.25rem;
+  padding: 0.1rem 0.2rem 0.1rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.curate-suggestions-member:hover {
+  background: color-mix(in srgb, var(--accent-soft) 60%, transparent);
+}
+.curate-suggestions-member.is-current {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.curate-suggestions-member-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.curate-suggestions-member-confidence {
+  min-width: 2.1rem;
+  text-align: right;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: var(--step--2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* `less sure · 29`: the questions under even odds, numbered from 1 again as
+   the review's band numbers them. */
+.curate-suggestions-divider {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.25rem 0 0;
+  color: var(--text-faint);
+  font-size: var(--step--2);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.curate-suggestions-divider::after {
+  content: '';
+  flex: 1 1 auto;
+  border-top: 1px solid var(--border);
+}
+.curate-suggestions-divider.is-more {
+  margin: 0 0 0.1rem;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.curate-suggestions-more {
+  font-size: var(--step--2);
+}
+
+/* Auto: the run, and what it held back and why — a grade it would lower. */
+.curate-suggestions-auto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.curate-suggestions-run {
+  align-items: center;
+}
+.curate-suggestions-running {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-right: 0.2rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+.curate-suggestions-running::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: curate-suggestions-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes curate-suggestions-pulse {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .curate-suggestions-running::before {
+    animation: none;
+  }
+}
+.curate-suggestions-sub {
+  margin-top: 0.15rem;
+}
+.curate-suggestions-held-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.curate-suggestions-held,
+.curate-suggestions-held-button {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+.curate-suggestions-held {
+  padding: 0.2rem 0.45rem;
+  border-left: 3px solid var(--warn);
+  border-radius: 0 4px 4px 0;
+  background: var(--bg-sunken);
+}
+.curate-suggestions-held-button {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.curate-suggestions-held-button:hover .curate-suggestions-held-words {
+  color: var(--accent);
+}
+.curate-suggestions-held-words {
+  overflow-wrap: anywhere;
+}
+.curate-suggestions-held-why {
+  color: var(--warn);
+  font-size: var(--step--2);
+  overflow-wrap: anywhere;
+}
+
+/* What was turned down: the words struck through, `offer again` at the end. */
+.curate-suggestions-declined-list > li {
+  align-items: baseline;
+}
+.curate-suggestions-declined-list .edit-declined-words {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.curate-suggestions-declined-list .edit-declined-words.is-gone {
+  font-style: italic;
+}
+.curate-suggestions-restore {
+  flex: none;
+  font-size: var(--step--2);
+}
+.curate-suggestions-learned {
+  font-size: var(--step--2);
+}
+
+/* ---- The history card (cards/HistoryCard.ts) ---- */
+
+.curate-history-list {
+  position: relative;
+  max-height: min(18rem, 40vh);
+}
+.curate-history-button {
+  align-items: baseline;
+  gap: 0.45rem;
+}
+.curate-history-text {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+/* The pill at the top right of the words, no taller than their first line, its
+   margin box ending inside it: a float that reaches the second line shortens
+   it by the pill's width, and a whole name there was cut mid-name. */
+.curate-history-by {
+  float: right;
+  margin: 0.12em 0 -0.25em 0.4rem;
+  line-height: 1.35;
+}
+.curate-history-steps {
+  color: var(--text-faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.curate-history-row.is-current .curate-history-steps {
+  color: var(--text-dim);
+}
+.curate-history-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* A curation kept for another binning is held, not applied: look before trusting the rows. */
+.curate-history-refusal {
+  padding: 0.25rem 0.5rem;
+  border-left: 3px solid var(--warn);
+  border-radius: 0 4px 4px 0;
+  background: var(--warn-soft);
+  color: var(--text);
+}
+.curate-history-undone,
+.curate-history-hint {
+  font-size: var(--step--2);
+}
+
+/* ---- The export card (cards/ExportCard.ts) ---- */
+
+/* Four tables, two by two: each button named for its file. */
+/* Two a row where a name like `contig → genome ✓` fits whole in each, one a
+   row where it does not — in the stage's own type, which is scaled — never a
+   name cut to `contig → ge…`. */
+.curate-export-files {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10.5em), 1fr));
+  gap: 0.3rem;
+}
+.curate-export-file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  min-width: 0;
+  white-space: nowrap;
+}
+.curate-export-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Written from the curation as it stands: ticked in the finished colour. */
+.curate-export-tick {
+  flex: none;
+  color: var(--ok);
+}
+.curate-export-status {
+  overflow-wrap: anywhere;
+}
+.curate-export-status:empty {
+  display: none;
+}
+.curate-export-stale {
+  color: var(--warn);
+  font-size: var(--step--2);
+}
+.curate-export-sub {
+  margin-top: 0.3rem;
+}
+
+/* The two commands, numbered: what each does on its line with its copy
+   button, the command under them the card's width, then what follows from
+   it. */
+.curate-export-recipe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: curate-export-step;
+}
+.curate-export-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'number does copy'
+    'command command command'
+    'then then then';
+  align-items: center;
+  gap: 0.25rem 0.4rem;
+  counter-increment: curate-export-step;
+}
+.curate-export-step::before {
+  grid-area: number;
+  content: counter(curate-export-step);
+  min-width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 999px;
+  background: var(--bg-muted);
+  color: var(--text-dim);
+  font-size: var(--step--2);
+  font-weight: 600;
+  line-height: 1.15rem;
+  text-align: center;
+}
+.curate-export-does {
+  grid-area: does;
+  min-width: 0;
+  color: var(--text);
+}
+/* As a shell takes it, the lines as copied: a line an argument, a flag
+   beside its value. A line too long for the card goes on under itself,
+   indented past the arguments' own indent, breaking only between a flag and
+   its value: a name, and the ` \` after it, move whole (a name longer than
+   the line alone breaks inside). */
+.curate-export-command {
+  grid-area: command;
+  display: block;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--step--2);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  user-select: all;
+}
+.curate-export-line {
+  display: block;
+  padding-left: 4ch;
+  text-indent: -4ch;
+}
+.curate-export-word {
+  display: inline-block;
+  max-width: 100%;
+  text-indent: 0;
+  word-break: break-all;
+}
+.curate-export-copy {
+  grid-area: copy;
+  color: var(--text-dim);
+}
+.curate-export-copy.is-copied {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.curate-export-then {
+  grid-area: then;
+  margin: 0;
+  font-size: var(--step--2);
+}
+
+/* ---- The card about the map (cards/AboutCard.ts) ---- */
+
+/* What was read and what the stage weighs by: a label, then its value, a
+   line under it saying how it was measured. */
+.curate-about-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.35rem 0.75rem;
+  margin: 0;
+}
+.curate-about-label {
+  color: var(--text-dim);
+}
+.curate-about-value {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.curate-about-note {
+  color: var(--text-faint);
+  font-size: var(--step--2);
+  line-height: 1.4;
+}
+
+/* *Edit the sequence*: the door to the reference editor (§27.10), first of a
+   genome's acts and haloed in the second accent — a soft glow round a hairline
+   of it, its icon in it — so it reads as another tool rather than a step here.
+   The glow brightens under the pointer and the keyboard. */
+.curate-act-sequence {
+  /* The whole first row of the acts' grid, over the rest. */
+  grid-column: 1 / -1;
+  border-color: color-mix(in srgb, var(--accent-alt) 55%, var(--border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent-alt) 20%, transparent),
+    0 0 10px 1px color-mix(in srgb, var(--accent-alt) 28%, transparent);
+}
+.curate-act-sequence > svg {
+  color: var(--accent-alt);
+}
+.curate-act-sequence:hover:not(:disabled),
+.curate-act-sequence:focus-visible {
+  border-color: var(--accent-alt);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent-alt) 35%, transparent),
+    0 0 14px 2px color-mix(in srgb, var(--accent-alt) 40%, transparent);
+}

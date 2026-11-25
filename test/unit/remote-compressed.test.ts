@@ -33,8 +33,8 @@ import { ViewerError } from '@/errors'
 /** The chunk a remote source reads in, which its probe asks for (§6.1). */
 const CHUNK = 256 * 1024
 
-const FILE = new URL('../../demo/metagenomics/mock-community/Mock_microbial_community.metacool', import.meta.url).pathname
-const URL_UNDER_TEST = 'https://example.test/demo/Mock_microbial_community.metacool'
+const FILE = new URL('../../demo/metagenomics/mock-community/MM133.metacool', import.meta.url).pathname
+const URL_UNDER_TEST = 'https://example.test/demo/MM133.metacool'
 
 const identity = new Uint8Array(readFileSync(FILE))
 const encoded = new Uint8Array(gzipSync(identity))
@@ -183,7 +183,7 @@ describe('a host that applies transfer compression', () => {
     expect(source.size).toBe(identity.byteLength)
 
     const mc = await MetaCooler.open(URL_UNDER_TEST, source)
-    expect(mc.nGenomes).toBe(49)
+    expect(mc.nGenomes).toBe(178)
     expect(mc.nContigs).toBe(20566)
     expect(mc.binsize).toBe(1000)
     mc.close()

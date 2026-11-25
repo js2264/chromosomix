@@ -302,6 +302,20 @@ export class SessionCommands {
             },
           ]
         : []),
+      // The stage that curates the genomes (§33), a dev feature (§29) on a
+      // metagenome alone: absent, not greyed, while the switch is off.
+      ...(devFeature('curate') && devFeature('metacool') && file !== null && isMetacool
+        ? [
+            {
+              id: 'curate-genomes',
+              group: 'View',
+              title: 'Curate the genomes',
+              hint: 'Move contigs between genomes, merge the fragments of one organism, recruit unbinned contigs and gather mobile elements with their hosts — the session drawn through the curated binning.',
+              enabled: this.session.reader !== null && this.session.curateStage === null && this.session.editStage === null,
+              run: () => void this.session.openCurateStage(),
+            },
+          ]
+        : []),
       {
         id: 'hide-map',
         group: 'View',

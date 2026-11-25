@@ -66,6 +66,8 @@ export interface ExportCardProps {
    * makes of the file's contigs, as it stands when asked.
    */
   binning?: () => BinningTable
+  /** What the genome edited is called, where that is not the id its edit is kept under (§27.10): its files are named after it. */
+  genomeName?: string
   /** When a file is written, for its header; a clock the tests can hold. */
   now?: () => Date
 }
@@ -230,7 +232,7 @@ export class ExportCard {
 
   private name(suffix: string): string {
     // One genome's files say whose they are (§27.10).
-    const genome = this.props.store.edit.original.genome
+    const genome = this.props.store.edit.original.genome === undefined ? undefined : (this.props.genomeName ?? this.props.store.edit.original.genome)
     return `${exportStem(this.props.title)}${genome === undefined ? '' : `.${exportBaseName(genome)}`}.${suffix}`
   }
 

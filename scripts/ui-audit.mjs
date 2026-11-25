@@ -18,6 +18,8 @@ import { execSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { withDev } from './gallery-lib.mjs'
+
 const require = createRequire(import.meta.url)
 function playwright() {
   try {
@@ -291,7 +293,7 @@ async function look(label, go, { width = 1920, height = 1100, dark = false } = {
 const YEAST = `${BASE}/demo/yeast/Yeast_microC.chromosomix.json`
 const TRACKS = `${BASE}/demo/yeast/Yeast_tracks.chromosomix.json`
 const DECK = `${BASE}/demo/yeast/Yeast_deck.chromosomix.json`
-const MOCK = `${BASE}/demo/metagenomics/mock-community/Mock_microbial_community.chromosomix.json`
+const MOCK = `${BASE}/demo/metagenomics/mock-community/MM133.chromosomix.json`
 const openAll = async (page) => {
   for (const t of ['Fold or show the General', 'Fold or show the Annotations', 'Fold or show the Aesthetics', 'Fold or show the Analysis']) {
     for (const b of await page.$$(`button[title^="${t}"]`)) {
@@ -321,7 +323,7 @@ await look('map 1366', async (p) => { await p.goto(`${BASE}/?config=${YEAST}`, {
 await look('map dark', async (p) => { await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000); await openAll(p) }, { dark: true })
 await look('browser', async (p) => { await p.goto(`${BASE}/?config=${TRACKS}`, { waitUntil: 'networkidle' }); await sleep(10000); await openAll(p) })
 await look('deck', async (p) => { await p.goto(`${BASE}/?config=${DECK}`, { waitUntil: 'networkidle' }); await sleep(12000); await openAll(p) })
-await look('metagenome', async (p) => { await p.goto(`${BASE}/?config=${MOCK}`, { waitUntil: 'networkidle' }); await sleep(10000) })
+await look('metagenome', async (p) => { await p.goto(withDev(`${BASE}/?config=${MOCK}`), { waitUntil: 'networkidle' }); await sleep(10000) })
 await look('chromosomes', async (p) => { await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000); await p.keyboard.press('c'); await sleep(2500) })
 await look('whole genome', async (p) => { await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000); await p.keyboard.press('w'); await sleep(3500) })
 await look('drawer', async (p) => { await p.goto(`${BASE}/?config=${YEAST}`, { waitUntil: 'networkidle' }); await sleep(9000); const r = p.locator('.analysis-task', { hasText: 'Contact probability' }).first(); if (await r.count()) { await r.click(); await sleep(2500) } })
@@ -368,7 +370,7 @@ await look('map context menu', async (p) => {
   if (map) { await p.mouse.click(map.x + map.width * 0.5, map.y + map.height * 0.5, { button: 'right' }); await sleep(900) }
 })
 await look('genome view', async (p) => {
-  await p.goto(`${BASE}/?config=${MOCK}`, { waitUntil: 'networkidle' }); await sleep(10000)
+  await p.goto(withDev(`${BASE}/?config=${MOCK}`), { waitUntil: 'networkidle' }); await sleep(10000)
   const row = p.locator('.view-genomes .tr .td:not(.td-check)').first()
   if (await row.count()) { await row.click(); await sleep(4000) }
   await openAll(p)

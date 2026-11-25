@@ -14,13 +14,13 @@ import { join } from 'node:path'
 import { gallery, sleep } from './gallery-lib.mjs'
 
 const OUT = process.argv[2] ?? 'gallery'
-const GENOME = process.env.GENOME ?? 'metator_00009_00000'
+const GENOME = process.env.GENOME ?? 'MM133_metator_00001_00002'
 const g = await gallery(OUT)
 const { page, shot, text, history } = g
 const files = join(OUT, 'files')
 mkdirSync(files, { recursive: true })
 
-await g.openWithDev(`?config=${g.base}/demo/metagenomics/mock-community/Mock_microbial_community.chromosomix.json`)
+await g.openWithDev(`?config=${g.base}/demo/metagenomics/mock-community/MM133.chromosomix.json`)
 await sleep(9000)
 await shot('g01-genomes')
 
@@ -34,7 +34,7 @@ await page.waitForSelector('.genome-picker-row', { timeout: 30_000 })
 await sleep(300)
 console.log('picker rows:', await page.evaluate(() => document.querySelectorAll('.genome-picker-row').length))
 await shot('g02-picker')
-await page.fill('.genome-picker-filter', GENOME.replace(/^metator_/, ''))
+await page.fill('.genome-picker-filter', GENOME)
 await sleep(300)
 await shot('g03-picker-filtered')
 await page.click('.genome-picker-row')

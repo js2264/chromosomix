@@ -1,0 +1,199 @@
+/* The curation stage (SPECS §33.3): scatter. Tokens only, both themes from the app's own. */
+
+/* ---------------------------------------------------------------------------
+   The GC × coverage scatter: a head (the count, how the hand selects, the
+   dots' sizes, the zoom), then the plot — three canvases one over another, the
+   dots, the marks, and the hand on top, which takes the pointer.
+   ------------------------------------------------------------------------- */
+
+.curate-scatter {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: var(--bg);
+}
+
+/* Short of room, whole pieces give way, never a word cut: the sizes first,
+   then the strip's count, then the hint's `drag to`, then the hint; the count
+   and the zoom stay. Measured by the pane (`fitHead`), which hides each with
+   `.hidden`: the reader's text scale grows the words and not the buttons, so no
+   width holds at every scale. */
+.curate-scatter-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 0 0 auto;
+  min-height: 2.5rem;
+  padding: 0.25rem 0.5rem 0.25rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: var(--step--1);
+}
+.curate-scatter.is-small .curate-scatter-head {
+  display: none;
+}
+
+/* What is placed: the contigs, and those the strip holds or none can place. */
+.curate-scatter-counts {
+  display: inline-flex;
+  align-items: baseline;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* The contigs' count is never cut; what the strip holds is, before it goes. */
+.curate-scatter-count {
+  flex: 0 0 auto;
+  color: var(--text);
+}
+.curate-scatter-bare {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.curate-scatter-bare:empty,
+.curate-scatter-count:empty {
+  display: none;
+}
+
+/* How the hand selects: one quiet line, its keys printed, never cut — it goes
+   whole when the room goes. */
+.curate-scatter-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.curate-scatter-hint > kbd {
+  margin-left: 0.3rem;
+}
+
+/* The dots' sizes: a dot's area is its contig's length. */
+.curate-scatter-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.curate-scatter-legend-word {
+  color: var(--text-faint);
+}
+.curate-scatter-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-variant-numeric: tabular-nums;
+}
+.curate-scatter-disc {
+  display: inline-block;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--text-faint);
+  opacity: 0.7;
+}
+
+.curate-scatter-tools {
+  display: inline-flex;
+  gap: 0.15rem;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+/* Nothing placed: nothing to lasso, size or zoom. */
+.curate-scatter.is-empty .curate-scatter-hint,
+.curate-scatter.is-empty .curate-scatter-legend,
+.curate-scatter.is-empty .curate-scatter-tools {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   The plot.
+   ------------------------------------------------------------------------- */
+
+.curate-scatter-plot {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.curate-scatter-plot > canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+}
+.curate-scatter-dots,
+.curate-scatter-marks {
+  pointer-events: none;
+}
+
+.curate-scatter-hand {
+  outline: none;
+  touch-action: none;
+  user-select: none;
+}
+.curate-scatter-hand:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.curate-scatter-hand[data-cursor='crosshair'] {
+  cursor: crosshair;
+}
+.curate-scatter-hand[data-cursor='pointer'] {
+  cursor: pointer;
+}
+.curate-scatter-hand[data-cursor='grab'] {
+  cursor: grab;
+}
+.curate-scatter-hand[data-cursor='grabbing'] {
+  cursor: grabbing;
+}
+
+/* A thumbnail beside the large picture: the stage's head above it makes it large. */
+.curate-scatter.is-small .curate-scatter-hand {
+  pointer-events: none;
+}
+
+/* What the plot is waiting for, or why it draws nothing. */
+.curate-scatter-note {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: min(26rem, 84%);
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-1);
+  color: var(--text-dim);
+  font-size: var(--step--1);
+  line-height: 1.45;
+  text-align: center;
+  pointer-events: none;
+}
+/* GC alone: a caption over the band it explains, not a box over the plot. */
+.curate-scatter-note.is-above {
+  transform: translate(-50%, -100%);
+  max-width: min(40rem, 92%);
+  padding: 0 0 0.25rem;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+.curate-scatter.is-small .curate-scatter-note {
+  padding: 0.2rem 0.5rem;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--text-faint);
+  font-size: var(--step--2);
+}

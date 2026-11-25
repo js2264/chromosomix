@@ -15,7 +15,7 @@
 import { complementByte } from '../annotations/fasta'
 import type { FeatureSet, PairSet } from '../annotations/types'
 import type { BigWigContig, BigWigSpans } from '../analysis/write/bigwig'
-import { isGap, type EditedAssembly, type Piece } from '../genome/edit'
+import { isGap, type EditedAssembly, type Part, type Piece } from '../genome/edit'
 import { assemblyObjects, type AssemblyObject } from './exports'
 
 /** Where a stretch of an original sequence lands among the sequences the files write. */
@@ -134,8 +134,30 @@ export async function fastaOf(
   read: ReadBases,
   options: { width?: number; onProgress?: (done: number, total: number) => void; cancelled?: () => boolean } = {},
 ): Promise<FastaOut | null> {
+  return fastaOfObjects(assemblyObjects(assembly), read, options)
+}
+
+/** A sequence a FASTA writes: a record of its parts, its header the name and, where given, a description after it. */
+export interface FastaObject {
+  name: string
+  parts: readonly Part[]
+  length: number
+  description?: string
+}
+
+/**
+ * A FASTA of any sequences made of the original's stretches and runs of `N`,
+ * as {@link fastaOf} writes an edited assembly's: every genome of a curated
+ * metagenome, laid out by its edit or not (§33.8).
+ *
+ * @returns `null` where `cancelled` said so.
+ */
+export async function fastaOfObjects(
+  objects: readonly FastaObject[],
+  read: ReadBases,
+  options: { width?: number; onProgress?: (done: number, total: number) => void; cancelled?: () => boolean } = {},
+): Promise<FastaOut | null> {
   const width = Math.max(1, Math.trunc(options.width ?? FASTA_WIDTH))
-  const objects = assemblyObjects(assembly)
   const total = objects.reduce((sum, object) => sum + object.length, 0)
   const parts: Uint8Array[] = []
   const missing = new Set<string>()
@@ -171,7 +193,7 @@ export async function fastaOf(
       put(NEWLINE)
       column = 0
     }
-    text(`>${object.name}\n`)
+    text(`>${object.name}${object.description === undefined || object.description === '' ? '' : ` ${object.description}`}\n`)
     for (const part of object.parts) {
       if (options.cancelled?.() === true) return null
       if (isGap(part)) {

@@ -20,6 +20,7 @@ import { EditStage, type EditStageProps } from '@/edit/EditStage'
 import { expectedOf } from '@/edit/method'
 import type { Suggested } from '@/edit/suggest'
 import { EditStore } from '@/state/referenceEdit'
+import { closeMenu, openMenu } from '@/ui/Menu'
 import type { PictureResult } from '@/worker/protocol'
 import { setUpDom, textsOf, type DomTeardown } from '../support/dom'
 import { simulate, type TruePiece } from '../support/simulatedMap'
@@ -209,6 +210,17 @@ describe('the stage', () => {
     expect(document.querySelector('.edit-readout')?.textContent).toBe('II is first already')
   })
 
+  it('leaves ↓ to a menu that is open, so a menu row is never also a step (§26.4)', async () => {
+    const { store } = await open()
+    sequence('II').click()
+    openMenu(20, 20, [{ label: 'nothing', run: () => {} }])
+    key('ArrowUp')
+    expect(store.applied).toBe(0)
+    closeMenu()
+    key('ArrowUp')
+    expect(store.applied).toBe(1)
+  })
+
   it('moves a sequence by its grip, dragged or with ↑ ↓ on it', async () => {
     const { store } = await open()
     const proto = HTMLElement.prototype as unknown as Record<string, unknown>
@@ -258,7 +270,23 @@ describe('the stage', () => {
         const kind = [...card.classList].find((name) => /^edit-(modes|[a-z]+-card)$/.test(name))
         return kind ?? (card.querySelector('.edit-card-head')?.textContent?.split(' ')[0] ?? '')
       })
-    expect(order()).toEqual(['edit-modes', 'selection', 'edit-sequences-card', 'history', 'edit-suggestions-card', 'edit-export-card', 'edit-picture-card'])
+    expect(order()).toEqual(['selection', 'edit-sequences-card', 'history', 'edit-suggestions-card', 'edit-export-card', 'edit-picture-card'])
+    // The modes are the title bar's, in its middle, as the curation's are (§33.3).
+    const modes = document.querySelector('.modal-edit .modal-head-centre > .edit-modes') as HTMLElement
+    expect(modes.textContent).toBe('apply suggestionsmanualreviewauto')
+    // The view's tools and the steps' before the ✕, the inspector's toggle last of them.
+    const end = document.querySelector('.modal-edit .modal-head-end') as HTMLElement
+    expect([...end.querySelectorAll('button')].map((node) => (node.getAttribute('aria-label') ?? '').replace(/ \(.*\)$/, ''))).toEqual([
+      'Show the whole assembly',
+      'Zoom out',
+      'Zoom in',
+      'Undo the last step',
+      'Redo it',
+      'Hide the inspector',
+      'Close',
+    ])
+    // The line at the head of the picture keeps the readout alone.
+    expect([...(document.querySelector('.edit-toolbar')?.children ?? [])].map((node) => node.className)).toEqual(['edit-readout'])
   })
 
   it('renames a sequence from its pencil, as a step, and refuses a name another has', async () => {
@@ -446,7 +474,7 @@ describe('the suggestions', () => {
 
   it('puts the suggestions card first in review and auto, and back after the history in manual', async () => {
     await openOnATurn()
-    const first = (): string | undefined => [...(document.querySelector('.edit-side-body')?.children ?? [])][1]?.className
+    const first = (): string | undefined => [...(document.querySelector('.edit-side-body')?.children ?? [])][0]?.className
     expect(first()).toBe('edit-card')
     button('review').click()
     expect(first()).toBe('edit-card edit-suggestions-card')

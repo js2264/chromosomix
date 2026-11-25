@@ -65,6 +65,7 @@
  */
 
 import type { OpenResult } from '../worker/protocol'
+import type { UnassignedStats } from '../metacooler/MetaCooler'
 import { convergenceOf, libraryComplexity, writePairtoolsStats, type PairStats } from '../pairs/stats'
 import { devFeature } from '../state/devFeatures'
 import { button, el, fmt } from './dom'
@@ -96,6 +97,32 @@ export interface InfoPanelProps {
    * perfectly ordinary one-file map.
    */
   onCloseFile?(which: 1 | 2): void
+  /**
+   * The file's genomes counted by kind, where the kinds are known — a curation's
+   * `kind` column, or metaTOR's `mge` (§33.2): the MAGs and the mobile elements
+   * are two different things to have found, and the File card counts them apart.
+   */
+  genomeKinds?: { mags: number; elements: number } | null
+}
+
+/**
+ * The genomes of a `/genomes` table counted by kind, the pool left out: by a
+ * curation's `kind` column, else by metaTOR's `mge`; `null` where neither says.
+ */
+export function countKinds(table: { columns: string[]; data: Record<string, string[] | Float64Array> }): { mags: number; elements: number } | null {
+  const names = table.data['name']
+  const kind = table.data['kind']
+  const mge = table.data['mge']
+  const column = Array.isArray(kind) ? { values: kind, element: (v: string) => v === 'element' } : Array.isArray(mge) ? { values: mge, element: (v: string) => v.toLowerCase() === 'true' } : null
+  if (column === null || !Array.isArray(names)) return null
+  let mags = 0
+  let elements = 0
+  names.forEach((name, row) => {
+    if (name === '__unbinned__') return
+    if (column.element(column.values[row] ?? '')) elements++
+    else mags++
+  })
+  return { mags, elements }
 }
 
 /**
@@ -110,6 +137,26 @@ export interface InfoPanelProps {
  * what is on screen. General says what the file *is*; it does not decide
  * whether it is drawn.
  */
+
+/**
+ * `1,204 contigs (30.1%) · 830 bins (8.3%)`: each quantity whole, and its share of its own total.
+ *
+ * Whole across a wrap as well: the line is longer than the card is wide, and it
+ * broke wherever the width ran out — `12,785` closing one line and `contigs
+ * (62.2%)` opening the next, a count read without what it counts. The spaces
+ * inside a quantity are no-break spaces, so the card breaks the line between
+ * the label and a quantity or at the `·` between two, and nowhere else.
+ */
+function unassignedText(stats: UnassignedStats): string {
+  const contigFraction = stats.totalContigs === 0 ? 0 : stats.contigs / stats.totalContigs
+  const binFraction = stats.totalBins === 0 ? 0 : stats.bins / stats.totalBins
+  return `${quantity(stats.contigs, 'contig', contigFraction)} · ${quantity(stats.bins, 'bin', binFraction)}`
+}
+
+/** `12,785 contigs (62.2%)`, one unbreakable run: the count, its noun, and its share. */
+function quantity(count: number, noun: string, fraction: number): string {
+  return [fmt.int(count), count === 1 ? noun : `${noun}s`, `(${fmt.pct(fraction)})`].join('\u00a0')
+}
 
 export class InfoPanel {
   readonly el: HTMLElement
@@ -342,7 +389,9 @@ export class InfoPanel {
   }
 
   private fileTable(info: OpenResult): HTMLElement {
-    const rows: Array<[string, string]> = [
+    // A key, its value, and — where the value alone does not say what it is
+    // of — the words under the pointer in place of the value itself.
+    const rows: Array<[string, string, string?]> = [
       ['uri', info.uri],
       ['layout', info.layout.kind],
       ['source', info.sourceKind === 'local' ? `local file (${fmt.bytes(info.sourceBytes)})` : `remote (${fmt.bytes(info.sourceBytes)})`],
@@ -386,9 +435,40 @@ export class InfoPanel {
       // width above a table saying 48 rows. The QC line below is the one place
       // it is counted.
       ...(info.hasGenomes
-        ? ([
-            ['genomes', fmt.int(info.nGenomes - (info.unassigned === null ? 0 : 1))],
-          ] as Array<[string, string]>)
+        ? ((): Array<[string, string]> => {
+            // The MAGs and the mobile elements counted apart, where the kinds
+            // are known (§33.2) — on the session's own file, whose table they
+            // were counted from.
+            const kinds = info === this.props.info ? (this.props.genomeKinds ?? null) : null
+            return kinds === null
+              ? [['genomes', fmt.int(info.nGenomes - (info.unassigned === null ? 0 : 1))]]
+              : [
+                  ['MAGs', fmt.int(kinds.mags)],
+                  ['elements', fmt.int(kinds.elements)],
+                ]
+          })()
+        : []),
+      // The curation the map is drawn through, where there is one (§33.4): the
+      // counts above are the curated genomes', and the file's pool is set
+      // beside the curated one in the Binning QC card. Keyed `curation` and
+      // valued by its steps alone, which is short enough to read whole: this
+      // card keeps a row to one line and scrolls sideways rather than wrap it,
+      // and `binning curated · 17 steps` lost its last letter at the General
+      // column's own width — read as *17 step*, a value that stopped rather than
+      // one that went on. The heading's word says `curated · 17 steps` as well.
+      ...(info.curation?.refusal === null && info.curation.file !== undefined
+        ? ((): Array<[string, string, string]> => {
+            const steps = `${fmt.int(info.curation.steps)} ${info.curation.steps === 1 ? 'step' : 'steps'}`
+            const laid = info.curation.laidOut ?? 0
+            // Genomes laid out by their edits of the reference (§27.10): a row of their own, short as this one.
+            return [
+              // Laid out with no step of the curation, the binning is the file's: only the layouts are said.
+              ...(info.curation.steps === 0 && laid > 0 ? [] : ([['curation', steps, `The genomes are drawn through a curation of ${steps} made on the file’s binning.`]] as Array<[string, string, string]>)),
+              ...(laid === 0
+                ? []
+                : ([['laid out', `${fmt.int(laid)} ${laid === 1 ? 'genome' : 'genomes'}`, `${fmt.int(laid)} ${laid === 1 ? 'genome is' : 'genomes are'} drawn as ${laid === 1 ? 'its edit' : 'their edits'} of the reference lay them out: their contigs ordered, turned and joined.`]] as Array<[string, string, string]>)),
+            ]
+          })()
         : []),
       [info.hasGenomes ? 'contigs' : 'chromosomes', fmt.int(info.nContigs)],
       ['bins', fmt.int(info.nBins)],
@@ -427,7 +507,7 @@ export class InfoPanel {
     return el(
       'div',
       { class: 'file-scroll' },
-      el('div', { class: 'kv kv-nowrap' }, ...rows.flatMap(([key, value]) => keyValue(key, value))),
+      el('div', { class: 'kv kv-nowrap' }, ...rows.flatMap(([key, value, title]) => keyValue(key, value, title))),
     )
   }
 
@@ -565,16 +645,37 @@ export class InfoPanel {
     // no bins is a false statement, not a reassuring one.
     if (!this.props.info.hasGenomes) return null
     const stats = this.props.info.unassigned
+    // Under a curation (§33.4) the pool is the curated binning's, and the
+    // file's is set beside it where the two differ.
+    const file = this.props.info.curation?.refusal === null ? this.props.info.curation.file : undefined
+    const differs =
+      file !== undefined && ((file.unassigned?.contigs ?? 0) !== (stats?.contigs ?? 0) || (file.unassigned?.bins ?? 0) !== (stats?.bins ?? 0))
+    const inFile =
+      file === undefined || !differs
+        ? []
+        : [
+            el('p', {
+              class: 'qc-stat qc-file',
+              text:
+                file.unassigned === null
+                  ? 'in the file: none unassigned'
+                  : `in the file: ${unassignedText(file.unassigned)}`,
+            }),
+          ]
     if (stats === null) {
       return el(
         'div',
         { class: 'card qc qc-clean' },
         cardTitle('Binning QC', 'info'),
-        el('p', { text: 'This file has no __unbinned__ genome: every contig was assigned to a bin.' }),
+        el('p', {
+          text:
+            file === undefined
+              ? 'This file has no __unbinned__ genome: every contig was assigned to a bin.'
+              : 'The curated binning assigns every contig to a genome.',
+        }),
+        ...inFile,
       )
     }
-    const contigFraction = stats.totalContigs === 0 ? 0 : stats.contigs / stats.totalContigs
-    const binFraction = stats.totalBins === 0 ? 0 : stats.bins / stats.totalBins
     return el(
       'div',
       { class: 'card qc' },
@@ -585,10 +686,9 @@ export class InfoPanel {
       // and a reader acts on neither; what they act on is the number.
       el('p', {
         class: 'qc-stat',
-        text:
-          `unassigned: ${fmt.int(stats.contigs)} contigs (${fmt.pct(contigFraction)}) · ` +
-          `${fmt.int(stats.bins)} bins (${fmt.pct(binFraction)})`,
+        text: `${file === undefined ? 'unassigned' : 'unassigned, curated'}: ${unassignedText(stats)}`,
       }),
+      ...inFile,
       el('p', {
         class: 'hint',
         text: '__unbinned__ is not a genome and is never drawn; a diagnostic of binning quality.',
@@ -664,7 +764,7 @@ function statsName(uri: string): string {
   return `${name.replace(/\.pairs(am)?(\.b?gz)?$/i, '') || 'pairs'}.stats`
 }
 
-function keyValue(key: string, value: string): HTMLElement[] {
+function keyValue(key: string, value: string, title: string = value): HTMLElement[] {
   return [
     el('div', { class: 'k', text: key }),
     // A long value **wraps** rather than being cut: the panel is where a reader
@@ -672,7 +772,8 @@ function keyValue(key: string, value: string): HTMLElement[] {
     // sideways scroll was the promise this made and never kept — a URL chopped
     // at `http://127.0.0.1:5` with no ellipsis and no scrollbar drawn reads as a
     // rendering fault rather than as a long path. The `title` stays for the
-    // reader who would rather hover than read three lines.
-    el('div', { class: 'v', text: value, title: value }),
+    // reader who would rather hover than read three lines, and says what the
+    // value is of where the value alone does not.
+    el('div', { class: 'v', text: value, title }),
   ]
 }

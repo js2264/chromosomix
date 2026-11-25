@@ -26,6 +26,7 @@
  */
 
 import { ViewerError, type ErrorCode } from '../errors'
+import type { RefusedContainer } from '../metacooler/detect'
 import { devFeature } from '../state/devFeatures'
 import { button, el } from './dom'
 import { Surface } from '../perf/rendered'
@@ -267,7 +268,9 @@ const GUIDANCE: Record<ErrorCode, Guidance> = {
  * the format, its genomes or its command line: a refusal is the last place a
  * reader should learn of a format this page will not open. The codes only a
  * multi-genome file raises (`mmetacool-root`, `bad-ordering`, `unbinned-…`,
- * `genome-coordinate-suffix`) cannot be reached with it off, and keep theirs.
+ * `genome-coordinate-suffix`) cannot be reached with it off, and keep theirs;
+ * the multi-genome file itself, refused under `not-a-cooler`, is headed as what
+ * it is ({@link MULTI_GENOME_GUIDANCE}), these words being false of it.
  */
 const PLAIN_GUIDANCE: Partial<Record<ErrorCode, Guidance>> = {
   'not-hdf5': {
@@ -336,6 +339,37 @@ const PLAIN_GUIDANCE: Partial<Record<ErrorCode, Guidance>> = {
 /** The guidance for a code, as this page reads it (§29). */
 function guidanceFor(code: ErrorCode): Guidance {
   return devFeature('metacool') ? GUIDANCE[code] : (PLAIN_GUIDANCE[code] ?? GUIDANCE[code])
+}
+
+/**
+ * A multi-genome container, refused while that format is a dev feature that is
+ * off (§29.3): headed as what it is.
+ *
+ * `not-a-cooler` by code, as every file this page does not read is, and told
+ * apart by the container the refusal names (`metacooler/detect.ts`) rather than
+ * by its prose. The plain heading that code has — *HDF5, but not a contact map*,
+ * over *it is not a cooler, an mcool or an scool* — was false of it twice: a
+ * `.metacool` is a contact map, and a cooler. So the heading names the file's
+ * kind — the reader's sentence above the advice says what that is and that
+ * this viewer does not open one — and the advice what it opens instead; none
+ * of it says the page could read the file, or how (§29.1, §29.2).
+ */
+const MULTI_GENOME_GUIDANCE: Record<RefusedContainer, Guidance> = {
+  metacool: {
+    title: 'This is a metagenome’s contact map',
+    advice: ['This viewer opens a plain cooler, an .mcool or an .scool.'],
+  },
+  mmetacool: {
+    title: 'This is a collection of metagenome contact maps',
+    advice: ['This viewer opens a plain cooler, an .mcool or an .scool.'],
+  },
+}
+
+/** The guidance of a multi-genome container's refusal (§29.3), or `null` for any other. */
+function multiGenomeGuidance(error: ViewerError): Guidance | null {
+  if (error.code !== 'not-a-cooler') return null
+  const container = error.detail['container']
+  return container === 'metacool' || container === 'mmetacool' ? MULTI_GENOME_GUIDANCE[container] : null
 }
 
 /**
@@ -438,7 +472,7 @@ export class ErrorView {
             ? REFUSED_GUIDANCE
             : perContig(viewerError)
               ? PER_CONTIG_GUIDANCE
-              : guidanceFor(viewerError.code)
+              : (multiGenomeGuidance(viewerError) ?? guidanceFor(viewerError.code))
 
     const entries = extractEntries(viewerError)
     const actions: HTMLElement[] = []

@@ -106,6 +106,49 @@ describe('the digit row', () => {
     expect(open(app)).toEqual([true, false, false, true])
   })
 
+  it('folds nothing while a dialog is up: a stage’s keys never reach the window behind it (§26.4)', () => {
+    const app = windowWithAFile()
+    const backdrop = document.createElement('div')
+    backdrop.className = 'modal-backdrop'
+    document.body.appendChild(backdrop)
+    press({ key: '1', code: 'Digit1' })
+    press({ key: '2', code: 'Digit2' })
+    expect(open(app)).toEqual([true, false, true, false])
+    backdrop.remove()
+    press({ key: '1', code: 'Digit1' })
+    expect(open(app)).toEqual([false, false, true, false])
+  })
+
+  it('hears a dialog’s own commands while that dialog is on top, and only those (§25.3, §26.4)', () => {
+    const ran: string[] = []
+    const backdrop = document.createElement('div')
+    backdrop.className = 'modal-backdrop'
+    const model = document.createElement('div')
+    backdrop.appendChild(model)
+    // The enlarged model's letters are the session's commands, bound while its
+    // dialog is up and naming it; `t` is a session command that names none.
+    const app = windowWithAFile([
+      { id: 'frame', group: 'Structure', title: 'Frame', keys: 'f', inDialog: model, run: () => ran.push('frame') },
+      { id: 'other', group: 'View', title: 'Other', keys: 't', run: () => ran.push('other') },
+    ])
+    document.body.appendChild(backdrop)
+    press({ key: 'f', code: 'KeyF' })
+    press({ key: 't', code: 'KeyT' })
+    press({ key: '1', code: 'Digit1' })
+    expect(ran).toEqual(['frame'])
+    expect(open(app)).toEqual([true, false, true, false])
+    // A dialog stacked over it — a question, a menu's dialog — takes them too.
+    const question = document.createElement('div')
+    question.className = 'modal-backdrop'
+    document.body.appendChild(question)
+    press({ key: 'f', code: 'KeyF' })
+    expect(ran).toEqual(['frame'])
+    question.remove()
+    backdrop.remove()
+    press({ key: 't', code: 'KeyT' })
+    expect(ran).toEqual(['frame', 'other'])
+  })
+
   it('is text in a box, and the browser’s with a modifier held', () => {
     const app = windowWithAFile()
     const box = document.createElement('input')

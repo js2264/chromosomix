@@ -32,7 +32,7 @@
   },
   "generated-by": {
    "python_type": "str",
-   "value": "metacooler-0.2.0"
+   "value": "metacooler-0.4.0"
   },
   "genome-assembly": {
    "python_type": "str",
@@ -270,234 +270,326 @@
   "columns": [
    "name",
    "length",
-   "genome_id"
+   "genome_id",
+   "qc_intra_contig_short",
+   "qc_intra_contig_long"
   ],
   "dtypes": {
    "genome_id": "<i4",
    "length": "<i4",
-   "name": "|S12"
+   "name": "|S12",
+   "qc_intra_contig_long": "<f8",
+   "qc_intra_contig_short": "<f8"
   },
   "length": 44,
   "rows": [
    {
     "genome_id": 0,
     "length": 12000,
-    "name": "contig_1_010"
+    "name": "contig_1_010",
+    "qc_intra_contig_long": 3.0,
+    "qc_intra_contig_short": 174.5
    },
    {
     "genome_id": 0,
     "length": 9000,
-    "name": "contig_1_035"
+    "name": "contig_1_035",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 174.5
    },
    {
     "genome_id": 0,
     "length": 8000,
-    "name": "contig_1_032"
+    "name": "contig_1_032",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 167.0
    },
    {
     "genome_id": 0,
     "length": 7000,
-    "name": "contig_1_015"
+    "name": "contig_1_015",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 157.5
    },
    {
     "genome_id": 0,
     "length": 6000,
-    "name": "contig_1_003"
+    "name": "contig_1_003",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 171.5
    },
    {
     "genome_id": 1,
     "length": 25000,
-    "name": "contig_1_023"
+    "name": "contig_1_023",
+    "qc_intra_contig_long": 208.5,
+    "qc_intra_contig_short": 328.0
    },
    {
     "genome_id": 1,
     "length": 22000,
-    "name": "contig_1_036"
+    "name": "contig_1_036",
+    "qc_intra_contig_long": 160.5,
+    "qc_intra_contig_short": 338.0
    },
    {
     "genome_id": 1,
     "length": 13000,
-    "name": "contig_1_012"
+    "name": "contig_1_012",
+    "qc_intra_contig_long": 27.0,
+    "qc_intra_contig_short": 407.5
    },
    {
     "genome_id": 2,
     "length": 50000,
-    "name": "contig_1_005"
+    "name": "contig_1_005",
+    "qc_intra_contig_long": 204.5,
+    "qc_intra_contig_short": 127.0
    },
    {
     "genome_id": 2,
     "length": 50000,
-    "name": "contig_1_034"
+    "name": "contig_1_034",
+    "qc_intra_contig_long": 202.5,
+    "qc_intra_contig_short": 122.5
    },
    {
     "genome_id": 2,
     "length": 12000,
-    "name": "contig_1_001"
+    "name": "contig_1_001",
+    "qc_intra_contig_long": 13.5,
+    "qc_intra_contig_short": 266.5
    },
    {
     "genome_id": 2,
     "length": 12000,
-    "name": "contig_1_020"
+    "name": "contig_1_020",
+    "qc_intra_contig_long": 12.5,
+    "qc_intra_contig_short": 251.0
    },
    {
     "genome_id": 3,
     "length": 27000,
-    "name": "contig_1_029"
+    "name": "contig_1_029",
+    "qc_intra_contig_long": 88.5,
+    "qc_intra_contig_short": 143.5
    },
    {
     "genome_id": 3,
     "length": 23000,
-    "name": "contig_1_019"
+    "name": "contig_1_019",
+    "qc_intra_contig_long": 85.5,
+    "qc_intra_contig_short": 147.5
    },
    {
     "genome_id": 3,
     "length": 10000,
-    "name": "contig_1_027"
+    "name": "contig_1_027",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 160.5
    },
    {
     "genome_id": 3,
     "length": 10000,
-    "name": "contig_1_030"
+    "name": "contig_1_030",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 163.0
    },
    {
     "genome_id": 3,
     "length": 10000,
-    "name": "contig_1_033"
+    "name": "contig_1_033",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 164.0
    },
    {
     "genome_id": 4,
     "length": 18000,
-    "name": "contig_1_000"
+    "name": "contig_1_000",
+    "qc_intra_contig_long": 108.0,
+    "qc_intra_contig_short": 414.0
    },
    {
     "genome_id": 4,
     "length": 3000,
-    "name": "contig_1_002"
+    "name": "contig_1_002",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 416.0
    },
    {
     "genome_id": 4,
     "length": 3000,
-    "name": "contig_1_037"
+    "name": "contig_1_037",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 410.0
    },
    {
     "genome_id": 5,
     "length": 19000,
-    "name": "contig_1_042"
+    "name": "contig_1_042",
+    "qc_intra_contig_long": 81.5,
+    "qc_intra_contig_short": 209.0
    },
    {
     "genome_id": 5,
     "length": 9000,
-    "name": "contig_1_043"
+    "name": "contig_1_043",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 253.5
    },
    {
     "genome_id": 5,
     "length": 7000,
-    "name": "contig_1_026"
+    "name": "contig_1_026",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 239.0
    },
    {
     "genome_id": 5,
     "length": 6000,
-    "name": "contig_1_025"
+    "name": "contig_1_025",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 245.5
    },
    {
     "genome_id": 6,
     "length": 48000,
-    "name": "contig_1_007"
+    "name": "contig_1_007",
+    "qc_intra_contig_long": 149.0,
+    "qc_intra_contig_short": 97.5
    },
    {
     "genome_id": 6,
     "length": 15000,
-    "name": "contig_1_006"
+    "name": "contig_1_006",
+    "qc_intra_contig_long": 24.5,
+    "qc_intra_contig_short": 157.0
    },
    {
     "genome_id": 6,
     "length": 12000,
-    "name": "contig_1_011"
+    "name": "contig_1_011",
+    "qc_intra_contig_long": 6.0,
+    "qc_intra_contig_short": 167.5
    },
    {
     "genome_id": 6,
     "length": 4000,
-    "name": "contig_1_004"
+    "name": "contig_1_004",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 151.0
    },
    {
     "genome_id": 6,
     "length": 4000,
-    "name": "contig_1_041"
+    "name": "contig_1_041",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 171.0
    },
    {
     "genome_id": 7,
     "length": 16000,
-    "name": "contig_1_040"
+    "name": "contig_1_040",
+    "qc_intra_contig_long": 71.5,
+    "qc_intra_contig_short": 375.5
    },
    {
     "genome_id": 7,
     "length": 9000,
-    "name": "contig_1_039"
+    "name": "contig_1_039",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 378.5
    },
    {
     "genome_id": 7,
     "length": 5000,
-    "name": "contig_1_016"
+    "name": "contig_1_016",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 436.5
    },
    {
     "genome_id": 8,
     "length": 20000,
-    "name": "contig_1_009"
+    "name": "contig_1_009",
+    "qc_intra_contig_long": 86.0,
+    "qc_intra_contig_short": 218.0
    },
    {
     "genome_id": 8,
     "length": 11000,
-    "name": "contig_1_024"
+    "name": "contig_1_024",
+    "qc_intra_contig_long": 1.5,
+    "qc_intra_contig_short": 271.0
    },
    {
     "genome_id": 8,
     "length": 9000,
-    "name": "contig_1_013"
+    "name": "contig_1_013",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 249.5
    },
    {
     "genome_id": 8,
     "length": 9000,
-    "name": "contig_1_038"
+    "name": "contig_1_038",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 221.0
    },
    {
     "genome_id": 9,
     "length": 50000,
-    "name": "contig_1_021"
+    "name": "contig_1_021",
+    "qc_intra_contig_long": 151.0,
+    "qc_intra_contig_short": 76.5
    },
    {
     "genome_id": 9,
     "length": 28000,
-    "name": "contig_1_018"
+    "name": "contig_1_018",
+    "qc_intra_contig_long": 97.0,
+    "qc_intra_contig_short": 136.0
    },
    {
     "genome_id": 9,
     "length": 14000,
-    "name": "contig_1_028"
+    "name": "contig_1_028",
+    "qc_intra_contig_long": 20.0,
+    "qc_intra_contig_short": 188.5
    },
    {
     "genome_id": 9,
     "length": 6000,
-    "name": "contig_1_017"
+    "name": "contig_1_017",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 155.5
    },
    {
     "genome_id": 9,
     "length": 5000,
-    "name": "contig_1_014"
+    "name": "contig_1_014",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 147.5
    },
    {
     "genome_id": 10,
     "length": 17000,
-    "name": "contig_1_031"
+    "name": "contig_1_031",
+    "qc_intra_contig_long": 100.0,
+    "qc_intra_contig_short": 403.0
    },
    {
     "genome_id": 10,
     "length": 5000,
-    "name": "contig_1_022"
+    "name": "contig_1_022",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 451.5
    },
    {
     "genome_id": 10,
     "length": 3000,
-    "name": "contig_1_008"
+    "name": "contig_1_008",
+    "qc_intra_contig_long": 0.0,
+    "qc_intra_contig_short": 383.0
    }
   ]
  },
@@ -559,6 +651,16 @@
    "name": {
     "dtype": "|S12",
     "kind": "S",
+    "length": 44
+   },
+   "qc_intra_contig_long": {
+    "dtype": "<f8",
+    "kind": "f",
+    "length": 44
+   },
+   "qc_intra_contig_short": {
+    "dtype": "<f8",
+    "kind": "f",
     "length": 44
    }
   },
@@ -1575,7 +1677,7 @@
   "format": "HDF5::MetaCooler",
   "format-url": "https://github.com/js2264/metacooler",
   "format-version": 1,
-  "generated-by": "metacooler-0.2.0",
+  "generated-by": "metacooler-0.4.0",
   "nbins": 661,
   "ncontigs": 44,
   "ngenomes": 11,

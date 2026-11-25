@@ -346,6 +346,14 @@ export interface Command {
    */
   enabled?: boolean
   /**
+   * The dialog these keys belong to (§26.4): an element inside it. While any
+   * dialog is open the window's keys stand down — everything behind a dialog is
+   * inert — except a command whose `inDialog` is in the dialog on top. The
+   * enlarged 3D model's letters (§25.3) are bound this way, only while its
+   * dialog is up, since the model is the whole window there.
+   */
+  inDialog?: Element
+  /**
    * Stand down when the keystroke is really about text.
    *
    * For the one binding that collides with something the browser already does:
@@ -440,11 +448,16 @@ export function shiftKey(): string {
 export function keyLabel(keys: string): string {
   const mac = isMac()
   const { mods, key } = parseKeys(keys)
-  return [...mods.map((mod) => MODIFIERS[mod]?.[mac ? 0 : 1] ?? mod), keyGlyph(key, mac)].join(mac ? '' : '+')
+  // A Mac writes its modifiers in one order whatever the binding's: ⌃⌥⇧⌘.
+  const ordered = mac ? [...mods].sort((a, b) => MAC_ORDER.indexOf(a) - MAC_ORDER.indexOf(b)) : mods
+  return [...ordered.map((mod) => MODIFIERS[mod]?.[mac ? 0 : 1] ?? mod), keyGlyph(key, mac)].join(mac ? '' : '+')
 }
 
 /** Each modifier as a Mac writes it and as everything else does. */
-const MODIFIERS: Record<string, readonly [string, string]> = { mod: ['⌘', 'Ctrl'], ctrl: ['⌃', 'Ctrl'] }
+const MODIFIERS: Record<string, readonly [string, string]> = { mod: ['⌘', 'Ctrl'], ctrl: ['⌃', 'Ctrl'], alt: ['⌥', 'Alt'], shift: ['⇧', 'Shift'] }
+
+/** The order a Mac writes its modifiers in. */
+const MAC_ORDER = ['ctrl', 'alt', 'shift', 'mod']
 
 /**
  * A key's badge as the children of a `<kbd>`: {@link keyLabel}, with any

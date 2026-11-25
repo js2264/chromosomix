@@ -638,6 +638,10 @@ All through the save dialog (§26.6), each a new file, none touching the one ope
 - **Lifted tracks** — a signal as bigWig or bedGraph, features as BED (strands flipped, features
   across a cut split in two), pairs as BEDPE, marks as the Manual card writes them.
 - **A metagenome's**: the contig → MAG table `metacooler create` takes, and a FASTA and AGP per MAG.
+  Inside a curation of the genomes (SPECS §33), a genome's edit is the curated genome's: every contig
+  it takes in or lets go whole is a move of the curation as well, the session draws the genome laid
+  out in its place, and the curation's export writes every genome as drawn — one AGP, one FASTA and a
+  sequence → genome table (SPECS §27.10, §33.4, §33.8).
 
 ---
 
@@ -706,8 +710,9 @@ A mechanism the app did not have: a feature on `main`, built and tested like any
   and the genome and pair views, the metagenome tasks, the example and every sentence that names
   them), `edit` (the stage, its task, its keys, the lens's surfaces) and `dotplot`. Making one public
   is deleting its line.
-- **Off, a `.metacool` is refused like any file the app does not read**, in the generic sentence, and
-  so is an `.mmetacool`. (A `.metacool` also satisfies cooler's own test (§3.1), so this is an active
+- **Off, a `.metacool` is refused like any file the app does not read**, under that refusal's code but
+  in words true of it — a metagenome's contact map, which this viewer does not open, never the generic
+  *it is not a cooler*, which a `.metacool` is (SPECS §29.3) — and so is an `.mmetacool`. (A `.metacool` also satisfies cooler's own test (§3.1), so this is an active
   refusal, not a detection branch skipped.)
 - **State a dev feature left is kept, not applied.** A link or a workspace carrying an edit opens
   without it while the switch is off; the record is untouched, so turning the switch on brings it

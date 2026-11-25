@@ -1562,6 +1562,9 @@ describe('select mode and the reader\'s marks (§25.4)', () => {
     expect(bound.get('structure-frame')).toBe('f')
     expect(bound.get('structure-all')).toBe('a')
     expect(bound.get('structure-turn')).toBe('r')
+    // …and say the dialog is theirs, so the window hears them over it (§26.4).
+    const frame = deck.cellCommands().find((c) => c.id === 'structure-frame')
+    expect(frame?.inDialog?.closest('.modal-backdrop')).not.toBeNull()
     // The three modes have none, enlarged or not (§25.4): a bare letter that
     // arms a mode is a letter pressed by accident with the pointer over the
     // model, and `e`, `o` and `m` each belonged to something else, so the

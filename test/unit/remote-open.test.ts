@@ -16,7 +16,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { openSync, readSync, statSync, closeSync } from 'node:fs'
 import { requireGenomes } from './_golden'
 
-const FILE = new URL('../../demo/metagenomics/mock-community/Mock_microbial_community.metacool', import.meta.url).pathname
+const FILE = new URL('../../demo/metagenomics/mock-community/MM133.metacool', import.meta.url).pathname
 const URL_FOR = (path: string): string => `https://example.test/${path.replace(/^\//, '')}`
 /** The chunk a remote source reads in, which is what its probe asks for (§6.1). */
 const CHUNK = 256 * 1024
@@ -122,11 +122,11 @@ describe('opening a file over ranged HTTP', () => {
     expect(source.size).toBe(size)
 
     const mc = await MetaCooler.open(url, source)
-    expect(mc.nGenomes).toBe(49)
+    expect(mc.nGenomes).toBe(178)
     expect(mc.nContigs).toBe(20566)
     expect(mc.binsize).toBe(1000)
 
-    // The point of the exercise: a 14 MB file opened out of a fraction of itself.
+    // The point of the exercise: a 12 MB file opened out of a fraction of itself.
     expect(source.stats().bytes).toBeLessThan(size / 2)
     mc.close()
     source.close()
@@ -142,7 +142,7 @@ describe('opening a file over ranged HTTP', () => {
         fetchImpl: fakeFetch as typeof fetch,
       })
       const mc = await MetaCooler.open(URL_FOR(FILE), source)
-      expect(mc.nGenomes).toBe(49)
+      expect(mc.nGenomes).toBe(178)
       expect(requireGenomes(mc).columns).toContain('name')
       mc.close()
       source.close()

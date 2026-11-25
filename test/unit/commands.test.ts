@@ -392,6 +392,15 @@ describe('keyLabel', () => {
     expect(keyLabel('mod+p')).toBe('⌘P')
   })
 
+  it('names Shift and Alt as each platform does, a Mac in its own order', () => {
+    on('Linux x86_64')
+    expect(keyLabel('mod+shift+z')).toBe('Ctrl+Shift+Z')
+    expect(keyLabel('shift+Enter')).toBe('Shift+Enter')
+    on('MacIntel')
+    expect(keyLabel('mod+shift+z')).toBe('⇧⌘Z')
+    expect(keyLabel('alt+mod+k')).toBe('⌥⌘K')
+  })
+
   it('upper-cases a single-character key and leaves named keys alone', () => {
     expect(keyLabel('g')).toBe('G')
     expect(keyLabel('?')).toBe('?')

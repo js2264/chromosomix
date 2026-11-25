@@ -60,6 +60,12 @@
   --accent: #1f5fa9;
   --accent-soft: #dce8f7;
   /*
+   * A second accent, for the one act a card wants seen first — the door to
+   * another tool, such as a genome's sequence in the reference editor (§33.3):
+   * a violet, so it is never read as the blue that says *pressed* or *here*.
+   */
+  --accent-alt: #7440c8;
+  /*
    * Text and marks set *in* an accent fill, rather than on the page.
    *
    * Six rules wrote `#fff` here and one wrote `white`, which was right on the
@@ -209,6 +215,7 @@
   --text-faint: #8a8c90;
   --accent: #6ba4e8;
   --accent-soft: #203657;
+  --accent-alt: #b593f0;
   --on-accent: #131416;
   --danger: #ef8a8a;
   --danger-soft: #3b2020;
@@ -238,6 +245,7 @@
   --text-faint: #8a8c90;
   --accent: #6ba4e8;
   --accent-soft: #203657;
+  --accent-alt: #b593f0;
   --on-accent: #131416;
   --danger: #ef8a8a;
   --danger-soft: #3b2020;
@@ -5814,6 +5822,58 @@ body.is-carrying-tab * {
   text-transform: none;
   letter-spacing: normal;
   color: var(--text);
+}
+
+/* A head that carries controls (`ModalProps.head`): the caller's tools before
+   the ✕, a hairline between them, and — with a centre — three columns, the
+   centre in the middle of the bar while the title's column holds its first
+   words, the end never cut; narrower (`is-stacked`, measured by the modal), the
+   centre on a line of its own under the title and the end. */
+.modal-head-end {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 0.5rem;
+}
+/* A control's words, and a label beside them, at the controls' step. */
+.modal-head-centre,
+.modal-head-end {
+  font-size: var(--step--1);
+}
+.modal-head-end > :not(.btn-close) {
+  padding-right: 0.5rem;
+  border-right: 1px solid var(--border);
+}
+.modal-head.has-centre {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
+}
+.modal-head.has-centre > .modal-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.modal-head-centre {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+.modal-head.has-centre.is-stacked {
+  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-areas:
+    'title end'
+    'centre centre';
+  row-gap: 0.4rem;
+}
+.modal-head.is-stacked > .modal-title {
+  grid-area: title;
+}
+.modal-head.is-stacked > .modal-head-centre {
+  grid-area: centre;
+}
+.modal-head.is-stacked > .modal-head-end {
+  grid-area: end;
 }
 
 /* Where the file's own columns end and what its creator joined in begins. One
@@ -12420,7 +12480,9 @@ span.deck-name {
   padding: 0.6rem 0.8rem 2.6rem;
   border-left: 1px solid var(--border);
   overflow-y: auto;
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  /* The app's step, as a card in a panel is: the reader's text scale is for
+     the words drawn on a picture (`ui/textScale.ts`), not for the page. */
+  font-size: var(--step--1);
 }
 
 /* The grip between the picture and the settings, six pixels of it, with a
@@ -14413,8 +14475,25 @@ span.deck-name {
   bottom: 8px;
   z-index: 4;
 }
+/* Docked in the dialog's head where the caller gives it an end
+   (`StageDialogProps.head`), last before the ✕, over no card. */
+.modal-head-end .stage-side-toggle {
+  position: static;
+}
 .stage-side.hidden {
   display: none;
+}
+/* Opened where it does not fit beside the stage (`StageDialogProps.stageMin`):
+   over the stage's right edge, a drawer at its own width, lifted off the
+   picture rather than squeezing it. Escape folds it, in the caller's order. */
+.stage-side.is-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  max-width: calc(100% - 3rem);
+  box-shadow: var(--shadow-2);
 }
 
 /* The cell's on/off settings as icon toggles, in rows; a field with a toggle
@@ -14580,7 +14659,7 @@ span.deck-name {
 .genome-picker-note {
   margin: 0;
   color: var(--text-dim);
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-size: var(--step--1);
 }
 .genome-picker-list {
   list-style: none;
@@ -14623,7 +14702,7 @@ span.deck-name {
 }
 .genome-picker-steps {
   color: var(--accent);
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-size: var(--step--1);
   text-align: right;
 }
 .genome-picker-none {
@@ -14645,12 +14724,23 @@ span.deck-name {
   min-width: 0;
   min-height: 0;
 }
+/* The line at the head of the picture: the readout alone, the tools being the
+   title bar's (§27.3), as the curation's are. */
 .edit-toolbar {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
+  padding: 0.35rem 0.75rem;
   border-bottom: 1px solid var(--border);
+}
+/* The title bar's tools: the view's, then the steps', a little apart. */
+.modal-edit .modal-head {
+  padding-block: 0.3rem;
+}
+.edit-head-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 .edit-tools {
   display: flex;
@@ -14660,11 +14750,11 @@ span.deck-name {
 .edit-readout {
   flex: 1 1 auto;
   min-width: 0;
-  text-align: center;
+  text-align: start;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-size: var(--step--1);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -14753,7 +14843,7 @@ span.deck-name {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-size: var(--step--1);
 }
 .edit-side-body p,
 .edit-side-body button {
@@ -14761,7 +14851,14 @@ span.deck-name {
 }
 .edit-modes {
   display: flex;
+  align-items: center;
   gap: 0.25rem;
+}
+/* What the modes decide, before them in the title bar's middle. */
+.edit-modes-label {
+  margin-right: 0.3rem;
+  color: var(--text-dim);
+  white-space: nowrap;
 }
 .edit-card {
   display: flex;
@@ -14774,7 +14871,7 @@ span.deck-name {
 }
 .edit-card-head {
   margin: 0;
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -14782,7 +14879,7 @@ span.deck-name {
 }
 .edit-card-sub {
   margin: 0.4rem 0 0.1rem;
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-weight: 600;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -14970,24 +15067,38 @@ span.deck-name {
 .edit-card-act {
   flex: none;
   padding: 0 0.4rem;
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-size: var(--step--1);
 }
+/* The stretch on its line, why under it — a genome it was sent to is a long
+   name (§27.10), and beside the stretch it left the stretch a letter a line —
+   and its way back at the right of both. */
 .edit-aside-list > li {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'locus back'
+    'why back';
+  column-gap: 0.5rem;
   align-items: center;
-  gap: 0.5rem;
   padding: 0.15rem 0.5rem;
 }
 .edit-aside-locus {
-  flex: 1 1 auto;
+  grid-area: locus;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 .edit-aside-why {
+  grid-area: why;
+  min-width: 0;
   color: var(--text-dim);
+  font-size: var(--step--2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* What was set aside, put back (§27.4): quiet, as a row's own act is. */
 .edit-aside-back {
+  grid-area: back;
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -15004,7 +15115,7 @@ span.deck-name {
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   line-height: 1.5;
 }
 
@@ -15046,7 +15157,7 @@ span.deck-name {
 .edit-genome-share {
   grid-area: share;
   color: var(--text-dim);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   font-variant-numeric: tabular-nums;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -15145,7 +15256,7 @@ span.deck-name {
   padding: 0.3rem 0.75rem;
   border-bottom: 1px solid var(--border);
   background: var(--accent-soft);
-  font-size: calc(var(--step--1) * var(--text-scale, 1));
+  font-size: var(--step--1);
 }
 .edit-review.hidden {
   display: none;
@@ -15247,7 +15358,7 @@ span.deck-name {
   border-radius: 999px;
   background: var(--bg-muted);
   color: var(--text-dim);
-  font-size: calc(var(--step--2) * var(--text-scale, 1));
+  font-size: var(--step--2);
   line-height: 1.6;
 }
 /* The chip that says a suggestion's ends were dragged is the way back too (§27.6). */
@@ -15306,7 +15417,10 @@ span.deck-name {
   margin-left: auto;
 }
 .breadcrumb > .crumb-reference + .crumb-res,
-.breadcrumb > .crumb-reference + .crumb-contacts {
+.breadcrumb > .crumb-reference + .crumb-contacts,
+/* On a metagenome the word on the genomes (§33.4) comes first and takes the
+   free space; the reference's reads on from it. */
+.breadcrumb > .crumb-reference + .crumb-reference {
   margin-left: 0;
 }
 .crumb-reference-button {

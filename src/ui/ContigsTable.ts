@@ -30,6 +30,12 @@ export interface ContigsTableOptions {
   rows?: number[]
   /** Columns to omit — `genome_id` is noise on a synthesised single-genome file. */
   hideColumns?: string[]
+  /**
+   * The genomes `genome_id` indexes, where the file has a genome layer: the
+   * column then names each contig's genome rather than its row of `/genomes` —
+   * a number nobody reads, and one a curation renumbers (§33.4).
+   */
+  genomeNames?: readonly string[]
   title?: string
   hint?: string
   /**
@@ -197,9 +203,24 @@ export class ContigsTable {
     // The first column the file's creator joined in, marked so the header shows
     // where the format's own two end — the same break the record card draws.
     const firstJoined = ordered.find((name) => !CORE_ORDER.includes(name))
+    const genomeNames = options.genomeNames
     const columns: ColumnDef[] = ordered.map((name) => {
       const column = payload.data[name]
       const joined = name === firstJoined ? { joined: true } : {}
+      if (name === 'genome_id' && genomeNames !== undefined && !payloadColumnIsText(column)) {
+        return {
+          key: 'genome',
+          label: 'genome',
+          title: 'genome — the genome this contig is in, by name (genome_id in the file)',
+          ...joined,
+          kind: 'string',
+          width: 'minmax(9rem, 1fr)',
+          value: (row) => {
+            const id = column[row]
+            return Number.isInteger(id) && id >= 0 && id < genomeNames.length ? genomeNames[id] : undefined
+          },
+        }
+      }
       const note = CORE_ORDER.includes(name)
         ? {}
         : { title: `${name} — joined in with the file, not part of the format` }
