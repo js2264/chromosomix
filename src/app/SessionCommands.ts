@@ -62,6 +62,31 @@ export class SessionCommands {
     }
   }
 
+  /**
+   * The ideogram (§5.11), `Z`: every chromosome whole, side by side, with the
+   * tracks beside each — from the browser, or from a map, which is put down as
+   * `v` puts it down. A switch titled by its noun and wearing its state
+   * (§26.4); a dev feature (§29), so absent while the switch is off.
+   */
+  private ideogram(): Command[] {
+    if (!devFeature('ideogram')) return []
+    const shown = this.session.ideogramShown
+    return [
+      {
+        id: 'ideogram',
+        group: 'View',
+        title: 'Ideogram',
+        hint: shown
+          ? 'Back to the picture the ideogram replaced — the browser, or the map it was put up over.'
+          : 'Every chromosome whole, side by side, with the tracks beside each; a contact map is put down first, as V puts it down.',
+        keys: KEYS.ideogram,
+        state: shown ? 'on' : 'off',
+        enabled: this.session.assembly !== null || this.session.canHideMap,
+        run: () => this.session.toggleIdeogram(),
+      },
+    ]
+  }
+
   private own(): Command[] {
     const state = this.session.store.state
     const file = this.session.file
@@ -81,15 +106,27 @@ export class SessionCommands {
     const stepNoun = state?.view === 'genome' ? 'genome' : 'sequence'
     const chip = (on: boolean): 'on' | 'off' => (on ? 'on' : 'off')
     const expected = this.session.current?.panel?.expectedLit ?? null
+    const drawnRound = this.session.current?.panel?.circleLit ?? null
+    const drawnLines = this.session.current?.panel?.linesLit ?? null
     if (this.session.assembly !== null) {
+      // Over the ideogram (§5.11) the whole genome is its camera at rest —
+      // every chromosome whole again — and the browser's window, which is where
+      // it goes back to when the ideogram is put away, is left where it was.
+      const ideogram = this.session.ideogramShown
+      const whole = (): void => {
+        if (ideogram) this.session.browser?.fitIdeogram()
+        else this.session.store.patch({ locus: undefined })
+      }
       return [
         {
           id: 'browser-whole',
           group: 'Go',
           title: 'Whole genome',
-          hint: 'Every sequence, end to end. Also the 0 key, and a double click on the tracks.',
+          hint: ideogram
+            ? 'Every chromosome whole again, as the ideogram opens. Also the 0 key.'
+            : 'Every sequence, end to end. Also the 0 key, and a double click on the tracks.',
           keys: KEYS.whole,
-          run: () => this.session.store.patch({ locus: undefined }),
+          run: whole,
         },
         // `0` is the map's refit, and the browser's whole genome is what a refit
         // is here: the same key in both, so a reader who learnt it on one picture
@@ -98,9 +135,11 @@ export class SessionCommands {
           id: 'browser-fit',
           group: 'View',
           title: 'Fit the view',
-          hint: 'The whole genome across, as W and a double click on the tracks do.',
+          hint: ideogram
+            ? 'Every chromosome whole in the window, as W does.'
+            : 'The whole genome across, as W and a double click on the tracks do.',
           keys: KEYS.fit,
-          run: () => this.session.store.patch({ locus: undefined }),
+          run: whole,
         },
         // The same two keys a map has, walking the same list. They were left out
         // of this branch, which made the browser the one view where the plainest
@@ -194,6 +233,7 @@ export class SessionCommands {
           keys: KEYS.find,
           run: () => this.session.browser?.focusSearch(),
         },
+        ...this.ideogram(),
         {
           id: 'show-map',
           group: 'View',
@@ -274,6 +314,7 @@ export class SessionCommands {
         enabled: this.session.canHideMap,
         run: () => this.session.cycleView(),
       },
+      ...this.ideogram(),
       {
         id: 'map-export',
         group: 'File',
@@ -358,6 +399,37 @@ export class SessionCommands {
         enabled: this.session.current?.panel?.canCentreOnDiagonal === true || diagonalLocked(),
         run: () => void toggleDiagonalLock(),
       },
+      // The circle (§7.6), titled by its noun and wearing its state. Listed
+      // wherever the dev features are on and greyed where the map cannot be
+      // drawn round, as the palette greys rather than changes shape.
+      ...(devFeature('circle')
+        ? [
+            {
+              id: 'map-circle',
+              group: 'View' as const,
+              title: 'Circle',
+              hint:
+                'The map drawn round — each genome an arc, chords as wide as their contacts, the ' +
+                'tracks as rings — the orbit toggle on the Map card.',
+              ...(drawnRound === null ? {} : { state: chip(drawnRound) }),
+              enabled: this.session.current?.panel?.canToggleCircle === true,
+              run: () => this.session.current?.panel?.toggleCircle(),
+            },
+            // The two lines beside it, on the same terms: the toggle after the
+            // orbit on the Map card.
+            {
+              id: 'map-lines',
+              group: 'View' as const,
+              title: 'Two lines',
+              hint:
+                'The map drawn as two lines — the genomes split in two by a column of the Genomes table, ' +
+                'ribbons between them as wide as their contacts, the tracks as lanes.',
+              ...(drawnLines === null ? {} : { state: chip(drawnLines) }),
+              enabled: this.session.current?.panel?.canToggleLines === true,
+              run: () => this.session.current?.panel?.toggleLines(),
+            },
+          ]
+        : []),
       {
         id: 'map-fit',
         group: 'View',

@@ -41,6 +41,8 @@ import { ReferenceChip } from '../edit/ReferenceChip'
 import { DEFAULT_UI_COLORMAP } from '../render/colormaps'
 import { ManualStore, type ManualMark } from '../annotations/manual'
 import { GroupSettings } from '../annotations/groups'
+import { IdeogramSettings } from '../state/ideogramLook'
+import type { KaryotypeOrientation } from '../render/karyotype'
 import { AnnotationStore } from '../annotations/store'
 import { AnnotationClient } from '../annotations/worker/client'
 import { AnalysisClient } from '../analysis/worker/client'
@@ -123,6 +125,21 @@ import type {
   DerivePresentation,
   TurnPresentation,
 } from '../ui/MatrixPanel'
+import type { CirclePresentation, LinesPresentation } from '../ui/CircleView'
+import { lineSplit, splitChoices, type SplitChoice } from './lineSplit'
+import { slotCount, type CircleResolver, type CircleUnit } from '../render/circle'
+import type { AxisGenomes } from '../render/blockOrder'
+import {
+  FILE_ORDER,
+  OrderStore,
+  arrange,
+  isFileOrder,
+  withContigsMoved,
+  withGenomesMoved,
+  type ReaderOrder,
+  type Side,
+} from '../state/readerOrder'
+import { circleResolverFrom } from './circleIndex'
 import type { LowerPresentation } from '../ui/LowerReading'
 import { rereading, type LowerRead } from '../ui/compare'
 import { binsForLength } from '../analysis/context'
@@ -180,7 +197,7 @@ import { metadataIndexFrom, type MetadataIndex } from '../annotations/metaIndex'
 import { summaryOf, type MetaLevel } from '../annotations/metadata'
 import { BookmarkStore, formatRegion, type Bookmark } from '../annotations/bookmarks'
 import { BookmarksCard } from '../ui/BookmarksCard'
-import type { AnnotationContext, BorrowedScale, FigureSubject, MatrixPanel } from '../ui/MatrixPanel'
+import type { AnnotationContext, BorrowedScale, FigureSubject, MatrixPanel, PanelOrder } from '../ui/MatrixPanel'
 import { ContigsTable, type CircularColumn, type OriginColumn } from '../ui/ContigsTable'
 import { ErrorView } from '../ui/ErrorView'
 import { FilePicker, firstEntry } from '../ui/FilePicker'
@@ -205,6 +222,7 @@ import {
   GENOME_TICKS,
   MAP_TICKS,
   sequenceCard,
+  type SequenceCardProps,
   type SequenceRow,
 } from '../ui/SequenceCard'
 import { WholeView } from '../ui/WholeView'
@@ -586,6 +604,12 @@ interface FileAnnotations {
    * map (`annotations/groups.ts`).
    */
   groups: GroupSettings
+  /**
+   * How the ideogram view draws this file's chromosomes (§5.11) — one instance
+   * for the file, as {@link groups} is, so the card that writes it and the
+   * picture that reads it hear one change.
+   */
+  ideogram: IdeogramSettings
   contigLength(name: string): number | undefined
 }
 
@@ -713,6 +737,14 @@ export class Session {
    * @internal SessionRouter lets it go with the file.
    */
   wholeFile: { key: string; view: WholeFileView } | null = null
+  /** The tables a circle's sections are sized and filled from, indexed once (§7.6). */
+  private circleIndex: {
+    genomes: GenomesResult
+    contigs: ContigsResult | null
+    resolver: CircleResolver
+  } | null = null
+  /** Whether a circle has already asked for the contigs table. */
+  private circleContigsPending = false
   /** @internal SessionRouter waits out an open in flight rather than start a second. */
   opening: string | null = null
   /**
@@ -833,6 +865,12 @@ export class Session {
   private stepCache: { state: ViewState; previous: string | null; next: string | null } | null = null
   /** The resolution the lead map last said it is drawn at; see {@link resolution}. */
   private shownBinsize: number | null = null
+  /** The reader's order of the open file's genomes and contigs (§7.6), and the file it is kept for. */
+  private orderHeld: { key: string; store: OrderStore; off: () => void } | null = null
+  /** Every contig in the reader's order, kept until the table or the order moves. */
+  private arrangedContigsMemo: { names: string[]; order: ReaderOrder; out: number[] } | null = null
+  /** The Genomes table's columns as the two lines' `split by` offers them (§7.6), kept per table. */
+  private splitChoicesMemo: { genomes: GenomesResult; choices: readonly SplitChoice[] } | null = null
   /**
    * The second file in the lower-left triangle, and everything it takes to
    * hold one: its reader, its gate, its eye, and its carry across a change of
@@ -932,6 +970,16 @@ export class Session {
    * @internal SessionCommands words the map key by it.
    */
   mapOnly = false
+  /**
+   * Where the ideogram on screen was put up from (§5.11): a map — put down for
+   * it, with its tracks or without them ({@link mapOnly}) — or `null` for the
+   * browser. What putting it away brings back: a click on a chromosome, a drag
+   * along one or its switch leave it for the picture it replaced, so a reader
+   * who pressed `z` over a map is handed the map back, at the chromosome or the
+   * stretch they chose. Furniture, as {@link mapOnly} is, and not in a link: a
+   * map put down for an ideogram a link asks for is the map that comes back.
+   */
+  private ideogramOver: { mapOnly: boolean } | null = null
   /**
    * The map view's Tracks card, told when the lanes are put away (`V`).
    *
@@ -1510,6 +1558,11 @@ export class Session {
   private metadataLevel(): MetaLevel | null {
     const state = this.store.state
     if (state === null || this.current?.panel === undefined) return null
+    // The circle's rings follow each section's contigs, whatever the square
+    // beside it is read at (§7.6): a genome × genome circle draws a contig's GC
+    // along its genome's arc, and no circle draws a bin's weight — nor do the
+    // two lines' lanes, which hold what the rings hold.
+    if (this.current.panel.circleLit === true || this.current.panel.linesLit === true) return 'contig'
     switch (state.view) {
       case 'overview':
         return overviewLevel(state)
@@ -1706,11 +1759,12 @@ export class Session {
     const state = this.store.state
     const file = this.file
     if (state === null || file === null) return null
+    // `<` and `>` walk the order the lists are in, the reader's (§7.6).
     if (state.view === 'genome' && state.genome !== undefined) {
-      return neighbour(file.displayNames, state.genome, delta)
+      return neighbour(this.arrangedGenomes(), state.genome, delta)
     }
     if (state.view === 'region' && state.region !== undefined && state.region2 === undefined) {
-      const names = this.contigNames()
+      const names = this.arrangedContigNames()
       if (names === null) return null
       const current = contigOf(state.region, names)
       return current === null ? null : neighbour(names, current, delta)
@@ -3303,6 +3357,7 @@ export class Session {
       client,
       loader,
       groups: new GroupSettings(scope),
+      ideogram: new IdeogramSettings(scope),
       contigLength: (name) => lengths.get(name),
     }
 
@@ -3506,7 +3561,7 @@ export class Session {
     const file = this.file
     const panel = this.infoPanel
     if (file === null || panel === null) return
-    const rows = scope.kind === 'genomes' ? this.genomeRows() : this.contigRowsOf(scope.genome)
+    const rows = this.metaRows(scope)
     const selection = new SequenceSelection()
     this.sequenceListener?.()
     this.sequenceListener = selection.subscribe(() => this.metaChosen())
@@ -3542,11 +3597,25 @@ export class Session {
               : { uri, view: 'region', region: name, genome: scope.genome },
           ),
         ...(scope.kind === 'genomes' ? GENOME_TICKS : CONTIG_TICKS),
+        // The reader's order moved (§7.6): the rows again, in it.
+        ...this.metaReorder(scope),
       }),
     )
   }
 
-  /** The genomes, in the order the file displays them, `__unbinned__` left out. */
+  /** The rows of a metagenome's card: its genomes, or one genome's contigs, in the reader's order. */
+  private metaRows(scope: MetaScope): SequenceRow[] {
+    return scope.kind === 'genomes' ? this.genomeRows() : this.contigRowsOf(scope.genome)
+  }
+
+  /** What tells a card of genomes or contigs its rows in a new order (§7.6). */
+  private metaReorder(scope: MetaScope): Pick<SequenceCardProps, 'reordered'> {
+    const store = this.orderStore()
+    if (store === null) return {}
+    return { reordered: { subscribe: (listener) => store.subscribe(() => listener(this.metaRows(scope))) } }
+  }
+
+  /** The genomes, in the reader's order (§7.6), `__unbinned__` left out. */
   private genomeRows(): SequenceRow[] {
     const file = this.file
     if (file === null) return []
@@ -3556,11 +3625,23 @@ export class Session {
     if (Array.isArray(names) && lengths !== undefined && !Array.isArray(lengths)) {
       ;(names as string[]).forEach((name, row) => lengthOf.set(name, Number(lengths[row])))
     }
-    return file.displayNames.map((name) => ({ name, length: lengthOf.get(name) ?? 0 }))
+    return this.arrangedGenomes().map((name) => ({ name, length: lengthOf.get(name) ?? 0 }))
+  }
+
+  /** One genome's contigs, in the reader's order (§7.6). */
+  private contigRowsOf(genome: string): SequenceRow[] {
+    const rows = this.fileContigRowsOf(genome)
+    const placed = this.orderStore()?.current.contigs[genome]
+    if (placed === undefined) return rows
+    const byName = new Map(rows.map((row) => [row.name, row]))
+    return arrange(
+      rows.map((row) => row.name),
+      placed,
+    ).map((name) => byName.get(name) as SequenceRow)
   }
 
   /** One genome's contigs, in file order, from the contigs table's `genome_id`. */
-  private contigRowsOf(genome: string): SequenceRow[] {
+  private fileContigRowsOf(genome: string): SequenceRow[] {
     const file = this.file
     const table = file?.contigs?.table
     const genomeNames = file?.genomes.table.data['name']
@@ -3847,6 +3928,11 @@ export class Session {
       // rather than read back through the session, for the reason the tracks and
       // the groups are: a view is rebuilt on every navigation and a mark is not.
       manual: held.manual,
+      // The ideogram (§5.11): which way it is drawn is the view state's, how it
+      // is inked is the file's, and a change to either is one step of history.
+      ...(state.ideogram === undefined ? {} : { ideogram: state.ideogram }),
+      look: held.ideogram,
+      onIdeogramChange: (orientation, locus) => this.setIdeogram(orientation, locus),
     })
     this.browser = view
     this.showContent(view.el, {
@@ -4530,19 +4616,31 @@ export class Session {
    * A map is a thing laid over a genome, like the tracks beside it; hiding one
    * should cost no more than hiding the other.
    *
+   * `asked` is the state that asked for the tracks, where one did — a Back to
+   * a picture of them, a link — and is then the state the browser opens on,
+   * window and all, rather than where the map was looking: navigating to
+   * another would push a new entry over the one Back arrived at, and the
+   * entries after it would be lost.
+   *
    * @internal SessionRouter puts the map down when a state asks for its tracks.
    */
-  hideMap(): void {
+  hideMap(ideogram?: KaryotypeOrientation, asked?: ViewState): void {
     const file = this.file
     const state = this.store.state
     if (file === null || state === null || !this.canHideMap) return
+    // Put down for the ideogram, the map is what putting the ideogram away
+    // brings back, with its tracks as they were (§5.11).
+    this.ideogramOver = ideogram === undefined ? null : { mapOnly: this.mapOnly }
     // A map put down while its tracks were away comes back with them: the point
     // of the browser is the tracks, so arriving there with none would be the
     // cycle's second stop showing nothing at all.
     this.mapOnly = false
     const assembly = this.assemblyOfFile(file)
     if (assembly === null) return
-    this.parkedMap = state
+    // The map's own state, to come back to. Where a state asked for the tracks
+    // — a Back, a link — the store already holds that one, and the map is what
+    // was mounted.
+    this.parkedMap = asked !== undefined && this.mounted !== null && this.mounted.view !== 'browser' ? this.mounted : state
     this.assembly = assembly
     // The browser steers its axis from the Sequences card, which is General's;
     // the Annotations column is untouched, because every card in it — the
@@ -4561,15 +4659,77 @@ export class Session {
     // the whole genome — which is that picture's own analogue of a whole map.
     const locus = this.current?.panel?.framedLocus()
     this.mounted = null
-    const target: ViewState = {
+    const target: ViewState = asked ?? {
       uri: file.uri,
       view: 'browser',
       ...(locus === undefined ? {} : { locus }),
+      // Asked for as the ideogram (§5.11): the map put down as `v` puts it down,
+      // and the tracks drawn beside every chromosome rather than along one axis.
+      ...(ideogram === undefined ? {} : { ideogram }),
     }
     const willNotify = !viewStateEquals(target, this.store.state)
     this.navigate(target)
     if (!willNotify) void this.render(target)
     this.host.sessionChanged(this)
+  }
+
+  /**
+   * Put the ideogram on, turn it, or put it away (§5.11) — one step in the view
+   * state, so Back comes back to it; with where to look, where a click or a drag
+   * on a chromosome is what put it away.
+   *
+   * Over a map, the map is put down first, as `v` puts it down: the ideogram is
+   * a picture of the tracks, and the map is not unloaded. **Put away, it gives
+   * back the picture it replaced**: the browser, at the chromosome or stretch
+   * named, or — where it was put up over a map ({@link ideogramOver}) — that
+   * map, on that chromosome or stretch, with its tracks as they were.
+   *
+   * @internal The browser asks through its prop; the command and its key run it.
+   */
+  setIdeogram(orientation: KaryotypeOrientation | undefined, locus?: string): void {
+    const state = this.store.state
+    if (state === null || !devFeature('ideogram')) return
+    if (this.assembly !== null && state.view === 'browser') {
+      const over = this.ideogramOver
+      if (orientation === undefined && state.ideogram !== undefined && over !== null && this.canShowMap) {
+        this.mapOnly = over.mapOnly
+        this.showMap(locus === undefined ? undefined : this.regionOfLocus(locus))
+        return
+      }
+      // Put up from the browser, it gives the browser back.
+      if (orientation !== undefined && state.ideogram === undefined) this.ideogramOver = null
+      this.store.patch({ ideogram: orientation, ...(locus === undefined ? {} : { locus }) })
+      return
+    }
+    if (orientation !== undefined && this.canHideMap) this.hideMap(orientation)
+  }
+
+  /**
+   * A locus as the browser writes it, as the map's region string: the bare
+   * name for the whole of a sequence — how this application spells the whole
+   * of something everywhere else — and the 0-based half-open window otherwise,
+   * as the map's own box writes one (`typedLocusToRegion`). `undefined` where it
+   * names nothing on this genome, and the map is then left where it was.
+   */
+  private regionOfLocus(locus: string): string | undefined {
+    const assembly = this.assembly
+    if (assembly === null) return undefined
+    const range = parseLocus(locus, assembly)
+    if (range === null || range === 'whole') return undefined
+    const length = assembly.contigs.find((contig) => contig.name === range.contig)?.length
+    if (range.start <= 0 && length !== undefined && range.end >= length) return range.contig
+    return `${range.contig}:${range.start}-${range.end}`
+  }
+
+  /** Whether the ideogram is what is drawn: the browser, as one (§5.11). */
+  get ideogramShown(): boolean {
+    const state = this.store.state
+    return this.assembly !== null && state?.view === 'browser' && state.ideogram !== undefined
+  }
+
+  /** The ideogram's key, `z`: on, from the map or the browser alike, and off. */
+  toggleIdeogram(): void {
+    this.setIdeogram(this.ideogramShown ? undefined : 'vertical')
   }
 
   /**
@@ -4675,11 +4835,22 @@ export class Session {
     return card.el
   }
 
-  /** Bring the parked map back, exactly where it was left. */
-  private showMap(): void {
-    const target = this.parkedMap
-    if (target === null || this.file === null) return
+  /**
+   * Bring the parked map back, exactly where it was left — or on `region`, the
+   * window an ideogram was put away on (§5.11), in the map's own presentation:
+   * one window on the diagonal, whatever block was in view before.
+   */
+  private showMap(region?: string): void {
+    const parked = this.parkedMap
+    if (parked === null || this.file === null) return
+    const target: ViewState = region === undefined ? parked : { ...parked, view: 'region', region }
+    if (region !== undefined) {
+      delete target.region2
+      delete target.focus
+      delete target.regions
+    }
     this.parkedMap = null
+    this.ideogramOver = null
     this.assembly = null
     this.browser = null
     // …and turned again on the way back, by the same call: it is a toggle, so
@@ -5224,6 +5395,7 @@ export class Session {
       client,
       loader,
       groups: new GroupSettings(scope),
+      ideogram: new IdeogramSettings(scope),
       contigLength: (name) => lengths.get(name),
       metadata: metadataIndexFrom({
         // The two tables the app has already read, and the third by name only.
@@ -5672,7 +5844,7 @@ export class Session {
       // reader now answers with (§27.7).
       const pairs = contigPairs(contigs)
       const file = { names: pairs.map(([name]) => name), lengths: pairs.map(([, length]) => length) }
-      const rows = genome === undefined ? [] : this.contigRowsOf(genome)
+      const rows = genome === undefined ? [] : this.fileContigRowsOf(genome)
       const original =
         genome === undefined ? (this.lens?.edit.original ?? file) : { names: rows.map((row) => row.name), lengths: rows.map((row) => row.length), genome }
       const store = new EditStore(key, original, undefined, file)
@@ -6612,6 +6784,412 @@ export class Session {
   }
 
   /**
+   * The circle (§7.6), as the view on screen is handed it — or `undefined`
+   * where it is not offered at all: a file with no genome layer, or the dev
+   * features off (§29.2).
+   *
+   * Offered on every map of a metagenome and greyed on the two that cannot be
+   * drawn round, each with its reason, on the turn's rule: a reader on a pair
+   * can see the control exists and learn what it wants of them.
+   */
+  private circleFor(state: ViewState): CirclePresentation | undefined {
+    const refusal =
+      state.view === 'pair'
+        ? 'A pair of genomes is a rectangle with no diagonal to draw round; tick both in the Genomes table to see them as a circle.'
+        : state.view === 'region'
+          ? 'A window of one sequence has nothing to join; a circle is drawn of genomes, or of a genome’s contigs.'
+          : undefined
+    return this.circlePresentation(state, refusal)
+  }
+
+  private circlePresentation(state: ViewState, refusal?: string): CirclePresentation | undefined {
+    if (!devFeature('circle')) return undefined
+    const file = this.file
+    if (file === null || !file.info.hasGenomes) return undefined
+    const uri = state.uri
+    return {
+      // Absent is the square, as for the turn: the circle is what gets written
+      // down, and only when the reader asks for it — and drawing it puts the
+      // two lines away, which are the other picture of the same block.
+      on: state.circle === true && state.lines !== true,
+      onChange: (on) => {
+        this.store.patch({ circle: on ? true : undefined, lines: undefined })
+        this.rederive()
+        // What the Metadata card offers is what the picture on screen can draw.
+        this.metadataCard?.refresh()
+      },
+      lines: this.linesPresentation(state),
+      // Its cut, where the block offers two: written down only when it is not
+      // the genomes, as the circle itself is only when it is drawn.
+      cut: state.sections === 'contigs' ? 'contigs' : 'genomes',
+      onCut: (cut) => {
+        this.store.patch({ sections: cut === 'contigs' ? 'contigs' : undefined })
+        this.rederive()
+      },
+      ...(refusal === undefined ? {} : { refusal }),
+      resolver: this.circleResolver(),
+      // A section opens what it is, as an axis label of the square does: a
+      // genome its own map — drawn round while the circle is on — and a contig
+      // its window.
+      onOpenUnit: (unit) => {
+        if (unit.kind === 'genome') {
+          this.navigate({ uri, view: 'genome', genome: unit.name })
+          return
+        }
+        this.navigate({
+          uri,
+          view: 'region',
+          region: unit.name,
+          ...(unit.genome === undefined ? {} : { genome: unit.genome }),
+        })
+      },
+      onOpenGroup: (genome) => this.navigate({ uri, view: 'genome', genome }),
+      // An arc carried along the circle moves in the reader's order (§7.6),
+      // which every map and list of the file follows; a genome of the band
+      // over contig sections moves among the genomes.
+      onMoveUnit: (moved, anchor, side) => this.moveUnit(state, moved, anchor, side),
+      onMoveGroup: (moved, anchor, side) => this.moveGenomes([moved], anchor, side),
+      // A chord opens the block between its two ends, as an off-diagonal cell
+      // does: the pair view of two genomes, the window pair of two contigs.
+      onOpenPair: (a, b) => {
+        if (a.kind === 'genome') {
+          this.navigate({ uri, view: 'pair', genome: a.name, genome2: b.name })
+          return
+        }
+        this.navigate({
+          uri,
+          view: 'region',
+          region: a.name,
+          region2: b.name,
+          ...(a.genome !== undefined && a.genome === b.genome ? { genome: a.genome } : {}),
+        })
+      },
+    }
+  }
+
+  /**
+   * The two lines (§7.6), as the view on screen is handed them: the genomes
+   * split by a column of the Genomes table, offered wherever the circle is and
+   * greyed, each with its reason, where they have no genomes to split — one
+   * genome's contigs, which all have its value; a pair, which is a rectangle; a
+   * window of one sequence — or where no column of the table holds two values.
+   */
+  private linesPresentation(state: ViewState): LinesPresentation {
+    const file = this.file
+    const choices = this.splitChoices()
+    const split =
+      file === null || state.split === undefined
+        ? null
+        : lineSplit(file.genomes.table, file.genomes.display, state.split, state.top)
+    const why =
+      state.view === 'genome'
+        ? 'One genome’s contigs all have its value; the two lines split genomes — tick some in the Genomes table, or open the whole metagenome.'
+        : state.view === 'pair'
+          ? 'A pair of genomes is a rectangle; tick both in the Genomes table, with others, to split them over two lines.'
+          : state.view === 'region'
+            ? 'A window of one sequence has no genomes to split; the two lines are drawn of genomes, or of their contigs.'
+            : choices.every((choice) => choice.levels === null)
+              ? 'No column of the Genomes table holds two values to split the genomes by.'
+              : undefined
+    return {
+      on: state.lines === true,
+      onChange: (on) => {
+        this.store.patch({ lines: on ? true : undefined, circle: undefined })
+        this.rederive()
+        this.metadataCard?.refresh()
+      },
+      ...(why === undefined ? {} : { refusal: why }),
+      split,
+      choices,
+      // A new column starts with its first value on top.
+      onColumn: (column) => {
+        this.store.patch({ split: column, top: undefined })
+        this.rederive()
+      },
+      onSwap: () => {
+        if (split === null) return
+        this.store.patch({ top: split.levels[1] })
+        this.rederive()
+      },
+    }
+  }
+
+  /** Every column of the Genomes table as the two lines' `split by` offers it, once per table. */
+  private splitChoices(): readonly SplitChoice[] {
+    const genomes = this.file?.genomes ?? null
+    if (genomes === null) return []
+    if (this.splitChoicesMemo?.genomes !== genomes) {
+      this.splitChoicesMemo = { genomes, choices: splitChoices(genomes.table, genomes.display) }
+    }
+    return this.splitChoicesMemo.choices
+  }
+
+  // -------------------------------------------------------------------------
+  // The reader's order (§7.6)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The reader's order of the open file's genomes and contigs, kept per file
+   * in session memory (`state/readerOrder.ts`) — `null` on a file with no
+   * genomes, and where the circle, the one place it is set, is not offered.
+   */
+  private orderStore(): OrderStore | null {
+    const file = this.file
+    if (file === null || !file.info.hasGenomes || !devFeature('circle')) return null
+    const key = this.memoryKey(file.uri)
+    if (this.orderHeld?.key !== key) {
+      this.orderHeld?.off()
+      const store = new OrderStore(key)
+      this.orderHeld = { key, store, off: store.subscribe(() => this.orderMoved()) }
+    }
+    return this.orderHeld.store
+  }
+
+  /**
+   * What a map's panel draws its block in: the order now, told when it moves,
+   * and the genome each axis is where the block does not say — one genome's
+   * map, a pair's two.
+   */
+  private panelOrder(axes?: AxisGenomes): { order?: PanelOrder } {
+    const store = this.orderStore()
+    if (store === null) return {}
+    return {
+      order: {
+        ranks: () => store.currentRanks,
+        subscribe: (listener) => store.subscribe(listener),
+        ...(axes === undefined ? {} : { axes }),
+        moved: () => !isFileOrder(store.current),
+        reset: () => this.resetOrder(),
+      },
+    }
+  }
+
+  /**
+   * The genome each axis of a region view is: a region that names a genome is
+   * that genome, and a window is in the genome it was opened from.
+   */
+  private regionAxes(state: ViewState): AxisGenomes | undefined {
+    const names = this.file?.displayNames ?? []
+    const rows = state.region !== undefined && names.includes(state.region) ? state.region : state.genome
+    const cols =
+      state.region2 === undefined ? rows : names.includes(state.region2) ? state.region2 : undefined
+    if (rows === undefined && cols === undefined) return undefined
+    return { ...(rows === undefined ? {} : { rows }), ...(cols === undefined ? {} : { cols }) }
+  }
+
+  /**
+   * The order the lead's map is drawn in, for the deck's companions to draw
+   * theirs in (§7.6), with the lead's axes: a companion follows the lead's view.
+   *
+   * @internal SessionDeck hands it to every map of the deck.
+   */
+  leadOrder(): PanelOrder | undefined {
+    const state = this.store.state
+    if (state === null) return undefined
+    const axes =
+      state.view === 'genome'
+        ? { rows: state.genome, cols: state.genome }
+        : state.view === 'pair'
+          ? { rows: state.genome, cols: state.genome2 }
+          : state.view === 'region'
+            ? this.regionAxes(state)
+            : undefined
+    return this.panelOrder(axes).order
+  }
+
+  /** The file's genomes as the reader has them, `__unbinned__` left out. */
+  private arrangedGenomes(): string[] {
+    const file = this.file
+    if (file === null) return []
+    return arrange(file.displayNames, this.orderStore()?.current.genomes)
+  }
+
+  /**
+   * Every contig of the file in the reader's order, as rows of the contigs
+   * table: genome by genome as they are placed, and each genome's in its own —
+   * the contigs of no genome after, as the file has them. Rows rather than
+   * names, so two contigs of one name in two genomes each keep their own.
+   * `null` before the table is read, and where the order is the file's.
+   */
+  private arrangedContigRowList(): number[] | null {
+    const table = this.file?.contigs?.table
+    const order = this.orderStore()?.current ?? FILE_ORDER
+    if (table === undefined || isFileOrder(order)) return null
+    const names = table.data['name']
+    const memo = this.arrangedContigsMemo
+    if (memo !== null && memo.names === names && memo.order === order) return memo.out
+    const ids = table.data['genome_id']
+    const genomeNames = this.file?.genomes.table.data['name']
+    if (!Array.isArray(names) || ids === undefined || Array.isArray(ids) || !Array.isArray(genomeNames)) return null
+    const byGenome = new Map<string, number[]>()
+    for (let row = 0; row < names.length; row++) {
+      const genome = (genomeNames as string[])[Number(ids[row])] ?? ''
+      const rows = byGenome.get(genome)
+      if (rows === undefined) byGenome.set(genome, [row])
+      else rows.push(row)
+    }
+    const out: number[] = []
+    for (const genome of this.arrangedGenomes()) {
+      const rows = byGenome.get(genome)
+      if (rows === undefined) continue
+      byGenome.delete(genome)
+      const placed = order.contigs[genome]
+      if (placed === undefined) {
+        out.push(...rows)
+        continue
+      }
+      // Within one genome a name is one contig.
+      const rowOf = new Map(rows.map((row) => [(names as string[])[row], row]))
+      for (const name of arrange(rows.map((row) => (names as string[])[row]), placed)) {
+        const row = rowOf.get(name)
+        if (row !== undefined) out.push(row)
+      }
+    }
+    for (const rows of byGenome.values()) out.push(...rows)
+    this.arrangedContigsMemo = { names: names as string[], order, out }
+    return out
+  }
+
+  /** Every contig's name in the reader's order — {@link arrangedContigRowList}'s, as names. */
+  private arrangedContigNames(): string[] | null {
+    const names = this.contigNames()
+    const rows = this.arrangedContigRowList()
+    return names === null || rows === null ? names : rows.map((row) => names[row])
+  }
+
+  /** The contigs table's rows in the reader's order, where it is not the file's. */
+  private arrangedContigRows(data: { table: { data: Record<string, unknown> } }): { rows?: number[] } {
+    const rows = this.arrangedContigRowList()
+    const names = data.table.data['name']
+    return rows !== null && Array.isArray(names) && rows.length === names.length ? { rows } : {}
+  }
+
+  /**
+   * The order moved, from a drag on any map of the file: every map's panel
+   * follows on its own subscription, and so does the card of genomes or
+   * contigs; what the session keeps from them follows here — the steps `<` and
+   * `>` take, and the order a tick on the card draws its genomes in.
+   */
+  private orderMoved(): void {
+    this.stepCache = null
+    if (this.metaScope !== null) this.metaOrder = this.metaRows(this.metaScope).map((row) => row.name)
+  }
+
+  /** Genomes put beside another (§7.6): what a drop on the circle, or on a line, does. */
+  private moveGenomes(genomes: readonly string[], anchor: string, side: Side): void {
+    const file = this.file
+    const store = this.orderStore()
+    if (file === null || store === null) return
+    store.set(withGenomesMoved(store.current, file.displayNames, genomes, anchor, side))
+  }
+
+  /**
+   * Contigs put beside another of their genome's (§7.6), never into another
+   * genome — and nothing moved before the contigs table can say the genome's
+   * contigs, which an order is kept against.
+   */
+  private moveContigs(genome: string, contigs: readonly string[], anchor: string, side: Side): void {
+    const store = this.orderStore()
+    if (store === null) return
+    const file = this.fileContigRowsOf(genome).map((row) => row.name)
+    const known = new Set(file)
+    if (!known.has(anchor) || !contigs.every((name) => known.has(name))) return
+    store.set(withContigsMoved(store.current, genome, file, contigs, anchor, side))
+  }
+
+  /**
+   * An arc dropped beside another on the circle (§7.6): a genome — or a slot of
+   * several, where the file has more genomes than the picture has cells — among
+   * the genomes, and a contig, or every contig of a cell, among its genome's.
+   * Before a neighbour is before the first of it in the reader's order, after it
+   * after its last.
+   */
+  private moveUnit(state: ViewState, moved: CircleUnit, anchor: CircleUnit, side: Side): void {
+    const beside = (names: readonly string[], order: readonly string[]): string | undefined => {
+      const rank = new Map(order.map((name, i) => [name, i]))
+      const ranked = [...names].sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0))
+      return side === 'before' ? ranked[0] : ranked[ranked.length - 1]
+    }
+    if (moved.kind === 'genome') {
+      const to = beside(this.unitGenomes(anchor), this.arrangedGenomes())
+      if (to !== undefined) this.moveGenomes(this.unitGenomes(moved), to, side)
+      return
+    }
+    const genome = moved.genome ?? state.genome
+    if (genome === undefined || (anchor.genome ?? genome) !== genome) return
+    const contigsOf = (unit: CircleUnit): string[] =>
+      unit.sequences.length > 0 ? unit.sequences.map((sequence) => sequence.name) : [unit.name]
+    const to = beside(
+      contigsOf(anchor),
+      this.contigRowsOf(genome).map((row) => row.name),
+    )
+    if (to !== undefined) this.moveContigs(genome, contigsOf(moved), to, side)
+  }
+
+  /**
+   * The genomes an arc of genomes is: its own, or a pooled slot's — the slot's
+   * first and the ones after it in the file, which the worker pools in order.
+   */
+  private unitGenomes(unit: CircleUnit): string[] {
+    const count = slotCount(unit.label)
+    const names = this.file?.displayNames ?? []
+    const from = count > 1 ? names.indexOf(unit.name) : -1
+    return from < 0 ? [unit.name] : names.slice(from, from + count)
+  }
+
+  /** Every genome and contig back where the file has it. */
+  private resetOrder(): void {
+    this.orderStore()?.set(FILE_ORDER)
+  }
+
+  /**
+   * The tables' answers about a circle's sections, asked afresh on every call.
+   *
+   * Live rather than captured: the presentation is built on a render, and the
+   * contigs table it needs may land after that render — so each question goes
+   * through to whatever the session holds now, and the first that finds the
+   * table missing asks for it.
+   */
+  private circleResolver(): CircleResolver {
+    const now = (): CircleResolver => {
+      const file = this.file
+      if (file === null) return {}
+      const held = this.circleIndex
+      if (held !== null && held.genomes === file.genomes && held.contigs === file.contigs) return held.resolver
+      if (file.contigs === null) void this.awaitCircleContigs()
+      const resolver = circleResolverFrom(
+        file.genomes.table,
+        file.genomes.display,
+        file.contigs?.table ?? null,
+        () => this.orderStore()?.current ?? null,
+      )
+      this.circleIndex = { genomes: file.genomes, contigs: file.contigs, resolver }
+      return resolver
+    }
+    return {
+      genomeLength: (genome) => now().genomeLength?.(genome),
+      genomeSequences: (genome) => now().genomeSequences?.(genome) ?? null,
+      slotSequences: (first, count) => now().slotSequences?.(first, count) ?? null,
+      contigLength: (name) => now().contigLength?.(name),
+    }
+  }
+
+  /** Read the contigs table for a circle that asked before it was read, then redraw. */
+  private async awaitCircleContigs(): Promise<void> {
+    if (this.circleContigsPending) return
+    this.circleContigsPending = true
+    try {
+      await this.contigs()
+    } catch {
+      return
+    } finally {
+      this.circleContigsPending = false
+    }
+    if (this.destroyed) return
+    this.current?.panel?.repaint()
+  }
+
+  /**
    * Recompute the picture without re-reading it.
    *
    * A derivation is a transform over cells that are already on screen, so it
@@ -6637,6 +7215,7 @@ export class Session {
       undefined,
       this.turnPresentation(state),
       this.lowerPresentation(state) ?? null,
+      this.circleFor(state),
     )
   }
 
@@ -6715,6 +7294,12 @@ export class Session {
               void this.addPicked(picked, edge === null ? undefined : placementOn(edge), map)
             })
           },
+          // The ideogram's switch in the map's Tracks card (§5.11), as `z`: the
+          // session's own map only, whose tracks the ideogram draws, and only
+          // with the dev feature on (§29).
+          ...((map === undefined || map === LEAD_MAP) && devFeature('ideogram')
+            ? { ideogram: () => this.setIdeogram('vertical') }
+            : {}),
         }
   }
 
@@ -7836,11 +8421,30 @@ export class Session {
     if (file === null) return
     const view = new GenomesTable({
       data: file.genomes,
+      // Its own order unsorted, the reader's (§7.6).
+      order: this.arrangedGenomes(),
       persistence: this.tableMemory(state.uri, 'genomes'),
       onOpenGenome: (genome) => this.navigate({ uri: state.uri, view: 'genome', genome }),
       onOpenSelection: (names) =>
         this.navigate({ uri: state.uri, view: 'selection', genomes: names.join(',') }),
       onOpenWhole: () => this.navigate({ uri: state.uri, view: this.wholeFileView() }),
+      // The circle's own door (§7.6): every genome at genome level, which is the
+      // one pass a circle of genomes needs — a ticked one drawn round as its
+      // contigs, and several as one circle. The reading is written down here and
+      // kept by every navigation after, as the turn is.
+      ...(this.circlePresentation(state) === undefined
+        ? {}
+        : {
+            onOpenCircle: (names: string[]) => {
+              if (names.length === 0) {
+                this.navigate({ uri: state.uri, view: 'overview', level: 'genome', circle: true })
+              } else if (names.length === 1) {
+                this.navigate({ uri: state.uri, view: 'genome', genome: names[0], circle: true })
+              } else {
+                this.navigate({ uri: state.uri, view: 'selection', genomes: names.join(','), circle: true })
+              }
+            },
+          }),
       // Straight to the window, past the two whole-something doors beside it.
       // No `genome` on the state: the reader resolves a genome name, a contig
       // name and either with coordinates on it, so what was typed decides which
@@ -8089,6 +8693,9 @@ export class Session {
     const assembly = cooler ? this.assemblyOfFile(file) : null
     const view = new ContigsTable({
       data,
+      // In the reader's order (§7.6): genome by genome as placed, each one's
+      // contigs in its own — the file's on a cooler, which has no order to keep.
+      ...(cooler ? {} : this.arrangedContigRows(data)),
       hideColumns: cooler ? ['genome_id'] : [],
       title: cooler ? 'Chromosomes' : 'Contigs',
       // The same word the crumb and the title use, inside the table too: its
@@ -8221,6 +8828,8 @@ export class Session {
           onScoreChange: (choice) => this.setScore(choice),
           derive: this.derivePresentation(state),
           turn: this.turnPresentation(state),
+          round: this.circleFor(state),
+          ...this.panelOrder(),
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenRegion: (region, region2) =>
             this.navigate({
@@ -8299,6 +8908,8 @@ export class Session {
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
+      round: this.circleFor(state),
+      ...this.panelOrder(),
       onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
       // A selection of several genomes is divided and labelled by genome, so an
       // axis label here is a MAG and the gesture on it is the one the genomes
@@ -8398,6 +9009,8 @@ export class Session {
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
+      round: this.circleFor(state),
+      ...this.panelOrder({ rows: state.genome, cols: state.genome }),
       ...(this.circularPresentation(state) === undefined
         ? {}
         : { circular: this.circularPresentation(state) }),
@@ -8430,13 +9043,15 @@ export class Session {
       binsize: file.info.binsize ?? 1,
       rungs: file.info.entries,
       ...this.pickProps(),
-      genomeNames: file.displayNames,
+      genomeNames: this.arrangedGenomes(),
       balance: this.balanceOf(state),
       value: this.valueOf(state),
       ...this.scoreProps(state),
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
+      round: this.circleFor(state),
+      ...this.panelOrder({ rows: state.genome, cols: state.genome2 }),
       rowGenome: state.genome,
       colGenome: state.genome2,
       level: matrixLevel(state),
@@ -8491,6 +9106,8 @@ export class Session {
       onScoreChange: (choice) => this.setScore(choice),
       derive: this.derivePresentation(state),
       turn: this.turnPresentation(state),
+      round: this.circleFor(state),
+      ...this.panelOrder(this.regionAxes(state)),
       ...(this.circularPresentation(state) === undefined
         ? {}
         : { circular: this.circularPresentation(state) }),
@@ -8584,7 +9201,9 @@ export class Session {
           ...(edgeListUrl === undefined ? {} : { edgeListUrl }),
           level,
           scale: this.seedOf(state),
-          genomeNames: file.displayNames,
+          genomeNames: this.arrangedGenomes(),
+          round: this.circleFor(state),
+          ...this.panelOrder(),
           onScaleChange: (scale) => this.store.patch(scale, { replace: true }),
           onOpenPair: (a, b) =>
             this.navigate({ uri: file.uri, view: 'pair', genome: a, genome2: b }),
@@ -8649,6 +9268,9 @@ export class Session {
     this.wholeFile ??= { key, view: build() }
     const { view } = this.wholeFile
     view.applyScale(this.scaleOf(state))
+    // A whole-file view is kept while the file is open, and the circle may have
+    // been turned on or off on another view since it was built (§7.6).
+    view.panel.setCircle(this.circleFor(state))
     // A map kept across a navigation was built with the lower reading of the
     // state it was built for (§5.10); this is the one it is shown under.
     if (reused) view.panel.relower(this.lowerPresentation(state) ?? null)
