@@ -83,6 +83,12 @@ export interface ScoreChoice {
   label: string
   /** Multiply by the two bin weights. */
   balance: boolean
+  /**
+   * The weight column to balance by, where it is another than the file's
+   * `weight` — `normcc`, `metator_empirical_hit`, `KR` (§6.4). Absent for the
+   * plain `balanced`, which is `weight`.
+   */
+  weight?: string
   /** `/pixels` column to read; absent means `count`. */
   value?: string
   /**
@@ -135,6 +141,40 @@ export const COUNT_SCORE = 'count'
 export const BALANCED_SCORE = 'balanced'
 /** The id of the compartment pipeline: balanced, over expected, correlated. */
 export const CORRELATION_SCORE = 'correlation'
+
+/**
+ * The start of the id of a balance by another weight column than `weight`
+ * (§6.4): `score=balanced:normcc` in a link.
+ *
+ * The column is in the id rather than in a key of its own so that a choice
+ * stays one act and one field, carried wherever a score already is — a link,
+ * a workspace, a map of a deck, the second file of a comparison — with no new
+ * road for any of them to forget. A `/pixels` column named this way would be
+ * read as a weight; nobody names one so.
+ */
+export const NAMED_BALANCE_PREFIX = 'balanced:'
+
+/** The weight column a score names, or `null` for a score that names none. */
+export function weightOfScore(score: string | undefined): string | null {
+  if (score === undefined || !score.startsWith(NAMED_BALANCE_PREFIX)) return null
+  const column = score.slice(NAMED_BALANCE_PREFIX.length)
+  return column === '' ? null : column
+}
+
+/**
+ * Put the score a picker shows in its tooltip, whole.
+ *
+ * A picker is as wide as its card, and a weight column's name is as long as
+ * its writer made it: metaTOR's `balanced · metator_empirical_hit` reads
+ * `balanced · met` in the box, which no reader can tell from another of the
+ * file's weights. The tooltip is the name the box cuts off.
+ */
+export function nameScore(select: HTMLSelectElement): void {
+  select.title = select.selectedOptions[0]?.textContent ?? ''
+}
+
+/** The weight column balanced reads take by default, `cooler balance`'s. */
+const DEFAULT_WEIGHT = 'weight'
 /**
  * The id of the distance-decay baseline — the denominator of O/E, drawn.
  *
@@ -174,13 +214,35 @@ export const ARM_BASELINE_SCORE = 'armbaseline'
 export function scoreChoices(info: {
   hasWeights: boolean
   scoreColumns?: readonly string[]
+  /**
+   * Every weight column of the file (§6.4). Absent, `weight` alone where
+   * {@link hasWeights} says the file has weights, which is what every caller
+   * from before named weights means.
+   */
+  weightColumns?: readonly string[]
   circle?: boolean
 }): ScoreChoice[] {
   const columns = info.scoreColumns ?? [COUNT_SCORE]
   const extras = columns.filter((key) => key !== COUNT_SCORE)
+  // `balanced` is the file's own `weight`, as it always was; each other weight
+  // column is a balance of its own, under its name. Whether `weight` is there
+  // is asked of the list rather than of `hasWeights`, which a chosen column
+  // makes true on a file that has no `weight` at all.
+  const weights = info.weightColumns ?? (info.hasWeights ? [DEFAULT_WEIGHT] : [])
+  const plain = weights.includes(DEFAULT_WEIGHT)
+  const named = weights.filter((column) => column !== DEFAULT_WEIGHT)
   return [
     { id: COUNT_SCORE, label: 'counts', balance: false },
-    ...(info.hasWeights ? [{ id: BALANCED_SCORE, label: 'balanced', balance: true }] : []),
+    ...(plain ? [{ id: BALANCED_SCORE, label: 'balanced', balance: true }] : []),
+    // Right under the plain balance, each named for its column: a metaTOR map's
+    // `metator_empirical_hit`, metacooler's `normcc` and `hiczin`, the `KR` and
+    // `VC` hic2cool converts (inverted as cooler reads them).
+    ...named.map((column) => ({
+      id: `${NAMED_BALANCE_PREFIX}${column}`,
+      label: `balanced · ${column}`,
+      balance: true,
+      weight: column,
+    })),
     { id: 'vc', label: 'VC', balance: false, normalise: 'vc' as const },
     { id: 'vcsqrt', label: 'VC √', balance: false, normalise: 'vcsqrt' as const },
     { id: 'ice', label: 'ICE', balance: false, normalise: 'ice' as const },
@@ -203,7 +265,8 @@ export function scoreChoices(info: {
     // exactly like a compartment. Beside `balanced` in what it needs and after
     // `ICE` in the list, because it is the furthest of these from the numbers in
     // the file and the list runs outward.
-    ...(info.hasWeights
+    // Balanced by `weight`, the column it was always balanced by.
+    ...(plain
       ? [{ id: CORRELATION_SCORE, label: 'correlation', balance: true, correlate: true }]
       : []),
     // Under the file's own names, except where one of those names is already the

@@ -14,6 +14,17 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Every weight column a file carries is a balance, by name (§6.4).** A cooler's bins table may hold
+  more weights than `weight`: the `normcc` and `hiczin` of `metacooler normalize`, the
+  `metator_empirical_hit` metaTOR stores, the `KR` and `VC` hic2cool converts from a `.hic`. Each is
+  offered in the score picker as **balanced · *column*** (`score=balanced:normcc` in a link), and
+  balances every view, a deck's maps, a comparison's second file where it has the column, and the
+  tasks; a column cooler reads as divisive — `KR`, `VC`, `VC_SQRT`, or by its `divisive_weights` attribute
+  — is divided by rather than multiplied by, as cooler does. `weight` stays the default and the only
+  column a file opens balanced by, so a metaTOR map still opens on its counts. The command line takes
+  `--weight <column>`, and writes it in the command line a run made by one shows. A score picker
+  names the score it shows in its tooltip, since a long column's name runs past the box.
+
 - **Every task that reads a map has a *Resolution* row, the first of its form (§18.4).** A list of
   every rung of the map's ladder, stored and added (marked `*`), starting on the one picked in the
   crumb row or, with none picked, the one the file was opened at; every setting after it that counts
@@ -371,6 +382,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **A genome's map is drawn from the score its picker shows (a dev feature, §5.2, §6.4).** The genome
+  view never asked its reader for the balance or the `/pixels` column, so a genome was drawn from its
+  raw counts whatever the picker said — `balanced` on a metacool with `weight` as much as another
+  column of its pixels — while the caption and the colour key said otherwise. The pair, region and
+  whole views always asked; the genome view now does too.
 - **The inter-MAG network names its genomes, however many the file has (a dev feature, §18.8).** Past
   forty MAGs every edge was named by its row — `MAG 123` — because the names were taken from the
   labels of the QC matrix's picture, which leaves them off past forty. A metaTOR map holds a hundred

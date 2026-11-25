@@ -239,9 +239,10 @@ export class SessionRouter {
     // view below. Rewriting it here — rather than at each of those sites —
     // covers the shared link, the hand-edited hash and the three redirects at
     // once, and leaves nobody on an empty table with no way off it.
-    // A link can carry `balance=true` to a file with no weight column; every
-    // read would then be refused for a reason the recipient did not choose.
-    if (state.balance === true && !this.session.file.info.hasWeights) {
+    // A link can carry `balance=true` to a file with no weight column — or
+    // name a column it does not have; every read would then be refused for a
+    // reason the recipient did not choose.
+    if (state.balance === true && !this.session.servesBalance(state)) {
       this.session.navigate({ ...state, balance: undefined }, { replace: true })
       return
     }
@@ -382,6 +383,7 @@ export class SessionRouter {
       differsOnlyInPresentationOrScore(this.session.mounted, state) &&
       this.session.valueOf(this.session.mounted) === this.session.valueOf(state) &&
       this.session.balanceOf(this.session.mounted) === this.session.balanceOf(state) &&
+      this.session.namedWeightOf(this.session.mounted) === this.session.namedWeightOf(state) &&
       (lowerRead === '' || lowerRead === this.session.lowerReadKey(this.session.mounted))
     if (
       this.mounting === null &&
@@ -452,6 +454,13 @@ export class SessionRouter {
     // block drawn from the previous set would be a picture of the wrong cells.
     await this.session.syncCells(state)
     if (this.session.stale(state, signal)) return
+    // …and the weight column its score balances by (§6.4), for the same reason
+    // — awaited only where there is a column to swap.
+    const weighing = this.session.syncWeight(state)
+    if (weighing !== null) {
+      await weighing
+      if (this.session.stale(state, signal)) return
+    }
     // …and the total the maps are drawn to (§6.5), for the same reason. Told,
     // not awaited: the view's reads queue behind the census in the worker, under
     // the view's own veil, and the answer arrives for the box and the captions.

@@ -322,6 +322,8 @@ describe('the charts in the card', () => {
       cellNnz: null,
       hasGenomes: false,
       hasWeights: false,
+      weightColumns: [],
+      weightColumn: null,
       scoreColumns: ['count'],
       sourceBytes: 1_234_567,
       contacts: null,

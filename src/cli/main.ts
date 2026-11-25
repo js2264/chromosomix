@@ -468,12 +468,14 @@ function pairsBinningOf(args: Args, task?: AnalysisTask): PairsBinning | undefin
 function framingFlags(
   args: Args,
   task?: AnalysisTask,
-): Pick<RunOptions, 'value' | 'circular' | 'cells' | 'origins' | 'contacts' | 'coarsen'> {
+): Pick<RunOptions, 'value' | 'circular' | 'cells' | 'origins' | 'contacts' | 'coarsen' | 'weight'> {
   const value = one(args, 'value')
+  const weight = one(args, 'weight')
   const contacts = contactsOf(args, task)
   const coarsen = coarsenOf(args)
   return {
     ...(value === undefined || value === '' ? {} : { value }),
+    ...(weight === undefined || weight === '' ? {} : { weight }),
     ...(contacts === undefined ? {} : { contacts }),
     ...(coarsen === undefined ? {} : { coarsen }),
     circular: all(args, 'circular').flatMap((item) => item.split(',')).filter((item) => item !== ''),
@@ -814,6 +816,9 @@ const RESERVED = new Set([
   // without them repeats a different run.
   'value',
   'circular',
+  // Which weight column a balanced read multiplies by, where it is another than
+  // `weight` (§6.4): the app's `balanced · normcc` is `--weight normcc`.
+  'weight',
   // Where each sequence's replication origin is (§8.15), which the arm-frame
   // expectation and the inter-arm alignment read their arms from.
   'origin',
@@ -926,6 +931,11 @@ interface RunOptions {
   origins: Readonly<Record<string, number>>
   /** The cells of an `.scool` to sum; empty is every cell (§3.8). */
   cells: readonly string[]
+  /**
+   * The weight column to balance by, where it is another than the file's
+   * `weight` (§6.4) — the app's `balanced · <column>`.
+   */
+  weight?: string | undefined
   quiet: boolean
   /** How to bin a `.pairs`, which states no resolution of its own (§3.7). */
   binning?: PairsBinning | undefined
@@ -1195,6 +1205,9 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       }
       mc.selectCells(options.cells)
     }
+    // Balanced by the column asked for (§6.4), as the analysis worker balances
+    // its mount — before the total and the resolution, which carry it.
+    if (options.weight !== undefined) mc.selectWeight(options.weight)
     // Drawn to the total asked for before anything reads it, as the analysis
     // worker draws its mount (§6.5); the seed is the app's, so the pixels are.
     const depth = await drawnTo(mc, options.contacts, options.quiet)
@@ -1245,13 +1258,14 @@ async function runOne(options: RunOptions): Promise<TaskResult & { contigs: BedG
       binsize: mc.binsize,
       binsPerCell: 1,
       balance,
+      ...(balance && options.weight !== undefined ? { weight: options.weight } : {}),
       value,
       normalise: null,
       level: 'bin',
       label:
         `${region === undefined ? 'whole file' : regionLabel(region)} at ${mc.binsize} bp` +
         `${coarsened ? ` (${fileBinsize} bp bins summed)` : ''}` +
-        `${balance ? ', balanced' : ''}, ${value}` +
+        `${balance ? `, balanced${options.weight === undefined ? '' : ` by ${options.weight}`}` : ''}, ${value}` +
         `${options.circular.length === 0 ? '' : `, circular ${options.circular.join(',')}`}` +
         `${Object.keys(options.origins).length === 0 ? '' : `, origin ${originLabel(options.origins)}`}` +
         `${options.cells.length === 0 ? '' : `, ${options.cells.length} cells`}` +
@@ -2287,6 +2301,11 @@ export const USAGE = `chromosomix — the Analysis panel, from a shell
                            digits grouped or not: chrIV:1,000,001-1,400,000
       --no-balance         read the raw counts. A map is read balanced wherever
                            the file carries weights, as the app reads it
+      --weight <column>    the /bins column to balance by, where it is another
+                           than weight: a metacooler normalize's normcc, the
+                           metator_empirical_hit metaTOR stores, a KR or VC
+                           (read divisive, as cooler reads them). The app's
+                           balanced · <column>
       --features <file>    a feature or loop file a task needs, read as the app
                            reads it: BED, narrowPeak, GTF, genePred, VCF,
                            cytoBand, barChart, junctions, bedpe, interact,

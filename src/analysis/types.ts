@@ -635,6 +635,12 @@ export interface AnalysisFraming {
   binsPerCell: number
   balance: boolean
   /**
+   * The weight column `balance` multiplies by, where the reader chose one by
+   * name (§6.4) — `normcc`, `metator_empirical_hit`; absent for the file's own
+   * `weight`. Two balances by two columns are two readings of the map.
+   */
+  weight?: string
+  /**
    * The `/pixels` column the view was drawn from.
    *
    * A **column**, never the score picker's id. The two look alike and are not:

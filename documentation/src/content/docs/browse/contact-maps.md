@@ -59,6 +59,7 @@ and `chromosome × chromosome`.
 |---|---|
 | **counts** | the contacts stored for that pair of bins |
 | **balanced** | the counts with each bin's bias divided out by the file's weights, when it has them |
+| **balanced · *column*** | the same, by another weight column of the file: `normcc`, `metator_empirical_hit`, `KR` |
 | **VC**, **VC √**, **ICE** | a normalisation computed from the block on screen |
 | **expected** | what the cell's distance from the diagonal predicts: the baseline of an O/E |
 | **arm decay** | that baseline along both arms of a circular sequence |
@@ -73,6 +74,13 @@ For **balanced**, a cooler's weights are those `cooler balance` wrote, applied a
 them; a `.hic` brings its own normalisation (SCALE, else KR, else the coverage ones), which the
 **normalisation** row of the **File** card (**General** panel) names. A bin the balancer dropped has
 its row and column drawn as paper, not as zero.
+
+A file can carry more than one set of weights: every decimal column of its bins table is one, as
+cooler reads them. Each is offered as **balanced · *column***, under its name — the `normcc` and
+`hiczin` of `metacooler normalize`, the `metator_empirical_hit` metaTOR stores, the `KR` and `VC` a
+`.hic` converted with hic2cool brings, which cooler reads divided rather than multiplied and so does
+this viewer. Plain **balanced** is always the `weight` column, and a file opens balanced only by
+that one: a map whose only weights are another tool's opens on its counts.
 
 **VC**, **VC √** and **ICE** normalise a file without weights, or another way; on a window they are
 the window's normalisation, not the chromosome's. Each agrees with cooler and cooltools cell for

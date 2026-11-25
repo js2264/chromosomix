@@ -117,6 +117,8 @@ export interface RunnerHost {
     uri: string
     source: SourceSpec
     cells?: readonly string[]
+    /** The weight column the map is balanced by, where the reader chose one by name (§6.4). */
+    weight?: string
     binning?: PairsBinning
     orientation?: OrientationSummary
     /** What `pairtools stats` counts, where the map's import counted it (§3.7). */
@@ -240,6 +242,8 @@ function sameFraming(a: AnalysisFraming, b: AnalysisFraming): boolean {
     a.binsize === b.binsize &&
     a.binsPerCell === b.binsPerCell &&
     a.balance === b.balance &&
+    // …and the column it balanced by (§6.4).
+    (a.weight ?? null) === (b.weight ?? null) &&
     a.value === b.value &&
     a.level === b.level &&
     // The total the map is drawn to changes every count a task reads (§6.5).
@@ -349,9 +353,13 @@ function mountKey(
   resample?: ResampleTarget,
   edit?: ReferenceEdit,
   coarsen?: number,
+  weight?: string,
 ): string {
-  const base =
+  const cellsKey =
     cells === undefined || cells.length === 0 ? uri : `${uri}\u0000${cells.join('\u0000')}`
+  // The weight column it is balanced by (§6.4): one file balanced by two columns
+  // is two maps to a task that reads it balanced.
+  const base = weight === undefined ? cellsKey : `${cellsKey}\u0000weight:${weight}`
   // The base resolution and the rung count, because an imported map at 1 kb and
   // the same file at 10 kb are two maps behind one uri (§3.7) — and a mount kept
   // for the uri alone would answer a task about the second with the first.
@@ -412,6 +420,11 @@ export interface RunTarget {
    * experiments, and a task measures the one on screen.
    */
   cells?: readonly string[]
+  /**
+   * The weight column this map is balanced by, where the reader chose one by
+   * name (§6.4). A property of the view, as {@link cells} is.
+   */
+  weight?: string
   /**
    * How this map was binned, where it was imported from a `.pairs` (§3.7).
    *
@@ -886,6 +899,8 @@ export class AnalysisRunner {
       // set lost here is lost for every single-map run — which is all of them
       // outside a batch (§3.8).
       ...(source?.cells === undefined ? {} : { cells: source.cells }),
+      // …and the weight column it is balanced by (§6.4), for the same reason.
+      ...(source?.weight === undefined ? {} : { weight: source.weight }),
       // And the two facts an imported `.pairs` carries (§3.7), which were being
       // dropped here: the worker's own mount of a contact list is refused
       // without the grid the reader chose, so every plain Run on a map binned
@@ -1252,7 +1267,7 @@ export class AnalysisRunner {
     // picture, and that picture is at this resolution — unless this map reaches
     // the deck's resolution by summing a rung of its own (§16.2).
     const coarsen = source.coarsen ?? job.framing.coarsen
-    const key = mountKey(source.uri, source.cells, source.binning, source.resample, source.edit, coarsen)
+    const key = mountKey(source.uri, source.cells, source.binning, source.resample, source.edit, coarsen, source.weight)
     if (this.mounted === key) return
     this.setState(job.task.id, {
       status: 'running',
@@ -1271,6 +1286,7 @@ export class AnalysisRunner {
       uri: source.uri,
       source: source.source,
       ...(source.cells === undefined ? {} : { cells: source.cells }),
+      ...(source.weight === undefined ? {} : { weight: source.weight }),
       ...(source.binning === undefined ? {} : { binning: source.binning }),
       ...(source.resample === undefined ? {} : { resample: source.resample }),
       ...(source.edit === undefined ? {} : { edit: source.edit }),
@@ -1584,6 +1600,7 @@ export class AnalysisRunner {
           uri: target.uri,
           source: target.source,
           ...(target.cells === undefined ? {} : { cells: target.cells }),
+          ...(target.weight === undefined ? {} : { weight: target.weight }),
           ...(target.binning === undefined ? {} : { binning: target.binning }),
           // Each map at the depth it is drawn to: reproducibility between two
           // maps matched to one depth is the comparison §6.5 exists for.
@@ -1613,6 +1630,7 @@ export class AnalysisRunner {
         uri: job.target.uri,
         source: job.target.source,
         ...(job.target.cells === undefined ? {} : { cells: job.target.cells }),
+        ...(job.target.weight === undefined ? {} : { weight: job.target.weight }),
         ...(job.target.resample === undefined ? {} : { resample: job.target.resample }),
       }
     }

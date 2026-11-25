@@ -250,6 +250,36 @@ describe('the shape of the command', () => {
   })
 
   /**
+   * A balance by another column than `weight` names it (§6.4): the shell's
+   * default is the file's `weight`, and a line without the column would repeat a
+   * run balanced by something else.
+   */
+  it('names the weight column a balance multiplied by, where it is another than weight', () => {
+    const named = flagsOf(
+      commandOf(
+        cliCommandFor({
+          task: detect,
+          provenance: provenance('chromosight', { balance: true }, { balance: true, weight: 'normcc' }),
+          context: context(),
+        }).text,
+      ),
+    )
+    expect(named.get('weight')).toBe('normcc')
+    expect(named.has('no-balance')).toBe(false)
+    // Unbalanced, the column is nothing the run read, and goes unsaid.
+    const off = flagsOf(
+      commandOf(
+        cliCommandFor({
+          task: detect,
+          provenance: provenance('chromosight', { balance: false }, { balance: false, weight: 'normcc' }),
+          context: context(),
+        }).text,
+      ),
+    )
+    expect(off.has('weight')).toBe(false)
+  })
+
+  /**
    * A record with no `balance` in it — an older session, or a task that gained
    * the parameter since — must not be read as a positive claim that the numbers
    * were unbalanced. The framing always has one, and it is the better answer.

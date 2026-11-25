@@ -146,6 +146,32 @@ describe('a companion’s score picker', () => {
     expect(fit.select().value).toBe('count')
   })
 
+  it('names the score it shows in its tooltip, a weight column’s long name whole (§6.4)', () => {
+    // The box is as wide as its card: metaTOR's weight reads `balanced · met`
+    // in it, which no reader can tell from another of the file's weights.
+    const fit = harness()
+    expect(fit.select().title).toBe('counts')
+    fit.panel.syncScoreChoice('balanced')
+    expect(fit.select().title).toBe('balanced')
+
+    const panel = new MatrixPanel({
+      binsize: 1000,
+      detachedControls: true,
+      hideTitle: true,
+      scores: {
+        choices: scoreChoices({ hasWeights: false, weightColumns: ['metator_empirical_hit'] }),
+        current: 'balanced:metator_empirical_hit',
+        onChange: () => {},
+      },
+    })
+    built.push(panel)
+    const select = scoreSelectIn(panel.controlsEl)!
+    expect(select.title).toBe('balanced · metator_empirical_hit')
+    select.value = 'count'
+    select.dispatchEvent(new Event('change'))
+    expect(select.title).toBe('counts')
+  })
+
   /**
    * A score that reads the same cells repaints rather than rebuilding the panel,
    * so the dropdown is not all that has to follow: the framing an analysis of

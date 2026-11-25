@@ -63,6 +63,8 @@ export interface PairViewProps {
   scale: PanelSeed
   balance: boolean
   hasWeights: boolean
+  /** Every weight column of the file, each a balance of the picker's (§6.4). */
+  weightColumns?: readonly string[]
   /**
    * The `/pixels` column the reads take; `count` when absent.
    *

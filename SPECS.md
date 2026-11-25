@@ -2311,6 +2311,52 @@ filtered row reads as absent rather than as empty. Where there is no weight colu
 offered, a link naming it lands on counts, and a read asking for weights anyway is refused by name.
 No default weighting is invented.
 
+**Every weight column a file carries is a balance, by name.** A cooler's `/bins` may hold more than
+`weight`: the `normcc` and `hiczin` of `metacooler normalize`, the `metator_empirical_hit` metaTOR
+stores, the `KR`, `VC` and `VC_SQRT` hic2cool converts from a `.hic`. Every floating-point column
+beside `chrom`, `start` and `end` is one — the rule metacooler's own `weight_columns` follows — and
+each is offered in the score picker as **`balanced · <column>`**, right under `balanced`, with the id
+`balanced:<column>` (`score=balanced:normcc` in a link; the column is in the id so that the choice
+is carried wherever a score already is — a link, a workspace, a deck's map, a comparison's second
+file — with no road of its own to forget). A column cooler reads as **divisive** — `KR`, `VC`,
+`VC_SQRT` by name, as cooler's `_4DN_DIVISIVE_WEIGHTS`, or any column whose `divisive_weights`
+attribute says so, as metacooler's `read_weights` reads it — is inverted on the way in, so a
+balanced cell is `raw · w[i] · w[j]` whichever column it came from, and a weight that is not finite
+after that is a dropped bin. A picker is as wide as its card and a column's name as long as its
+writer made it — metaTOR's reads `balanced · met` in the box — so every score picker carries the
+score it shows, whole, as its tooltip.
+
+**`weight` stays the default, and the only column a file opens balanced by.** Plain `balanced` and
+the correlation are `weight`'s; a map whose only weights are another tool's — a metaTOR map's
+`metator_empirical_hit` — opens on its counts exactly as it did, and is balanced by that column only
+when the reader asks for it by name. The score that names a column is the balance: a
+`balanced:<column>` with no `balance` beside it is balanced, as a link's `score` always overrides its
+`balance`, and the picker writes no `balance` with one — so a build that does not know the column
+lands on counts rather than on `weight` under that column's name. The two fields are written in one
+patch: written one after the other, the first arrived without the second and the router dropped a
+balance by a column the score had not named yet.
+
+**The column is state on the open map**, as a cell set is (§3.8): the reader serves it where every
+balanced read already looks, at `bins/weight` (`MetaCooler.selectWeight`, a view of the handle as the
+resample's scaled weights are one), so the dense block, the pooled and aggregated roll-ups, a
+resample's weights, a resolution summed from them and the tasks' own reads all multiply by it, and
+no request carries a column name. The session puts its reader on the column the state's score names
+before every mount (`syncWeight`, beside `syncCells`), and a deck's map puts its own on the column
+its score names before it reads; a comparison's second file is read by the same column where it has
+it and by its own `weight` where it has not, the column a balanced read of it always took. Two
+balances by two columns are two reads: the router re-reads rather than repaints between them, a
+whole-file picture is kept under its column, and the answer cache starts a new name with each choice.
+The lower reading (§5.10) is read from the same open map, so it is offered a balance only by the
+column the upper reading has in force. A task's own mount is balanced by the reader's column too
+(`weight` on its open and on each peer), and its framing records the column, so two runs balanced by
+two columns are two recipes and its command line writes `--weight <column>`, the command line's own
+flag for it.
+
+**A genome's map reads its score.** The pair, region and whole views asked for the balance and the
+`/pixels` column on every read; the genome view (§5.2) asked for neither, so a genome was drawn from
+its raw counts whatever its picker said — `balanced` on a metacool with `weight` as much as a column
+by name.
+
 **A zero the weights cannot change is not visited** (`weighBlock`). Under a row and a column weight
 that are both finite and not negative, `0 · w[i] · w[j]` is the same zero, sign and all, so those cells
 are left as they are; every other cell — a contact, or a zero under a weight that is `NaN`, infinite

@@ -16,8 +16,10 @@ import {
   BASELINE_SCORE,
   CORRELATION_SCORE,
   COUNT_SCORE,
+  NAMED_BALANCE_PREFIX,
   scoreChoices,
   scoreFor,
+  weightOfScore,
 } from '@/ui/scores'
 
 describe('what the cells can be', () => {
@@ -267,5 +269,55 @@ describe('the baseline along both arms', () => {
     const labels = choices.map((c) => c.label)
     expect(new Set(labels).size).toBe(labels.length)
     expect(choices.find((c) => c.value === 'arm decay')?.label).toBe('arm decay (column)')
+  })
+})
+
+describe('a balance by each weight column a file carries (§6.4)', () => {
+  it('offers each named column right under the plain balance, as a balance by it', () => {
+    const choices = scoreChoices({ hasWeights: true, weightColumns: ['weight', 'normcc', 'KR'] })
+    expect(choices.slice(0, 4).map((c) => c.id)).toEqual([
+      COUNT_SCORE,
+      BALANCED_SCORE,
+      `${NAMED_BALANCE_PREFIX}normcc`,
+      `${NAMED_BALANCE_PREFIX}KR`,
+    ])
+    const normcc = choices[2]
+    expect(normcc).toMatchObject({ label: 'balanced · normcc', balance: true, weight: 'normcc' })
+    // A balance, and not a column: nothing is read from /pixels for it.
+    expect(normcc.value).toBeUndefined()
+    // The plain one is `weight`, and says so by carrying none.
+    expect(choices[1].weight).toBeUndefined()
+  })
+
+  it('offers no plain balance, nor the correlation, to a file without weight', () => {
+    // A metaTOR map: its normalization alone, offered under its name — and
+    // balanced by it only when the reader asks, whatever `hasWeights` says once
+    // it is chosen.
+    for (const hasWeights of [false, true]) {
+      const ids = scoreChoices({ hasWeights, weightColumns: ['metator_empirical_hit'] }).map((c) => c.id)
+      expect(ids).toContain(`${NAMED_BALANCE_PREFIX}metator_empirical_hit`)
+      expect(ids).not.toContain(BALANCED_SCORE)
+      expect(ids).not.toContain(CORRELATION_SCORE)
+    }
+  })
+
+  it('reads the column a link names, and lands on counts where the file has not got it', () => {
+    const choices = scoreChoices({ hasWeights: false, weightColumns: ['normcc'] })
+    expect(scoreFor(choices, { score: 'balanced:normcc', balance: true }).weight).toBe('normcc')
+    expect(scoreFor(choices, { score: 'balanced:hiczin', balance: true }).id).toBe(COUNT_SCORE)
+  })
+
+  it('names the column of a score, and none for any other', () => {
+    expect(weightOfScore('balanced:metator_empirical_hit')).toBe('metator_empirical_hit')
+    expect(weightOfScore('balanced:')).toBeNull()
+    expect(weightOfScore(BALANCED_SCORE)).toBeNull()
+    expect(weightOfScore(undefined)).toBeNull()
+    expect(weightOfScore('qvalue')).toBeNull()
+  })
+
+  it('offers what it always did to a caller that names no weight columns', () => {
+    expect(scoreChoices({ hasWeights: true }).map((c) => c.id)).toEqual(
+      scoreChoices({ hasWeights: true, weightColumns: ['weight'] }).map((c) => c.id),
+    )
   })
 })

@@ -96,7 +96,7 @@ export interface AnalysisWorkspaceHost {
    * `task` that reads no map, for the session's own, whichever map is starred
    * (§18.1): a 1D task reads the session's tracks and is framed by its map.
    */
-  source(task?: AnalysisTask): { uri: string; source: SourceSpec; cells?: readonly string[]; label?: string } | null
+  source(task?: AnalysisTask): { uri: string; source: SourceSpec; cells?: readonly string[]; weight?: string; label?: string } | null
   context(task?: AnalysisTask): AnalysisContext | null
   /**
    * Where a map's task recipes are remembered (`AnalysisContext.memoryKey`): the
