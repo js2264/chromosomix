@@ -311,6 +311,7 @@ describe('the tabs’ names', () => {
       onClose: () => undefined,
       onNew: () => undefined,
       onRename: (index, name) => renames.push([index, name]),
+      onMove: () => undefined,
     })
     document.body.append(made.el)
     made.render(

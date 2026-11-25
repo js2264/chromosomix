@@ -29,6 +29,7 @@ node scripts/ui-marks.mjs gallery            # marks on the card and the model's
 node scripts/ui-marks-hide.mjs gallery       # marks hidden and shown (§8.1): a row's eye, A off and back with a hand-hidden mark kept hidden, the map's menu on a rule, a mark alone and the rest back, the turned map's V, the 1D browser's menu and A there, the model's key and its menu on a marked bead, the palette's switch, dark: h01 … h14b
 node scripts/ui-captions.mjs gallery         # figures saved with their caption on and off: t1 … t9
 node scripts/ui-cards.mjs gallery            # cards moved by their headings, through every rebuild: c1 … c8
+node scripts/ui-tab-move.mjs gallery         # tabs carried along the strip (§5.6), with the strip's order printed after each step: four tabs, the first held past the third with the row closed up behind it, let go, the empty tab held at the start and Escape, the palette's Move this tab pair and right run, a reload keeping the order, dark mid-carry, a phone's width with the strip overflowing and scrolling as a tab is held at its end: tm01 … tm11
 node scripts/ui-bacteria.mjs gallery-bacteria  # a bacterial chromosome from origin to compartments: b01 … b36
 node scripts/ui-tracks.mjs gallery           # the Tracks card, points, the pointers, map first, a circle, genes: tr01 … tr24
 node scripts/ui-deck-lead.mjs gallery        # a lone bed3d as its model, the first cell moved, hidden, back, and a workspace opened from its address with its first map second: l1 … l4, m1 … m6

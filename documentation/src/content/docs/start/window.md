@@ -45,7 +45,8 @@ that forgets it all ([Keyboard and command palette](/browse/keyboard/)).
 A tab per open file, twelve at most, each a session of its own: two tabs on the same file share
 nothing. The **+** at the end of the row, or <kbd>O</kbd>, opens a new one;
 <kbd>Ctrl</kbd>+<kbd>&lt;</kbd> and <kbd>Ctrl</kbd>+<kbd>&gt;</kbd> step between them; a double-click
-or <kbd>F2</kbd> renames one; its × or a middle-click closes it, and the last is emptied instead.
+or <kbd>F2</kbd> renames one; dragging one along the row moves it; its × or a middle-click closes
+it, and the last is emptied instead.
 
 For a file on the web, the address bar is a link to the view. After you close the browser, the
 window offers your tabs back with **restore**. A bar under the tabs carries what a tab found out about

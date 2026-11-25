@@ -14,6 +14,12 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **Tabs are reordered by dragging them along the strip (§5.6).** A press on a tab that travels
+  carries it: the tab follows the pointer, the others close up behind it and open a gap where it will
+  land, and letting go moves it there — Escape puts it back. Moving a tab does not select it, so a
+  remembered tab is not read for being moved, and the tab in front stays in front. The order is the
+  one a reload, a remembered workspace and a saved one bring the tabs back in. *Move this tab left*
+  and *Move this tab right* in the palette do the same from the keyboard, one place at a time.
 - **A metagenome's map drawn as a circle (§7.6, a dev feature).** Each genome an arc as long as it
   is, the contacts between two genomes a chord as wide as they are, the tracks the map draws as rings
   inside — the map's own block drawn round, so nothing more is read and the square comes back at
