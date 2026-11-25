@@ -23,7 +23,7 @@ import {
   ContigPurityAccumulator,
   GenomeContactAccumulator,
 } from '@/analysis/mags'
-import { runMagNetwork, runMagQc } from '@/analysis/run/mags'
+import { runMagNetwork, runMagPurity, runMagQc, runMagSplit } from '@/analysis/run/mags'
 import type { AnalysisFraming, Params, TableOutput } from '@/analysis/types'
 import type { TaskInputs } from '@/analysis/worker/protocol'
 import type { MetaCooler } from '@/metacooler/MetaCooler'
@@ -230,9 +230,9 @@ const MAG_FRAMING: AnalysisFraming = {
   level: 'bin',
 }
 
-function jobOf(params: Params, inputs: TaskInputs = {}): JobContext {
+function jobOf(params: Params, inputs: TaskInputs = {}, mc: MetaCooler = metagenome()): JobContext {
   return {
-    mc: metagenome(),
+    mc,
     params,
     framing: MAG_FRAMING,
     inputs,
@@ -285,5 +285,252 @@ describe('the inter-MAG network', () => {
     expect(edges[0][1]).toBeCloseTo(0.3, 12)
     expect(edges[1][1]).toBeCloseTo(0.2, 12)
     expect(edges[2][1]).toBeCloseTo(0.1, 12)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Files of any shape: names past the forty a picture labels, and table order
+// ---------------------------------------------------------------------------
+
+interface FakeContig {
+  name: string
+  genome: number
+  bins: number
+}
+
+/**
+ * A metagenome of the given contigs, genomes and pixels, the last genome its
+ * `__unbinned__`. `matrix` and `aggregate` are the reader's, done by hand —
+ * the whole block, filled symmetrically, then summed contig by contig — so a
+ * runner that splits a MAG reads exactly the contacts listed here.
+ */
+function fakeMap(contigs: FakeContig[], genomeNames: string[], pixels: Array<[number, number, number]>): MetaCooler {
+  const starts: number[] = []
+  let nBins = 0
+  for (const contig of contigs) {
+    starts.push(nBins)
+    nBins += contig.bins
+  }
+  const contigOfBin = new Int32Array(nBins)
+  contigs.forEach((contig, cid) => contigOfBin.fill(cid, starts[cid], starts[cid] + contig.bins))
+  const extentOf = (cid: number): [number, number] => [starts[cid], starts[cid] + contigs[cid].bins]
+  const genomeExtent = (genome: number): [number, number] => {
+    const own = contigs.flatMap((contig, cid) => (contig.genome === genome ? [cid] : []))
+    return [extentOf(own[0])[0], extentOf(own[own.length - 1])[1]]
+  }
+  return {
+    nBins,
+    nContigs: contigs.length,
+    nGenomes: genomeNames.length,
+    binsize: 1000,
+    chromnames: contigs.map((contig) => contig.name),
+    chromsizes: new Map(contigs.map((contig) => [contig.name, contig.bins * 1000])),
+    contigGenomeIds: Int32Array.from(contigs, (contig) => contig.genome),
+    genomeNames,
+    contigExtent: extentOf,
+    displayGenomes: () => genomeNames.slice(0, -1).map((_, genome) => genome),
+    genomeExtent,
+    scanPixels: async (options: {
+      onChunk(chunk: { bin1: Int32Array; bin2: Int32Array; count: Float64Array; length: number }): boolean | void
+    }) => {
+      options.onChunk({
+        bin1: Int32Array.from(pixels, ([a]) => a),
+        bin2: Int32Array.from(pixels, ([, b]) => b),
+        count: Float64Array.from(pixels, ([, , count]) => count),
+        length: pixels.length,
+      })
+    },
+    matrix: async (query: { rows: [number, number] }) => {
+      const [from, to] = query.rows
+      const n = to - from
+      const values = new Float32Array(n * n)
+      for (const [a, b, count] of pixels) {
+        if (a < from || a >= to || b < from || b >= to) continue
+        values[(a - from) * n + (b - from)] = count
+        values[(b - from) * n + (a - from)] = count
+      }
+      return { nrows: n, ncols: n, values, rowExtent: [from, to], colExtent: [from, to] }
+    },
+    aggregate: (dense: { nrows: number; values: Float32Array; rowExtent: [number, number] }) => {
+      const [from, to] = dense.rowExtent
+      const ids = [...new Set(Array.from(contigOfBin.subarray(from, to)))]
+      const slot = new Map(ids.map((cid, k) => [cid, k]))
+      const n = ids.length
+      const values = new Float64Array(n * n)
+      for (let r = 0; r < dense.nrows; r++) {
+        for (let c = 0; c < dense.nrows; c++) {
+          const row = slot.get(contigOfBin[from + r]) ?? 0
+          const col = slot.get(contigOfBin[from + c]) ?? 0
+          values[row * n + col] += dense.values[r * dense.nrows + c]
+        }
+      }
+      return { nrows: n, ncols: n, values, rowIds: Int32Array.from(ids), colIds: Int32Array.from(ids), level: 'contig' }
+    },
+  } as unknown as MetaCooler
+}
+
+/** The table a runner wrote, by its id. */
+function tableOf(outputs: Awaited<ReturnType<typeof runMagQc>>, id: string): TableOutput {
+  const table = outputs.find((output): output is TableOutput => output.kind === 'table' && output.id === id)
+  if (table === undefined) throw new Error(`no ${id} table`)
+  return table
+}
+
+describe('the inter-MAG network of a file with more MAGs than its picture labels', () => {
+  it('names every edge after its two genomes', async () => {
+    // Forty-five MAGs of one contig each, every neighbour touching the next:
+    // past the forty the QC matrix's picture puts names on, so its ticks are
+    // empty — and the edges were `MAG 0–MAG 1` … rather than genomes.
+    const n = 45
+    const names = [...Array.from({ length: n }, (_, k) => `bin_${String(k).padStart(2, '0')}`), '__unbinned__']
+    const contigs = names.map((_, genome) => ({ name: `contig_${genome}`, genome, bins: 1 }))
+    const pixels: Array<[number, number, number]> = []
+    for (let k = 0; k < n; k++) pixels.push([k, k, 100])
+    for (let k = 0; k + 1 < n; k++) pixels.push([k, k + 1, k + 1])
+    const map = fakeMap(contigs, names, pixels)
+    const qc = await runMagQc(jobOf({}, {}, map))
+    const upstream = { magqc: { outputs: qc } } as unknown as TaskInputs['upstream']
+    const edges = tableOf(await runMagNetwork(jobOf({ normalise: 'raw' }, { upstream }, map)), 'magnetwork').rows
+    expect(edges).toHaveLength(n - 1)
+    // The strongest edge first, and every row named as the file names it.
+    expect([edges[0]['a'], edges[0]['b'], edges[0]['raw']]).toEqual(['bin_43', 'bin_44', 44])
+    for (const edge of edges) {
+      expect(String(edge['a'])).toMatch(/^bin_\d\d$/)
+      expect(String(edge['b'])).toMatch(/^bin_\d\d$/)
+    }
+  })
+
+  it('refuses a QC matrix that is not this file’s rather than name its rows after other genomes', async () => {
+    const qc = await runMagQc(jobOf({}))
+    const upstream = { magqc: { outputs: qc } } as unknown as TaskInputs['upstream']
+    const other = fakeMap(
+      [
+        { name: 'x', genome: 0, bins: 1 },
+        { name: 'u', genome: 1, bins: 1 },
+      ],
+      ['X', '__unbinned__'],
+      [],
+    )
+    await expect(runMagNetwork(jobOf({ normalise: 'raw' }, { upstream }, other))).rejects.toThrow(
+      /3 MAGs and this file has 1, so its rows cannot be matched to their genomes/,
+    )
+  })
+})
+
+describe('the order of the metagenome tables', () => {
+  /**
+   * Four MAGs of four one-bin contigs each, built so that their splits are
+   * known by hand, and the unassigned contig last:
+   *
+   * - `whole`: two pairs, 100 inside each and 50 across every cross pair — a
+   *   split of the pairs crosses 200 for 200 inside, a ratio of 1;
+   * - `apart`: the same two pairs with nothing across, a ratio of exactly 0;
+   * - `loose`: three contigs at 100 a pair, the fourth touching one of them
+   *   once, which a split peels off for 1 across and 300 inside;
+   * - `alone`: contacts within each contig and none between, so the split's
+   *   two sides have nothing inside to compare with: no ratio.
+   *
+   * `apart` used to be listed after `whole`, with `alone`, its 0 read as the 1
+   * that stood in for a missing ratio.
+   */
+  const GENOMES = ['whole', 'apart', 'loose', 'alone', '__unbinned__']
+  const contigs: FakeContig[] = [
+    ...GENOMES.slice(0, 4).flatMap((name, genome) =>
+      Array.from({ length: 4 }, (_, k) => ({ name: `${name}_${k}`, genome, bins: 1 })),
+    ),
+    { name: 'unbinned_0', genome: 4, bins: 1 },
+  ]
+  const pixels: Array<[number, number, number]> = [
+    // whole: bins 0–3
+    [0, 1, 100],
+    [2, 3, 100],
+    [0, 2, 50],
+    [0, 3, 50],
+    [1, 2, 50],
+    [1, 3, 50],
+    // apart: bins 4–7
+    [4, 5, 100],
+    [6, 7, 100],
+    // loose: bins 8–11
+    [8, 9, 100],
+    [8, 10, 100],
+    [9, 10, 100],
+    [10, 11, 1],
+    // alone: bins 12–15, only themselves
+    [12, 12, 10],
+    [13, 13, 10],
+    [14, 14, 10],
+    [15, 15, 10],
+  ]
+  const map = (): MetaCooler => fakeMap(contigs, GENOMES, pixels)
+
+  it('lists the split MAGs from the lowest cross-block ratio up, and one with no ratio last', async () => {
+    const rows = tableOf(await runMagSplit(jobOf({}, {}, map())), 'magsplit').rows
+    expect(rows.map((row) => row['genome'])).toEqual(['apart', 'loose', 'whole', 'alone'])
+    expect(Number(rows[0]['ratio'])).toBe(0)
+    expect(Number(rows[1]['ratio'])).toBeCloseTo(1 / 300, 12)
+    expect(Number(rows[2]['ratio'])).toBeCloseTo(1, 12)
+    expect(Number.isNaN(Number(rows[3]['ratio']))).toBe(true)
+    expect(rows.map((row) => row['flagged'])).toEqual(['yes', 'yes', '', ''])
+  })
+
+  it('lists a MAG with no contact at all after the leakiest, never among them', async () => {
+    // Three MAGs: one keeps some of its contact, one sends all of it out, and
+    // one — listed before it in the file — has none at all.
+    const names = ['keeps', 'silent', 'leaks', '__unbinned__']
+    const qc = await runMagQc(
+      jobOf(
+        {},
+        {},
+        fakeMap(
+          [
+            { name: 'k', genome: 0, bins: 1 },
+            { name: 's', genome: 1, bins: 1 },
+            { name: 'l', genome: 2, bins: 1 },
+            { name: 'u', genome: 3, bins: 1 },
+          ],
+          names,
+          [
+            [0, 0, 30],
+            [0, 2, 10],
+          ],
+        ),
+      ),
+    )
+    const rows = tableOf(qc, 'magqc').rows
+    expect(rows.map((row) => row['genome'])).toEqual(['keeps', 'leaks', 'silent'])
+    expect(rows.map((row) => row['fraction'])).toEqual([0.75, 0, Number.NaN])
+  })
+
+  it('lists the contigs too poor in contact to judge after the purest, never among them', async () => {
+    // One MAG of three contigs: a rich one that keeps everything, a poor one —
+    // first in the file — with too little contact to judge, and a rich one that
+    // sends a third of its contact to the other MAG.
+    const names = ['mag', 'other', '__unbinned__']
+    const outputs = await runMagPurity(
+      jobOf(
+        { minContacts: 10 },
+        {},
+        fakeMap(
+          [
+            { name: 'poor', genome: 0, bins: 1 },
+            { name: 'pure', genome: 0, bins: 1 },
+            { name: 'mixed', genome: 0, bins: 1 },
+            { name: 'away', genome: 1, bins: 1 },
+            { name: 'u', genome: 2, bins: 1 },
+          ],
+          names,
+          [
+            [0, 1, 2],
+            [1, 1, 40],
+            [2, 2, 20],
+            [2, 3, 10],
+          ],
+        ),
+      ),
+    )
+    const rows = tableOf(outputs, 'magpurity').rows.filter((row) => row['genome'] === 'mag')
+    expect(rows.map((row) => row['contig'])).toEqual(['mixed', 'pure', 'poor'])
+    expect(Number.isNaN(Number(rows[2]['outside']))).toBe(true)
   })
 })

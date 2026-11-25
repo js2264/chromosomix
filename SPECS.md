@@ -10638,12 +10638,26 @@ spectrally in two, flagged when the cross-block contacts are too few for it to b
 *Inter-MAG network*: the genome × genome matrix as a ranked edge table, written in the column order
 `metacooler network --level genome` uses so the two are interchangeable downstream, and built from
 *MAG contact QC*'s own matrix — its *inter-MAG matrix*, on by default — which runs first at its
-defaults and is reused where it already has. An edge is ranked by its *edge weight*: by default
+defaults and is reused where it already has. Each edge names its two genomes as the file does,
+however many there are: the names come from the file, read again beside the matrix, and not from
+the labels of the matrix's picture, which leaves them off past forty MAGs and once left every edge
+of a larger file — a metaTOR map, with its mobile elements, holds a hundred and seventy-seven —
+named `MAG 123`. A matrix whose MAGs are not the file's is refused rather than named after other
+genomes. An edge is ranked by its *edge weight*: by default
 *per coverage*, the contacts over the geometric mean of the two MAGs' intra-MAG contacts, so a
 deeply sequenced pair and a shallow one rank on one scale; *per bin pair*, the contacts over the
 product of the two MAGs' bin counts, since a large MAG touches more of everything for no reason but
 its size; or the *raw contacts*. A MAG with nothing to divide by gives its edges no weight rather
 than an infinite one.
+
+Each table opens sorted on its verdict — *MAG contact QC* on the fraction that stays inside, most
+first; *MAG purity* on the fraction that leaves, most first; *split-MAG detection* on the
+cross-block ratio, least first, the MAGs most clearly in two pieces at the top — and a row with no
+value there, a MAG with no contact or a contig with too little to judge, comes after every row
+that has one, whichever way the column runs, as a table's own sort puts what is missing (§18.13).
+The three once sorted on the value or a stand-in for none, which read a real 0 as missing: a MAG
+whose contigs fall into two blocks with no contact between them, a ratio of exactly 0, was listed
+last.
 
 `__unbinned__` appears in none of them as a row, exactly as §7.4 requires — and its contacts are
 dropped from every metagenome accumulation rather than counted as inter-MAG, because counting them

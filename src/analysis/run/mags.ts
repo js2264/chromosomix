@@ -65,6 +65,28 @@ function layoutOf(job: JobContext): Layout {
   return { contigs, genomes, allowed }
 }
 
+/**
+ * A table's order on one of its numbers, with what is missing last whichever
+ * way it runs.
+ *
+ * The rule a table's own column sort follows (`figures/tableFigure.ts`): a row
+ * with no value is not a row with the smallest one. Each table here once sorted
+ * on `value || 0` or `value || 1`, which also reads a real 0 as missing — so on
+ * a mock community's metaTOR map the one MAG whose contigs fall into two blocks
+ * with no contact at all, the strongest split a file can hold, was listed last
+ * of fifty-five, and the contigs too poor in contact to judge were mixed in with
+ * the purest.
+ */
+function byNumber(key: string, direction: 1 | -1) {
+  return (a: Record<string, unknown>, b: Record<string, unknown>): number => {
+    const left = Number(a[key])
+    const right = Number(b[key])
+    const leftMissing = !Number.isFinite(left)
+    if (leftMissing !== !Number.isFinite(right)) return leftMissing ? 1 : -1
+    return leftMissing ? 0 : direction * (left - right)
+  }
+}
+
 /** The one warning every scanning task here owes the reader. */
 function noteScoreColumn(job: JobContext): void {
   if (job.framing.value !== '' && job.framing.value !== DEFAULT_COUNT_COLUMN) {
@@ -154,7 +176,7 @@ export const runMagQc: TaskRunner = async (job) => {
         { key: 'fraction', label: 'Intra fraction', kind: 'number', digits: 3 },
         { key: 'perBin', label: 'Contacts per bin', kind: 'number', digits: 2 },
       ],
-      rows: [...rows].sort((a, b) => (b.fraction || 0) - (a.fraction || 0)),
+      rows: [...rows].sort(byNumber('fraction', -1)),
     } satisfies TableOutput,
   ]
 
@@ -209,7 +231,6 @@ export const runMagNetwork: TaskRunner = async (job) => {
       'The MAG QC step produced no inter-MAG matrix. Turn its "inter-MAG matrix" option on.',
     )
   }
-  const names = matrix.xTicks.length === matrix.nrows ? matrix.xTicks : null
   const m = matrix.nrows
   const mode = strParam(job.params, 'normalise', 'coverage')
   const minWeight = numParam(job.params, 'minWeight', 0)
@@ -218,23 +239,25 @@ export const runMagNetwork: TaskRunner = async (job) => {
   const own = new Float64Array(m)
   for (let r = 0; r < m; r++) own[r] = matrix.values[r * m + r]
 
-  // *Per bin pair* needs each MAG's size, which the matrix does not carry. It
-  // is the file's, so it is read again here: `layoutOf` is a pure function of
-  // the file and is what the QC pass compacted its matrix to, row for row, so
-  // the two orders agree by construction — and a matrix that does not match
-  // the layout is refused rather than divided by another MAG's bins.
-  let bins: Float64Array | null = null
-  if (mode === 'bins') {
-    const layout = layoutOf(job)
-    if (layout.genomes.length !== m) {
-      throw new Error(
-        `The MAG QC step's matrix has ${m.toLocaleString()} MAGs and this file has ` +
-          `${layout.genomes.length.toLocaleString()}, so its rows cannot be matched to their bin ` +
-          'counts. Run MAG contact QC again.',
-      )
-    }
-    bins = Float64Array.from(layout.genomes, (genome) => genome.bins)
+  // Which genome each row is, and — for *per bin pair* — its size: neither is
+  // in the matrix, and both are the file's, so they are read again here.
+  // `layoutOf` is a pure function of the file and is what the QC pass compacted
+  // its matrix to, row for row, so the two orders agree by construction — and a
+  // matrix that does not match the layout is refused rather than named after,
+  // or divided by, another MAG. The names were once the matrix's tick labels,
+  // which its picture leaves off past forty MAGs: every edge of a larger file —
+  // a metaTOR map, with its mobile elements, has a hundred and seventy-seven —
+  // was then `MAG 123`.
+  const layout = layoutOf(job)
+  if (layout.genomes.length !== m) {
+    throw new Error(
+      `The MAG QC step's matrix has ${m.toLocaleString()} MAGs and this file has ` +
+        `${layout.genomes.length.toLocaleString()}, so its rows cannot be matched to their ` +
+        'genomes. Run MAG contact QC again.',
+    )
   }
+  const names = layout.genomes.map((genome) => genome.name)
+  const bins = mode === 'bins' ? Float64Array.from(layout.genomes, (genome) => genome.bins) : null
 
   /**
    * One edge's weight, by the option the reader chose.
@@ -265,12 +288,7 @@ export const runMagNetwork: TaskRunner = async (job) => {
       if (!Number.isFinite(raw) || raw <= 0) continue
       const weight = weightOf(r, c, raw)
       if (!Number.isFinite(weight) || weight < minWeight) continue
-      edges.push({
-        a: names === null ? `MAG ${r}` : names[r],
-        b: names === null ? `MAG ${c}` : names[c],
-        weight,
-        raw,
-      })
+      edges.push({ a: names[r], b: names[c], weight, raw })
     }
   }
   edges.sort((x, y) => y.weight - x.weight)
@@ -391,7 +409,7 @@ export const runMagPurity: TaskRunner = async (job) => {
         { key: 'partner', label: 'Top partner', kind: 'text' },
         { key: 'flagged', label: 'Flagged', kind: 'text' },
       ],
-      rows: rows.sort((a, b) => Number(b.outside || 0) - Number(a.outside || 0)),
+      rows: rows.sort(byNumber('outside', -1)),
     } satisfies TableOutput,
     {
       kind: 'profile',
@@ -537,7 +555,9 @@ export const runMagSplit: TaskRunner = async (job) => {
         { key: 'sideB', label: 'Side B', kind: 'number', digits: 0 },
         { key: 'flagged', label: 'Flagged', kind: 'text' },
       ],
-      rows: rows.sort((a, b) => Number(a.ratio || 1) - Number(b.ratio || 1)),
+      // The MAGs most clearly in two pieces first; one with no internal contact,
+      // whose ratio says nothing, last.
+      rows: rows.sort(byNumber('ratio', 1)),
     } satisfies TableOutput,
   ]
   if (count > 0) {

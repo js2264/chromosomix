@@ -366,6 +366,18 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Fixed
 
+- **The inter-MAG network names its genomes, however many the file has (a dev feature, §18.8).** Past
+  forty MAGs every edge was named by its row — `MAG 123` — because the names were taken from the
+  labels of the QC matrix's picture, which leaves them off past forty. A metaTOR map holds a hundred
+  and seventy-seven with its mobile elements, so its MGE–host edges, the ones the table is for, could
+  not be read. Each edge now names its two genomes as the file does, and a QC matrix whose MAGs are not
+  the file's is refused rather than named after other genomes.
+- **The metagenome tables sort a zero as a zero (a dev feature, §18.8).** Split-MAG detection listed a
+  MAG whose contigs fall into two blocks with no contact between them — a cross-block ratio of exactly
+  0, the strongest split there is — last, reading the 0 as the 1 that stood in for no ratio at all.
+  MAG contact QC and MAG purity read a 0 as missing the same way, and mixed a MAG with no contact in
+  with the leakiest and the contigs too poor in contact to judge in with the purest. Each now puts a
+  row with no value after every row with one, as a table's own sort does.
 - **The maps of a deck stay on one place across the whole genome (§16.3).** Zoomed or panned fast,
   the maps of a deck on the whole genome went on moving together but showed two places: the yeast
   micro-C twice, zoomed fast into the whole genome, showed chrVII:378–632 kb on the first map and
