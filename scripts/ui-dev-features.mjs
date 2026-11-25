@@ -120,7 +120,7 @@ await closeModal()
 
 await openMetacool()
 text = await words()
-console.log('off · .metacool refused:', /not a contact map this viewer reads/.test(text))
+console.log('off · .metacool refused as what it is:', /metagenome’s contact map/.test(text), '· never "not a cooler":', !/not a cooler/.test(text))
 console.log('off · refusal names metacool (outside the file name):',
   /metacool/i.test(text.replaceAll('MM133.metacool', '')))
 await shot('d03-metacool-refused')
@@ -146,7 +146,7 @@ await closeModal()
 
 await openMetacool()
 text = await words()
-console.log('on · genomes table:', /genomes/i.test(text), '· refused:', /not a contact map this viewer reads/.test(text))
+console.log('on · genomes table:', /genomes/i.test(text), '· refused:', /metagenome’s contact map|not a contact map this viewer reads/.test(text))
 await shot('d07-metacool-on')
 
 if (errors.length > 0) console.log('page errors:', errors)

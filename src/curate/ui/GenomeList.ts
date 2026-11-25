@@ -573,6 +573,7 @@ export class GenomeList {
     const genome = derived.answer.genomes[row.genome]
     node.dataset.dropGenome = genome.id
     node.dataset.genome = genome.id
+    node.classList.toggle('is-element', genome.kind === 'element')
     node.setAttribute('aria-expanded', String(row.open))
     const colour = this.ctx.colourOf(genome.id)
     const disclosure = el('button', {

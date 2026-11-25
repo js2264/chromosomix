@@ -44,12 +44,19 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   map, pixel for pixel, to `reassign`'s own file of it; the export card's `reassign` command asks for
   that layout, `--layout genome-then-length`, whatever order the file kept. The genomes table has a `kind` and a
   `curation` column and leaves a changed genome's file columns empty; the contigs table names each
-  contig's genome; the File card counts MAGs and elements apart and says the binning is curated; the
+  contig's genome; the File card counts MAGs and elements apart and says how many steps the curation
+  has (`curation 17 steps`); the
   Binning QC card sets the file's pool beside the curated one. The heading's word reads `genomes ·
   curated · 7 steps`, and its arrow puts the file's binning back, carrying the view to where a
   renamed or merged genome went. A workspace and a link carry the curation.
 
 ### Changed
+
+- **A metagenome's contact map is refused as what it is (§29.3).** A `.metacool`, or a collection of
+  them, was refused in the words any HDF5 file this viewer does not read gets — *it is not a cooler*,
+  over a list of a cooler's own keys — and a `.metacool` is a cooler. The refusal now says it is a
+  metagenome's contact map, a cooler with a genome layer over its contigs, which this viewer does not
+  open.
 
 - **The goldens of metacooler's fixtures are rebuilt with 0.4.0, the release CI installs.** The
   fixtures metacooler writes now carry each contig's intra-contig QC counts

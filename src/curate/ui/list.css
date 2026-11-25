@@ -301,6 +301,13 @@
   flex: 0 1 auto;
   min-width: min(11ch, 100%);
 }
+/* An element's short name is short (`00003`): it takes its own width, and its
+   host the room a MAG's eleven characters would keep — `→ 00706_00000` whole. */
+.curate-row-genome.is-element .curate-row-name {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 45%;
+}
 
 .curate-row-contig .curate-row-name {
   color: var(--text-dim);

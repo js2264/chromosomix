@@ -93,6 +93,8 @@ await sleep(300)
 await page.click('.curate-filter-note .btn-link').catch(() => console.log('no "select them"'))
 await sleep(500)
 console.log('selection:', await page.evaluate(() => document.querySelector('[data-card="selection"]')?.textContent?.replace(/\s+/g, ' ').slice(0, 300)))
+// The run of three named once on each bar, its count kept: `00700_00001 +2`.
+console.log('plates:', await page.evaluate(() => document.querySelector('.curate-contact-overlay')?.dataset.plates ?? null))
 await shot('cu05-one-organism')
 await page.fill('.curate-filter', '')
 await sleep(200)

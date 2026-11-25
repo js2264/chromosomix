@@ -1185,6 +1185,8 @@ export class ContactPane implements CuratePane {
     // The names on plates first, where blocks are too narrow to hold them: a
     // section's label on the bar keeps clear of them.
     const plates = this.large ? this.genomePlates(g, geo, drawn, { selected, lit, pointer: pointerHit }) : []
+    // What the plates say, edge by edge: as a script driving the stage reads them.
+    this.overlay.dataset.plates = plates.map((plate) => `${plate.edge}:${plate.label}`).join('|')
 
     // The bars.
     for (const edge of ['top', 'left'] as const) this.genomeBar(g, edge, geo, drawn, ink, { selected: new Set(selected), lit, drop: dropSlot, pointer: pointerHit, plates })
@@ -1739,7 +1741,7 @@ export class ContactPane implements CuratePane {
       if (along < start || along > start + this.map.size) continue
       if (taken[edge].some(([a, b]) => along > a - 8 && along < b + 8)) continue
       const { text, element } = nameOf(slot)
-      const plate = this.plateFor(g, edge, along, span > 1 ? `${text} +${span - 1}` : text, strong, element)
+      const plate = this.plateFor(g, edge, along, text, strong, element, span > 1 ? ` +${span - 1}` : '')
       if (plate === null) continue
       taken[edge].push([along - 7, along + 7])
       plates.push(plate)
@@ -1748,15 +1750,18 @@ export class ContactPane implements CuratePane {
   }
 
   /** A name's plate across a bar, cut to the room there; `null` where not even a few letters fit. */
-  private plateFor(g: CanvasRenderingContext2D, edge: 'top' | 'left', along: number, text: string, strong: boolean, element: boolean): Plate | null {
+  private plateFor(g: CanvasRenderingContext2D, edge: 'top' | 'left', along: number, text: string, strong: boolean, element: boolean, suffix = ''): Plate | null {
     const { strip, gap } = this.bar
     const c0 = gap + strip + 2
     const room = (edge === 'top' ? this.map.y : this.map.x) - c0 - 2
     const mark = element ? DIAMOND_ROOM : 0
     if (room < 16 + mark) return null
     g.font = this.font('600')
-    const label = this.fitText(g, text, room - 8 - mark)
-    if (label === '') return null
+    // A run's count (` +2`) is never cut: the name gives way to it.
+    const tail = suffix === '' ? 0 : g.measureText(suffix).width
+    const name = this.fitText(g, text, room - 8 - mark - tail)
+    if (name === '') return null
+    const label = `${name}${suffix}`
     return { edge, along, label, width: g.measureText(label).width + 8 + mark, strong, element }
   }
 

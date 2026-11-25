@@ -173,10 +173,10 @@ describe('the GC × coverage scatter', () => {
   it('says the contig under the pointer — its genome, its affinities, what is offered — and lights it', async () => {
     const { model, said } = await mount()
     pointer('pointermove', at('u0'))
-    expect(said.at(-1)).toBe('u0 · 50.0 kb · GC 39.0% · 10 Hi-C contacts per kb · unbinned · best X1, affinity 1.95 · recruit 98%')
+    expect(said.at(-1)).toBe('u0 · unbinned · 50.0 kb · GC 39.0% · 10 Hi-C contacts per kb · best X1, affinity 1.95 · recruit 98%')
     expect(model.hovered).toEqual({ genome: null, contig: index('u0') })
     pointer('pointermove', at('y5'))
-    expect(said.at(-1)).toBe('y5 · 50.0 kb · GC 57.5% · 40 Hi-C contacts per kb · in X1 · own affinity 0 · best Y, affinity 1.25 · move 97%')
+    expect(said.at(-1)).toBe('y5 · in X1 · 50.0 kb · GC 57.5% · 40 Hi-C contacts per kb · own affinity 0 · best Y, affinity 1.25 · move 97%')
     expect(model.hovered).toEqual({ genome: 'X1', contig: index('y5') })
     // Between the clouds: where the pointer is, in the data.
     const { clientX, clientY } = at('p0')
@@ -362,7 +362,7 @@ describe('the GC × coverage scatter', () => {
     expect(after[1] - after[0]).toBeLessThan(before[1] - before[0])
     expect(after[3] - after[2]).toBeLessThan(before[3] - before[2])
     // What is under the still pointer, said as the view moves under it.
-    expect(said.at(-1)).toMatch(/^y2 · 50\.0 kb · GC 53\.0% · /)
+    expect(said.at(-1)).toMatch(/^y2 · in Y · 50\.0 kb · GC 53\.0% · /)
     // The dot under the pointer stays under it; the clouds far from it leave the view.
     expect(at('y2').clientX).toBeCloseTo(under.clientX, 1)
     expect(at('y2').clientY).toBeCloseTo(under.clientY, 1)

@@ -706,8 +706,9 @@ A mechanism the app did not have: a feature on `main`, built and tested like any
   and the genome and pair views, the metagenome tasks, the example and every sentence that names
   them), `edit` (the stage, its task, its keys, the lens's surfaces) and `dotplot`. Making one public
   is deleting its line.
-- **Off, a `.metacool` is refused like any file the app does not read**, in the generic sentence, and
-  so is an `.mmetacool`. (A `.metacool` also satisfies cooler's own test (§3.1), so this is an active
+- **Off, a `.metacool` is refused like any file the app does not read**, under that refusal's code but
+  in words true of it — a metagenome's contact map, which this viewer does not open, never the generic
+  *it is not a cooler*, which a `.metacool` is (SPECS §29.3) — and so is an `.mmetacool`. (A `.metacool` also satisfies cooler's own test (§3.1), so this is an active
   refusal, not a detection branch skipped.)
 - **State a dev feature left is kept, not applied.** A link or a workspace carrying an edit opens
   without it while the switch is off; the record is untouched, so turning the switch on brings it

@@ -65,6 +65,7 @@ import {
   type ScatterPlaces,
 } from '../scatter'
 import type { Suggestion } from '../suggest'
+import { contigShortName } from '../names'
 import { affinityText } from './contactLayout'
 import type { CurateContext, CurateDropTarget, CurateFrame, CuratePane } from './context'
 
@@ -2140,18 +2141,26 @@ export class ScatterPane implements CuratePane {
     this.schedule()
   }
 
-  /** A contig: its name, length, GC, coverage, genome, how densely it meets its own and the MAG it meets most, and what is offered. */
+  /**
+   * A contig: its name — an assembler's without the length that follows, as
+   * the list prints it — and the genome it is in first, the readout's one line
+   * cutting what comes last; then its length, GC, coverage, how densely it
+   * meets its own and the MAG it meets most, and what is offered.
+   */
   private dotWords(c: number): string {
     const { file, gc, coverage, coverageLabel } = this.ctx.data
-    const parts = [file.names[c] ?? `#${c}`, fmt.bp(file.lengths[c] ?? 0)]
-    if (gc !== null && Number.isFinite(gc[c])) parts.push(`GC ${fmt.pct(gc[c] / 100, 1)}`)
-    if (coverage !== null) parts.push(coverageWords(coverage[c], coverageLabel))
-    // Its own numbers above, where it is drawn here: at the frame's edge.
-    if ((this.placing?.pin[c] ?? 0) !== 0) parts.push('off the scale')
+    const parts = [contigShortName(file.names[c] ?? `#${c}`)]
     const shown = this.ctx.model.shown
     if (shown !== null) {
       const g = shown.genomeOf[c] ?? -1
       parts.push(g < 0 || shown.genomes[g] === undefined ? 'unbinned' : `in ${this.ctx.shortName(shown.genomes[g].id)}`)
+    }
+    parts.push(fmt.bp(file.lengths[c] ?? 0))
+    if (gc !== null && Number.isFinite(gc[c])) parts.push(`GC ${fmt.pct(gc[c] / 100, 1)}`)
+    if (coverage !== null) parts.push(coverageWords(coverage[c], coverageLabel))
+    // Its own numbers above, where it is drawn here: at the frame's edge.
+    if ((this.placing?.pin[c] ?? 0) !== 0) parts.push('off the scale')
+    if (shown !== null) {
       const places = shown.contigs
       const own = places.ownAffinity[c]
       if (own !== undefined && Number.isFinite(own)) parts.push(`own affinity ${affinityText(own)}`)

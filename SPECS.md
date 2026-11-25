@@ -245,7 +245,9 @@ Within HDF5, attribute-based, in this order. Order matters: **a `.metacool` also
 `is_cooler()`** because of the `/chroms → /contigs` soft link and `format = "HDF5::Cooler"`, so
 testing for cooler first would silently downgrade every metacool to a contig-only view. While the
 multi-genome format is switched off (§29), a file that 1 or 2 would match is refused before anything
-else is asked, in the sentence 5 gives any HDF5 file this viewer does not read.
+else is asked — under the code 5 gives any HDF5 file this viewer does not read, in words of its own:
+a metagenome's contact map, or a collection of them, which this viewer does not open; never 5's *it
+is not a cooler*, which a `.metacool` is (§29.3).
 
 1. `format == "HDF5::MMetaCooler"` and `/entries` present → **mmetacool collection** (§3.4)
 2. `metacooler-format == "HDF5::MetaCooler"` and `genomes`, `contigs`, `bins`, `pixels`, `indexes`
@@ -264,8 +266,8 @@ else is asked, in the sentence 5 gives any HDF5 file this viewer does not read.
 
 **A dev feature (§29).** Everything in this section, §3.4, §5.1–§5.3, §7.3 and the metagenome tasks of
 §18.8 is read, drawn and offered only while the *dev features* switch is on; switched off, a
-`.metacool` and an `.mmetacool` are refused as files this viewer does not read, and nothing on screen
-names either.
+`.metacool` and an `.mmetacool` are refused as files this viewer does not read — each named as what it
+is in its own refusal, and there alone (§29.3) — and nothing else on screen names either.
 
 Accepted when:
 
@@ -3082,9 +3084,10 @@ diagnostic of binning quality, a metagenomics reader will look for it, and a rev
 It is a number, not a view: it opens nothing, selects nothing, and is not a row in any table. Label it
 as a QC statistic — "unassigned: 1,204 contigs (30.1%) · 830 bins (8.3%)", each quantity whole, since
 a count of contigs beside a percentage of bins leaves a reader to assemble either one from two
-sentences — and not as a genome, with one clause under it saying it is never drawn. This is the sole
-exception to the rule above and does not weaken it — no code path reaches `__unbinned__` through this
-statistic.
+sentences — and not as a genome, with one clause under it saying it is never drawn. Each quantity is
+whole across a wrap as well, its spaces no-break ones: a line that ended on `12,785` above one that
+started `contigs (62.2%)` was a count read without what it counts. This is the sole exception to the
+rule above and does not weaken it — no code path reaches `__unbinned__` through this statistic.
 
 It is also the only place it is **counted**. The File card's `genomes` row leaves it out, because the
 genomes table a hand's width below that card does: two numbers for one fact on one screen is what
@@ -16783,9 +16786,15 @@ What is dev, and what switched off means for each:
   views (§5.2, §5.3), the genome × genome overview (§7.3), the metagenome tasks (§18.8), the palette's
   *Genomes table* and the root crumb's greyed *Genomes* on a plain
   file, the File card's `ordering` row, and every sentence that names any of them. **Switched off, a
-  `.metacool` or an `.mmetacool` is refused like any file the app does not read**, in that refusal's
-  words. A `.metacool` also passes cooler's own test (§3.1), so this is a refusal the detection makes,
-  not a branch it skips — or it would open as a cooler of twenty thousand contigs. The refusals a
+  `.metacool` or an `.mmetacool` is refused like any file the app does not read**, under that refusal's
+  code and in words true of it: *This is a metagenome's contact map* — a cooler with a genome layer
+  over its contigs, which this viewer does not open — or *a collection of metagenome contact maps*. The
+  words any unknown HDF5 file gets said *it is not a cooler* over a list of a cooler's own keys, and a
+  `.metacool` is one: `cooler.Cooler()` opens it. The view heads the refusal by the container its
+  detail names, not by its prose; it is the one sentence that names either container, being the
+  refusal of a file that is one, and nothing in it says the page could read the file, or how (§29.1,
+  §29.2). A `.metacool` also passes cooler's own test (§3.1), so this is a refusal the detection
+  makes, not a branch it skips — or it would open as a cooler of twenty thousand contigs. The refusals a
   *plain* file can meet stop naming it too: an unknown HDF5 file, a gzip, a file with no HDF5
   signature and a variable-bin cooler each say what they said, less the multi-genome container and the
   command that makes one, and the advice under every refusal a plain file can meet names neither. Any
@@ -17347,7 +17356,9 @@ which starts a curation of its own in its place, drawn as any other.
 
 *Curate the genomes* — the palette's, or a press on the heading's word on the genomes (§33.4) —
 opens a stage on the whole window (`stageDialog`, §27.3's shell), titled `Curate the genomes ·
-<map>`. **Escape never closes it**: it cancels the innermost thing — the keys' sheet, a chooser, a
+<map>`, its controls in the scale of its words — the title, every button, chip, tab and key cap, the
+inspector's and the chooser's too, at the app's steps times the reader's text scale — and *tidy*
+bordered as the tools beside it. **Escape never closes it**: it cancels the innermost thing — the keys' sheet, a chooser, a
 drag, a picture's own press or lasso in flight, a rename, a field's text (and then the field: the
 keyboard goes back to the list), an auto
 run, the selection — and `×` alone closes it, which loses nothing: every step is kept with the file
@@ -17360,18 +17371,22 @@ map, the host map or the GC × coverage scatter large, kept per file; in review 
 one the question's evidence is in, the contact map for a merge, a move or a recruit, the host map for
 a link. Narrower than 720 px — a laptop's window — the two small ones go in a strip under the large
 one, still lit with it; narrower than 440 px the large one shows alone and tabs choose it. The **inspector** on the
-right is the reference stage's sunken column of cards (§27.3), in the mode's order: *who presses
-take*, then the selection, the history, the suggestions, the export and *about the map* — the
-suggestions first in review and in auto. Every column keeps its width per file.
+right is the reference stage's sunken column of cards (§27.3), in the mode's order: *apply
+suggestions* (manual, review or auto), then the selection, the history, the suggestions, the export
+and *about the map* — the suggestions first in review and in auto —; its toggle, *Hide the
+inspector*, stands at the toolbar's end, over no card. Every column keeps its width per file, and its
+two dividers are alike: the column's hairline, its grip shown under the pointer or the keyboard.
 
 **One selection, one hover**, in every part: whole genomes, or contigs, one kind at a time; a press
 selects, ⌘/Ctrl toggles, ⇧ extends. The genome under the pointer is lit in the list, the maps and
-the scatter at once. Every genome keeps one colour everywhere — a hue a golden angle from the last,
+the scatter at once, and the readout names what is under it — a list row as a picture does, by its
+whole name and its numbers. Every genome keeps one colour everywhere — a hue a golden angle from the last,
 by its row in the file's genomes (a created one after them, stepped on where its hue would stand
 within 30° of a neighbour's), darker for an element, grey for the pool — so a merge or a sort
 changes none. A binner's long shared prefix is printed once, in its
-section's head (`MM133_metator_…`), and each genome by the rest (`00700_00001`); titles, exports and
-the history keep the whole name.
+section's head (`MM133_metator_…`, `MetaTOR_MGE_…`: a prefix cut short keeps its `…`, which stands
+outside what gives way), and each genome by the rest (`00700_00001`); titles, exports and the
+history keep the whole name.
 
 **The order.** The MAGs are laid out chained, the two that meet most densely side by side, then the
 next densest joined at an end (the greedy multiple-fragment chain over the method's pairs), each
@@ -17383,14 +17398,16 @@ the hand; *tidy* lays it out again. The stage's order is its own: the session dr
 `metacooler reassign`'s (§33.4).
 
 **The genome list** (`curate/ui/GenomeList.ts`) has three sections, the MAGs, the elements and the
-**unbinned pool**, each a head with its count that folds and takes a drop. A genome's row: its
+**unbinned pool**, each a head with its count — the whole, or what the filter and the chips show of
+it, in one form: `3 of 50`, `0 of 12,785 contigs` — that folds and takes a drop. A genome's row: its
 colour (a disc for a MAG, a ring for an element), its short name, what the curation changed (`+30`,
 `−2`, `new`, `renamed`, `was an element`, the change in words in its title), its length — given up
 to the change on a changed row —, its weighted completeness with its bar under it, `--ok` at
 metaTOR's high quality, and its weighted redundancy, `--warn` above 1.10 — a redundancy within half a
 hundredth of 1.05 or 1.10 printed to a third decimal, off the bound, so the number says which side of
 it the grade went (1.1004 is `1.101`), here, in the band and in the cards — or, for an element, its
-host (`→ 00003_00001`, `3 hosts`, `no host`), and a disc counting the suggestions that name it; the
+host (`→ 00003_00001`, `3 hosts`, `no host`; an element's short name takes its own width, its host
+the rest), and a disc counting the suggestions that name it; the
 MAGs' head names their columns, *length · complete · redundant*. Each column is as wide as its widest
 value in the rows' own type, and the list opens wide enough for them at any text scale (380 px at
 the default), giving way as it narrows — the MAGs' prefix to their legend, then a genome's length,
@@ -17410,7 +17427,13 @@ first and last row, `F2` or `R` renames in place — Tab takes the name and open
 elsewhere leaves the old name and the focus where it went, and the box stays open through any count
 that lands while a name is typed; a genome `B` or `E` makes opens its name once it is counted, unless
 another name is being typed by then. Enter is
-the stage's close-up, and in review the arrows are the review's. A virtual list: twenty thousand
+the stage's close-up, and in review the arrows are the review's. In review the rows the question
+names are tinted, a broken rule and a disc in their margin, clear of the chevron — the selection's
+are a fuller fill and a whole rule —; a genome a frame opens on its contigs — review's question, a
+card's suggestion — closes again with the next frame or a change of mode, unless the reader opened or
+closed it since, so a pass through review leaves the list as it was. A genome's row holding selected
+contigs — a lasso's — wears the selection's rule at half its height and how many, in its length's
+room (the words in its title); the pool's head says its own. A virtual list: twenty thousand
 contigs scroll as fifty genomes do; a section's head stays at the top while its rows scroll, and
 takes a press and a drop as the head does. A contig's row takes a drop as its genome's, a pool
 contig's as the pool's. Three targets docked at its foot, *+ MAG*, *+ element* and *unbinned*, never
@@ -17432,7 +17455,9 @@ resting on a read pair or two is pale. The **close-up** (`Enter`, or a double pr
 offered recruit or move would bring in, a cell a contig pair's contacts over chance. Both are painted as
 a figure, on paper, in either theme; the key stands under the map. Along the top and the left, bars in
 each genome's colour with its short name where a block holds one, and a name on a plate where it does
-not, the sections' labels kept clear of it. The selection is outlined, the genome lit in every pane
+not — a run of selected genomes side by side one plate, named by its first and how many more
+(`00700_00001 +2`), the name giving way to the count where the bar is short —, the sections' labels kept
+clear of it. The selection is outlined, the genome lit in every pane
 dashed, a merge on offer an L at its cell's corner, a link a ring, an unlink a cross — on a cell under
 6 px only those naming the selection, a mark there painting over the contacts it points at; the
 question shown — review's, whole: each pair of an organism's fragments, each link and unlink of a host
@@ -17450,15 +17475,36 @@ no MAG ▸*). A node is a bar as wide as its genome is long, on a log scale. A l
 ink as wide as the share of the element's contacts with MAGs it takes, a link **offered** dashed in the
 accent, a held link a suggestion would undo crossed; the question shown thicker, with its number. An
 element dragged onto a MAG is linked to it. Past three hundred genomes a side, or by its head's choice,
-it shows only what is around the selection.
+it shows only what is around the selection: the genomes chosen, the genomes linked to them — held or
+offered — and one step further, a MAG's elements' other hosts and an element's hosts' other elements.
+**Around an element** it shows what its hosts are judged against: the three MAGs it meets most that no
+link joins it to, each a faint dotted curve (*meets* in the key; their contacts counted as a link's
+are, §33.5), and the five elements it meets most, the selection card's; each of its links is labelled
+where it leaves its MAG with the share of the element's contacts with MAGs that MAG takes (`97%`,
+`0.3%`, `<0.1%`), as the readout says it. The neighbourhood is laid out compact and centred: its links
+300 px long at most, its nodes and names larger, its rows fitted to the view. The head counts **links**,
+each an element and a MAG — never questions, which take an element's links together: `96 links · 17
+links offered · 1 to unlink`, and around the selection what is drawn of them, `13 of 96 links · 3 of 17
+links offered`. Short of room, whole pieces give way, measured and never cut: in the head the view's
+`the selection`, then the offers, the links held staying; in the foot `around the selection`, then the
+key.
 
 **The scatter** (`curate/ui/ScatterPane.ts`): every contig a dot — its GC content across, its Hi-C
 contacts per kb up on a log scale, its area its length, its colour its genome's, the pool faint — so an
 organism is one cloud and a contig binned out of its cloud stands out. Before the contacts are read, GC
-alone, in a band; a contig with no contact sits in a strip at the foot. A drag lassoes (⇧ adds, ⌥ takes
-away), a press selects a dot's contig and a second its genome; the question shown rings its contigs,
-outlines its genomes and draws a line to where it would take them. Nothing is dropped on it: clouds
-overlap, and a drop is never a guess.
+alone, in a band; a contig with no contact sits in a strip at the foot. **The frame leaves the strays
+out**: it spans the contigs but the 0.5% at each end of each axis, by rank, so a few — a short contig at
+3% GC, a repeat at thousands of contacts per kb — do not shrink every cloud to the middle of it (on
+MM133 it holds GC 22–81% and up to 1,054 contacts per kb, where every contig would stretch it to 3–89%
+and 6,782, and 111 of the 20,566 contigs lie beyond it); a map of fewer than 201 contigs keeps every
+one. A contig beyond it is pinned to the edge it lies past, a wedge pointing out, counted in the head,
+said *off the scale* by the readout beside its own numbers, and taken by a lasso along that edge. The
+readout names a dot's contig as the list does and the genome it is in next (`NODE_3633 · in
+00036_00001 · 394.2 kb · GC 45.6% · …`), the one line cutting what comes last. The
+coverage axis reads in one notation from its foot to its top: `10,000` over `1,000`, or every tick an
+exponent where one needs it. A drag lassoes (⇧ adds, ⌥ takes away), a press selects a dot's contig and a
+second its genome; the question shown rings its contigs, outlines its genomes and draws a line to where
+it would take them. Nothing is dropped on it: clouds overlap, and a drop is never a guess.
 
 **The inspector's cards** (`curate/ui/cards/`): the **selection** — a genome's numbers and quality,
 weighted and not, the genomes it meets most, each with its merge; several genomes' sum and their
@@ -17491,10 +17537,13 @@ a table means no genome by — `__unbinned__`, `NA`, `nan`, `n/a`, `ND`, `n/d`, 
 
 **The readout**, on its own line under the toolbar — two in a narrow centre, its height held so a hover never moves the pictures — says what is under the
 pointer; idle, the curation's tally: `MAGs 50 → 45 · 127 elements · 12,412 unbinned · 6 steps · 400
-contigs moved · links +3 −1`.
+contigs moved · links +3 −1`. While the pictures draw a preview (*As it would be*, below) it says so
+first, *as it would be*, and its tally is the binning's as it would be against the binning as it is
+(`MAGs 50 → 49 · 127 elements · 12,785 unbinned · if taken`); the pictures stand in a frame of the
+accent.
 
-**Who presses take** (§27.6): **manual** — the suggestions are drawn and listed and never apply
-themselves —, **review**, and **auto**. **Review asks questions, not pairs** (`curate/questions.ts`):
+**Apply suggestions** (§27.6's *who presses take*): **manual** — the suggestions are drawn and
+listed and never apply themselves —, **review**, and **auto**. **Review asks questions, not pairs** (`curate/questions.ts`):
 the merges at even odds or more grouped by the genomes they join — one question an organism, merged
 into its most complete member (the longest on a tie, a lone pair's as a group's), at the confidence of
 its **weakest needed pair** (the card's *least sure join*), the least sure join
@@ -17502,11 +17551,20 @@ of the surest tree that joins them —, the moves by the genome they leave and t
 recruits by the genome they join, an element's links and unlinks together; what is less sure stays a
 question of its own. They come likely first, and among those the merges, then the moves, the recruits
 and the host links, since a merge changes every affinity of the genome it makes (on MM133 one merge
-answers eighteen moves between three fragments). The **band** under the toolbar says `review · 3 of
-41`, the question, its confidence and its keys, and its **price**: every MAG it changes, weighted
-completeness and redundancy before → after, `--warn` where a grade falls (`contaminated`, `a grade
-lower`), `--ok` where one reaches high quality, and the markers it makes present twice — what a rise
-in redundancy is made of. `Y` takes a question whole, one gesture; `N` turns every member down; ← →
+answers eighteen moves between three fragments). The **band** under the toolbar is three lines
+whatever is asked, so nothing under it moves from one question to the next: where the question
+stands — `3 of 41 likely · 138 less likely after`, the tail only where it fits whole — with its keys
+at the right, the same five on every question (`↓ ↑` dimmed for a question of one member, *hold
+Space to preview* lit while it is held, their words going as the band narrows, the answers' last);
+the question, each genome it names after its disc or, an element, its ring, each contig by the
+list's name, and its confidence; and its **price**: every MAG it changes, weighted completeness and
+redundancy before → after in the cards' numbers — a genome's own and those it takes in whole, the
+one taking contigs in first —, the number that makes a grade fall in `--warn` and the one that makes
+it high quality in `--ok`, as the cards colour them, the name and the verdict with it
+(`contaminated`, `a grade lower`, `high quality`), and one chip counting the markers it makes present
+twice — what a rise in redundancy is made of —, named in its title. Where its line cannot hold it,
+the price drops its sums, then its words, then cuts each genome's numbers short, never its name or
+its verdict; its title is whole. `Y` takes a question whole, one gesture; `N` turns every member down; ← →
 move between questions, ↓ ↑ answer a question's members one by one, `Space` held draws every picture
 as the question would leave the binning — every step of it, an element's link and unlink together. **Auto** takes the questions at 80% or more in that order,
 one gesture each, counting again between two, two hundred at most a run, and **holds back**, naming
@@ -17520,7 +17578,8 @@ selected element to the selected MAG, or *link to…* for elements or one MAG; `
 element of the selected contigs, or the selected genomes made one; `Delete` unbins contigs,
 dissolves genomes, unlinks a selected element and MAG; `F2`/`R` rename; `Enter` the selected
 genomes' contigs close up, `⇧Enter` back; `/` the list's filter; ⌘Z, ⇧⌘Z undo and redo; `Y N ← → ↓ ↑
-Space` in review; `0 + −` the picture under the pointer; `?` this list. Enter presses a focused
+Space` in review; `0 + −` the picture under the pointer; `?` this list, which prints its keys as
+the parts do (`⏎`, `⇧⏎`, `⌫`). Enter presses a focused
 button and the arrows move a focused grip, as everywhere (§26.4). An act that would make nothing —
 contigs moved where they are, the pool's contigs unbinned — makes no step.
 
@@ -17622,8 +17681,10 @@ the recomputed ones titled as such and the file's others as left empty where the
 genome; the contigs table names each contig's genome; the genome and genome-pair views and the
 genome × genome overview read the curated genomes — a genome edge list beside the file, which counts
 the file's genomes, set aside (§7.3); the record card leads with a genome's kind and curation; the
-File card counts the MAGs and the elements apart and says `binning curated · 7 steps`; the Binning
-QC card gives the curated pool, and the file's beside it where the two differ.
+File card counts the MAGs and the elements apart and says `curation 7 steps` — a value short enough to
+read whole on the card's one line, where `binning curated · 17 steps` lost its last letter to the
+General column's width and read *17 step* —; the Binning QC card gives the curated pool, and the
+file's beside it where the two differ.
 A genome's stage (§27.10) draws the curated genome's contigs from the file as it is, and counts where
 they belong by the curated genomes.
 
