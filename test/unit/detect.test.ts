@@ -155,9 +155,13 @@ describe('refused fixtures name their own value (§10)', () => {
       expect(h.attrs()['bin-size']).toBe('null')
       const error = capture(() => assertAcceptable(h, detectLayout(h)))
       expect(error.code).toBe('variable-bins')
-      expect(error.detail).toEqual({ 'bin-type': 'variable', 'bin-size': null })
+      expect(error.detail).toMatchObject({ 'bin-type': 'variable', 'bin-size': null })
+      // A map of DpnII fragments: more bins than contigs, so it is binned
+      // coarser with binnify — the fix a map of one bin per contig cannot take.
+      expect(error.detail['nbins']).toBeGreaterThan(Number(error.detail['nchroms']))
       expect(error.message).toContain("bin-type is 'variable'")
       expect(error.message).toContain('bin-size is None')
+      expect(error.message).toContain('`metacooler binnify --binsize <bp>`')
     })
   })
 

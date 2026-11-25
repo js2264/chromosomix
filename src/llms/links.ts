@@ -10,10 +10,11 @@
  * So the keys are written here once, beside the reader's own list
  * (`state/ViewState.ts`'s `KEY_ORDER`), and the test holds the two to each
  * other in both directions: no key documented that the reader does not take,
- * none taken that the page leaves out but those of the multi-genome format,
- * which is a dev feature (§29.5) and is named nowhere a reader without the
- * switch can see. Every value list that the app keeps as a list — views,
- * transforms, colour maps, comparisons, smoothings — is read from that list.
+ * none taken that the page leaves out but those of the dev features — the
+ * multi-genome format's and the ideogram view's (§29.5) — which are named
+ * nowhere a reader without the switch can see. Every value list that the app
+ * keeps as a list — views, transforms, colour maps, comparisons, smoothings —
+ * is read from that list.
  */
 
 import { COLORMAP_NAMES } from '../render/colormaps'
@@ -53,8 +54,22 @@ export const LINK_VIEWS: ReadonlyArray<{ view: ViewKind; meaning: string }> = [
   { view: 'cells', meaning: 'the table of an `.scool`’s cells, to pick the ones summed into the map' },
 ]
 
-/** Keys the reader takes that this page does not name: the multi-genome format's (§29). */
-export const UNDOCUMENTED_KEYS: readonly string[] = ['genome', 'genome2', 'genomes']
+/**
+ * Keys the reader takes that this page does not name: the dev features' (§29) —
+ * the multi-genome format's, the circle's and two lines' drawn of it (§7.6),
+ * and the ideogram's.
+ */
+export const UNDOCUMENTED_KEYS: readonly string[] = [
+  'genome',
+  'genome2',
+  'genomes',
+  'ideogram',
+  'circle',
+  'sections',
+  'lines',
+  'split',
+  'top',
+]
 
 const SMOOTHS = SMOOTH_CHOICES.map((choice) => choice.id)
 
@@ -171,12 +186,14 @@ export const LINK_KEYS: readonly LinkKey[] = [
   },
   {
     key: 'score',
-    values: `${either(['count', 'balanced', 'vc', 'vcsqrt', 'ice', 'baseline', 'correlation'])}, or a column of the file`,
+    values: `${either(['count', 'balanced', 'vc', 'vcsqrt', 'ice', 'baseline', 'correlation'])}, \`balanced:<column>\`, or a column of the file`,
     meaning:
       'What each cell is drawn from: the raw counts, the balanced counts, a normalisation computed on the fly ' +
       '(VC, square-root VC, ICE), the expected count at that distance, the Pearson correlation of the ' +
-      'observed over expected (on a balanced file), or another column of the file’s pixel table. Overrides ' +
-      '`balance`. A value the file cannot answer falls back to the counts.',
+      'observed over expected (on a balanced file), or another column of the file’s pixel table. ' +
+      '`balanced:<column>` balances by another weight column of the file’s bins than `weight` — ' +
+      '`balanced:normcc`, `balanced:metator_empirical_hit`, `balanced:KR` (read divisive, as cooler reads it). ' +
+      'Overrides `balance`. A value the file cannot answer falls back to the counts.',
   },
   {
     key: 'oe',

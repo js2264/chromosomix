@@ -401,8 +401,22 @@ export interface OpenResult {
   cellNnz: number | null
   /** `false` for a plain cooler, which has no genome layer to browse. */
   hasGenomes: boolean
-  /** `true` when `/bins/weight` exists, so balanced counts can be offered. */
+  /**
+   * `true` when a weight column is in force — `/bins/weight`, or the one chosen
+   * with `selectWeight` — so balanced counts can be offered.
+   */
   hasWeights: boolean
+  /**
+   * Every `/bins` column that holds weights, whoever wrote it (§6.4) — what the
+   * score picker offers to balance by, beside `weight`. One group listing and a
+   * dtype per column, taken while the file is opened: no value is read.
+   */
+  weightColumns: string[]
+  /**
+   * The column balanced reads multiply by: `weight` where the file has it, the
+   * one chosen with `selectWeight`, or `null` while none is in force.
+   */
+  weightColumn: string | null
   /**
    * The `/pixels` value columns, `count` first — what the score picker lists.
    *
@@ -499,6 +513,14 @@ export interface CellsResult {
   selected: Int32Array
 }
 
+/** The weights in force after a `selectWeight` (§6.4). */
+export interface WeightSelectedResult {
+  /** The column balanced reads now multiply by; `null` for none. */
+  weightColumn: string | null
+  /** Whether balanced counts can be offered now. */
+  hasWeights: boolean
+}
+
 /** What changed when a reader ticked a different set of cells. */
 export interface CellsSelectedResult {
   /** The resolved set, in file order — deduplicated and validated. */
@@ -550,6 +572,15 @@ export interface AxisGroup {
    */
   merged?: Array<{ label: string; unitLength: number }>
   label: string
+  /**
+   * The plain name of the unit this run starts at, where {@link label} is
+   * decorated — a pooled slot of the whole-metagenome overview reads
+   * `NODE_7431 +15`, which is a label and not a sequence anything can open.
+   *
+   * Set only by `ui/Overview.ts`, which has both strings from the scan
+   * (`OverviewResult.unitNames`); everywhere else the label is the name.
+   */
+  name?: string
   /** First row/column of the group within the block. */
   start: number
   /** One past the last row/column of the group within the block. */
@@ -904,6 +935,7 @@ export interface ResultMap extends CurationResults {
   contigs: ContigsResult
   cells: CellsResult
   selectCells: CellsSelectedResult
+  selectWeight: WeightSelectedResult
   binColumns: BinColumnsResult
   binColumn: BinColumnResult
   range: ParsedRange
@@ -992,6 +1024,15 @@ export type WorkerRequest =
    * `null` is every cell, which is what an scool with nothing ticked shows.
    */
   | { id: number; kind: 'selectCells'; names: string[] | null }
+  /**
+   * Balance the open map by another of its weight columns (§6.4), or by its
+   * default again (`null`).
+   *
+   * State on the open map, as a cell set is: the column is served where every
+   * balanced read already looks, so a matrix, a scan and a pooled roll-up after
+   * it all multiply by the same weights, and no read carries a column name.
+   */
+  | { id: number; kind: 'selectWeight'; name: string | null }
   | { id: number; kind: 'binColumns' }
   // One `/bins` column over the bins a picture actually covers (§8.12). The
   // range is the caller's because the caller is the side that knows what is on

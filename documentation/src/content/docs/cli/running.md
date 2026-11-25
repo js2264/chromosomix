@@ -53,7 +53,7 @@ A map is a path or an `http://` or `https://` address; `s3://`, `gs://` and othe
 | `.pairs`, `.pairs.gz` | binned first, so it needs `--bin-size <bp>`; `--rungs <n>` builds more resolutions above it (a 1-2-5 series, 1 by default). A `.px2` index beside it is used |
 | HiC-Pro | the `.matrix`, with its `_abs.bed` bins file beside it |
 
-A map is read balanced wherever the file carries weights, as in the app. `--no-balance` reads the raw counts; `--balance` is refused, except as Coverage's own switch.
+A map is read balanced wherever the file carries weights, as in the app. `--no-balance` reads the raw counts; `--balance` is refused, except as Coverage's own switch. `--weight <column>` balances by another weight column of the file than `weight` — `--weight normcc`, `--weight metator_empirical_hit` — as the app's **balanced · *column*** does.
 
 - `--coarsen <bp>` reads a bin size the file does not store, a whole number of its own bins. Counts sum exactly.
 - `--contacts <n>` (`10M`, `23,000,000` or `2.5e7`) draws the map to `n` contacts — an exact subsample below the file's total, a Boost-HiC oversample above it — with the app's seed, so it draws the same pixels as the app. To compare libraries at one depth: `chromosomix insulation rep1.cool rep2.cool --contacts 10M --out results/`.

@@ -155,6 +155,8 @@ function opened(over: Partial<OpenResult> = {}): OpenResult {
     cellNnz: null,
     hasGenomes: false,
     hasWeights: false,
+    weightColumns: [],
+    weightColumn: null,
     scoreColumns: ['count'],
     sourceBytes: 1,
     contacts: null,

@@ -406,6 +406,8 @@ export class SessionDeck {
         const { onAvailable: _grey, ...shared } = this.session.turnPresentation(state)
         return shared
       },
+      // The reader's order (§7.6): every map of the deck drawn in the lead's.
+      order: () => this.session.leadOrder(),
       // The stored rung the lead reads: the one picked, or the one opened
       // (§3.4) — the rung a companion handed a whole `.mcool` opens at. What it
       // is *drawn* at is the deck's resolution, below.

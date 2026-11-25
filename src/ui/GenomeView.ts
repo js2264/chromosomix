@@ -8,6 +8,7 @@
  * a view built at it; this genome's contigs are listed, and ticked, there too.
  */
 
+import type { CirclePresentation } from './CircleView'
 import type { ParsedRange, Transform } from '../types'
 import { typedLocusToRegion } from '../genome/assembly'
 import type { MatrixResult } from '../worker/protocol'
@@ -18,7 +19,7 @@ import { MatrixPanel,
   type BorrowedScale,
   type DerivePresentation,
   type TurnPresentation,
- type FigureSubject} from './MatrixPanel'
+ type FigureSubject, type PanelOrder} from './MatrixPanel'
 import { axisRegion } from './mapSelection'
 import { blockSummary, poolingNote } from './mapSummary'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
@@ -74,6 +75,8 @@ export interface GenomeViewProps {
   scale: PanelSeed
   balance: boolean
   hasWeights: boolean
+  /** Every weight column of the file, each a balance of the picker's (§6.4). */
+  weightColumns?: readonly string[]
   /**
    * The `/pixels` column the reads take; `count` when absent.
    *
@@ -96,6 +99,10 @@ export interface GenomeViewProps {
   derive?: DerivePresentation
   /** The 45° turn (`render/rotate.ts`), built by the session like `derive`. */
   turn?: TurnPresentation
+  /** The map drawn round (§7.6), built by the session like the turn. */
+  round?: CirclePresentation
+  /** The reader's order of the file's genomes and contigs (§7.6), which the map is drawn in. */
+  order?: PanelOrder
   onScaleChange(scale: ScaleState): void
   onOpenRegion(region: string): void
   /**
@@ -187,6 +194,8 @@ export class GenomeView {
       balance: props.balance,
       ...(props.derive === undefined ? {} : { derive: props.derive }),
       ...(props.turn === undefined ? {} : { turn: props.turn }),
+      ...(props.round === undefined ? {} : { round: props.round }),
+      ...(props.order === undefined ? {} : { order: props.order }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,
@@ -270,6 +279,19 @@ export class GenomeView {
     this.panel.destroy()
   }
 
+  /**
+   * What every read of this view asks for besides its window: balanced or not,
+   * and which `/pixels` column — the score the picker shows.
+   *
+   * The pair, region and whole views asked for both on every read; this one
+   * asked for neither, so a genome's map was its raw counts whatever its picker
+   * said — `balanced`, a weight column by name (§6.4), another column of the
+   * file — and a reader comparing two balances saw one picture twice.
+   */
+  private reading(): { balance: boolean; value?: string } {
+    return { balance: this.props.balance, ...(this.props.value === undefined ? {} : { value: this.props.value }) }
+  }
+
   private async load(): Promise<void> {
     this.panel.setBusy(true)
     try {
@@ -287,11 +309,13 @@ export class GenomeView {
               kind: 'matrix',
               rows: [lo, hi],
               ...this.firstPlan(hi - lo),
+              ...this.reading(),
             })
           : await this.props.client.request<'aggregate'>({
               kind: 'aggregate',
               rows: [lo, hi],
               level: 'contig',
+              ...this.reading(),
             })
       if (this.disposed) return
       // The reader plans the grid for a genome, because it is the side that
@@ -343,6 +367,7 @@ export class GenomeView {
           ...(binsPerCell === undefined ? {} : { binsPerCell }),
           rows,
           cols,
+          ...this.reading(),
         })
         return { cancel: own.cancel, promise: own.promise.then((block) => ({ result: block })) }
       },

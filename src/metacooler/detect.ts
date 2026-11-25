@@ -556,12 +556,18 @@ export function assertAcceptable(
 
     const ordering = strAttr(attrs, 'contig-ordering')
     if (ordering !== REQUIRED_ORDERING) {
+      // Two ways out, and the first needs nothing but the map: a reassignment
+      // to the genomes the map already has, laid out as this viewer reads it,
+      // groups any ordering — the `custom` one `metacooler reassign --layout
+      // keep` writes included — where re-creating the map needs its pairs.
       throw new ViewerError(
         'bad-ordering',
         `This file's contig-ordering is ${pyRepr(ordering)}; the viewer requires ` +
           `${pyRepr(REQUIRED_ORDERING)}. Only a genome-grouped layout puts every genome in one ` +
           `contiguous block of bins, which is what makes a genome or a genome pair a single ` +
-          `bounded read. Re-create the file with ` +
+          `bounded read. Group its contigs by genome with \`metacooler reassign --contigs ` +
+          `<table> --contigs-format contig,genome --layout ${REQUIRED_ORDERING}\`, the table its ` +
+          `own (\`metacooler dump <file> -t contigs -H\`), or re-create the file with ` +
           `\`metacooler create pairs --contig-order ${REQUIRED_ORDERING}\`.`,
         { found: ordering, expected: REQUIRED_ORDERING },
       )
@@ -590,20 +596,37 @@ export function assertAcceptable(
   const binType = strAttr(geometry.attrs, 'bin-type')
   const binSize = intAttr(geometry.attrs, 'bin-size')
   if (binType === 'variable' || binSize === null || binSize <= 0) {
+    // The fix depends on what the map is. A cooler is binned again from its
+    // pairs, whether or not the multi-genome format is read (§29). A metacool
+    // of fragments is binned coarser with `metacooler binnify`. A metacool of
+    // one bin per contig — the map metaTOR writes from pairs or BAM files —
+    // cannot be: its contacts were counted per contig, and binnify, which only
+    // sums bins, puts every contact of a contig in one bin of it and leaves the
+    // rest empty, a map that opens and misleads. Its counts are what tell it:
+    // as many bins as contigs, which the detail shows the reader too.
+    const metacool = layout.kind === 'metacool' && options.metacool !== false
+    const nbins = intAttr(geometry.attrs, 'nbins')
+    const nchroms = intAttr(geometry.attrs, 'nchroms')
+    const perContig = metacool && nbins !== null && nbins > 0 && nbins === nchroms
+    const count = (nbins ?? 0).toLocaleString('en-US')
+    const stated =
+      `The viewer supports fixed-bin files only; this file's bin-type is ` +
+      `${pyRepr(binType)} and its bin-size is ${pyRepr(binSize)}.`
     throw new ViewerError(
       'variable-bins',
-      options.metacool === false
-        ? // A plain cooler meets this refusal too, so switched off (§29) it
-          // names the fix a cooler has rather than the metacool one.
-          `The viewer supports fixed-bin files only; this file's bin-type is ` +
-          `${pyRepr(binType)} and its bin-size is ${pyRepr(binSize)}. Bin its contacts at a ` +
-          `fixed size — \`cooler cload pairs\` does, from the pairs it was made from — and ` +
-          `open that.`
-        : `The viewer supports fixed-bin files only; this file's bin-type is ` +
-          `${pyRepr(binType)} and its bin-size is ${pyRepr(binSize)}. Fragment-level and ` +
-          `contig-level metacools are variable-bin by construction. Produce a fixed-bin file ` +
-          `with \`metacooler binnify --binsize <bp>\` and open that.`,
-      { 'bin-type': binType, 'bin-size': binSize },
+      !metacool
+        ? `${stated} Bin its contacts at a fixed size — \`cooler cload pairs\` does, from the ` +
+            `pairs it was made from — and open that.`
+        : perContig
+          ? `${stated} It holds one bin per contig (${count} contigs, ${count} bins), as ` +
+            `metaTOR writes a map from pairs or BAM files: its contacts were counted per contig, ` +
+            `and \`metacooler binnify\` cannot put them back along it. Make a fixed-bin map from ` +
+            `the same pairs with \`metacooler create pairs --bins <bp>\` and open that.`
+          : `${stated} Fragment-level metacools are variable-bin by construction. Produce a ` +
+            `fixed-bin file with \`metacooler binnify --binsize <bp>\` and open that.`,
+      metacool
+        ? { 'bin-type': binType, 'bin-size': binSize, nbins, nchroms }
+        : { 'bin-type': binType, 'bin-size': binSize },
     )
   }
 

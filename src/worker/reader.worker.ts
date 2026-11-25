@@ -54,6 +54,7 @@ import {
   type BinColumnsResult,
   type CellsResult,
   type CellsSelectedResult,
+  type WeightSelectedResult,
   type ContigsResult,
   type DeepValidation,
   type GenomesResult,
@@ -815,6 +816,8 @@ async function handleOpen(request: Extract<WorkerRequest, { kind: 'open' }>): Pr
         : null,
     hasGenomes: mc.hasGenomes,
     hasWeights: mc.hasWeights,
+    weightColumns: [...mc.weightColumns],
+    weightColumn: mc.weightColumn,
     scoreColumns: mc.scoreColumns,
     sourceBytes: source.size,
     contacts: mc.declaredContacts,
@@ -888,6 +891,15 @@ function handleSelectCells(
   const { mc } = requireSession()
   mc.selectCells(request.names)
   return { names: mc.activeCells, nnz: mc.nnz ?? 0, scoreColumns: mc.scoreColumns }
+}
+
+/** Balance by another weight column, or the default again — see the request's note. */
+function handleSelectWeight(
+  request: Extract<WorkerRequest, { kind: 'selectWeight' }>,
+): WeightSelectedResult {
+  const { mc } = requireSession()
+  mc.selectWeight(request.name)
+  return { weightColumn: mc.weightColumn, hasWeights: mc.hasWeights }
 }
 
 /** What `/bins` holds, by name and kind — no values (§8.12). */
@@ -2399,6 +2411,8 @@ async function dispatch(request: WorkerRequest): Promise<unknown> {
       return handleCells()
     case 'selectCells':
       return handleSelectCells(request)
+    case 'selectWeight':
+      return handleSelectWeight(request)
     case 'binColumns':
       return handleBinColumns()
     case 'binColumn':

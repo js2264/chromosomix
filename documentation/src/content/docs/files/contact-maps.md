@@ -132,9 +132,15 @@ for cell. A bin the balancer dropped has no weight: its row and column are trans
 rather than empty. Without weights, **balanced** is not offered, and a link asking for it opens on
 counts.
 
+Every other decimal column of a cooler's bins table is a set of weights too, as cooler reads them,
+and is offered as **balanced · *column***: `normcc` and `hiczin` from `metacooler normalize`,
+`metator_empirical_hit` from metaTOR, `KR` and `VC` from hic2cool. `KR`, `VC` and `VC_SQRT`, and a
+column whose `divisive_weights` attribute says so, are divided by rather than multiplied by, as
+cooler does. A file opens balanced only by its `weight` column.
+
 | File | Its weights |
 | --- | --- |
-| `.cool` | the `weight` column `cooler balance` writes into its bins table |
+| `.cool` | the `weight` column `cooler balance` writes into its bins table, and every other decimal column of it by name |
 | `.mcool` | each rung's own; `cooler zoomify --balance` balances every rung |
 | `.hic` | the best normalisation vector at the open resolution — `SCALE`, then `KR` with its `INTER_KR` and `GW_KR` variants, then the coverage ones — named on the **normalisation** row of the General panel's File card, or *none at this resolution* |
 | `.scool` | the one weight column all its cells share, if any, applied to their sum |

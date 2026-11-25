@@ -24,7 +24,8 @@
  * requests change. An `open` names it — the file, its source, the edit or the
  * curation it is drawn through, its import, the page's dev switch — and answers are filed under
  * that name, so switching to another resolution and back finds them again. A
- * total drawn to (`resample`), a cell set (`selectCells`), a `close`, a failed
+ * total drawn to (`resample`), a cell set (`selectCells`), the weights balanced
+ * by (`selectWeight`), a `close`, a failed
  * open, and any request this module does not know start a name nothing is
  * filed under: a cache that might answer for a map the worker no longer holds is
  * worse than none, and the default for a request nobody has classified is the
@@ -309,9 +310,14 @@ export class AnswerCache {
     }
     this.name = fresh()
     // A request nobody has classified may have changed anything, including
-    // what an earlier map's answers meant; the three that are known change only
+    // what an earlier map's answers meant; the four that are known change only
     // the map now open, which a later open of it starts again from.
-    if (request.kind !== 'resample' && request.kind !== 'selectCells' && request.kind !== 'close') {
+    if (
+      request.kind !== 'resample' &&
+      request.kind !== 'selectCells' &&
+      request.kind !== 'selectWeight' &&
+      request.kind !== 'close'
+    ) {
       this.store.dropOwner(this.owner)
     }
   }

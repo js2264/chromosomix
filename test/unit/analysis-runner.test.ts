@@ -1319,6 +1319,8 @@ describe('sameRecipe', () => {
     const { params } = provenance
     expect(sameRecipe(provenance, { params, framing: { ...FRAMING, rows: [0, 50] } })).toBe(false)
     expect(sameRecipe(provenance, { params, framing: { ...FRAMING, balance: false } })).toBe(false)
+    // Balanced by another weight column (§6.4): another reading of the map.
+    expect(sameRecipe(provenance, { params, framing: { ...FRAMING, weight: 'normcc' } })).toBe(false)
     expect(sameRecipe(provenance, { params, framing: { ...FRAMING, binsPerCell: 4 } })).toBe(false)
     expect(sameRecipe(provenance, { params, framing: { ...FRAMING, uri: 'other.cool' } })).toBe(
       false,

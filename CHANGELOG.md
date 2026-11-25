@@ -14,6 +14,71 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Added
 
+- **A metagenome's map drawn as a circle (§7.6, a dev feature).** Each genome an arc as long as it
+  is, the contacts between two genomes a chord as wide as they are, the tracks the map draws as rings
+  inside — the map's own block drawn round, so nothing more is read and the square comes back at
+  once, with its lower reading (§5.10), whose tabs step aside while the map is round. Turned on by the orbit toggle on the Map card, by *circle →* at the end of the Genomes
+  table's row (the ticked genomes, or every one), or by *Circle* in the palette; `circle=true` in the
+  link, kept as the reader navigates, so a genome clicked on the circle opens its contigs drawn round.
+  The whole metagenome is genomes at `genome × genome` and contigs under each genome's band at
+  `contig × contig`; ticked genomes are cut into genomes or, from the card's `sections` row
+  (`sections=contigs`), into their contigs. A hovered genome lights its partners, tinted and counted
+  by their contacts; a chord says what it carries and each end's share; an arc opens its genome or
+  contig, a chord the pair. The rings — bigWigs, bedGraphs, BEDs, genome and contig metadata — are
+  named at twelve o'clock and dragged in or out by their names to reorder them, and the Tracks card
+  and every map's lanes follow; a ring's inner edge is dragged to make it thicker or thinner, as a
+  lane's border is in the 1D browser, setting its track's height everywhere, and a ring is as thick
+  as its lane wherever the room allows. The Map card's `tracks` row puts the rings **outside** the
+  arcs instead, the genomes then the inner circle the chords meet. The Tracks card's `name column`
+  writes the rings' names right-aligned in a column before twelve o'clock with no track under them,
+  **on by default in the circle**: it is the circle's own setting, so the 1D browser's is exactly as
+  the reader left it when the map goes back to square, and `u` is the circle's while one is on
+  screen. Off, the names are centred over the opening. Every arc starts on twelve, always, and with
+  the column ends short of the names, the circle open by as much as they take. Chords are raw contacts for now, the strongest 3,000 kept and the
+  `chords` row thinning them to 1,000, 200 or 50; PNG, PDF and copy save the circle and its key.
+  **It zooms as the map does**: the wheel or a pinch about the pointer, up to 200 times, a drag to
+  pan, a sideways or ⌘ scroll to slide, the arrows and Page Up and Page Down, and a double click,
+  Home, the refit or `0` back to the whole circle. A zoom keeps what is under the pointer there, keeps
+  the rings as thick as their lanes, names the genomes or contigs it brings into view — forty of a
+  thousand genomes, the contigs of one genome — and reads the rings again at the screen's resolution
+  for the stretch in view once the view holds still; a zoomed figure is the view, its caption saying
+  how many sections are in it at what zoom.
+  **Genomes and contigs are put in the reader's own order by dragging them along the circle** — a
+  genome among the genomes, by its arc or its band, and a contig among its own genome's contigs only,
+  a bar marking where it will land and Escape putting it back — and **every map of the file follows**,
+  the squares included, with the Genomes and Contigs cards, the Genomes table, the ticked genomes and
+  the `<` `>` steps. An order rather than an edit: the file is read as it is stored, the order is kept
+  per file by name, carried by a workspace and a share link, and the Map card's `order` row puts the
+  file's order back.
+  **The same map can be drawn as two lines** (the toggle after the orbit, *Two lines* in the
+  palette, `lines=true&split=…` in the link): the genomes split in two by a column of the Genomes
+  table — `split by` lists every column, those with exactly two values with their values and the rest
+  greyed with why not, a genome with no value left out — one value's genomes along a line at the top
+  and the other's along the bottom, each line as wide as the picture, ribbons only between a genome of
+  one line and a genome of the other, the tracks as lanes above and below, the line titles, the lanes'
+  names and the key in a column to the left. A swap puts the other value on top; sections are dragged
+  along their line into the same reader's order; hovering, clicking, the contig level under genome
+  bands and the PNG and PDF figures are the circle's.
+  The Aesthetics column drives it as it drives the square and the lanes: the names follow the Map
+  card's `labels` (off by default, as for the square), with the square's rule — every name up to
+  fifty, past that only contigs of 50 kb or more, and never a thousand genomes', whose room the
+  circle takes instead; `legend` is its key, `crosshair` a radial line through every ring at the
+  pointer and `tooltip` its card; the Tracks card's track text, fill, outline, floor, opacity, text
+  size, height, stretch and shrink act on the rings; and a track group shares one range across its
+  rings, or one ring when it is drawn in one lane. `node scripts/ui-circle.mjs` drives it on the
+  mock community, and `node scripts/ui-lines.mjs` the reader's order and the two lines.
+
+- **Every weight column a file carries is a balance, by name (§6.4).** A cooler's bins table may hold
+  more weights than `weight`: the `normcc` and `hiczin` of `metacooler normalize`, the
+  `metator_empirical_hit` metaTOR stores, the `KR` and `VC` hic2cool converts from a `.hic`. Each is
+  offered in the score picker as **balanced · *column*** (`score=balanced:normcc` in a link), and
+  balances every view, a deck's maps, a comparison's second file where it has the column, and the
+  tasks; a column cooler reads as divisive — `KR`, `VC`, `VC_SQRT`, or by its `divisive_weights` attribute
+  — is divided by rather than multiplied by, as cooler does. `weight` stays the default and the only
+  column a file opens balanced by, so a metaTOR map still opens on its counts. The command line takes
+  `--weight <column>`, and writes it in the command line a run made by one shows. A score picker
+  names the score it shows in its tooltip, since a long column's name runs past the box.
+
 - **Every task that reads a map has a *Resolution* row, the first of its form (§18.4).** A list of
   every rung of the map's ladder, stored and added (marked `*`), starting on the one picked in the
   crumb row or, with none picked, the one the file was opened at; every setting after it that counts
@@ -23,6 +88,38 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   map moving. Choosing the rung the task would read anyway clears the choice, and another file
   forgets it. A task that reads no map, a starred companion of a deck, an import and a ladder with
   nothing to choose have no such row.
+- **An ideogram view: every chromosome whole, side by side, with the tracks beside each (§5.11), as
+  a dev feature (§29).** The switch in the Tracks card's new `picture` row — the browser's, and a
+  map's — the palette's *Ideogram* or `z` draws the sequences ticked on the Sequences card, or the
+  whole genome where none is, as a karyotype on one scale: standing in a row, each read downward with
+  its tracks to its right, or, flipped, lying in a column with its tracks above it; one chromosome
+  alone lies; the longest forty at most. Over a contact map the switch or `z` puts the map down
+  first, as `v` does. Put away — the switch, `z`, a click on a chromosome or a drag along one — it
+  gives back the picture it replaced, the 1D browser or the map, on the chromosome or stretch the
+  click or the drag named, in one step that Back undoes. Every lane of the browser's stack is drawn
+  beside every chromosome by the browser's own painters — area, line, bars, points, heatmap, ribbon,
+  features, arcs — on one axis per track over every chromosome drawn, shrunk by one factor to fit the
+  window and never past their heights in the browser, down to four pixels. The wheel magnifies the
+  picture gradually about the pointer, both ways at once — the chromosome under it longer, thicker
+  and its lanes wider, its neighbours leaving the window on either side — to a base a pixel, and back
+  to every chromosome whole; a sideways scroll or, magnified, a drag moves it, Shift-drag chooses a
+  stretch, the zoom buttons, `+` and `−` magnify it about the middle, and `W` and `0` put it back. The
+  key stays put, the names are held at the window's edge, and a thin bar at its foot and right edge
+  says which part of a picture larger than the window is shown; magnified, each chromosome in the
+  window is read for its own stretch there. A cytoBand fills the chromosomes with its bands by
+  default; *colour by* fills them with one colour, a track (in its lane's colours, white to its
+  colour unless the lane is a heatmap, with its colour scale, unboxed, in the key's corner) or a
+  feature set's own colours. A pair set's pairs on one chromosome are its lane's arcs and its pairs
+  between two are curves leaving each chromosome straight across it, under every lane, the strongest
+  4,000; a set with only those takes no lane. The
+  reader's lines, boxes and arrowheads are drawn across each chromosome; the pointer draws the
+  hairline across one chromosome and its lanes, and the card names the band and every track there.
+  The key over the chromosomes is the browser's lane labels, names and ranges typed into as in a lane.
+  The ideogram's settings are rows of the Tracks card while it is drawn — flip, colour by, colour,
+  width, gap, height and the tracks' fit — kept with the file and in a workspace
+  (`SessionConfig.ideogram`); the orientation is in the link (`ideogram=vertical|horizontal`), and
+  the figure exports as PNG or PDF — the whole picture at rest, the window as framed when magnified.
+  `scripts/ui-ideogram-view.mjs` drives it on the yeast and human demos.
 
 - **Curate the genomes: a stage that curates a metagenome's binning — a dev feature (§33.3).** The
   palette's *Curate the genomes*, or the heading's word on the genomes, opens a stage on the whole
@@ -87,6 +184,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   id moves — and the galleries open it with the dev features on, `ui-edit-metagenome` on
   MM133_metator_00001_00002.
 
+- **A map whose contigs are not grouped by genome is told how to group them without its pairs (a dev
+  feature, §10).** The refusal said to re-create the map from its pairs. It now leads with
+  `metacooler reassign --layout genome-then-length`, given the map's own assignment
+  (`metacooler dump -t contigs`), which groups any ordering with nothing but the map — the `custom`
+  one `reassign --layout keep` writes included — and keeps re-creating it as the other way.
 - **With no map starred, a deck's map tasks run on every map at once (§18.1).** They used to be
   greyed until a map was starred. Now only the plain `run on ★` is greyed, with the reason in its
   tooltip, and *run on all N maps* runs, set up from the first map as the *Map* card is while it sets
@@ -444,6 +546,44 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   newer build whose edit held an operation this one has never heard of threw while the edit was
   replayed, inside the reader's open, so the session was lost. The step is kept in the history,
   changes nothing, and is named there as *a step this version does not know*.
+- **The line under a pooled map counts every sequence on it (§5.2).** Where a window is too wide to
+  read bin for bin, the contigs too small for a cell share one, labelled with the first of them —
+  and the line under the map counted one sequence a cell, measuring the first alone: a MAG of 59
+  contigs and 4.91 Mb read *33 sequences · 4.89 Mb*, a whole metagenome of 7,781 contigs and 164 Mb
+  *2,169 sequences · 145.78 Mb*. It now counts every sequence of a shared cell, and all of its length.
+- **A genome's map is drawn from the score its picker shows (a dev feature, §5.2, §6.4).** The genome
+  view never asked its reader for the balance or the `/pixels` column, so a genome was drawn from its
+  raw counts whatever the picker said — `balanced` on a metacool with `weight` as much as another
+  column of its pixels — while the caption and the colour key said otherwise. The pair, region and
+  whole views always asked; the genome view now does too.
+- **The inter-MAG network names its genomes, however many the file has (a dev feature, §18.8).** Past
+  forty MAGs every edge was named by its row — `MAG 123` — because the names were taken from the
+  labels of the QC matrix's picture, which leaves them off past forty. A metaTOR map holds a hundred
+  and seventy-seven with its mobile elements, so its MGE–host edges, the ones the table is for, could
+  not be read. Each edge now names its two genomes as the file does, and a QC matrix whose MAGs are not
+  the file's is refused rather than named after other genomes.
+- **The metagenome tables sort a zero as a zero (a dev feature, §18.8).** Split-MAG detection listed a
+  MAG whose contigs fall into two blocks with no contact between them — a cross-block ratio of exactly
+  0, the strongest split there is — last, reading the 0 as the 1 that stood in for no ratio at all.
+  MAG contact QC and MAG purity read a 0 as missing the same way, and mixed a MAG with no contact in
+  with the leakiest and the contigs too poor in contact to judge in with the purest. Each now puts a
+  row with no value after every row with one, as a table's own sort does.
+- **Split-MAG detection flags MAGs in two pieces, not every MAG with a loose contig (a dev feature,
+  §18.8).** It cut each MAG where the plain graph Laplacian put its cheapest cut, which on a MAG that is
+  one organism is the contig it holds least: a block of one or two contigs with next to nothing
+  crossing, flagged. On a mock community's metaTOR map it flagged 47 MAGs of 55. It now takes the
+  normalized cut, which weighs each side by its contact rather than by its contigs: the same map flags
+  4, and two MAGs merged into one are divided exactly where they were joined. A contig with no contact
+  with the rest of its MAG is set aside, on neither side, and counted in a note; a MAG none of whose
+  contigs touches another is listed with no ratio, as before, and now with no sides either.
+- **A map of one bin per contig is told how to get a map this viewer reads (a dev feature, §10).** The
+  map metaTOR writes from pairs or BAM files holds one bin per contig, and its refusal said to run
+  `metacooler binnify`, which only sums bins: from that map it puts every contact of a contig in one
+  bin of it and leaves the rest empty — a map that opens, and misleads. Such a map, told by as many
+  bins as contigs, is now headed *One bin per contig* and told to make a fixed-bin map from the same
+  pairs with `metacooler create pairs --bins`, keeping its genomes with its own assignment. A
+  fragment-level metacool is still told to binnify; a variable-bin cooler is told to bin its pairs
+  with `cooler cload pairs` with the multi-genome format read too, where it was told to binnify.
 - **The maps of a deck stay on one place across the whole genome (§16.3).** Zoomed or panned fast,
   the maps of a deck on the whole genome went on moving together but showed two places: the yeast
   micro-C twice, zoomed fast into the whole genome, showed chrVII:378–632 kb on the first map and

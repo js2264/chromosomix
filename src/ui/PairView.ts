@@ -15,6 +15,7 @@
  * legible as "no contacts" rather than as "wrong query".
  */
 
+import type { CirclePresentation } from './CircleView'
 import type { MatrixResult } from '../worker/protocol'
 import type { ReaderClient } from '../worker/client'
 import { button, el, field, titleWhenCut } from './dom'
@@ -24,7 +25,7 @@ import { MatrixPanel,
   type AnnotationContext,
   type DerivePresentation,
   type TurnPresentation,
- type FigureSubject} from './MatrixPanel'
+ type FigureSubject, type PanelOrder} from './MatrixPanel'
 import { axisRegion } from './mapSelection'
 import { blockSummary } from './mapSummary'
 import { scoreChoices, scoreFor, type ScoreChoice } from './scores'
@@ -63,6 +64,8 @@ export interface PairViewProps {
   scale: PanelSeed
   balance: boolean
   hasWeights: boolean
+  /** Every weight column of the file, each a balance of the picker's (§6.4). */
+  weightColumns?: readonly string[]
   /**
    * The `/pixels` column the reads take; `count` when absent.
    *
@@ -85,6 +88,10 @@ export interface PairViewProps {
   derive?: DerivePresentation
   /** The 45° turn (`render/rotate.ts`), built by the session like `derive`. */
   turn?: TurnPresentation
+  /** The map drawn round (§7.6), built by the session like the turn. */
+  round?: CirclePresentation
+  /** The reader's order of the file's genomes and contigs (§7.6), which the map is drawn in. */
+  order?: PanelOrder
   onChangeGenomes(rowGenome: string, colGenome: string): void
   onScaleChange(scale: ScaleState): void
   onOpenGenome(genome: string): void
@@ -178,6 +185,8 @@ export class PairView {
       balance: props.balance,
       ...(props.derive === undefined ? {} : { derive: props.derive }),
       ...(props.turn === undefined ? {} : { turn: props.turn }),
+      ...(props.round === undefined ? {} : { round: props.round }),
+      ...(props.order === undefined ? {} : { order: props.order }),
       scores: {
         choices: scoreChoices(props),
         current: scoreFor(scoreChoices(props), props).id,

@@ -137,6 +137,16 @@ async function handleOpen(
   })
   const source = opened.source
   let mc = opened.mc
+  // Balanced by the column the reader chose (§6.4), first: the edit's lens and
+  // an added resolution are made from the map as it is balanced, and carry it.
+  if (request.weight !== undefined) {
+    try {
+      mc.selectWeight(request.weight)
+    } catch (error) {
+      mc.close()
+      throw error
+    }
+  }
   // Through the edit the reader's map is drawn through (§27.7), before anything
   // reads it: a task on an edited map measures the edited assembly. Refused by
   // name where it cannot be, rather than measuring the file as it was under a
@@ -323,6 +333,14 @@ async function handleRun(
       })
       if (map.cells !== undefined && opened.mc.cells.length > 0) {
         opened.mc.selectCells(map.cells)
+      }
+      if (map.weight !== undefined) {
+        try {
+          opened.mc.selectWeight(map.weight)
+        } catch (error) {
+          opened.mc.close()
+          throw error
+        }
       }
       if (map.resample !== undefined) {
         try {

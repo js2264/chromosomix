@@ -166,7 +166,26 @@ describe('a genome laid out by its edit, in the curated map', () => {
     expect(layouts.length).toBe(1)
     expect(laid.curation?.key).not.toBe(plain.curation?.key)
     expect(laid.curation?.key.startsWith(plain.curation?.key ?? '-')).toBe(true)
+  })
 
-
+  it('is balanced by the weight column chosen on the file, as an edit of the reference is (§6.4)', () => {
+    // MM133 carries metaTOR's column alone, and opens on its counts.
+    expect(MetaCooler.withCuration(mc, curation, read, new Map([[genome, edit]])).map.hasWeights).toBe(false)
+    mc.selectWeight('metator_empirical_hit')
+    try {
+      const stored = mc.handle.readNumeric('bins/weight')
+      for (const drawn of [MetaCooler.withCuration(mc, curation, read).map, MetaCooler.withCuration(mc, curation, read, new Map([[genome, edit]])).map]) {
+        expect(drawn.hasWeights).toBe(true)
+        // Each bin's weight is the stored bin's it shows.
+        const weights = drawn.handle.readNumeric('bins/weight')
+        const lensed = (drawn.store as unknown as { lens: { toOriginal: Int32Array } }).lens
+        for (let e = 0; e < weights.length; e += 997) {
+          const bin = lensed.toOriginal[e]
+          expect([e, weights[e]]).toEqual([e, bin >= 0 ? stored[bin] : Number.NaN])
+        }
+      }
+    } finally {
+      mc.selectWeight(null)
+    }
   })
 })

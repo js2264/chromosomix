@@ -186,6 +186,10 @@ export function cliCommandFor(input: CliCommandInput): CliCommand {
   const derived = declared !== undefined && paramDerived(declared)
   const balance = derived && typeof params.balance === 'boolean' ? params.balance : framing.balance
   if (!mapless && !balance) args.push('--no-balance')
+  // The column a balance multiplied by, where it is another than `weight`
+  // (§6.4): the shell's own default is the file's `weight`, so a balance by
+  // `normcc` written without it would repeat a run balanced by something else.
+  if (!mapless && balance && framing.weight !== undefined) args.push('--weight', quote(framing.weight))
   if (!mapless && derived && balance !== framing.balance) {
     // Worth a line, and worth being exact about what it costs. The two are one
     // flag in a shell, so the command cannot say that the *map* was drawn one
