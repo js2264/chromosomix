@@ -20,6 +20,7 @@ import { TAB_WALKS, tabStep } from '../../ui/tabWalk'
 import { fmt } from '../../units'
 import { changeChip, changeWords, counted, curationChanges, type CurationChanges } from '../changes'
 import { redundancyText } from '../price'
+import { contigShortName } from '../names'
 import { listRows, readFilter, rowKey, type GenomeSort, type ListChip, type ListRow, type ListRows, type ListSection, type PoolSort } from '../listRows'
 import type { CurateChange } from '../model'
 import type { Suggestion } from '../suggest'
@@ -529,8 +530,17 @@ export class GenomeList {
     holder.appendChild(chevron)
     // The prefix every name of the section shares, printed once here.
     const prefix = row.section === 'pool' ? '' : this.ctx.prefixOf(row.section === 'mags' ? 'mag' : 'element')
-    if (prefix === '') return [holder, title, countNode]
-    return [holder, title, el('span', { class: 'curate-section-prefix', text: `${prefix}…`, title: `Every name here begins ${prefix}` }), countNode]
+    const prefixNode = prefix === '' ? null : el('span', { class: `curate-section-prefix${row.section === 'mags' ? ' is-mags' : ''}`, text: `${prefix}…`, title: `Every name here begins ${prefix}` })
+    if (prefix !== '') title.title = `Every name here begins ${prefix}`
+    if (row.section !== 'mags') return prefixNode === null ? [holder, title, countNode] : [holder, title, prefixNode, countNode]
+    // The MAGs' numbers named, in their order on a row: the count beside the title, the legend at the right.
+    countNode.classList.add('is-beside')
+    const legend = el('span', {
+      class: 'curate-section-legend',
+      text: 'length · complete · redundant',
+      title: 'A MAG’s length, and its completeness and redundancy weighted by its markers, as miComplete gives them: 1.00 is every marker once; past 1.05 a MAG is no longer high quality, past 1.10 contaminated, and a third decimal shows near those bounds.',
+    })
+    return prefixNode === null ? [holder, title, countNode, legend] : [holder, title, countNode, prefixNode, legend]
   }
 
   private genomeContent(node: HTMLElement, row: Extract<ListRow, { kind: 'genome' }>): void {
@@ -568,7 +578,8 @@ export class GenomeList {
     ]
     if (genome.kind === 'mag') {
       const q = genome.quality
-      if (q === null) parts.push(el('span', { class: 'curate-row-quality is-none', text: '—', title: 'No marker genes stored for its contigs.' }))
+      // No markers: a dash, and the redundancy's room kept, so the discs stay in one column.
+      if (q === null) parts.push(el('span', { class: 'curate-row-quality is-none', text: '—', title: 'No marker genes stored for its contigs.' }), el('span', { class: 'curate-row-redundant' }))
       else {
         const g = grade(q.weightedCompleteness, q.weightedRedundancy)
         const bar = el('span', { class: 'curate-bar', attrs: { 'aria-hidden': 'true' } })
@@ -577,8 +588,8 @@ export class GenomeList {
         bar.appendChild(fill)
         const title = `${fmt.pct(q.weightedCompleteness, 1)} complete and ${fmt.fixed(q.weightedRedundancy, 3)} redundant, weighted (${q.set}); ${fmt.pct(q.completeness, 1)} and ${fmt.fixed(q.redundancy, 3)} unweighted; ${q.present} of ${q.markers} markers${g === null ? '' : ` · ${g === 'contaminated' ? 'contaminated' : `${g} quality`}`}`
         parts.push(
-          // High quality is the bar's colour, and the percentage's where a changed row or a narrow list hides the bar.
-          el('span', { class: 'curate-row-quality', title }, bar, el('span', { class: `curate-row-complete${g === 'high' ? ' is-high' : ''}`, text: fmt.pct(q.weightedCompleteness, 0) })),
+          // The percentage over its bar, which takes no width of its own: `--ok` at high quality.
+          el('span', { class: 'curate-row-quality', title }, el('span', { class: 'curate-row-complete', text: fmt.pct(q.weightedCompleteness, 0) }), bar),
           el('span', { class: `curate-row-redundant${q.weightedRedundancy > 1.1 ? ' is-warn' : ''}`, text: redundancyText(q.weightedRedundancy), title }),
         )
       }
@@ -627,13 +638,15 @@ export class GenomeList {
     const name = file.names[c] ?? `#${c}`
     const parts: HTMLElement[] = [
       el('span', { class: 'curate-row-indent' }),
-      el('span', { class: 'curate-row-name', text: name, title: name }),
+      // An assembler's name without the length the row prints beside it: the whole in the title.
+      el('span', { class: 'curate-row-name', text: contigShortName(name), title: `${name} · ${fmt.bp(file.lengths[c] ?? 0)}${gc !== null && Number.isFinite(gc[c]) ? ` · GC ${gc[c].toFixed(0)}%` : ''}` }),
       el('span', { class: 'curate-row-length', text: fmt.bp(file.lengths[c] ?? 0) }),
     ]
     if (gc !== null) parts.push(el('span', { class: 'curate-row-gc', text: Number.isFinite(gc[c]) ? `GC ${gc[c].toFixed(0)}%` : '' }))
     const best = derived.best.get(c)
     const was = derived.changes.fileGenomeOf[c]
     const now = derived.answer.genomeOf[c] < 0 ? null : derived.answer.genomes[derived.answer.genomeOf[c]].id
+    node.classList.toggle('has-offer', best !== undefined)
     if (best !== undefined) {
       const target = best.genomes[0] === undefined ? '' : this.ctx.shortName(derived.answer.genomes[best.genomes[0]]?.id ?? '')
       parts.push(el('span', { class: 'curate-row-offer', text: `→ ${target} ${Math.min(99, Math.round(best.confidence * 100))}%`, title: best.words }))

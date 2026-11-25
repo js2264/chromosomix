@@ -61,9 +61,9 @@ describe('the genome list', () => {
     // The MAGs in the stage's order: the two halves of X side by side.
     expect(names()).toEqual(['Y', 'X1', 'X2', 'Z', 'P', 'u0'])
     expect(row('g:Z').querySelector('.curate-row-complete')?.textContent).toBe('100%')
-    // High quality in the bar's colour, and the percentage's, which a changed row keeps when its change takes the bar's room.
+    // High quality in the bar's colour, the bar under the percentage on every row, a changed one's too.
     expect(row('g:Z').querySelector('.curate-bar-fill')?.classList.contains('is-high')).toBe(true)
-    expect(row('g:Z').querySelector('.curate-row-complete')?.classList.contains('is-high')).toBe(true)
+    expect(textsOf(document.body, '.curate-section-legend')).toEqual(['length · complete · redundant'])
     expect(row('g:P').querySelector('.curate-row-hosts')?.textContent).toBe('→ Z')
   })
 

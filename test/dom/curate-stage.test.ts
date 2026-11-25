@@ -356,6 +356,8 @@ describe('the curation stage', () => {
 
   it('lets a picture’s Escape be the innermost thing: a press let go of, the selection kept', async () => {
     const { ctx, told } = await open({ boxed: true })
+    // The stage hands the list the keyboard a frame after it opens: past that, under any load.
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
     ctx().model.selectGenomes(['Y'])
     document.querySelector('.curate-stage')?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, clientX: 10, clientY: 10 }))
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))

@@ -7,7 +7,7 @@
  */
 
 import type { CurationStateResult } from '../worker/curateProtocol'
-import { shortName } from './names'
+import { contigShortName, shortName } from './names'
 
 /** The list's three sections. */
 export type ListSection = 'mags' | 'elements' | 'pool'
@@ -149,7 +149,8 @@ export function listRows(input: ListInput): ListRows {
     if (passes(filter, name)) return true
     return filter.kind === 'names' && filter.names.has(shortName(name, prefixOf(g)))
   }
-  const contigPasses = (c: number): boolean => filter === null || passes(filter, names[c] ?? '')
+  // A contig by its whole name, or in a pasted list by the short one the list prints.
+  const contigPasses = (c: number): boolean => filter === null || passes(filter, names[c] ?? '') || (filter.kind === 'names' && filter.names.has(contigShortName(names[c] ?? '')))
   // A pasted list's names that exist, whatever the chips hide.
   const seen = new Set<string>()
   if (filter?.kind === 'names') {
@@ -158,7 +159,11 @@ export function listRows(input: ListInput): ListRows {
       const short = shortName(genome.name, prefixOf(g))
       if (filter.names.has(short)) seen.add(short)
     })
-    for (const name of names) if (filter.names.has(name)) seen.add(name)
+    for (const name of names) {
+      if (filter.names.has(name)) seen.add(name)
+      const short = contigShortName(name)
+      if (short !== name && filter.names.has(short)) seen.add(short)
+    }
   }
   const chipped = (g: number): boolean => {
     const genome = answer.genomes[g]
@@ -203,6 +208,7 @@ export function listRows(input: ListInput): ListRows {
       for (const c of hits) {
         found.contigs.push(c)
         shownNames.add(names[c])
+        shownNames.add(contigShortName(names[c]))
       }
       // Found by its own name, a genome is shown as it is; found by its
       // contigs', it opens on them.
@@ -231,6 +237,7 @@ export function listRows(input: ListInput): ListRows {
     for (const c of poolShown) {
       found.contigs.push(c)
       shownNames.add(names[c])
+      shownNames.add(contigShortName(names[c]))
     }
   sortPool(poolShown, input)
   let poolLength = 0

@@ -31,3 +31,15 @@ export function sharedPrefix(names: readonly string[]): string {
 export function shortName(name: string, prefix: string): string {
   return prefix !== '' && name.startsWith(prefix) && name.length > prefix.length ? name.slice(prefix.length) : name
 }
+
+/**
+ * A contig's name as the list prints it: an assembler's name without the
+ * length (and coverage) it carries — SPAdes' `NODE_12_length_5678_cov_9.1`,
+ * metaSPAdes' `NODE_12_len_5678` print `NODE_12` —, the row saying the length
+ * beside it; any other name whole. The whole name stays in the row's title,
+ * and a pasted list of the short ones finds them.
+ */
+export function contigShortName(name: string): string {
+  const match = /^(NODE_\d+)_len(?:gth)?_\d+(?:_cov_[\d.]+)?(?:_ID_\d+)?$/.exec(name)
+  return match === null ? name : match[1]
+}

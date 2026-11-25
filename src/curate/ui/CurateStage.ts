@@ -109,8 +109,13 @@ const PANE_KEY: Record<PaneName, string> = { contacts: '1', hosts: '2', scatter:
 const NOTHING_TO_ANSWER = 'Nothing to answer: the suggestions come once the contacts are read.'
 const NOTHING_ON_OFFER = `Nothing on offer: every suggestion is answered, turned down or under ${Math.round(OFFER_FLOOR * 100)}%.`
 
-/** Narrower than this, the centre shows the large picture alone, with tabs. */
-const NARROW = 840
+/**
+ * Narrower than this, the two small pictures go under the large one, side by
+ * side; narrower than {@link TIGHT}, the large picture is alone and the tabs
+ * choose it. A 1600-px window keeps the three side by side, a laptop's the strip.
+ */
+const NARROW = 720
+const TIGHT = 440
 /** A held drag rests this long on a target before the pictures draw it made. */
 const DROP_PREVIEW_MS = 300
 
@@ -195,17 +200,12 @@ export class CurateStage {
       on: { click: () => this.model.tidy() },
     })
     const keysButton = iconButton('keyboard', withKey('Keys on this stage', '?'), () => this.showKeys(), { class: 'btn btn-icon', size: 15 })
-    const toolbar = el(
-      'div',
-      { class: 'curate-toolbar' },
-      this.tabs,
-      this.readout,
-      el('div', { class: 'curate-tools' }, tidy, this.undoButton, this.redoButton, keysButton),
-    )
+    const toolbar = el('div', { class: 'curate-toolbar' }, this.tabs, el('div', { class: 'curate-tools' }, tidy, this.undoButton, this.redoButton, keysButton))
     this.band = el('div', { class: 'curate-band hidden', attrs: { 'aria-live': 'polite' } })
     this.status = el('div', { class: 'curate-status hidden', attrs: { role: 'status' } })
     this.paneArea = el('div', { class: 'curate-panes' })
-    this.centre = el('div', { class: 'curate-centre' }, toolbar, this.band, this.status, this.paneArea)
+    // The readout on its own line under the toolbar, the centre's width wide.
+    this.centre = el('div', { class: 'curate-centre' }, toolbar, this.readout, this.band, this.status, this.paneArea)
 
     // The list, and its grip.
     this.list = new GenomeList(this.ctx)
@@ -773,7 +773,9 @@ export class CurateStage {
   }
 
   private resized(): void {
-    this.centre.classList.toggle('is-narrow', this.centre.clientWidth > 0 && this.centre.clientWidth < NARROW)
+    const width = this.centre.clientWidth
+    this.centre.classList.toggle('is-narrow', width > 0 && width < NARROW)
+    this.centre.classList.toggle('is-tight', width > 0 && width < TIGHT)
     for (const pane of Object.values(this.panes)) pane.resize()
   }
 

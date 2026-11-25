@@ -96,6 +96,13 @@ describe('the genome list', () => {
     expect(closed.rows.map(word)).toEqual(['§mags', 'X2', '§elements', '§pool'])
   })
 
+  it('finds a pasted list of contigs by the short names the list prints for an assembler’s', () => {
+    const spades = NAMES.map((_, c) => `NODE_${c + 1}_len_${50_000 + c}`)
+    const rows = listRows(input({ names: spades, filter: readFilter('NODE_5 NODE_19') }))
+    expect(rows.missing).toEqual([])
+    expect(rows.found.contigs.map((c) => NAMES[c]).sort()).toEqual(['u0', 'x3'])
+  })
+
   it('sorts a section by a column, ties in the stage’s order, and the pool by its likeliest recruits', () => {
     const suggested = answer.genomes.map((genome) => (genome.name === 'Z' ? 3 : genome.name === 'X2' ? 1 : 0))
     expect(listRows(input({ genomeSort: 'suggestions', suggested })).rows.map(word).slice(0, 5)).toEqual(['§mags', 'Z', 'X2', 'X1', 'Y'])

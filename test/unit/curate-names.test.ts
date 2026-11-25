@@ -2,7 +2,7 @@
 /** Short names (SPECS §33.3): a section's shared prefix printed once. */
 
 import { describe, expect, it } from 'vitest'
-import { sharedPrefix, shortName } from '../../src/curate/names'
+import { contigShortName, sharedPrefix, shortName } from '../../src/curate/names'
 
 describe('short names', () => {
   it('take the prefix a binner gives every bin, to its last underscore', () => {
@@ -18,5 +18,13 @@ describe('short names', () => {
     expect(sharedPrefix(['ab_1', 'ab_2'])).toBe('')
     expect(sharedPrefix(['bin_x_1', 'bin_x_12'])).toBe('')
     expect(sharedPrefix(['X1', 'X2', 'Y'])).toBe('')
+  })
+
+  it('print an assembler’s contig without the length the row prints beside it, any other name whole', () => {
+    expect(contigShortName('NODE_7229_len_201310')).toBe('NODE_7229')
+    expect(contigShortName('NODE_12_length_5678_cov_9.13')).toBe('NODE_12')
+    expect(contigShortName('NODE_12_length_5678_cov_9.13_ID_44')).toBe('NODE_12')
+    expect(contigShortName('k141_33 flag=1 multi=4.0 len=9000')).toBe('k141_33 flag=1 multi=4.0 len=9000')
+    expect(contigShortName('contig_1')).toBe('contig_1')
   })
 })

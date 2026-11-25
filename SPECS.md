@@ -17358,7 +17358,8 @@ be dropped on it. The **pictures** fill the middle: one **large**, the other two
 as live thumbnails lit with it — `1`, `2`, `3` (or a press on a small one's head) make the contact
 map, the host map or the GC × coverage scatter large, kept per file; in review the large one is the
 one the question's evidence is in, the contact map for a merge, a move or a recruit, the host map for
-a link. Narrower than 840 px, the large one shows alone and tabs choose it. The **inspector** on the
+a link. Narrower than 720 px — a laptop's window — the two small ones go in a strip under the large
+one, still lit with it; narrower than 440 px the large one shows alone and tabs choose it. The **inspector** on the
 right is the reference stage's sunken column of cards (§27.3), in the mode's order: *who presses
 take*, then the selection, the history, the suggestions, the export and *about the map* — the
 suggestions first in review and in auto. Every column keeps its width per file.
@@ -17384,15 +17385,19 @@ the hand; *tidy* lays it out again. The stage's order is its own: the session dr
 **The genome list** (`curate/ui/GenomeList.ts`) has three sections, the MAGs, the elements and the
 **unbinned pool**, each a head with its count that folds and takes a drop. A genome's row: its
 colour (a disc for a MAG, a ring for an element), its short name, what the curation changed (`+30`,
-`−2`, `new`, `renamed`, `was an element`, the change in words in its title), its length, its
-weighted completeness over a bar and its weighted redundancy — `--warn` above 1.10, the bar `--ok`
-at metaTOR's high quality, and the percentage itself where the bar is not drawn: on a changed
-genome's row, whose change takes the bar's room, and in a narrow list; a redundancy within half a
+`−2`, `new`, `renamed`, `was an element`, the change in words in its title), its length — given up
+to the change on a changed row —, its weighted completeness with its bar under it, `--ok` at
+metaTOR's high quality, and its weighted redundancy, `--warn` above 1.10 — a redundancy within half a
 hundredth of 1.05 or 1.10 printed to a third decimal, off the bound, so the number says which side of
-it the grade went (1.1004 is `1.101`), here, in the band and in the cards — or, for an element, its host (`→ 00003_00001`, `3 hosts`, `no host`),
-and a disc counting the suggestions that name it. It opens on its contigs, longest first, each with
-its length, its GC content and the suggestion that would move it (`→ 00700_00002 99%`), or where a
-step brought it from. The pool lists its contigs, its likeliest recruits first. One box filters, by
+it the grade went (1.1004 is `1.101`), here, in the band and in the cards — or, for an element, its
+host (`→ 00003_00001`, `3 hosts`, `no host`), and a disc counting the suggestions that name it; the
+MAGs' head names their columns, *length · complete · redundant*. Each column is as wide as its widest
+value in the rows' own type, and the list opens wide enough for them at any text scale (380 px at
+the default), giving way as it narrows — the MAGs' prefix to their legend, then a genome's length,
+the legend, the change, the GC. It opens on its contigs, longest first, each by its name — an
+assembler's without the length it carries, `NODE_7229` for `NODE_7229_len_201310`, which a pasted
+list finds too — with its length and GC content; or, where a suggestion would move it, that
+suggestion whole in their place (`→ 00700_00002 99%`); or where a step brought it from. The pool lists its contigs, its likeliest recruits first. One box filters, by
 part of a name, a `/pattern/` (one that is not a pattern finds nothing and says why) or a **pasted
 list of names**, whole or as the list prints them (`12 of 12 found · select them`, the names it
 could not find, and how many the chips hide); a genome the filter opens on its contigs closes when
@@ -17465,7 +17470,7 @@ genome's, a contig's (it would hide the contig in every box that finds a place),
 non-ASCII character, a comma (metaTOR lists genomes with them) or a colon, and any case of the words
 a table means no genome by — `__unbinned__`, `NA`, `nan`, `n/a`, `ND`, `n/d`, `-1`.
 
-**The readout**, in the toolbar between the pictures' tabs and the tools — two lines where one does not hold it — says what is under the
+**The readout**, on its own line under the toolbar — two in a narrow centre, its height held so a hover never moves the pictures — says what is under the
 pointer; idle, the curation's tally: `MAGs 50 → 45 · 127 elements · 12,412 unbinned · 6 steps · 400
 contigs moved · links +3 −1`.
 
