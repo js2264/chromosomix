@@ -17463,7 +17463,17 @@ overlap, and a drop is never a guess.
 **The inspector's cards** (`curate/ui/cards/`): the **selection** — a genome's numbers and quality,
 weighted and not, the genomes it meets most, each with its merge; several genomes' sum and their
 affinities with one another; contigs' homes — with the acts on it and their keys, each step priced while
-the pointer or the keyboard rests on its act; the **suggestions** — the questions in the queue's order,
+the pointer or the keyboard rests on its act. Every affinity there is put against the map's background:
+`0.39 (at least 16× background)` from the cautious lower bound its contacts allow, `(within the
+background)` where only the bound falls in it, and at or under it `below the background`, its digits
+noise; *at least* is said once, under the first list that leans on it, and a genome met no more than
+strangers are keeps its row but no merge act. Every confidence says what it is sure of — `99% one
+organism` for a merge (not that the merge makes a better MAG: that is its price), `99% its host` and
+`99% not its host` for a link and an unlink, `68% belongs there` for contigs —; a lasso's rows count
+the contigs that meet a genome most and how many of those are in it already (`34 of 381 meet it most,
+33 of them in it already`), so a row's arithmetic is its act's; with nothing selected the map's tally
+counts every MAG (`24 high quality · 8 medium · 2 low · 4 contaminated · 12 under 50% complete`); a
+card's buttons are one size. The **suggestions** — the questions in the queue's order,
 numbered as the band numbers them, filtered by kind, each with *take* and *turn down* and what it
 rests on, a merge priced in the band's words and numbers (`complete 58% + 42% → 100% · redundant
 1.03 + 1.00 → 1.02 · high quality`: each MAG's own weighted numbers, the one kept first, and the
@@ -17522,7 +17532,15 @@ stage prices the question again. It is priced, not drawn, but while Space is hel
 link moves no contig and changes no genome's quality: nothing is counted for it. **The chooser** keeps
 the keyboard in its box whatever is pressed inside it, takes one row for Enter however long it is
 held, answers nothing while a step is counted, and leaves on Tab as on Escape, the keyboard back
-where it came from. A card's act and the key printed on it do the same thing: `L` and `Delete` on an
+where it came from. It stands under its act, its list on the card's edges, never over the grip beside
+the inspector, six rows deep at 1600 × 1000 and four at 1280 × 800; where the window has room it
+prices the row under the keyboard in a pane of its own to the list's left, over the pictures, five
+genomes deep, each name above its numbers — without that room under the list, three deep, giving way
+first —, and a link chooser, whose steps price nothing, has none. A price counts in the sum a genome
+taken in whole that has no numbers — an element is never graded — and prints the rest (`complete 100%
++ 9 more → 100%`, the row's title naming what it takes whole); what it does not list is said under it,
+never scrolled out with it (`and 27 more genomes lose contigs · 2 fall a grade`, the fall in
+`--warn`), in the selection card's prices too. A card's act and the key printed on it do the same thing: `L` and `Delete` on an
 element and a MAG take the link or the unlink on offer, as the card's act does.
 
 **One answer a press.** A question is answered only once the binning it was asked of is counted: Y
@@ -17730,9 +17748,13 @@ modifies a file it opened (§13). Each through the save dialog (§26.6), named a
 Tab-separated, one header line, numbers to four significant places. The card prints the two commands
 with a copy button each — `reassign` with `--layout genome-then-length`, so the map it writes is
 grouped as the session drew it (§33.4) whatever order the file kept, since `auto` keeps the order of a
-map that was not grouped by genome — and says what a reassignment keeps of the file: metaTOR's clustering rounds
-as they were, a changed genome's own columns as they were, and no weight that depends on the
-assignment. *Built* (`curate/exports.ts`, `curate/ui/cards/ExportCard.ts`): on MM133, the four
+map that was not grouped by genome — as a shell takes them: the program and its verb, then an
+argument a line, a flag beside its value, ` \` continuing each line, which is what the copy button
+copies; a line too long for the card goes on under its flag, indented, never inside a name. Each step
+says what it does — write the curated map, restore the elements — and, under its command, what
+follows in a reader's words: the new map keeps metaTOR's clustering rounds and each genome's own columns
+as they were, and drops the normalisation weights tied to the old binning; the annotation gives every
+genome its mobile-element flag back. A written table's size keeps its unit on its line. *Built* (`curate/exports.ts`, `curate/ui/cards/ExportCard.ts`): on MM133, the four
 tables of a curation of sixteen steps, given to `metacooler reassign` and then `annotate`, make a
 map whose binning reads back as the stage's — every contig's genome, every genome's kind and every
 link.
