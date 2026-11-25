@@ -138,11 +138,24 @@ export function countKinds(table: { columns: string[]; data: Record<string, stri
  * whether it is drawn.
  */
 
-/** `1,204 contigs (30.1%) · 830 bins (8.3%)`: each quantity whole, and its share of its own total. */
+/**
+ * `1,204 contigs (30.1%) · 830 bins (8.3%)`: each quantity whole, and its share of its own total.
+ *
+ * Whole across a wrap as well: the line is longer than the card is wide, and it
+ * broke wherever the width ran out — `12,785` closing one line and `contigs
+ * (62.2%)` opening the next, a count read without what it counts. The spaces
+ * inside a quantity are no-break spaces, so the card breaks the line between
+ * the label and a quantity or at the `·` between two, and nowhere else.
+ */
 function unassignedText(stats: UnassignedStats): string {
   const contigFraction = stats.totalContigs === 0 ? 0 : stats.contigs / stats.totalContigs
   const binFraction = stats.totalBins === 0 ? 0 : stats.bins / stats.totalBins
-  return `${fmt.int(stats.contigs)} contigs (${fmt.pct(contigFraction)}) · ${fmt.int(stats.bins)} bins (${fmt.pct(binFraction)})`
+  return `${quantity(stats.contigs, 'contig', contigFraction)} · ${quantity(stats.bins, 'bin', binFraction)}`
+}
+
+/** `12,785 contigs (62.2%)`, one unbreakable run: the count, its noun, and its share. */
+function quantity(count: number, noun: string, fraction: number): string {
+  return [fmt.int(count), count === 1 ? noun : `${noun}s`, `(${fmt.pct(fraction)})`].join('\u00a0')
 }
 
 export class InfoPanel {
@@ -376,7 +389,9 @@ export class InfoPanel {
   }
 
   private fileTable(info: OpenResult): HTMLElement {
-    const rows: Array<[string, string]> = [
+    // A key, its value, and — where the value alone does not say what it is
+    // of — the words under the pointer in place of the value itself.
+    const rows: Array<[string, string, string?]> = [
       ['uri', info.uri],
       ['layout', info.layout.kind],
       ['source', info.sourceKind === 'local' ? `local file (${fmt.bytes(info.sourceBytes)})` : `remote (${fmt.bytes(info.sourceBytes)})`],
@@ -433,11 +448,19 @@ export class InfoPanel {
                 ]
           })()
         : []),
-      // The binning the map is drawn through, where it is a curation's (§33.4):
-      // the counts above are the curated genomes', and the file's pool is set
-      // beside the curated one in the Binning QC card.
+      // The curation the map is drawn through, where there is one (§33.4): the
+      // counts above are the curated genomes', and the file's pool is set
+      // beside the curated one in the Binning QC card. Keyed `curation` and
+      // valued by its steps alone, which is short enough to read whole: this
+      // card keeps a row to one line and scrolls sideways rather than wrap it,
+      // and `binning curated · 17 steps` lost its last letter at the General
+      // column's own width — read as *17 step*, a value that stopped rather than
+      // one that went on. The heading's word says `curated · 17 steps` as well.
       ...(info.curation?.refusal === null && info.curation.file !== undefined
-        ? ([['binning', `curated · ${fmt.int(info.curation.steps)} ${info.curation.steps === 1 ? 'step' : 'steps'}`]] as Array<[string, string]>)
+        ? ((): Array<[string, string, string]> => {
+            const steps = `${fmt.int(info.curation.steps)} ${info.curation.steps === 1 ? 'step' : 'steps'}`
+            return [['curation', steps, `The genomes are drawn through a curation of ${steps} made on the file’s binning.`]]
+          })()
         : []),
       [info.hasGenomes ? 'contigs' : 'chromosomes', fmt.int(info.nContigs)],
       ['bins', fmt.int(info.nBins)],
@@ -476,7 +499,7 @@ export class InfoPanel {
     return el(
       'div',
       { class: 'file-scroll' },
-      el('div', { class: 'kv kv-nowrap' }, ...rows.flatMap(([key, value]) => keyValue(key, value))),
+      el('div', { class: 'kv kv-nowrap' }, ...rows.flatMap(([key, value, title]) => keyValue(key, value, title))),
     )
   }
 
@@ -733,7 +756,7 @@ function statsName(uri: string): string {
   return `${name.replace(/\.pairs(am)?(\.b?gz)?$/i, '') || 'pairs'}.stats`
 }
 
-function keyValue(key: string, value: string): HTMLElement[] {
+function keyValue(key: string, value: string, title: string = value): HTMLElement[] {
   return [
     el('div', { class: 'k', text: key }),
     // A long value **wraps** rather than being cut: the panel is where a reader
@@ -741,7 +764,8 @@ function keyValue(key: string, value: string): HTMLElement[] {
     // sideways scroll was the promise this made and never kept — a URL chopped
     // at `http://127.0.0.1:5` with no ellipsis and no scrollbar drawn reads as a
     // rendering fault rather than as a long path. The `title` stays for the
-    // reader who would rather hover than read three lines.
-    el('div', { class: 'v', text: value, title: value }),
+    // reader who would rather hover than read three lines, and says what the
+    // value is of where the value alone does not.
+    el('div', { class: 'v', text: value, title }),
   ]
 }

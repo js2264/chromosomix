@@ -265,9 +265,12 @@ describe('the binning QC statistic', () => {
     // Each quantity whole — a count and its own share — where the line used to
     // pair a count of contigs with a percentage of *bins* and leave the other
     // half of each to a paragraph under it (§7.4).
-    expect(view.el.querySelector('.qc-stat')?.textContent).toBe(
-      'unassigned: 1,204 contigs (30.1%) · 830 bins (8.3%)',
-    )
+    const stat = view.el.querySelector('.qc-stat')?.textContent ?? ''
+    expect(stat.replaceAll('\u00a0', ' ')).toBe('unassigned: 1,204 contigs (30.1%) · 830 bins (8.3%)')
+    // And whole across a wrap: the line is longer than the card is wide, and a
+    // break may fall between the label and a quantity or at the `·`, never
+    // inside a quantity — `1,204` ending a line that `contigs (30.1%)` starts.
+    expect(stat.split(' ')).toEqual(['unassigned:', '1,204\u00a0contigs\u00a0(30.1%)', '·', '830\u00a0bins\u00a0(8.3%)'])
     // §7.4: it opens nothing and selects nothing. The card's own fold chevron is
     // not a door — it is the one control every heading in every column carries,
     // and it reaches nothing but this card's own body.
@@ -305,8 +308,19 @@ describe('the binning QC statistic', () => {
         },
       }),
     )
-    expect(view.el.querySelector('.qc-stat')?.textContent).toBe(
+    expect(view.el.querySelector('.qc-stat')?.textContent?.replaceAll('\u00a0', ' ')).toBe(
       'unassigned: 0 contigs (0.0%) · 0 bins (0.0%)',
+    )
+  })
+
+  it('counts one contig and one bin in the singular', () => {
+    const view = panel(
+      openResult({
+        unassigned: { genomeIndex: 0, contigs: 1, bins: 1, totalContigs: 8, totalBins: 100, contigFraction: 0.125, binFraction: 0.01 },
+      }),
+    )
+    expect(view.el.querySelector('.qc-stat')?.textContent?.replaceAll('\u00a0', ' ')).toBe(
+      'unassigned: 1 contig (12.5%) · 1 bin (1.0%)',
     )
   })
 })

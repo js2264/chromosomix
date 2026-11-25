@@ -7,9 +7,10 @@
  * metaTOR's columns of the mobile elements — and the ones it recomputed say
  * so, and the file's other columns say they are empty for a genome the
  * curation changed. The contigs table names each contig's genome. The File
- * card counts the MAGs and the elements apart, says the binning is curated and
- * by how many steps, and the Binning QC card sets the file's pool beside the
- * curated one where the two differ. The heading's word on the genomes says
+ * card counts the MAGs and the elements apart and says how many steps the
+ * curation has, in a value short enough to read whole, and the Binning QC card
+ * sets the file's pool beside the curated one where the two differ, each
+ * quantity whole across a wrap. The heading's word on the genomes says
  * how many steps the session is drawn through, opens the stage, and puts the
  * file's binning back.
  */
@@ -139,7 +140,7 @@ describe('the File and Binning QC cards under a curation', () => {
     file: { genomes: 3, unassigned: { genomeIndex: 0, contigs: 2, bins: 5, totalContigs: 7, totalBins: 100, contigFraction: 2 / 7, binFraction: 0.05 } },
   }
 
-  it('counts the MAGs and the elements apart, and says the binning is curated', () => {
+  it('counts the MAGs and the elements apart, and says how many steps the curation has', () => {
     expect(countKinds(CURATED.table)).toEqual({ mags: 2, elements: 1 })
     const view = new InfoPanel({ info: openResult({ curation }), genomeKinds: countKinds(CURATED.table) })
     document.body.appendChild(view.el)
@@ -147,16 +148,33 @@ describe('the File and Binning QC cards under a curation', () => {
     expect(rows['MAGs']).toBe('2')
     expect(rows['elements']).toBe('1')
     expect(rows['genomes']).toBeUndefined()
-    expect(rows['binning']).toBe('curated · 3 steps')
+    // Keyed `curation` and valued by its steps alone: the card keeps a row to one
+    // line, and `binning curated · 17 steps` lost its `s` at the column's width.
+    expect(rows['curation']).toBe('3 steps')
+    expect(rows['binning']).toBeUndefined()
+    // What the steps are of, under the pointer, since the value alone does not say.
+    const kv = all(view.el, '.file-host .kv')[0]
+    const at = textsOf(kv, '.k').indexOf('curation')
+    expect(all(kv, '.v')[at].title).toBe('The genomes are drawn through a curation of 3 steps made on the file’s binning.')
+    // Every other row's title is its value, as it was.
+    expect(all(kv, '.v')[textsOf(kv, '.k').indexOf('MAGs')].title).toBe('2')
+    const one = fileCard(new InfoPanel({ info: openResult({ curation: { ...curation, steps: 1 } }) }))
+    expect(one['curation']).toBe('1 step')
+    const many = fileCard(new InfoPanel({ info: openResult({ curation: { ...curation, steps: 1234 } }) }))
+    expect(many['curation']).toBe('1,234 steps')
+    // A map drawn as the file has it has no such row.
+    expect(fileCard(new InfoPanel({ info: openResult() }))['curation']).toBeUndefined()
   })
 
   it('sets the file’s pool beside the curated one where they differ, and says nothing of it where they agree', () => {
     const view = new InfoPanel({ info: openResult({ curation }) })
     document.body.appendChild(view.el)
-    expect(textsOf(view.el, '.qc .qc-stat')).toEqual([
-      'unassigned, curated: 1 contigs (14.3%) · 1 bins (1.0%)',
+    expect(textsOf(view.el, '.qc .qc-stat').map((line) => line.replaceAll('\u00a0', ' '))).toEqual([
+      'unassigned, curated: 1 contig (14.3%) · 1 bin (1.0%)',
       'in the file: 2 contigs (28.6%) · 5 bins (5.0%)',
     ])
+    // Each quantity one unbreakable run, so a wrap never parts a count from its noun.
+    expect(textsOf(view.el, '.qc .qc-stat')[1].split(' ')).toEqual(['in', 'the', 'file:', '2\u00a0contigs\u00a0(28.6%)', '·', '5\u00a0bins\u00a0(5.0%)'])
     const same = new InfoPanel({ info: openResult({ curation: { ...curation, file: { genomes: 3, unassigned: openResult().unassigned } } }) })
     expect(textsOf(same.el, '.qc .qc-stat')).toHaveLength(1)
     // A curation that leaves nothing in the pool says so of itself, not of the file.
