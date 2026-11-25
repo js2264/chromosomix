@@ -26,6 +26,11 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
 
 ### Changed
 
+- **A map whose contigs are not grouped by genome is told how to group them without its pairs (a dev
+  feature, §10).** The refusal said to re-create the map from its pairs. It now leads with
+  `metacooler reassign --layout genome-then-length`, given the map's own assignment
+  (`metacooler dump -t contigs`), which groups any ordering with nothing but the map — the `custom`
+  one `reassign --layout keep` writes included — and keeps re-creating it as the other way.
 - **With no map starred, a deck's map tasks run on every map at once (§18.1).** They used to be
   greyed until a map was starred. Now only the plain `run on ★` is greyed, with the reason in its
   tooltip, and *run on all N maps* runs, set up from the first map as the *Map* card is while it sets
@@ -378,6 +383,14 @@ it can be ahead of the newest entry here. Its exact build is in **About → vers
   MAG contact QC and MAG purity read a 0 as missing the same way, and mixed a MAG with no contact in
   with the leakiest and the contigs too poor in contact to judge in with the purest. Each now puts a
   row with no value after every row with one, as a table's own sort does.
+- **A map of one bin per contig is told how to get a map this viewer reads (a dev feature, §10).** The
+  map metaTOR writes from pairs or BAM files holds one bin per contig, and its refusal said to run
+  `metacooler binnify`, which only sums bins: from that map it puts every contact of a contig in one
+  bin of it and leaves the rest empty — a map that opens, and misleads. Such a map, told by as many
+  bins as contigs, is now headed *One bin per contig* and told to make a fixed-bin map from the same
+  pairs with `metacooler create pairs --bins`, keeping its genomes with its own assignment. A
+  fragment-level metacool is still told to binnify; a variable-bin cooler is told to bin its pairs
+  with `cooler cload pairs` with the multi-genome format read too, where it was told to binnify.
 - **The maps of a deck stay on one place across the whole genome (§16.3).** Zoomed or panned fast,
   the maps of a deck on the whole genome went on moving together but showed two places: the yeast
   micro-C twice, zoomed fast into the whole genome, showed chrVII:378–632 kb on the first map and
