@@ -1,6 +1,13 @@
 {
-  "latest": "4647580",
+  "latest": "60d32e6",
   "versions": [
+    {
+      "commit": "60d32e6",
+      "version": "0.21.0",
+      "date": "2026-11-25T21:20:27+01:00",
+      "subject": "Draw one saddle over every sequence under cis only (#187)",
+      "tag": ""
+    },
     {
       "commit": "4647580",
       "version": "0.21.0",
@@ -262,13 +269,6 @@
     }
   ],
   "pulls": [
-    {
-      "number": 187,
-      "commit": "ef5a66e",
-      "title": "Draw one saddle over every sequence under cis only",
-      "branch": "js/focused-pasteur-rj923b",
-      "date": "2026-11-25T19:41:49Z"
-    },
     {
       "number": 184,
       "commit": "ff2c382",
