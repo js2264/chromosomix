@@ -263,6 +263,13 @@
   ],
   "pulls": [
     {
+      "number": 187,
+      "commit": "ef5a66e",
+      "title": "Draw one saddle over every sequence under cis only",
+      "branch": "js/focused-pasteur-rj923b",
+      "date": "2026-11-25T19:41:49Z"
+    },
+    {
       "number": 184,
       "commit": "ff2c382",
       "title": "Curate the genomes: curate a metagenome's binning, with each genome's layout inside it (dev feature, §33)",
